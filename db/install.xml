@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="mod/konzeptgenerator/db" VERSION="2026022340" COMMENT="Schema for mod_konzeptgenerator">
+  <TABLES>
+    <TABLE NAME="konzeptgenerator" COMMENT="Main activity table">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="course" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true"/>
+        <FIELD NAME="intro" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="introformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="defaultmethodsetid" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="course_idx" UNIQUE="false" FIELDS="course"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="kgen_activity_setlink" COMMENT="Links activity to global method sets and versions">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="methodsetid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="methodsetversionid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="pendingversionid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="autosyncenabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="isdefault" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="cmid_idx" UNIQUE="false" FIELDS="cmid"/>
+        <INDEX NAME="setver_idx" UNIQUE="false" FIELDS="methodsetid,methodsetversionid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="kgen_activity_methodovr" COMMENT="Activity-local overrides of global methods">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="source_methodid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="source_setversionid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="title" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="seminarphase" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="zeitbedarf" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="gruppengroesse" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="kurzbeschreibung" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="ablauf" TYPE="text" LENGTH="big" NOTNULL="false"/>
+        <FIELD NAME="lernziele" TYPE="text" LENGTH="big" NOTNULL="false"/>
+        <FIELD NAME="komplexitaetsgrad" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="vorbereitung" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="raumanforderungen" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="sozialform" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="risiken_tipps" TYPE="text" LENGTH="big" NOTNULL="false"/>
+        <FIELD NAME="debrief" TYPE="text" LENGTH="big" NOTNULL="false"/>
+        <FIELD NAME="material_technik" TYPE="text" LENGTH="big" NOTNULL="false"/>
+        <FIELD NAME="tags" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="kognitive_dimension" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="autor_kontakt" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="custommetajson" TYPE="text" LENGTH="big" NOTNULL="false"/>
+        <FIELD NAME="h5pcontentid" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="modifiedby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="cmid_idx" UNIQUE="false" FIELDS="cmid"/>
+        <INDEX NAME="src_idx" UNIQUE="false" FIELDS="source_methodid,source_setversionid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="kgen_grid" COMMENT="Grid definitions per activity">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true"/>
+        <FIELD NAME="description" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="isarchived" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="modifiedby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="cmid_idx" UNIQUE="false" FIELDS="cmid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="kgen_grid_user_state" COMMENT="Per-user saved state for a grid">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="gridid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="statejson" TYPE="text" LENGTH="big" NOTNULL="false"/>
+        <FIELD NAME="versionhash" TYPE="char" LENGTH="128" NOTNULL="true"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="grid_user_uix" UNIQUE="true" FIELDS="gridid,userid"/>
+        <INDEX NAME="grid_idx" UNIQUE="false" FIELDS="gridid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="kgen_grid_lock" COMMENT="Soft lock records for editing grid state">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="gridid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="locktoken" TYPE="char" LENGTH="128" NOTNULL="true"/>
+        <FIELD NAME="expiresat" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="grid_uix" UNIQUE="true" FIELDS="gridid"/>
+        <INDEX NAME="expires_idx" UNIQUE="false" FIELDS="expiresat"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="kgen_import_export_log" COMMENT="Audit log for manual import/export operations">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="contextid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="direction" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="import_moddata"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="ok"/>
+        <FIELD NAME="payloadmeta" TYPE="text" LENGTH="big" NOTNULL="false"/>
+        <FIELD NAME="message" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="actorid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="ctx_idx" UNIQUE="false" FIELDS="contextid"/>
+        <INDEX NAME="cmid_idx" UNIQUE="false" FIELDS="cmid"/>
+        <INDEX NAME="dir_status_idx" UNIQUE="false" FIELDS="direction,status"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="kgen_method_filemap" COMMENT="Maps method uid to file API itemid per user/activity">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="methoduid" TYPE="char" LENGTH="255" NOTNULL="true"/>
+        <FIELD NAME="itemid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="cm_user_method_uix" UNIQUE="true" FIELDS="cmid,userid,methoduid"/>
+        <INDEX NAME="cm_user_item_uix" UNIQUE="true" FIELDS="cmid,userid,itemid"/>
+        <INDEX NAME="cm_user_idx" UNIQUE="false" FIELDS="cmid,userid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="kgen_planning_state" COMMENT="Shared planning mode state per activity">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="statejson" TYPE="text" LENGTH="big" NOTNULL="false"/>
+        <FIELD NAME="versionhash" TYPE="char" LENGTH="128" NOTNULL="true"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="modifiedby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="cmid_uix" UNIQUE="true" FIELDS="cmid"/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>

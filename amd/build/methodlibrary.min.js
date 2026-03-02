@@ -1,0 +1,968 @@
+define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
+    const bySel = (sel) => document.querySelector(sel);
+    const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
+    const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const escapeHtml = (str) => String(str || '').replace(/[&<>"']/g, (ch) => (
+        {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch] || ch
+    ));
+    const sanitizeCardHtml = (value) => {
+        const root = document.createElement('div');
+        root.innerHTML = String(value || '');
+        root.querySelectorAll('script,style,iframe,object,embed,link,meta').forEach((node) => node.remove());
+        root.querySelectorAll('*').forEach((el) => {
+            Array.from(el.attributes).forEach((attr) => {
+                const name = String(attr.name || '').toLowerCase();
+                const val = String(attr.value || '');
+                if (name.startsWith('on')) {
+                    el.removeAttribute(attr.name);
+                    return;
+                }
+                if ((name === 'href' || name === 'src') && /^\s*javascript:/i.test(val)) {
+                    el.removeAttribute(attr.name);
+                    return;
+                }
+                if (name === 'style') {
+                    el.removeAttribute(attr.name);
+                }
+            });
+        });
+        return root.innerHTML;
+    };
+
+    const FIELDS = {
+        titel: '#kg-f-titel',
+        seminarphase: '#kg-f-seminarphase',
+        zeitbedarf: '#kg-f-zeitbedarf',
+        gruppengroesse: '#kg-f-gruppengroesse',
+        kurzbeschreibung: '#kg-f-kurzbeschreibung',
+        autor: '#kg-f-autor',
+        lernziele: '#kg-f-lernziele',
+        komplexitaet: '#kg-f-komplexitaet',
+        vorbereitung: '#kg-f-vorbereitung',
+        raum: '#kg-f-raum',
+        sozialform: '#kg-f-sozialform',
+        risiken: '#kg-f-risiken',
+        debrief: '#kg-f-debrief',
+        materialien: '#id_kg_materialiendraftitemid',
+        materialtechnik: '#kg-f-materialtechnik',
+        ablauf: '#kg-f-ablauf',
+        tags: '#kg-f-tags',
+        kognitive: '#kg-f-kognitive',
+        alternativen: '#kg-f-alternativen'
+    };
+
+    const FILTER_DROPDOWNS = {
+        tags: {
+            root: '#ml-filter-tags-dropdown',
+            toggle: '#ml-filter-tags-toggle',
+            panel: '#ml-filter-tags-panel',
+            all: '#ml-filter-tags-all',
+            options: '#ml-filter-tags-options',
+            labelAll: 'Alle Tags',
+            labelSome: 'Tags'
+        },
+        phase: {
+            root: '#ml-filter-phase-dropdown',
+            toggle: '#ml-filter-phase-toggle',
+            panel: '#ml-filter-phase-panel',
+            all: '#ml-filter-phase-all',
+            options: '#ml-filter-phase-options',
+            labelAll: 'Alle Seminarphasen',
+            labelSome: 'Seminarphasen'
+        },
+        group: {
+            root: '#ml-filter-group-dropdown',
+            toggle: '#ml-filter-group-toggle',
+            panel: '#ml-filter-group-panel',
+            all: '#ml-filter-group-all',
+            options: '#ml-filter-group-options',
+            labelAll: 'Alle Gruppengrößen',
+            labelSome: 'Gruppengrößen'
+        },
+        duration: {
+            root: '#ml-filter-duration-dropdown',
+            toggle: '#ml-filter-duration-toggle',
+            panel: '#ml-filter-duration-panel',
+            all: '#ml-filter-duration-all',
+            options: '#ml-filter-duration-options',
+            labelAll: 'Alle Zeiten',
+            labelSome: 'Zeiten'
+        },
+        cognitive: {
+            root: '#ml-filter-cognitive-dropdown',
+            toggle: '#ml-filter-cognitive-toggle',
+            panel: '#ml-filter-cognitive-panel',
+            all: '#ml-filter-cognitive-all',
+            options: '#ml-filter-cognitive-options',
+            labelAll: 'Alle Dimensionen',
+            labelSome: 'Dimensionen'
+        }
+    };
+
+    let methods = [];
+    let currentEditId = '';
+    let runtimeCmid = 0;
+    let autosyncSetIds = new Set();
+
+    const setStatus = (text, isError) => {
+        const el = bySel('#ml-status');
+        if (!el) {
+            return;
+        }
+        el.textContent = text;
+        el.style.color = isError ? '#b91c1c' : '#166534';
+    };
+
+    const normalize = (v) => String(v || '').trim().toLowerCase();
+
+    const splitMulti = (value) => {
+        if (Array.isArray(value)) {
+            return value.map((v) => String(v).trim()).filter(Boolean);
+        }
+        return String(value || '')
+            .split(/##|,|;|\r?\n/)
+            .map((v) => String(v).trim())
+            .filter(Boolean);
+    };
+
+    const joinMulti = (arr) => (Array.isArray(arr) ? arr.join(', ') : '');
+
+    const readMulti = (selector) => {
+        const el = bySel(selector);
+        if (!el) {
+            return [];
+        }
+        if (el.tagName !== 'SELECT') {
+            return String(el.value || '')
+                .split('##')
+                .map((v) => String(v).trim())
+                .filter(Boolean);
+        }
+        return Array.from(el.selectedOptions).map((o) => o.value);
+    };
+
+    const getFormMultiDropdown = (selector) => document.querySelector(
+        `[data-kg-form-multi-dropdown="1"][data-kg-field="${selector}"]`
+    );
+
+    const setFormMultiDropdownValues = (selector, values) => {
+        const dropdown = getFormMultiDropdown(selector);
+        const hidden = bySel(selector);
+        const cleanvalues = Array.isArray(values)
+            ? values.map((v) => String(v).trim()).filter(Boolean)
+            : [];
+        if (hidden) {
+            hidden.value = cleanvalues.join('##');
+        }
+        if (!dropdown) {
+            return;
+        }
+        const valueSet = {};
+        cleanvalues.forEach((value) => {
+            valueSet[value] = true;
+        });
+        dropdown.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
+            checkbox.checked = !!valueSet[String(checkbox.value || '')];
+        });
+        const toggle = dropdown.querySelector('[data-kg-form-multi-toggle="1"]');
+        if (!toggle) {
+            return;
+        }
+        const prefix = String(dropdown.getAttribute('data-kg-label-prefix') || 'Auswahl');
+        const placeholder = String(dropdown.getAttribute('data-kg-placeholder') || `${prefix} wählen`);
+        toggle.textContent = cleanvalues.length ? `${prefix} (${cleanvalues.length})` : placeholder;
+    };
+
+    const bindFormMultiDropdowns = () => {
+        document.querySelectorAll('[data-kg-form-multi-dropdown="1"]').forEach((dropdown) => {
+            const selector = String(dropdown.getAttribute('data-kg-field') || '');
+            const toggle = dropdown.querySelector('[data-kg-form-multi-toggle="1"]');
+            const panel = dropdown.querySelector('[data-kg-form-multi-panel="1"]');
+            if (toggle && panel) {
+                toggle.addEventListener('click', () => {
+                    const opening = panel.classList.contains('kg-hidden');
+                    document.querySelectorAll('[data-kg-form-multi-dropdown="1"]').forEach((other) => {
+                        const otherpanel = other.querySelector('[data-kg-form-multi-panel="1"]');
+                        if (otherpanel) {
+                            otherpanel.classList.add('kg-hidden');
+                        }
+                        other.classList.remove('kg-form-multi-open');
+                    });
+                    panel.classList.toggle('kg-hidden');
+                    if (opening) {
+                        dropdown.classList.add('kg-form-multi-open');
+                    } else {
+                        dropdown.classList.remove('kg-form-multi-open');
+                    }
+                });
+                document.addEventListener('click', (event) => {
+                    if (!dropdown.contains(event.target)) {
+                        panel.classList.add('kg-hidden');
+                        dropdown.classList.remove('kg-form-multi-open');
+                    }
+                });
+            }
+            dropdown.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
+                checkbox.addEventListener('change', () => {
+                    const selected = Array.from(dropdown.querySelectorAll('[data-kg-form-multi-option="1"]:checked'))
+                        .map((cb) => String(cb.value || '').trim())
+                        .filter(Boolean);
+                    setFormMultiDropdownValues(selector, selected);
+                });
+            });
+            const searchinput = dropdown.querySelector('[data-kg-form-multi-search="1"]');
+            if (searchinput) {
+                searchinput.addEventListener('input', () => {
+                    const term = String(searchinput.value || '').trim().toLowerCase();
+                    dropdown.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
+                        const row = checkbox.closest('.kg-tag-option');
+                        const label = row ? String(row.textContent || '').toLowerCase() : '';
+                        if (!row) {
+                            return;
+                        }
+                        row.style.display = !term || label.includes(term) ? '' : 'none';
+                    });
+                });
+            }
+            setFormMultiDropdownValues(selector, readMulti(selector));
+        });
+    };
+
+    const refreshEditAlternativeOptions = (currentid = '') => {
+        const host = bySel('#ml-e-alternativen-options');
+        if (!host) {
+            return;
+        }
+        const selected = readMulti('#ml-e-alternativen');
+        host.innerHTML = '';
+        methods.forEach((method) => {
+            const methodid = String(method.id || '').trim();
+            const title = String(method.titel || '').trim();
+            if (!methodid || !title || methodid === String(currentid || '')) {
+                return;
+            }
+            const row = document.createElement('label');
+            row.className = 'kg-tag-option';
+            row.innerHTML = `<input type="checkbox" value="${escapeHtml(methodid)}" data-kg-form-multi-option="1"><span>${escapeHtml(title)}</span>`;
+            host.appendChild(row);
+        });
+        host.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
+            checkbox.checked = selected.includes(String(checkbox.value || '').trim());
+            checkbox.addEventListener('change', () => {
+                const values = Array.from(host.querySelectorAll('[data-kg-form-multi-option="1"]:checked'))
+                    .map((cb) => String(cb.value || '').trim())
+                    .filter(Boolean);
+                setFormMultiDropdownValues('#ml-e-alternativen', values);
+            });
+        });
+        setFormMultiDropdownValues('#ml-e-alternativen', selected);
+    };
+
+    const getFieldValue = (selector) => {
+        const el = bySel(selector);
+        if (!el) {
+            return '';
+        }
+        const editor = (typeof window !== 'undefined' && window.tinyMCE && el.id) ? window.tinyMCE.get(el.id) : null;
+        if (editor) {
+            return String(editor.getContent() || '').trim();
+        }
+        return String(el.value || '').trim();
+    };
+
+    const setFieldValue = (selector, value) => {
+        const el = bySel(selector);
+        if (!el) {
+            return;
+        }
+        const normalized = value || '';
+        const editor = (typeof window !== 'undefined' && window.tinyMCE && el.id) ? window.tinyMCE.get(el.id) : null;
+        if (editor) {
+            editor.setContent(String(normalized));
+        }
+        el.value = normalized;
+    };
+
+    const attachmentName = (entry) => {
+        if (!entry) {
+            return '';
+        }
+        if (typeof entry === 'string') {
+            return entry.trim();
+        }
+        if (typeof entry === 'object') {
+            return String(entry.name || '').trim();
+        }
+        return '';
+    };
+
+    const attachmentNames = (value) => {
+        if (!Array.isArray(value)) {
+            return [];
+        }
+        return value.map((entry) => attachmentName(entry)).filter(Boolean);
+    };
+
+    const clearAddForm = () => {
+        Object.values(FIELDS).forEach((selector) => {
+            const el = bySel(selector);
+            if (!el) {
+                return;
+            }
+            if (el.tagName === 'SELECT') {
+                Array.from(el.options).forEach((opt) => {
+                    opt.selected = false;
+                });
+                if (!el.multiple && el.options.length) {
+                    el.selectedIndex = 0;
+                }
+                return;
+            }
+            if (getFormMultiDropdown(selector)) {
+                setFormMultiDropdownValues(selector, []);
+                return;
+            }
+            el.value = '';
+        });
+    };
+
+    const buildMethod = async () => {
+        const title = (bySel(FIELDS.titel)?.value || '').trim();
+        if (!title) {
+            return null;
+        }
+        const draftitemid = Number(bySel(FIELDS.materialien)?.value || 0);
+
+        return {
+            id: uid(),
+            titel: title,
+            seminarphase: readMulti(FIELDS.seminarphase),
+            zeitbedarf: (bySel(FIELDS.zeitbedarf)?.value || '').trim(),
+            gruppengroesse: (bySel(FIELDS.gruppengroesse)?.value || '').trim(),
+            kurzbeschreibung: (bySel(FIELDS.kurzbeschreibung)?.value || '').trim(),
+            autor: (bySel(FIELDS.autor)?.value || '').trim(),
+            lernziele: (bySel(FIELDS.lernziele)?.value || '').trim(),
+            komplexitaet: (bySel(FIELDS.komplexitaet)?.value || '').trim(),
+            vorbereitung: (bySel(FIELDS.vorbereitung)?.value || '').trim(),
+            raum: readMulti(FIELDS.raum),
+            sozialform: readMulti(FIELDS.sozialform),
+            risiken: (bySel(FIELDS.risiken)?.value || '').trim(),
+            debrief: (bySel(FIELDS.debrief)?.value || '').trim(),
+            materialien: [],
+            materialiendraftitemid: draftitemid || 0,
+            materialtechnik: (bySel(FIELDS.materialtechnik)?.value || '').trim(),
+            ablauf: (bySel(FIELDS.ablauf)?.value || '').trim(),
+            tags: (bySel(FIELDS.tags)?.value || '').trim(),
+            kognitive: readMulti(FIELDS.kognitive),
+            alternativen: readMulti(FIELDS.alternativen)
+        };
+    };
+
+    const getSelectedFilterValues = (key) => {
+        const cfg = FILTER_DROPDOWNS[key];
+        if (!cfg) {
+            return [];
+        }
+        const all = bySel(cfg.all);
+        const host = bySel(cfg.options);
+        if (!host) {
+            return [];
+        }
+        if (all && all.checked) {
+            return [];
+        }
+        return Array.from(host.querySelectorAll('input[type="checkbox"]:checked'))
+            .map((el) => String(el.value || '').trim().toLowerCase())
+            .filter(Boolean);
+    };
+
+    const updateFilterToggleLabel = (key) => {
+        const cfg = FILTER_DROPDOWNS[key];
+        if (!cfg) {
+            return;
+        }
+        const btn = bySel(cfg.toggle);
+        if (!btn) {
+            return;
+        }
+        const count = getSelectedFilterValues(key).length;
+        btn.textContent = count ? `${cfg.labelSome} (${count})` : cfg.labelAll;
+    };
+
+    const clearFilterSelections = (key) => {
+        const cfg = FILTER_DROPDOWNS[key];
+        if (!cfg) {
+            return;
+        }
+        const all = bySel(cfg.all);
+        const options = bySel(cfg.options);
+        if (all) {
+            all.checked = true;
+        }
+        if (options) {
+            options.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+                cb.checked = false;
+            });
+        }
+        updateFilterToggleLabel(key);
+    };
+
+    const bindFilterDropdown = (key) => {
+        const cfg = FILTER_DROPDOWNS[key];
+        if (!cfg) {
+            return;
+        }
+        const root = bySel(cfg.root);
+        const toggle = bySel(cfg.toggle);
+        const panel = bySel(cfg.panel);
+        const all = bySel(cfg.all);
+        const options = bySel(cfg.options);
+
+        if (toggle && panel) {
+            toggle.addEventListener('click', () => panel.classList.toggle('kg-hidden'));
+            document.addEventListener('click', (event) => {
+                if (root && !root.contains(event.target)) {
+                    panel.classList.add('kg-hidden');
+                }
+            });
+        }
+
+        if (all) {
+            all.addEventListener('change', () => {
+                if (all.checked && options) {
+                    options.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+                        cb.checked = false;
+                    });
+                }
+                updateFilterToggleLabel(key);
+                applyFilters();
+            });
+        }
+
+        if (options) {
+            options.addEventListener('change', (event) => {
+                const target = event.target;
+                if (!target || target.type !== 'checkbox') {
+                    return;
+                }
+                if (all) {
+                    all.checked = false;
+                }
+                updateFilterToggleLabel(key);
+                applyFilters();
+            });
+        }
+
+        updateFilterToggleLabel(key);
+    };
+
+    const populateTagOptions = () => {
+        const key = 'tags';
+        const cfg = FILTER_DROPDOWNS[key];
+        const host = bySel(cfg.options);
+        if (!host) {
+            return;
+        }
+        const previous = getSelectedFilterValues(key);
+        const tags = new Set();
+        methods.forEach((m) => {
+            splitMulti(m.tags).forEach((t) => tags.add(t));
+        });
+
+        host.innerHTML = '';
+        Array.from(tags).sort((a, b) => a.localeCompare(b, 'de')).forEach((tag) => {
+            const row = document.createElement('label');
+            row.className = 'kg-tag-option';
+            const checked = previous.includes(tag.toLowerCase()) ? 'checked' : '';
+            row.innerHTML = `<input type="checkbox" value="${tag}" ${checked}><span>${tag}</span>`;
+            host.appendChild(row);
+        });
+        updateFilterToggleLabel(key);
+    };
+
+    const loadAutosyncSetIds = (cmid) => {
+        return asCall('mod_konzeptgenerator_get_methodset_sync_status', {cmid}).then((res) => {
+            const links = Array.isArray(res && res.links) ? res.links : [];
+            autosyncSetIds = new Set(
+                links
+                    .filter((link) => !!link && !!link.autosyncenabled)
+                    .map((link) => Number(link.methodsetid) || 0)
+                    .filter((id) => id > 0)
+            );
+        }).catch(() => {
+            autosyncSetIds = new Set();
+        });
+    };
+
+    const getSyncMethodsetId = (method) => {
+        if (!method || !method._kgsync || typeof method._kgsync !== 'object') {
+            return 0;
+        }
+        return Number(method._kgsync.setid || 0) || 0;
+    };
+
+    const shouldShowFreezeLock = (method) => {
+        const setid = getSyncMethodsetId(method);
+        return setid > 0 && autosyncSetIds.has(setid);
+    };
+
+    const isFrozenState = (syncmeta, defaultfrozen) => {
+        if (!syncmeta || typeof syncmeta !== 'object') {
+            return !!defaultfrozen;
+        }
+        if (syncmeta.frozen === undefined || syncmeta.frozen === null || syncmeta.frozen === '') {
+            return !!defaultfrozen;
+        }
+        return Number(syncmeta.frozen) !== 0;
+    };
+
+    const applyFilters = () => {
+        const query = normalize(bySel('#ml-filter-search') ? bySel('#ml-filter-search').value : '');
+        const tags = getSelectedFilterValues('tags');
+        const phases = getSelectedFilterValues('phase');
+        const groups = getSelectedFilterValues('group');
+        const durations = getSelectedFilterValues('duration');
+        const cognitive = getSelectedFilterValues('cognitive').map((v) => normalize(v.split(/[:\-–]/)[0]));
+
+        const host = bySel('#ml-method-list');
+        if (!host) {
+            return;
+        }
+
+        const cards = Array.from(host.querySelectorAll('.kg-library-card'));
+        let visible = 0;
+        cards.forEach((card) => {
+            const id = card.getAttribute('data-id');
+            const method = methods.find((m) => String(m.id) === String(id));
+            if (!method) {
+                card.style.display = 'none';
+                return;
+            }
+
+            const hay = [
+                method.titel,
+                method.kurzbeschreibung,
+                method.tags,
+                joinMulti(method.seminarphase),
+                method.gruppengroesse,
+                method.zeitbedarf,
+                joinMulti(method.kognitive)
+            ].join(' ').toLowerCase();
+
+            const methodtags = splitMulti(method.tags).map((t) => t.toLowerCase());
+            const methodphase = splitMulti(method.seminarphase).map((t) => t.toLowerCase());
+            const methodgroup = normalize(method.gruppengroesse);
+            const methodduration = normalize(method.zeitbedarf);
+            const methodcog = splitMulti(method.kognitive).map((t) => normalize(t.split(/[:\-–]/)[0]));
+
+            const match = (!query || hay.includes(query))
+                && (!tags.length || methodtags.some((t) => tags.includes(t)))
+                && (!phases.length || methodphase.some((p) => phases.includes(p)))
+                && (!groups.length || groups.includes(methodgroup))
+                && (!durations.length || durations.includes(methodduration))
+                && (!cognitive.length || methodcog.some((c) => cognitive.includes(c)));
+
+            card.style.display = match ? '' : 'none';
+            if (match) {
+                visible++;
+            }
+        });
+
+        const status = bySel('#ml-filter-status');
+        if (status) {
+            status.textContent = `${visible} von ${methods.length} Methoden angezeigt.`;
+        }
+    };
+
+    const renderList = () => {
+        const host = bySel('#ml-method-list');
+        if (!host) {
+            return;
+        }
+        host.innerHTML = '';
+
+        methods.forEach((m, index) => {
+            if (!m.id) {
+                m.id = `legacy-${index}-${uid()}`;
+            }
+            const card = document.createElement('div');
+            card.className = 'kg-library-card sp-card';
+            card.setAttribute('data-id', String(m.id));
+            const showlock = shouldShowFreezeLock(m);
+            const frozen = showlock ? isFrozenState(m._kgsync, true) : false;
+            const freezeaction = showlock
+                ? `<button type="button" class="ml-card-menu-btn" data-act="freeze" title="Nur sichtbar bei aktivem Auto-Update für dieses Set.">${frozen ? '🔒 Fixierung lösen' : '🔓 Lokal fixieren'}</button>`
+                : '';
+            card.innerHTML = `
+              <div class="ml-card-head">
+                <div class="sp-card-title ml-card-title"><strong>${escapeHtml(m.titel || '(ohne Titel)')}</strong></div>
+                <div class="ml-card-head-actions">
+                  <details class="ml-card-menu">
+                    <summary class="ml-card-menu-toggle" aria-label="Aktionen">⋮</summary>
+                    <div class="ml-card-menu-panel">
+                      <button type="button" class="ml-card-menu-btn" data-act="edit">Bearbeiten</button>
+                      ${freezeaction}
+                      <button type="button" class="ml-card-menu-btn ml-card-menu-btn-delete" data-act="delete">Löschen</button>
+                    </div>
+                  </details>
+                </div>
+              </div>
+              <div class="sp-card-compact">
+                <div class="sp-card-meta">
+                  <span class="sp-badge">⏱️ ${escapeHtml(m.zeitbedarf || '-')}</span>
+                  <span class="sp-badge">👥 ${escapeHtml(m.gruppengroesse || '-')}</span>
+                  <span class="sp-badge">🏷️ ${escapeHtml(m.tags || '-')}</span>
+                </div>
+                <div class="sp-card-description">${sanitizeCardHtml(m.kurzbeschreibung || '')}</div>
+              </div>
+            `;
+
+            const editbtn = card.querySelector('[data-act="edit"]');
+            const freezebtn = card.querySelector('[data-act="freeze"]');
+            const deletebtn = card.querySelector('[data-act="delete"]');
+            const closeMenu = (button) => {
+                const menu = button ? button.closest('.ml-card-menu') : null;
+                if (menu) {
+                    menu.open = false;
+                }
+            };
+            if (editbtn) {
+                editbtn.addEventListener('click', () => {
+                    closeMenu(editbtn);
+                    openEditor(m.id);
+                });
+            }
+            if (freezebtn) {
+                freezebtn.addEventListener('click', () => {
+                    closeMenu(freezebtn);
+                    toggleMethodFreeze(m.id).catch((e) => {
+                        Notification.exception(e);
+                        setStatus('Fixieren fehlgeschlagen.', true);
+                    });
+                });
+            }
+            if (deletebtn) {
+                deletebtn.addEventListener('click', () => {
+                    closeMenu(deletebtn);
+                    deleteMethod(m.id);
+                });
+            }
+            host.appendChild(card);
+        });
+
+        populateTagOptions();
+        applyFilters();
+        if (currentEditId) {
+            refreshEditAlternativeOptions(currentEditId);
+        }
+    };
+
+    const setSelectMulti = (selector, values) => {
+        const el = bySel(selector);
+        if (!el) {
+            return;
+        }
+        const list = splitMulti(values);
+        if (el.tagName !== 'SELECT') {
+            setFormMultiDropdownValues(selector, list);
+            return;
+        }
+        Array.from(el.options).forEach((opt) => {
+            opt.selected = list.includes(opt.value);
+        });
+    };
+
+    const getSelectMulti = (selector) => {
+        const el = bySel(selector);
+        if (!el) {
+            return [];
+        }
+        if (el.tagName !== 'SELECT') {
+            return readMulti(selector);
+        }
+        return Array.from(el.selectedOptions).map((o) => o.value);
+    };
+
+    const openEditor = (id) => {
+        const method = methods.find((m) => String(m.id) === String(id));
+        if (!method) {
+            setStatus('Methode konnte nicht zum Bearbeiten geöffnet werden.', true);
+            return;
+        }
+        currentEditId = String(id);
+        const editsection = bySel('#ml-edit-section');
+        if (editsection) {
+            editsection.classList.remove('kg-hidden');
+        }
+
+        setFieldValue('#ml-edit-id', method.id);
+        setFieldValue('#ml-e-titel', method.titel);
+        setFieldValue('#ml-e-zeitbedarf', method.zeitbedarf);
+        setFieldValue('#ml-e-gruppengroesse', method.gruppengroesse);
+        setFieldValue('#ml-e-kurzbeschreibung', method.kurzbeschreibung);
+        setFieldValue('#ml-e-komplexitaet', method.komplexitaet);
+        setFieldValue('#ml-e-vorbereitung', method.vorbereitung);
+        setFieldValue('#ml-e-materialtechnik', method.materialtechnik);
+        setFieldValue('#ml-e-ablauf', method.ablauf);
+        setFieldValue('#ml-e-lernziele', method.lernziele);
+        setFieldValue('#ml-e-risiken', method.risiken);
+        setFieldValue('#ml-e-debrief', method.debrief);
+        setFieldValue('#ml-e-tags', method.tags);
+        setFieldValue('#ml-e-autor', method.autor);
+        const materialcurrent = bySel('#ml-e-materialien-current');
+        const materialdraft = bySel('#id_ml_materialiendraftitemid');
+        if (materialdraft) {
+            materialdraft.value = String(method.materialiendraftitemid || 0);
+        }
+        if (materialcurrent) {
+            const names = attachmentNames(method.materialien);
+            materialcurrent.textContent = names.length ? `Aktuell: ${names.join(', ')}` : '';
+        }
+
+        setSelectMulti('#ml-e-seminarphase', method.seminarphase);
+        setSelectMulti('#ml-e-kognitive', method.kognitive);
+        setSelectMulti('#ml-e-raum', method.raum);
+        setSelectMulti('#ml-e-sozialform', method.sozialform);
+        setSelectMulti('#ml-e-alternativen', method.alternativen || []);
+        refreshEditAlternativeOptions(method.id);
+        if (editsection) {
+            editsection.scrollIntoView({behavior: 'auto', block: 'start'});
+            window.setTimeout(() => {
+                const top = editsection.getBoundingClientRect().top + window.scrollY;
+                window.scrollTo({top: Math.max(0, top - 80), behavior: 'auto'});
+            }, 0);
+        }
+        setStatus(`Methode "${method.titel || ''}" zum Bearbeiten geladen.`, false);
+    };
+
+    const persist = (cmid) => {
+        return asCall('mod_konzeptgenerator_save_method_cards', {
+            cmid,
+            methodsjson: JSON.stringify(methods)
+        });
+    };
+
+    const addMethod = async (cmid) => {
+        const method = await buildMethod();
+        if (!method) {
+            setStatus('Titel ist Pflichtfeld.', true);
+            return;
+        }
+        methods.push(method);
+        await persist(cmid);
+        clearAddForm();
+        renderList();
+        setStatus('Methode hinzugefügt und gespeichert.', false);
+    };
+
+    const deleteMethod = (id) => {
+        const method = methods.find((m) => String(m.id) === String(id));
+        if (!method) {
+            return;
+        }
+        const yes = window.confirm(`Methodenkarte "${method.titel || ''}" wirklich löschen?`);
+        if (!yes) {
+            return;
+        }
+        methods = methods.filter((m) => String(m.id) !== String(id));
+        if (String(currentEditId) === String(id)) {
+            currentEditId = '';
+            bySel('#ml-edit-section')?.classList.add('kg-hidden');
+            const form = bySel('#ml-edit-form');
+            if (form && typeof form.reset === 'function') {
+                form.reset();
+            }
+        }
+        renderList();
+    };
+
+    const toggleMethodFreeze = async (id) => {
+        const idx = methods.findIndex((m) => String(m.id) === String(id));
+        if (idx < 0) {
+            return;
+        }
+        if (!shouldShowFreezeLock(methods[idx])) {
+            setStatus('Fixierung nur bei Methoden mit aktivem Auto-Update verfügbar.', true);
+            return;
+        }
+        if (!methods[idx]._kgsync || typeof methods[idx]._kgsync !== 'object') {
+            methods[idx]._kgsync = {};
+        }
+        const currentlyfrozen = isFrozenState(methods[idx]._kgsync, true);
+        methods[idx]._kgsync.frozen = currentlyfrozen ? 0 : 1;
+        renderList();
+        await persist(runtimeCmid);
+        setStatus(methods[idx]._kgsync.frozen ? 'Methode lokal fixiert (kein automatisches Überschreiben).' :
+            'Methode wieder für globale Aktualisierung freigegeben.', false);
+    };
+
+    const saveEditor = async (cmid) => {
+        if (!currentEditId) {
+            setStatus('Bitte zuerst eine Methode auswählen.', true);
+            return;
+        }
+        const idx = methods.findIndex((m) => String(m.id) === String(currentEditId));
+        if (idx < 0) {
+            setStatus('Ausgewählte Methode wurde nicht gefunden.', true);
+            return;
+        }
+
+        const title = (bySel('#ml-e-titel') ? bySel('#ml-e-titel').value : '').trim();
+        if (!title) {
+            setStatus('Titel ist erforderlich.', true);
+            return;
+        }
+
+        const currentdraftitemid = Number(bySel('#id_ml_materialiendraftitemid')?.value || methods[idx].materialiendraftitemid || 0);
+        methods[idx] = Object.assign({}, methods[idx], {
+            titel: title,
+            seminarphase: getSelectMulti('#ml-e-seminarphase'),
+            zeitbedarf: (bySel('#ml-e-zeitbedarf') ? bySel('#ml-e-zeitbedarf').value : '').trim(),
+            gruppengroesse: (bySel('#ml-e-gruppengroesse') ? bySel('#ml-e-gruppengroesse').value : '').trim(),
+            kurzbeschreibung: getFieldValue('#ml-e-kurzbeschreibung'),
+            komplexitaet: (bySel('#ml-e-komplexitaet') ? bySel('#ml-e-komplexitaet').value : '').trim(),
+            vorbereitung: (bySel('#ml-e-vorbereitung') ? bySel('#ml-e-vorbereitung').value : '').trim(),
+            raum: getSelectMulti('#ml-e-raum'),
+            sozialform: getSelectMulti('#ml-e-sozialform'),
+            ablauf: getFieldValue('#ml-e-ablauf'),
+            lernziele: getFieldValue('#ml-e-lernziele'),
+            risiken: getFieldValue('#ml-e-risiken'),
+            debrief: getFieldValue('#ml-e-debrief'),
+            materialien: Array.isArray(methods[idx].materialien) ? methods[idx].materialien : [],
+            materialiendraftitemid: currentdraftitemid || 0,
+            materialtechnik: getFieldValue('#ml-e-materialtechnik'),
+            tags: (bySel('#ml-e-tags') ? bySel('#ml-e-tags').value : '').trim(),
+            autor: (bySel('#ml-e-autor') ? bySel('#ml-e-autor').value : '').trim(),
+            kognitive: getSelectMulti('#ml-e-kognitive'),
+            alternativen: getSelectMulti('#ml-e-alternativen')
+        });
+        methods[idx].alternativen = (methods[idx].alternativen || []).filter((id) => String(id) !== String(methods[idx].id));
+
+        await persist(cmid);
+        renderList();
+        currentEditId = '';
+        const form = bySel('#ml-edit-form');
+        if (form && typeof form.reset === 'function') {
+            form.reset();
+        }
+        ['#ml-e-kurzbeschreibung', '#ml-e-ablauf', '#ml-e-lernziele',
+            '#ml-e-risiken', '#ml-e-debrief', '#ml-e-materialtechnik'].forEach((selector) => {
+            setFieldValue(selector, '');
+        });
+        const materialdraft = bySel('#id_ml_materialiendraftitemid');
+        if (materialdraft) {
+            materialdraft.value = '0';
+        }
+        bySel('#ml-edit-section')?.classList.add('kg-hidden');
+        setStatus('Methode gespeichert.', false);
+    };
+
+    const loadMethods = (cmid) => {
+        return asCall('mod_konzeptgenerator_get_method_cards', {cmid}).then((res) => {
+            let parsed = [];
+            try {
+                parsed = res.methodsjson ? JSON.parse(res.methodsjson) : [];
+            } catch (e) {
+                parsed = [];
+            }
+            methods = Array.isArray(parsed) ? parsed : [];
+            methods = methods.map((method) => {
+                const normalized = Object.assign({}, method);
+                normalized.alternativen = Array.isArray(method.alternativen) ? method.alternativen : [];
+                return normalized;
+            });
+            renderList();
+            setStatus(`Methoden geladen (${methods.length}).`, false);
+        });
+    };
+
+    const bindFilters = () => {
+        const search = bySel('#ml-filter-search');
+        const reset = bySel('#ml-filter-reset');
+
+        if (search) {
+            search.addEventListener('input', applyFilters);
+        }
+        Object.keys(FILTER_DROPDOWNS).forEach((key) => bindFilterDropdown(key));
+
+        if (reset) {
+            reset.addEventListener('click', () => {
+                if (search) {
+                    search.value = '';
+                }
+                Object.keys(FILTER_DROPDOWNS).forEach((key) => clearFilterSelections(key));
+                applyFilters();
+            });
+        }
+    };
+
+    return {
+        init: function(cmid) {
+            runtimeCmid = cmid;
+            bindFilters();
+            bindFormMultiDropdowns();
+            refreshEditAlternativeOptions('');
+
+            const addbtn = bySel('#kg-add-method');
+            if (addbtn) {
+                addbtn.addEventListener('click', () => {
+                    addMethod(cmid).catch((e) => {
+                        Notification.exception(e);
+                        setStatus('Speichern fehlgeschlagen.', true);
+                    });
+                });
+            }
+            const clearbtn = bySel('#kg-clear-form');
+            if (clearbtn) {
+                clearbtn.addEventListener('click', clearAddForm);
+            }
+            const saveallbtn = bySel('#kg-save-methods');
+            if (saveallbtn) {
+                saveallbtn.addEventListener('click', () => {
+                    persist(cmid).then(() => {
+                        setStatus('Methoden gespeichert.', false);
+                    }).catch((e) => {
+                        Notification.exception(e);
+                        setStatus('Speichern fehlgeschlagen.', true);
+                    });
+                });
+            }
+
+            const savebtn = bySel('#ml-save');
+            if (savebtn) {
+                savebtn.addEventListener('click', () => {
+                    saveEditor(cmid).catch((e) => {
+                        Notification.exception(e);
+                        setStatus('Speichern fehlgeschlagen.', true);
+                    });
+                });
+            }
+            const cancelbtn = bySel('#ml-cancel');
+            if (cancelbtn) {
+                cancelbtn.addEventListener('click', () => {
+                    currentEditId = '';
+                    const form = bySel('#ml-edit-form');
+                    if (form && typeof form.reset === 'function') {
+                        form.reset();
+                    }
+                    ['#ml-e-kurzbeschreibung', '#ml-e-ablauf', '#ml-e-lernziele',
+                        '#ml-e-risiken', '#ml-e-debrief', '#ml-e-materialtechnik'].forEach((selector) => {
+                        setFieldValue(selector, '');
+                    });
+                    const materialdraft = bySel('#id_ml_materialiendraftitemid');
+                    if (materialdraft) {
+                        materialdraft.value = '0';
+                    }
+                    bySel('#ml-edit-section')?.classList.add('kg-hidden');
+                });
+            }
+
+            Promise.all([loadMethods(cmid), loadAutosyncSetIds(cmid)]).then(() => {
+                renderList();
+            }).catch((e) => {
+                Notification.exception(e);
+                setStatus('Laden fehlgeschlagen.', true);
+            });
+        }
+    };
+});
