@@ -3,12 +3,12 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-use mod_konzeptgenerator\local\service\import_export_validator;
+use mod_seminarplaner\local\service\import_export_validator;
 
 /**
  * Tests for import/export validator.
  */
-final class mod_konzeptgenerator_import_export_validator_test extends advanced_testcase {
+final class mod_seminarplaner_import_export_validator_test extends advanced_testcase {
     public function test_validate_legacy_row_requires_title(): void {
         $validator = new import_export_validator();
         $result = $validator->validate_legacy_row(['Kurzbeschreibung' => 'X'], false);

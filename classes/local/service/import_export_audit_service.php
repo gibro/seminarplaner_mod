@@ -1,9 +1,9 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
 
-namespace mod_konzeptgenerator\local\service;
+namespace mod_seminarplaner\local\service;
 
-use mod_konzeptgenerator\local\repository\import_export_log_repository;
+use mod_seminarplaner\local\repository\import_export_log_repository;
 
 defined('MOODLE_INTERNAL') || die();
 

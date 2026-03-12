@@ -1,0 +1,29 @@
+Lucide icons used in this plugin view:
+- calendar-days.svg
+- sun.svg
+- sunset.svg
+- clock-3.svg
+- list-checks.svg
+- notebook-pen.svg
+- shield-check.svg
+- wrench.svg
+- file-text.svg
+- users.svg
+- tags.svg
+- target.svg
+- brain.svg
+- triangle-alert.svg
+- paperclip.svg
+- plus.svg
+- git-compare-arrows.svg
+- handshake.svg
+- calendar-range.svg
+- route.svg
+- layout-grid.svg
+- library.svg
+- blocks.svg
+- arrow-left-right.svg
+- clipboard-check.svg
+
+Source: https://github.com/lucide-icons/lucide
+License: ISC (see LICENSE in this directory)

@@ -1,9 +1,9 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
 
-namespace mod_konzeptgenerator\local\service;
+namespace mod_seminarplaner\local\service;
 
-use mod_konzeptgenerator\local\compat\legacy_field_map;
+use mod_seminarplaner\local\compat\legacy_field_map;
 
 defined('MOODLE_INTERNAL') || die();
 

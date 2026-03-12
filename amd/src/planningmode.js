@@ -6,7 +6,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     const PHASE_OPTIONS = ['Warm-Up', 'Einstieg', 'Erwartungsabfrage', 'Vorwissen aktivieren', 'Wissen vermitteln', 'Reflexion',
         'Transfer', 'Evaluation/Feedback', 'Abschluss'];
-    const GROUP_OPTIONS = ['1', '2-3', '3–5', '6–12', '13–24', '25+', 'beliebig'];
     const COGNITIVE_OPTIONS = ['Erinnern', 'Verstehen', 'Anwenden', 'Analysieren', 'Bewerten', 'Erschaffen'];
     const COGNITIVE_LEVELS = {
         erinnern: 1,
@@ -81,6 +80,64 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         `;
     };
 
+    const renderTagFilterDropdown = (slotkey, selectedValues, methods) => {
+        const selected = Array.isArray(selectedValues) ? selectedValues : [];
+        const options = [];
+        const seen = new Set();
+        (Array.isArray(methods) ? methods : []).forEach((method) => {
+            splitMulti(method && method.tags ? method.tags : []).forEach((tag) => {
+                const normalized = normalizeText(tag);
+                if (!normalized || seen.has(normalized)) {
+                    return;
+                }
+                seen.add(normalized);
+                options.push({value: normalized, label: String(tag).trim()});
+            });
+        });
+        options.sort((a, b) => a.label.localeCompare(b.label, 'de'));
+        const buttonLabel = selected.length ? `Tags (${selected.length})` : 'Tags';
+        return `
+            <div class="kg-tag-dropdown kg-pm-filter-dropdown" data-filter-dropdown="tags" data-slotkey="${escapeHtml(slotkey)}">
+                <button type="button" class="kg-input kg-tag-dropdown-toggle" data-filter-toggle="tags">${escapeHtml(buttonLabel)}</button>
+                <div class="kg-tag-dropdown-panel kg-hidden" data-filter-panel="tags">
+                    ${options.length
+                        ? options.map((entry) => {
+                            const checked = selected.includes(entry.value) ? 'checked' : '';
+                            return `<label class="kg-tag-option"><input type="checkbox" data-filter-option="tags" value="${escapeHtml(entry.value)}" ${checked}><span>${escapeHtml(entry.label)}</span></label>`;
+                        }).join('')
+                        : '<div class="sp-filter-status">Keine Tags vorhanden.</div>'}
+                </div>
+            </div>
+        `;
+    };
+
+    const renderInlineTagDropdown = (slotkey, methods) => {
+        const options = [];
+        const seen = new Set();
+        (Array.isArray(methods) ? methods : []).forEach((method) => {
+            splitMulti(method && method.tags ? method.tags : []).forEach((tag) => {
+                const normalized = normalizeText(tag);
+                if (!normalized || seen.has(normalized)) {
+                    return;
+                }
+                seen.add(normalized);
+                options.push({value: String(tag).trim(), normalized});
+            });
+        });
+        options.sort((a, b) => a.value.localeCompare(b.value, 'de'));
+        return `
+            <div class="kg-tag-dropdown" data-inline-tags-dropdown="${escapeHtml(slotkey)}">
+                <button type="button" class="kg-input kg-tag-dropdown-toggle" data-inline-tags-toggle="1">Tags wählen</button>
+                <div class="kg-tag-dropdown-panel kg-hidden" data-inline-tags-panel="1">
+                    ${options.length
+                        ? options.map((entry) => `<label class="kg-tag-option"><input type="checkbox" data-inline-tags-option="1" value="${escapeHtml(entry.value)}"><span>${escapeHtml(entry.value)}</span></label>`).join('')
+                        : '<div class="sp-filter-status">Keine Tags vorhanden.</div>'}
+                </div>
+            </div>
+            <input type="hidden" data-f="tags" value="">
+        `;
+    };
+
     class PlanningMode {
         constructor(cmid) {
             this.cmid = cmid;
@@ -94,6 +151,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.bindTop();
             Promise.all([this.loadMethods(), this.loadPlanningState()]).then(() => {
                 this.renderAll();
+                this.applyRequestedEditFromUrl();
             }).catch((error) => {
                 Notification.exception(error);
                 this.setStatus('Baustein konnte nicht geladen werden.', true);
@@ -113,6 +171,99 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             bySel('#kg-pm-save')?.addEventListener('click', () => this.savePlanningState(false));
             bySel('#kg-pm-check')?.addEventListener('click', () => this.runDidacticCheck());
             bySel('#kg-pm-cancel-edit')?.addEventListener('click', () => this.resetUnitForm());
+            this.bindAlternativeDropdown();
+        }
+
+        bindAlternativeDropdown() {
+            const dropdown = bySel('#kg-pm-unit-alt-dropdown');
+            const toggle = bySel('#kg-pm-unit-alt-toggle');
+            const panel = bySel('#kg-pm-unit-alt-panel');
+            const optionshost = bySel('#kg-pm-unit-alt-options');
+            if (!dropdown || !toggle || !panel || !optionshost) {
+                return;
+            }
+            toggle.addEventListener('click', () => {
+                const opening = panel.classList.contains('kg-hidden');
+                panel.classList.toggle('kg-hidden');
+                dropdown.classList.toggle('kg-form-multi-open', opening);
+            });
+            document.addEventListener('click', (event) => {
+                if (!dropdown.contains(event.target)) {
+                    panel.classList.add('kg-hidden');
+                    dropdown.classList.remove('kg-form-multi-open');
+                }
+            });
+            optionshost.addEventListener('change', (event) => {
+                const target = event.target;
+                if (!target || !target.matches('[data-pm-alt-option="1"]')) {
+                    return;
+                }
+                const values = byAll('[data-pm-alt-option="1"]:checked', optionshost)
+                    .map((checkbox) => String(checkbox.value || '').trim())
+                    .filter(Boolean);
+                this.setAlternativeUnitSelection(values);
+            });
+            this.setAlternativeUnitSelection([]);
+        }
+
+        readAlternativeUnitSelection() {
+            const hidden = bySel('#kg-pm-unit-altunits');
+            if (!hidden) {
+                return [];
+            }
+            return String(hidden.value || '')
+                .split('##')
+                .map((value) => String(value || '').trim())
+                .filter(Boolean);
+        }
+
+        setAlternativeUnitSelection(values) {
+            const hidden = bySel('#kg-pm-unit-altunits');
+            const optionshost = bySel('#kg-pm-unit-alt-options');
+            const toggle = bySel('#kg-pm-unit-alt-toggle');
+            const clean = Array.isArray(values)
+                ? values.map((value) => String(value || '').trim()).filter(Boolean)
+                : [];
+            if (hidden) {
+                hidden.value = clean.join('##');
+            }
+            if (optionshost) {
+                const selectedset = new Set(clean);
+                byAll('[data-pm-alt-option="1"]', optionshost).forEach((checkbox) => {
+                    checkbox.checked = selectedset.has(String(checkbox.value || '').trim());
+                });
+            }
+            if (toggle) {
+                toggle.textContent = clean.length ? `Bausteine (${clean.length})` : 'Bausteine wählen';
+            }
+        }
+
+        refreshAlternativeUnitOptions() {
+            const optionshost = bySel('#kg-pm-unit-alt-options');
+            if (!optionshost) {
+                return;
+            }
+            const selected = this.readAlternativeUnitSelection();
+            const selectedset = new Set(selected);
+            const renderedids = new Set();
+            const editingid = String(this.editingUnitId || '');
+            optionshost.innerHTML = '';
+            this.state.units.forEach((unit) => {
+                const id = String(unit && unit.id ? unit.id : '').trim();
+                if (!id || (editingid && id === editingid)) {
+                    return;
+                }
+                renderedids.add(id);
+                const row = document.createElement('label');
+                row.className = 'kg-tag-option';
+                row.innerHTML = `<input type="checkbox" value="${escapeHtml(id)}" data-pm-alt-option="1"><span>${escapeHtml(String(unit.title || 'Baustein'))}</span>`;
+                const checkbox = bySel('input[type="checkbox"]', row);
+                if (checkbox) {
+                    checkbox.checked = selectedset.has(id);
+                }
+                optionshost.appendChild(row);
+            });
+            this.setAlternativeUnitSelection(selected.filter((id) => renderedids.has(id)));
         }
 
         normalizeState(raw) {
@@ -123,7 +274,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 units: units.map((unit) => ({
                     id: String(unit.id || uid()),
                     title: String(unit.title || 'Ohne Titel').trim(),
-                    duration: Math.max(5, Number.parseInt(unit.duration, 10) || 90),
+                    plannedduration: Math.max(5, Number.parseInt(unit.plannedduration || unit.duration, 10) || 90),
+                    duration: Math.max(5, Number.parseInt(unit.duration || unit.plannedduration, 10) || 90),
                     slotkey: String(unit.slotkey || '').trim(),
                     objectives: sanitizeHtml(unit.objectives || ''),
                     topics: sanitizeHtml(unit.topics || ''),
@@ -138,34 +290,79 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             };
         }
 
+        parseMethodDuration(raw) {
+            const text = String(raw || '').trim();
+            if (!text) {
+                return 0;
+            }
+            const matches = text.match(/\d+/g);
+            if (!matches || !matches.length) {
+                return 0;
+            }
+            const values = matches.map((entry) => Number.parseInt(entry, 10)).filter((value) => Number.isFinite(value) && value > 0);
+            if (!values.length) {
+                return 0;
+            }
+            return Math.max(...values);
+        }
+
+        getUnitMethodsDuration(unit) {
+            const methods = Array.isArray(unit && unit.methods) ? unit.methods : [];
+            return methods.reduce((sum, entry) => {
+                const method = this.getMethodById(entry.methodid);
+                return sum + this.parseMethodDuration(method ? method.zeitbedarf : '');
+            }, 0);
+        }
+
+        recomputeUnitDurations() {
+            const overruns = [];
+            this.state.units = this.state.units.map((unit) => {
+                const plannedduration = Math.max(5, Number.parseInt(unit.plannedduration || unit.duration, 10) || 90);
+                const methodsduration = this.getUnitMethodsDuration(unit);
+                const hasmethods = Array.isArray(unit.methods) && unit.methods.length > 0;
+                const duration = hasmethods ? Math.max(5, methodsduration) : plannedduration;
+                if (hasmethods && methodsduration > plannedduration) {
+                    overruns.push({
+                        title: String(unit.title || 'Baustein'),
+                        planned: plannedduration,
+                        actual: methodsduration
+                    });
+                }
+                return Object.assign({}, unit, {plannedduration, duration});
+            });
+            return overruns;
+        }
+
         getSlotKey(unit) {
-            return unit.slotkey ? `group:${unit.slotkey}` : `unit:${unit.id}`;
+            return `unit:${unit.id}`;
         }
 
         getSlots() {
             const grouped = {};
             this.state.units.forEach((unit) => {
                 const key = this.getSlotKey(unit);
-                if (!grouped[key]) {
-                    grouped[key] = [];
-                }
-                grouped[key].push(unit);
+                grouped[key] = {key, units: [unit], active: unit};
             });
-            const order = this.state.slotorder.filter((key) => !!grouped[key]);
+            const order = this.state.slotorder.filter((key) => key.indexOf('unit:') === 0 && !!grouped[key]);
             Object.keys(grouped).forEach((key) => {
                 if (!order.includes(key)) {
                     order.push(key);
                 }
             });
             this.state.slotorder = order;
-            return order.map((key) => {
-                const units = grouped[key];
-                let active = units.find((u) => u.active);
-                if (!active) {
-                    active = units[0];
-                    active.active = true;
-                }
-                return {key, units, active};
+            return order.map((key) => grouped[key]);
+        }
+
+        getAlternativeUnits(unit) {
+            const slotkey = String(unit && unit.slotkey ? unit.slotkey : '').trim();
+            if (!slotkey) {
+                return [];
+            }
+            return this.state.units.filter((entry) => {
+                const entryid = String(entry && entry.id ? entry.id : '').trim();
+                const currentid = String(unit && unit.id ? unit.id : '').trim();
+                const entryslotkey = String(entry && entry.slotkey ? entry.slotkey : '').trim();
+                return entryid && entryid !== currentid && entryslotkey === slotkey;
             });
         }
 
@@ -175,16 +372,36 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 this.setStatus('Bitte Titel eingeben.', true);
                 return;
             }
-            const duration = Math.max(5, Number.parseInt(bySel('#kg-pm-unit-duration')?.value || '90', 10) || 90);
-            const slotkey = String(bySel('#kg-pm-unit-slotkey')?.value || '').trim();
+            const plannedduration = Math.max(5, Number.parseInt(bySel('#kg-pm-unit-duration')?.value || '90', 10) || 90);
+            const selectedAlternativeUnitIds = this.readAlternativeUnitSelection();
             const objectives = sanitizeHtml(this.readRichText('#kg-pm-unit-objectives'));
             const topics = sanitizeHtml(this.readRichText('#kg-pm-unit-topics'));
+            const selectedunits = this.state.units.filter((unit) => selectedAlternativeUnitIds.includes(String(unit.id || '')));
+            const existinggroupkey = selectedunits.find((unit) => String(unit.slotkey || '').trim()) || null;
+            const slotkey = selectedunits.length
+                ? (existinggroupkey ? String(existinggroupkey.slotkey || '').trim() : `alt-${uid()}`)
+                : '';
+            this.state.units = this.state.units.map((unit) => {
+                if (!selectedAlternativeUnitIds.includes(String(unit.id || ''))) {
+                    return unit;
+                }
+                return Object.assign({}, unit, {slotkey});
+            });
             if (this.editingUnitId) {
                 this.state.units = this.state.units.map((unit) => {
                     if (String(unit.id) !== String(this.editingUnitId)) {
                         return unit;
                     }
-                    return Object.assign({}, unit, {title, duration, slotkey, objectives, topics});
+                    const methodsduration = this.getUnitMethodsDuration(unit);
+                    const hasmethods = Array.isArray(unit.methods) && unit.methods.length > 0;
+                    return Object.assign({}, unit, {
+                        title,
+                        plannedduration,
+                        duration: hasmethods ? Math.max(5, methodsduration) : plannedduration,
+                        slotkey,
+                        objectives,
+                        topics
+                    });
                 });
                 this.normalizeActiveFlags();
                 this.resetUnitForm();
@@ -192,7 +409,17 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 this.savePlanningState(true);
                 return;
             }
-            const unit = {id: uid(), title, duration, slotkey, objectives, topics, active: true, methods: []};
+            const unit = {
+                id: uid(),
+                title,
+                plannedduration,
+                duration: plannedduration,
+                slotkey,
+                objectives,
+                topics,
+                active: true,
+                methods: []
+            };
             const key = this.getSlotKey(unit);
             this.state.units.forEach((entry) => {
                 if (this.getSlotKey(entry) === key) {
@@ -206,6 +433,30 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.resetUnitForm();
             this.renderAll();
             this.savePlanningState(true);
+        }
+
+        ensureUnitAlternativeSlots() {
+            const grouped = {};
+            this.state.units.forEach((unit) => {
+                const normalizedslotkey = String(unit.slotkey || '').trim();
+                unit.slotkey = normalizedslotkey;
+                if (!normalizedslotkey) {
+                    return;
+                }
+                if (!grouped[normalizedslotkey]) {
+                    grouped[normalizedslotkey] = [];
+                }
+                grouped[normalizedslotkey].push(unit);
+            });
+
+            Object.keys(grouped).forEach((slotkey) => {
+                const units = grouped[slotkey];
+                if (units.length < 2) {
+                    units.forEach((unit) => {
+                        unit.slotkey = '';
+                    });
+                }
+            });
         }
 
         readRichText(selector) {
@@ -279,10 +530,15 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             this.editingUnitId = String(unit.id);
             bySel('#kg-pm-unit-title').value = unit.title || '';
-            bySel('#kg-pm-unit-duration').value = String(unit.duration || 90);
-            bySel('#kg-pm-unit-slotkey').value = unit.slotkey || '';
+            bySel('#kg-pm-unit-duration').value = String(unit.plannedduration || unit.duration || 90);
             this.setRichText('#kg-pm-unit-objectives', unit.objectives || '');
             this.setRichText('#kg-pm-unit-topics', unit.topics || '');
+            const unitslotkey = String(unit.slotkey || '').trim();
+            const selected = this.state.units
+                .filter((entry) => String(entry.id) !== String(unit.id) && unitslotkey && String(entry.slotkey || '').trim() === unitslotkey)
+                .map((entry) => String(entry.id));
+            this.setAlternativeUnitSelection(selected);
+            this.refreshAlternativeUnitOptions();
             this.updateUnitFormMode();
         }
 
@@ -290,9 +546,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.editingUnitId = '';
             bySel('#kg-pm-unit-title').value = '';
             bySel('#kg-pm-unit-duration').value = '90';
-            bySel('#kg-pm-unit-slotkey').value = '';
             this.setRichText('#kg-pm-unit-objectives', '');
             this.setRichText('#kg-pm-unit-topics', '');
+            this.setAlternativeUnitSelection([]);
+            this.refreshAlternativeUnitOptions();
             this.updateUnitFormMode();
         }
 
@@ -338,14 +595,43 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         ensureMethodAlternatives() {
-            const ids = new Set(this.methods.map((m) => String(m.id || '')));
-            this.methods = this.methods.map((method) => {
+            const order = [];
+            const byid = new Map();
+            this.methods.forEach((method) => {
                 const normalized = Object.assign({}, method);
-                normalized.alternativen = Array.isArray(method.alternativen) ? method.alternativen : [];
-                normalized.alternativen = normalized.alternativen
-                    .map((id) => String(id || ''))
-                    .filter((id) => id && id !== String(normalized.id) && ids.has(id));
-                return normalized;
+                const id = String(normalized.id || '').trim();
+                if (!id) {
+                    return;
+                }
+                normalized.id = id;
+                byid.set(id, normalized);
+                order.push(id);
+            });
+
+            const links = new Map();
+            order.forEach((id) => {
+                links.set(id, new Set());
+            });
+
+            order.forEach((id) => {
+                const method = byid.get(id);
+                const rawalternatives = method.alternativen;
+                const values = Array.isArray(rawalternatives)
+                    ? rawalternatives
+                    : (typeof rawalternatives === 'string' ? rawalternatives.split(/##|[\r\n,;]+/u) : []);
+                values.map((value) => String(value || '').trim()).forEach((altid) => {
+                    if (!altid || altid === id || !byid.has(altid)) {
+                        return;
+                    }
+                    links.get(id).add(altid);
+                    links.get(altid).add(id);
+                });
+            });
+
+            this.methods = order.map((id) => {
+                const method = byid.get(id);
+                method.alternativen = order.filter((otherid) => otherid !== id && links.get(id).has(otherid));
+                return method;
             });
         }
 
@@ -364,7 +650,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 titel: title,
                 seminarphase: String(bySel('[data-f="phase"]', root)?.value || '').trim() ? [String(bySel('[data-f="phase"]', root)?.value || '').trim()] : [],
                 zeitbedarf: String(bySel('[data-f="duration"]', root)?.value || '').trim(),
-                gruppengroesse: String(bySel('[data-f="group"]', root)?.value || '').trim(),
+                gruppengroesse: '',
                 kurzbeschreibung: String(bySel('[data-f="description"]', root)?.value || '').trim(),
                 autor: '',
                 lernziele: String(bySel('[data-f="objectives"]', root)?.value || '').trim(),
@@ -392,11 +678,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 }
             });
             bySel('[data-f="duration"]', root).value = '30';
+            this.bindInlineTagDropdown(root, slotkey);
             return method;
         }
 
         persistMethods(silent) {
-            return asCall('mod_konzeptgenerator_save_method_cards', {
+            return asCall('mod_seminarplaner_save_method_cards', {
                 cmid: this.cmid,
                 methodsjson: JSON.stringify(this.methods)
             }).then(() => {
@@ -418,6 +705,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 return;
             }
             unit.methods.push({id: uid(), methodid: String(method.id)});
+            this.recomputeUnitDurations();
             this.renderAll();
             this.savePlanningState(true);
         }
@@ -428,6 +716,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 return;
             }
             unit.methods = unit.methods.filter((entry) => String(entry.id) !== String(entryid));
+            this.recomputeUnitDurations();
             this.renderAll();
             this.savePlanningState(true);
         }
@@ -450,6 +739,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             list[idx] = list[target];
             list[target] = tmp;
             unit.methods = list;
+            this.recomputeUnitDurations();
             this.renderAll();
             this.savePlanningState(true);
         }
@@ -465,20 +755,21 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 }
                 return Object.assign({}, entry, {methodid: String(methodid)});
             });
+            this.recomputeUnitDurations();
             this.renderAll();
             this.savePlanningState(true);
         }
 
         ensureFilter(slotkey) {
             if (!this.filters[slotkey]) {
-                this.filters[slotkey] = {search: '', phase: [], group: [], cognitive: []};
+                this.filters[slotkey] = {search: '', phase: [], tags: [], cognitive: []};
             }
             const current = this.filters[slotkey];
             if (!Array.isArray(current.phase)) {
                 current.phase = current.phase ? [String(current.phase)] : [];
             }
-            if (!Array.isArray(current.group)) {
-                current.group = current.group ? [String(current.group)] : [];
+            if (!Array.isArray(current.tags)) {
+                current.tags = current.tags ? [String(current.tags)] : [];
             }
             if (!Array.isArray(current.cognitive)) {
                 current.cognitive = current.cognitive ? [String(current.cognitive)] : [];
@@ -489,15 +780,107 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         methodsForSlot(slotkey) {
             const filter = this.ensureFilter(slotkey);
             return this.methods.filter((method) => {
-                const hay = [method.titel, method.kurzbeschreibung, method.tags].join(' ').toLowerCase();
+                const hay = normalizeText([
+                    stripHtml(method.titel || ''),
+                    stripHtml(method.kurzbeschreibung || ''),
+                    splitMulti(method.tags).join(' ')
+                ].join(' '));
                 const phase = splitMulti(method.seminarphase).map((v) => normalizeText(v));
+                const tags = splitMulti(method.tags).map((v) => normalizeText(v));
                 const cognitive = splitMulti(method.kognitive).map((v) => normalizeText(v.split(/[:\-–]/)[0]));
-                const group = normalizeText(method.gruppengroesse);
                 return (!filter.search || hay.includes(filter.search))
                     && (!filter.phase.length || filter.phase.some((value) => phase.includes(value)))
-                    && (!filter.group.length || filter.group.includes(group))
+                    && (!filter.tags.length || filter.tags.some((value) => tags.includes(value)))
                     && (!filter.cognitive.length || filter.cognitive.some((value) => cognitive.includes(value)));
             });
+        }
+
+        getFilterLabel(field) {
+            switch (field) {
+            case 'phase':
+                return 'Seminarphasen';
+            case 'tags':
+                return 'Tags';
+            case 'cognitive':
+                return 'Kognitive Dimensionen';
+            default:
+                return 'Filter';
+            }
+        }
+
+        updateFilterDropdownLabel(wrapper, field) {
+            if (!wrapper || !field || field === 'search') {
+                return;
+            }
+            const toggle = bySel(`[data-filter-toggle="${field}"]`, wrapper);
+            if (!toggle) {
+                return;
+            }
+            const count = byAll(`[data-filter-option="${field}"]:checked`, wrapper).length;
+            const label = this.getFilterLabel(field);
+            toggle.textContent = count ? `${label} (${count})` : label;
+        }
+
+        renderMethodPool(wrapper, slotkey) {
+            const pool = bySel('[data-pool="1"]', wrapper);
+            if (!pool) {
+                return;
+            }
+            const methods = this.methodsForSlot(slotkey);
+            pool.innerHTML = '';
+            if (!methods.length) {
+                pool.innerHTML = '<p class="sp-filter-status">Keine Methoden für aktuellen Filter.</p>';
+                return;
+            }
+            methods.forEach((method) => {
+                const card = document.createElement('div');
+                card.className = 'sp-card';
+                const level = getMethodCognitiveLevel(method);
+                if (level) {
+                    card.classList.add(`sp-level-${level}`);
+                }
+                card.draggable = true;
+                card.innerHTML = `<div class="sp-card-title"><strong>${escapeHtml(method.titel || '')}</strong></div><div class="sp-card-meta"><span class="sp-badge">${escapeHtml(method.zeitbedarf || '-')} Min</span></div><div class="sp-card-description">${escapeHtml(stripHtml(method.kurzbeschreibung || ''))}</div>`;
+                card.addEventListener('dragstart', (event) => {
+                    event.dataTransfer.setData('text/plain', JSON.stringify({type: 'method', methodid: String(method.id)}));
+                });
+                pool.appendChild(card);
+            });
+        }
+
+        bindInlineTagDropdown(root, slotkey) {
+            const dropdown = bySel(`[data-inline-tags-dropdown="${slotkey}"]`, root);
+            const toggle = bySel('[data-inline-tags-toggle="1"]', dropdown);
+            const panel = bySel('[data-inline-tags-panel="1"]', dropdown);
+            const hidden = bySel('[data-f="tags"]', root);
+            if (!dropdown || !toggle || !panel || !hidden) {
+                return;
+            }
+            const update = () => {
+                const values = byAll('[data-inline-tags-option="1"]:checked', dropdown)
+                    .map((checkbox) => String(checkbox.value || '').trim())
+                    .filter(Boolean);
+                hidden.value = values.join('##');
+                toggle.textContent = values.length ? `Tags (${values.length})` : 'Tags wählen';
+            };
+            toggle.addEventListener('click', () => {
+                const opening = panel.classList.contains('kg-hidden');
+                byAll('[data-inline-tags-panel="1"]', root).forEach((other) => {
+                    if (other !== panel) {
+                        other.classList.add('kg-hidden');
+                    }
+                });
+                panel.classList.toggle('kg-hidden', !opening);
+            });
+            byAll('[data-inline-tags-option="1"]', dropdown).forEach((checkbox) => {
+                checkbox.addEventListener('change', update);
+            });
+            document.addEventListener('click', (event) => {
+                if (!dropdown.contains(event.target)) {
+                    panel.classList.add('kg-hidden');
+                }
+            });
+            update();
         }
 
         alternativeMethodIds(method) {
@@ -556,7 +939,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             slots.forEach((slot, idx) => {
                 const row = document.createElement('div');
                 row.className = 'kg-unit-row';
-                const hasalternatives = slot.units.length > 1;
+                const alternatives = this.getAlternativeUnits(slot.active);
+                const hasalternatives = alternatives.length > 0;
+                const alternativesummary = hasalternatives
+                    ? `<div><strong>Alternativen:</strong> ${alternatives.map((unit) => `${escapeHtml(unit.title)} (${escapeHtml(String(unit.duration))} Min)`).join(' · ')}</div>`
+                    : '';
                 row.innerHTML = `
                     <div class="kg-unit-row-main">
                         <strong>${escapeHtml(slot.active.title)}</strong>
@@ -566,6 +953,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     <div class="kg-unit-meta">
                         <div><strong>Lernziele:</strong> ${escapeHtml(stripHtml(slot.active.objectives || '')) || '<em>Keine Angaben</em>'}</div>
                         <div><strong>Themen:</strong> ${escapeHtml(stripHtml(slot.active.topics || '')) || '<em>Keine Angaben</em>'}</div>
+                        ${alternativesummary}
                     </div>
                     <div class="kg-unit-row-actions">
                         <button class="kg-btn" data-act="edit">Bearbeiten</button>
@@ -573,13 +961,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         <button class="kg-btn" data-act="down" ${idx === slots.length - 1 ? 'disabled' : ''}>↓</button>
                         <button class="kg-btn" data-act="delete">Löschen</button>
                     </div>
-                    ${hasalternatives ? `<div><label class="kg-label">Aktive Alternative</label><select class="kg-input" data-act="select-active">${slot.units.map((unit) => `<option value="${escapeHtml(unit.id)}" ${unit.active ? 'selected' : ''}>${escapeHtml(unit.title)} (${unit.duration} Min)</option>`).join('')}</select></div>` : ''}
                 `;
                 row.querySelector('[data-act="edit"]')?.addEventListener('click', () => this.editUnit(slot.active.id));
                 row.querySelector('[data-act="up"]')?.addEventListener('click', () => this.moveSlot(slot.key, -1));
                 row.querySelector('[data-act="down"]')?.addEventListener('click', () => this.moveSlot(slot.key, 1));
                 row.querySelector('[data-act="delete"]')?.addEventListener('click', () => this.removeSlot(slot.key));
-                row.querySelector('[data-act="select-active"]')?.addEventListener('change', (event) => this.setActiveSlotUnit(slot.key, event.target.value));
                 host.appendChild(row);
             });
         }
@@ -589,25 +975,36 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (!host) {
                 return;
             }
+            const active = document.activeElement;
+            const focusedSearchState = active && active.matches && active.matches('[data-filter="search"]')
+                ? {
+                    slotkey: String(active.closest('[data-slot-key]')?.getAttribute('data-slot-key') || ''),
+                    start: typeof active.selectionStart === 'number' ? active.selectionStart : null,
+                    end: typeof active.selectionEnd === 'number' ? active.selectionEnd : null
+                }
+                : null;
             host.innerHTML = '';
             this.getSlots().forEach((slot, slotIndex) => {
                 const unit = slot.active;
+                const alternatives = this.getAlternativeUnits(unit);
+                const hasalternatives = alternatives.length > 0;
+                const plannedduration = Math.max(5, Number.parseInt(unit.plannedduration || unit.duration, 10) || 90);
+                const methodsduration = this.getUnitMethodsDuration(unit);
+                const hasmethods = Array.isArray(unit.methods) && unit.methods.length > 0;
+                const actualduration = hasmethods ? Math.max(5, methodsduration) : plannedduration;
+                const overrun = hasmethods ? Math.max(0, methodsduration - plannedduration) : 0;
                 const hasSavedOpen = Object.prototype.hasOwnProperty.call(this.state.openslots, slot.key);
                 const open = hasSavedOpen ? !!this.state.openslots[slot.key] : slotIndex === 0;
                 const filter = this.ensureFilter(slot.key);
-                const methods = this.methodsForSlot(slot.key);
 
                 const wrapper = document.createElement('details');
                 wrapper.className = 'kg-plan-row';
+                wrapper.setAttribute('data-slot-key', slot.key);
                 wrapper.open = open;
                 wrapper.addEventListener('toggle', () => {
                     this.state.openslots[slot.key] = wrapper.open;
                     this.savePlanningState(true);
                 });
-
-                const alternativeselector = slot.units.length > 1
-                    ? `<select class="kg-input" data-act="accordion-select">${slot.units.map((entry) => `<option value="${escapeHtml(entry.id)}" ${entry.active ? 'selected' : ''}>${escapeHtml(entry.title)}</option>`).join('')}</select>`
-                    : '';
 
                 wrapper.innerHTML = `
                     <summary>
@@ -615,7 +1012,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             <span class="kg-accordion-indicator" aria-hidden="true">▸</span>
                             <span>${escapeHtml(unit.title)}</span>
                             <span class="sp-badge">${unit.duration} Min</span>
-                            ${slot.units.length > 1 ? '<span class="sp-badge">Alternative vorhanden</span>' : ''}
+                            ${hasalternatives ? '<span class="sp-badge">Alternative vorhanden</span>' : ''}
                         </div>
                         <div class="kg-plan-summary-boxes">
                             <div class="kg-plan-summary-box">
@@ -631,19 +1028,23 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     <div class="kg-plan-grid">
                         <div class="kg-plan-col">
                             <h5>Baustein</h5>
-                            <div class="sp-filter-status">Gesamtdauer: ${escapeHtml(String(unit.duration || 0))} Min</div>
-                            ${alternativeselector}
-                            <div class="kg-unit-canvas" data-canvas="1"></div>
+                            <div class="sp-filter-status">Geplant (Schritt 1): ${escapeHtml(String(plannedduration))} Min</div>
+                            <div class="sp-filter-status">Aktuell (Schritt 2): ${escapeHtml(String(actualduration))} Min</div>
+                            ${hasalternatives ? `<div class="sp-filter-status">Alternativen: ${alternatives.map((entry) => escapeHtml(entry.title)).join(' · ')}</div>` : ''}
+                            ${overrun > 0 ? `<div class="sp-filter-status kg-pm-overrun-warning"><span class="kg-pm-warning-triangle" aria-hidden="true"><span>!</span></span><span>Warnung: Geplante Dauer um ${escapeHtml(String(overrun))} Min überschritten.</span></div>` : ''}
+                            <div class="sp-filter-status kg-dnd-hint">Zielbereich: Methoden hier hineinziehen.</div>
+                            <div class="kg-unit-canvas kg-dnd-zone" data-canvas="1"></div>
                         </div>
                         <div class="kg-plan-col">
                             <h5>Methodenpool</h5>
+                            <div class="sp-filter-status kg-dnd-hint">Quelle: Methodenkarte ziehen und im Zielbereich ablegen.</div>
                             <div class="kg-inline-filter">
                                 <input class="kg-input" data-filter="search" type="search" value="${escapeHtml(filter.search)}" placeholder="Suche">
                                 ${renderFilterDropdown('phase', 'Seminarphasen', PHASE_OPTIONS, filter.phase)}
-                                ${renderFilterDropdown('group', 'Gruppengrößen', GROUP_OPTIONS, filter.group)}
+                                ${renderTagFilterDropdown(slot.key, filter.tags, this.methods)}
                                 ${renderFilterDropdown('cognitive', 'Kognitive Dimensionen', COGNITIVE_OPTIONS, filter.cognitive)}
                             </div>
-                            <div class="kg-method-pool" data-pool="1"></div>
+                            <div class="kg-method-pool kg-dnd-source" data-pool="1"></div>
                         </div>
                         <div class="kg-plan-col">
                             <h5>Methode erstellen</h5>
@@ -653,10 +1054,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                                     <div><label class="kg-label">Zeitbedarf</label><input class="kg-input" data-f="duration" type="number" min="5" step="5" value="30"></div>
                                     <div><label class="kg-label">Seminarphase</label><select class="kg-input" data-f="phase"><option value="">-</option>${PHASE_OPTIONS.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('')}</select></div>
                                 </div>
-                                <div class="kg-two">
-                                    <div><label class="kg-label">Gruppengröße</label><select class="kg-input" data-f="group"><option value="">-</option>${GROUP_OPTIONS.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('')}</select></div>
-                                    <div><label class="kg-label">Tags</label><input class="kg-input" data-f="tags" type="text"></div>
-                                </div>
+                                <label class="kg-label">Tags</label>
+                                ${renderInlineTagDropdown(slot.key, this.methods)}
                                 <details><summary>Weitere Felder</summary>
                                     <label class="kg-label">Kurzbeschreibung</label><textarea class="kg-input" data-f="description" rows="2"></textarea>
                                     <label class="kg-label">Lernziele</label><textarea class="kg-input" data-f="objectives" rows="2"></textarea>
@@ -669,16 +1068,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                                 </details>
                                 <div class="kg-row">
                                     <button class="kg-btn kg-btn-primary" type="button" data-act="inline-create">Methode erstellen & einplanen</button>
-                                    <div class="sp-card kg-inline-drag" draggable="true" data-act="inline-drag">In Bereich ziehen</div>
+                                    <div class="sp-card kg-inline-drag" draggable="true" data-act="inline-drag">Drag & Drop: In Zielbereich ziehen</div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 `;
-
-                wrapper.querySelector('[data-act="accordion-select"]')?.addEventListener('change', (event) => {
-                    this.setActiveSlotUnit(slot.key, event.target.value);
-                });
 
                 const canvas = bySel('[data-canvas="1"]', wrapper);
                 if (canvas) {
@@ -706,7 +1101,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             }
                             item.innerHTML = `
                                 <div class="sp-card-title"><strong>${escapeHtml(method.titel || '')}</strong></div>
-                                <div class="sp-card-meta"><span class="sp-badge">${escapeHtml(method.zeitbedarf || '-')} Min</span><span class="sp-badge">${escapeHtml(method.gruppengroesse || '-')}</span></div>
+                                <div class="sp-card-meta"><span class="sp-badge">${escapeHtml(method.zeitbedarf || '-')} Min</span></div>
                                 ${selector}
                                 <div class="kg-row">
                                     <button class="kg-btn" data-act="entry-up" data-entry="${escapeHtml(entry.id)}" ${index === 0 ? 'disabled' : ''}>↑</button>
@@ -719,36 +1114,19 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     }
                 }
 
-                const pool = bySel('[data-pool="1"]', wrapper);
-                if (pool) {
-                    if (!methods.length) {
-                        pool.innerHTML = '<p class="sp-filter-status">Keine Methoden für aktuellen Filter.</p>';
-                    } else {
-                        methods.forEach((method) => {
-                            const card = document.createElement('div');
-                            card.className = 'sp-card';
-                            const level = getMethodCognitiveLevel(method);
-                            if (level) {
-                                card.classList.add(`sp-level-${level}`);
-                            }
-                            card.draggable = true;
-                            card.innerHTML = `<div class="sp-card-title"><strong>${escapeHtml(method.titel || '')}</strong></div><div class="sp-card-meta"><span class="sp-badge">${escapeHtml(method.zeitbedarf || '-')} Min</span><span class="sp-badge">${escapeHtml(method.gruppengroesse || '-')}</span></div><div class="sp-card-description">${escapeHtml(method.kurzbeschreibung || '')}</div>`;
-                            card.addEventListener('dragstart', (event) => {
-                                event.dataTransfer.setData('text/plain', JSON.stringify({type: 'method', methodid: String(method.id)}));
-                            });
-                            pool.appendChild(card);
-                        });
-                    }
-                }
+                this.renderMethodPool(wrapper, slot.key);
 
                 byAll('[data-filter]', wrapper).forEach((input) => {
                     const apply = () => {
                         const field = String(input.getAttribute('data-filter') || '');
                         this.ensureFilter(slot.key)[field] = normalizeText(input.value);
-                        this.renderAccordion();
+                        this.renderMethodPool(wrapper, slot.key);
                     };
                     input.addEventListener('input', apply);
                     input.addEventListener('change', apply);
+                    input.addEventListener('keydown', (event) => {
+                        event.stopPropagation();
+                    });
                 });
 
                 byAll('[data-filter-toggle]', wrapper).forEach((toggle) => {
@@ -776,9 +1154,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         this.ensureFilter(slot.key)[field] = byAll(`[data-filter-option="${field}"]:checked`, wrapper)
                             .map((option) => normalizeText(option.value))
                             .filter(Boolean);
-                        this.renderAccordion();
+                        this.updateFilterDropdownLabel(wrapper, field);
+                        this.renderMethodPool(wrapper, slot.key);
                     });
                 });
+                ['phase', 'tags', 'cognitive'].forEach((field) => this.updateFilterDropdownLabel(wrapper, field));
 
                 bySel('[data-act="inline-create"]', wrapper)?.addEventListener('click', () => {
                     const method = this.createInlineMethod(slot.key);
@@ -786,6 +1166,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         this.attachMethod(unit.id, method.id);
                     }
                 });
+                this.bindInlineTagDropdown(bySel(`[data-inline-form="${slot.key}"]`, wrapper), slot.key);
                 bySel('[data-act="inline-drag"]', wrapper)?.addEventListener('dragstart', (event) => {
                     const root = bySel(`[data-inline-form="${slot.key}"]`, wrapper);
                     const title = String(bySel('[data-f="title"]', root)?.value || '').trim();
@@ -804,6 +1185,15 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
                 host.appendChild(wrapper);
             });
+            if (focusedSearchState && focusedSearchState.slotkey) {
+                const search = bySel(`[data-slot-key="${focusedSearchState.slotkey}"] [data-filter="search"]`, host);
+                if (search) {
+                    search.focus();
+                    if (focusedSearchState.start !== null && focusedSearchState.end !== null) {
+                        search.setSelectionRange(focusedSearchState.start, focusedSearchState.end);
+                    }
+                }
+            }
         }
 
         runDidacticCheck() {
@@ -865,13 +1255,61 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         renderAll() {
+            this.recomputeUnitDurations();
+            this.ensureUnitAlternativeSlots();
+            this.normalizeActiveFlags();
             this.updateUnitFormMode();
+            this.refreshAlternativeUnitOptions();
             this.renderUnitList();
             this.renderAccordion();
         }
 
+        applyRequestedEditFromUrl() {
+            if (typeof window === 'undefined' || !window.location) {
+                return;
+            }
+            const params = new URLSearchParams(window.location.search || '');
+            const requested = String(params.get('editunitid') || '').trim();
+            const focus = String(params.get('focus') || '').trim().toLowerCase();
+            if (!requested) {
+                return;
+            }
+            const unit = this.state.units.find((entry) => String(entry.id) === requested);
+            if (!unit) {
+                this.setStatus('Baustein aus Link wurde nicht gefunden.', true);
+                return;
+            }
+            if (focus === 'step2') {
+                const slotkey = this.getSlotKey(unit);
+                this.state.units.forEach((entry) => {
+                    if (this.getSlotKey(entry) === slotkey) {
+                        entry.active = String(entry.id) === String(unit.id);
+                    }
+                });
+                this.state.openslots[slotkey] = true;
+                this.renderAll();
+
+                const section = bySel('#kg-pm-step-2');
+                if (section) {
+                    section.scrollIntoView({behavior: 'smooth', block: 'start'});
+                }
+                const slotRow = byAll('.kg-plan-row').find((row) => String(row.getAttribute('data-slot-key') || '') === slotkey);
+                if (slotRow) {
+                    slotRow.open = true;
+                    slotRow.scrollIntoView({behavior: 'smooth', block: 'start'});
+                }
+                return;
+            }
+            this.editUnit(unit.id);
+            const target = bySel('#kg-pm-unit-title');
+            if (target) {
+                target.scrollIntoView({behavior: 'smooth', block: 'center'});
+                target.focus({preventScroll: true});
+            }
+        }
+
         loadMethods() {
-            return asCall('mod_konzeptgenerator_get_method_cards', {cmid: this.cmid}).then((res) => {
+            return asCall('mod_seminarplaner_get_method_cards', {cmid: this.cmid}).then((res) => {
                 let parsed = [];
                 try {
                     parsed = res.methodsjson ? JSON.parse(res.methodsjson) : [];
@@ -884,7 +1322,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         loadPlanningState() {
-            return asCall('mod_konzeptgenerator_get_planning_state', {cmid: this.cmid}).then((res) => {
+            return asCall('mod_seminarplaner_get_planning_state', {cmid: this.cmid}).then((res) => {
                 let parsed = {};
                 try {
                     parsed = res.statejson ? JSON.parse(res.statejson) : {};
@@ -892,12 +1330,18 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     parsed = {};
                 }
                 this.state = this.normalizeState(parsed);
+                this.ensureUnitAlternativeSlots();
+                this.normalizeActiveFlags();
+                this.recomputeUnitDurations();
                 this.versionhash = String(res.versionhash || '');
             });
         }
 
         savePlanningState(silent) {
-            return asCall('mod_konzeptgenerator_save_planning_state', {
+            this.ensureUnitAlternativeSlots();
+            this.normalizeActiveFlags();
+            const overruns = this.recomputeUnitDurations();
+            return asCall('mod_seminarplaner_save_planning_state', {
                 cmid: this.cmid,
                 statejson: JSON.stringify(this.state),
                 expectedhash: this.versionhash || ''
@@ -905,7 +1349,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 this.versionhash = String(res.versionhash || '');
                 if (!silent) {
                     const timestr = new Date().toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'});
-                    this.setStatus(`Baustein gespeichert (${timestr}).`, false);
+                    if (overruns.length) {
+                        this.setStatus(`Baustein gespeichert (${timestr}). Warnung: ${overruns.length} Baustein(e) überschreiten die geplante Dauer.`, true);
+                    } else {
+                        this.setStatus(`Baustein gespeichert (${timestr}).`, false);
+                    }
                 }
             }).catch((error) => {
                 if (!silent) {

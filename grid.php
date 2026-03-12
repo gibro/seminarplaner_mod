@@ -5,20 +5,41 @@ require_once(__DIR__ . '/../../config.php');
 require_once(__DIR__ . '/locallib.php');
 
 $id = required_param('id', PARAM_INT);
-$activity = konzeptgenerator_require_activity_context($id, 'mod/konzeptgenerator:view');
+$activity = seminarplaner_require_activity_context($id, 'mod/seminarplaner:managegrids');
 $cm = $activity['cm'];
 $course = $activity['course'];
-$konzeptgenerator = $activity['konzeptgenerator'];
+$seminarplaner = $activity['seminarplaner'];
 
-$gridservice = new \mod_konzeptgenerator\local\service\grid_service();
+$gridservice = new \mod_seminarplaner\local\service\grid_service();
 $grids = $gridservice->list_grids((int)$cm->id);
 
-konzeptgenerator_prepare_page('/mod/konzeptgenerator/grid.php', $cm, $course, $konzeptgenerator, 'grid');
+seminarplaner_prepare_page('/mod/seminarplaner/grid.php', $cm, $course, $seminarplaner, 'grid');
+
+$lucidebaseurl = $CFG->wwwroot . '/mod/seminarplaner/pix/lucide';
+$renderlucide = static function(string $name, string $sizeclass = 'kg-lucide--sm') use ($lucidebaseurl): string {
+    return html_writer::empty_tag('img', [
+        'src' => $lucidebaseurl . '/' . $name . '.svg',
+        'class' => trim('kg-lucide ' . $sizeclass),
+        'alt' => '',
+        'aria-hidden' => 'true',
+        'loading' => 'lazy',
+        'decoding' => 'async',
+    ]);
+};
+$rendericontext = static function(string $icon, string $text, string $wrapperclass = 'kg-label-content') use ($renderlucide): string {
+    return html_writer::tag('span',
+        $renderlucide($icon) . html_writer::tag('span', s($text)),
+        ['class' => $wrapperclass]
+    );
+};
+$renderbuttonlabel = static function(string $text, string $icon) use ($rendericontext): string {
+    return $rendericontext($icon, $text, 'kg-btn-content');
+};
 
 echo $OUTPUT->header();
 
-echo $OUTPUT->heading(format_string($konzeptgenerator->name));
-echo konzeptgenerator_render_tabs((int)$cm->id, 'grid');
+echo $OUTPUT->heading(format_string($seminarplaner->name));
+echo seminarplaner_render_tabs((int)$cm->id, 'grid');
 
 echo html_writer::start_div('kg-shell');
 echo html_writer::tag('div', '', ['id' => 'kg-status', 'class' => 'kg-status']);
@@ -31,7 +52,7 @@ echo html_writer::start_div('kg-ie-block');
 echo html_writer::tag('h5', 'Seminarplan erstellen');
 echo html_writer::tag('label', 'Name', ['for' => 'kg-grid-name', 'class' => 'kg-label']);
 echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'kg-grid-name', 'class' => 'kg-input', 'placeholder' => 'Neuer Seminarplan']);
-echo html_writer::start_div('kg-row');
+echo html_writer::start_div('kg-row kg-row--action');
 echo html_writer::tag('button', 'Seminarplan erstellen', ['type' => 'button', 'id' => 'kg-create-grid', 'class' => 'kg-btn kg-btn-primary']);
 echo html_writer::end_div();
 echo html_writer::tag('p', 'Namen eingeben, Einstellungen festlegen und mit "Übernehmen" erstellen.', ['class' => 'sp-filter-status']);
@@ -45,8 +66,8 @@ foreach ($grids as $grid) {
     echo html_writer::tag('option', format_string($grid->name) . ' (#' . $grid->id . ')', ['value' => $grid->id]);
 }
 echo html_writer::end_tag('select');
-echo html_writer::start_div('kg-row');
-echo html_writer::tag('button', 'Seminarplan laden', ['type' => 'button', 'id' => 'kg-load-grid', 'class' => 'kg-btn']);
+echo html_writer::start_div('kg-row kg-row--action');
+echo html_writer::tag('button', 'Seminarplan laden', ['type' => 'button', 'id' => 'kg-load-grid', 'class' => 'kg-btn kg-btn-primary']);
 echo html_writer::end_div();
 echo html_writer::tag('p', 'Seminarplan auswählen und "Seminarplan laden" klicken', ['class' => 'sp-filter-status']);
 echo html_writer::end_div();
@@ -108,17 +129,15 @@ echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block kg-library-step kg-hidden', ['id' => 'kg-grid-step-2']);
 echo html_writer::tag('h4', '2. Seminarplan anzeigen und speichern');
+echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-row');
-echo html_writer::tag('button', 'Seminarplan speichern', ['type' => 'button', 'id' => 'kg-save-grid', 'class' => 'kg-btn kg-btn-primary']);
-echo html_writer::tag('button', 'Pause hinzufügen', ['type' => 'button', 'id' => 'sp-addbreak', 'class' => 'kg-btn']);
-echo html_writer::tag('button', 'Seminarplan löschen', ['type' => 'button', 'id' => 'sp-clear', 'class' => 'kg-btn']);
-echo html_writer::start_div('sp-time-zoom kg-grid-zoom', ['role' => 'group', 'aria-label' => 'Zoomsteuerung']);
-echo html_writer::tag('button', '-', ['class' => 'kg-btn', 'id' => 'sp-zoom-out', 'type' => 'button']);
-echo html_writer::tag('span', '15 Min', ['class' => 'sp-zoom-indicator', 'id' => 'sp-zoom-indicator']);
-echo html_writer::tag('button', '+', ['class' => 'kg-btn', 'id' => 'sp-zoom-in', 'type' => 'button']);
+echo html_writer::start_tag('label', ['class' => 'kg-label kg-inline-checkbox']);
+echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'kg-publish-roterfaden']);
+echo html_writer::tag('span', get_string('roterfaden_publishlabel', 'mod_seminarplaner'));
+echo html_writer::end_tag('label');
+echo html_writer::tag('span', '', ['id' => 'kg-publish-roterfaden-status', 'class' => 'sp-filter-status']);
 echo html_writer::end_div();
 echo html_writer::end_div();
-echo html_writer::tag('p', 'Kleineres Raster = genauer planen, größeres Raster = mehr Übersicht.', ['class' => 'sp-filter-status']);
 
 ?>
 <div class="sp-wrapper">
@@ -240,8 +259,40 @@ echo html_writer::tag('p', 'Kleineres Raster = genauer planen, größeres Raster
     </aside>
 
     <main>
+      <div class="sp-weekbar" role="toolbar" aria-label="Ansicht und Zeitraster">
+        <div class="sp-weekbar__nav">
+          <div class="sp-view-switch" role="group" aria-label="Ansicht wechseln">
+            <button class="kg-btn is-active" id="sp-view-week" type="button"><?php echo $renderbuttonlabel('Woche', 'calendar-range'); ?></button>
+            <button class="kg-btn" id="sp-view-day" type="button"><?php echo $renderbuttonlabel('Tag', 'calendar-days'); ?></button>
+          </div>
+          <div class="sp-day-switch" role="group" aria-label="Tag wechseln">
+            <select id="sp-day-select" class="kg-input kg-grid-select" aria-label="Tag auswählen"></select>
+          </div>
+          <div class="sp-weekbar__actions" role="group" aria-label="Plan Aktionen">
+            <button type="button" id="sp-addbreak" class="kg-btn"><?php echo $renderbuttonlabel('Pause hinzufügen', 'plus'); ?></button>
+            <button type="button" id="sp-clear" class="kg-btn"><?php echo $renderbuttonlabel('Seminarplan löschen', 'trash-2'); ?></button>
+            <span id="sp-saved-state" class="sp-saved-state" aria-live="polite"><?php echo $rendericontext('clipboard-check', 'Gespeichert: -', 'kg-btn-content'); ?></span>
+          </div>
+        </div>
+        <div class="sp-weekbar__meta">
+          <label class="sp-time-scale" for="sp-time-scale">
+            <span>Zeitraster</span>
+            <select id="sp-time-scale" class="kg-input kg-grid-select" aria-label="Zeitraster wählen">
+              <option value="5">5 Min</option>
+              <option value="15" selected>15 Min</option>
+              <option value="30">30 Min</option>
+            </select>
+          </label>
+          <div class="sp-weekbar__range" id="sp-view-label">Wochenansicht</div>
+        </div>
+      </div>
+
       <div class="sp-row" id="sp-header">
         <div></div>
+      </div>
+
+      <div class="sp-row sp-row--allday" id="sp-allday-row">
+        <div class="sp-allday-label" aria-hidden="true"></div>
       </div>
 
       <div class="sp-row" id="sp-grid-row">

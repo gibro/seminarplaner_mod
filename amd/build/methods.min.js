@@ -22,10 +22,47 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     };
 
     let methods = [];
+    let editingMethodId = '';
+    let addButtonDefaultHtml = '';
 
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
     const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const getMoodleRoot = () => {
+        if (typeof window === 'undefined' || !window.M || !window.M.cfg || !window.M.cfg.wwwroot) {
+            return '';
+        }
+        return String(window.M.cfg.wwwroot).replace(/\/+$/, '');
+    };
+    const MOODLE_ROOT = getMoodleRoot();
+    const LUCIDE_BASE_URL = MOODLE_ROOT ? `${MOODLE_ROOT}/mod/seminarplaner/pix/lucide` : '';
+    const renderLucideIcon = (name, extraClass = '') => {
+        if (!name || !LUCIDE_BASE_URL) {
+            return '';
+        }
+        const classes = `kg-lucide${extraClass ? ` ${extraClass}` : ''}`;
+        return `<img class="${classes}" src="${LUCIDE_BASE_URL}/${name}.svg" alt="" aria-hidden="true" loading="lazy" decoding="async">`;
+    };
+    const escapeHtml = (str) => String(str || '').replace(/[&<>"']/g, (ch) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch] || ch));
+    const sanitizeHtml = (html) => {
+        const tpl = document.createElement('template');
+        tpl.innerHTML = String(html || '');
+        tpl.content.querySelectorAll('script,style,iframe,object,embed,link,meta').forEach((el) => el.remove());
+        tpl.content.querySelectorAll('*').forEach((el) => {
+            Array.from(el.attributes).forEach((attr) => {
+                const name = String(attr.name || '').toLowerCase();
+                const value = String(attr.value || '').trim().toLowerCase();
+                if (name.startsWith('on')) {
+                    el.removeAttribute(attr.name);
+                    return;
+                }
+                if ((name === 'href' || name === 'src') && value.startsWith('javascript:')) {
+                    el.removeAttribute(attr.name);
+                }
+            });
+        });
+        return tpl.innerHTML;
+    };
 
     const setStatus = (text, isError) => {
         const el = bySel('#kg-status');
@@ -139,12 +176,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     const refreshAlternativeOptions = () => {
         const host = bySel('#kg-f-alternativen-options');
+        const hint = bySel('#kg-f-alternativen-hint');
         if (!host) {
             return;
         }
         const selected = readMulti(FIELDS.alternativen);
         const currenttitle = String(bySel(FIELDS.titel)?.value || '').trim().toLowerCase();
         host.innerHTML = '';
+        let optioncount = 0;
         methods.forEach((method) => {
             const id = String(method.id || '').trim();
             const title = String(method.titel || '').trim();
@@ -155,7 +194,17 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             row.className = 'kg-tag-option';
             row.innerHTML = `<input type="checkbox" value="${id}" data-kg-form-multi-option="1"><span>${title}</span>`;
             host.appendChild(row);
+            optioncount++;
         });
+        if (hint) {
+            if (!methods.length) {
+                hint.textContent = 'Noch keine Methoden geladen. Bitte zuerst Methoden importieren oder speichern.';
+            } else if (!optioncount) {
+                hint.textContent = 'Keine Alternativmethoden verfügbar (aktueller Titel ist bereits vergeben oder es gibt nur diese eine Methode).';
+            } else {
+                hint.textContent = '';
+            }
+        }
         host.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
             checkbox.checked = selected.includes(String(checkbox.value || '').trim());
             checkbox.addEventListener('change', () => {
@@ -169,14 +218,83 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     };
 
     const normalizeAlternatives = () => {
-        const ids = new Set(methods.map((method) => String(method.id || '')));
-        methods = methods.map((method) => {
+        const order = [];
+        const byid = new Map();
+        methods.forEach((method) => {
             const normalized = Object.assign({}, method);
-            const values = Array.isArray(method.alternativen) ? method.alternativen : [];
-            normalized.alternativen = values.map((id) => String(id || ''))
-                .filter((id) => id && id !== String(normalized.id) && ids.has(id));
-            return normalized;
+            const id = String(normalized.id || '').trim();
+            if (!id) {
+                return;
+            }
+            normalized.id = id;
+            byid.set(id, normalized);
+            order.push(id);
         });
+
+        const links = new Map();
+        order.forEach((id) => {
+            links.set(id, new Set());
+        });
+
+        order.forEach((id) => {
+            const method = byid.get(id);
+            const values = Array.isArray(method.alternativen) ? method.alternativen : [];
+            values.map((value) => String(value || '').trim()).forEach((altid) => {
+                if (!altid || altid === id || !byid.has(altid)) {
+                    return;
+                }
+                links.get(id).add(altid);
+                links.get(altid).add(id);
+            });
+        });
+
+        methods = order.map((id) => {
+            const method = byid.get(id);
+            method.alternativen = order.filter((otherid) => otherid !== id && links.get(id).has(otherid));
+            return method;
+        });
+    };
+
+    const reconcileAlternativesForMethod = (methodid, selectedalternatives) => {
+        const currentid = String(methodid || '').trim();
+        if (!currentid) {
+            return;
+        }
+        const selected = new Set(
+            (Array.isArray(selectedalternatives) ? selectedalternatives : [])
+                .map((id) => String(id || '').trim())
+                .filter((id) => id && id !== currentid)
+        );
+
+        methods = methods.map((method) => {
+            const id = String(method.id || '').trim();
+            if (!id) {
+                return method;
+            }
+            if (id === currentid) {
+                return Object.assign({}, method, {alternativen: Array.from(selected)});
+            }
+            const existing = Array.isArray(method.alternativen)
+                ? method.alternativen.map((altid) => String(altid || '').trim()).filter(Boolean)
+                : [];
+            const withoutcurrent = existing.filter((altid) => altid !== currentid);
+            if (selected.has(id)) {
+                withoutcurrent.push(currentid);
+            }
+            return Object.assign({}, method, {alternativen: Array.from(new Set(withoutcurrent))});
+        });
+    };
+
+    const normalizeLoadedMethod = (method) => {
+        const normalized = Object.assign({}, method);
+        normalized.id = String(normalized.id || uid()).trim();
+        normalized.titel = String(normalized.titel || normalized.title || normalized.name || '').trim();
+        const rawalternatives = normalized.alternativen;
+        const values = Array.isArray(rawalternatives)
+            ? rawalternatives
+            : (typeof rawalternatives === 'string' ? rawalternatives.split(/##|[\r\n,;]+/u) : []);
+        normalized.alternativen = values.map((id) => String(id || '').trim()).filter(Boolean);
+        return normalized;
     };
 
     const readFieldValue = (selector) => {
@@ -235,6 +353,85 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             el.value = '';
         });
+        editingMethodId = '';
+        const addbutton = bySel('#kg-add-method');
+        if (addbutton) {
+            if (!addButtonDefaultHtml) {
+                addButtonDefaultHtml = addbutton.innerHTML;
+            }
+            addbutton.innerHTML = addButtonDefaultHtml;
+        }
+        refreshAlternativeOptions();
+    };
+
+    const setFieldValue = (selector, value) => {
+        const el = bySel(selector);
+        if (!el) {
+            return;
+        }
+        const normalized = String(value || '');
+        const editor = (typeof window !== 'undefined' && window.tinyMCE && el.id) ? window.tinyMCE.get(el.id) : null;
+        if (editor) {
+            editor.setContent(normalized);
+        }
+        el.value = normalized;
+    };
+
+    const setMultiFieldValues = (selector, values) => {
+        const el = bySel(selector);
+        if (!el) {
+            return;
+        }
+        const list = Array.isArray(values)
+            ? values.map((value) => String(value || '').trim()).filter(Boolean)
+            : [];
+        if (el.tagName === 'SELECT') {
+            Array.from(el.options).forEach((opt) => {
+                opt.selected = list.includes(opt.value);
+            });
+            return;
+        }
+        setFormMultiDropdownValues(selector, list);
+    };
+
+    const loadMethodIntoForm = (methodid) => {
+        const method = methods.find((entry) => String(entry.id) === String(methodid));
+        if (!method) {
+            return;
+        }
+        editingMethodId = String(method.id);
+        setFieldValue(FIELDS.titel, method.titel || '');
+        setFieldValue(FIELDS.zeitbedarf, method.zeitbedarf || '');
+        setFieldValue(FIELDS.gruppengroesse, method.gruppengroesse || '');
+        setFieldValue(FIELDS.kurzbeschreibung, method.kurzbeschreibung || '');
+        setFieldValue(FIELDS.autor, method.autor || '');
+        setFieldValue(FIELDS.lernziele, method.lernziele || '');
+        setFieldValue(FIELDS.komplexitaet, method.komplexitaet || '');
+        setFieldValue(FIELDS.vorbereitung, method.vorbereitung || '');
+        setFieldValue(FIELDS.risiken, method.risiken || '');
+        setFieldValue(FIELDS.debrief, method.debrief || '');
+        setFieldValue(FIELDS.materialtechnik, method.materialtechnik || '');
+        setFieldValue(FIELDS.ablauf, method.ablauf || '');
+        setFieldValue(FIELDS.tags, method.tags || '');
+        setMultiFieldValues(FIELDS.seminarphase, method.seminarphase || []);
+        setMultiFieldValues(FIELDS.raum, method.raum || []);
+        setMultiFieldValues(FIELDS.sozialform, method.sozialform || []);
+        setMultiFieldValues(FIELDS.kognitive, method.kognitive || []);
+        setFormMultiDropdownValues(FIELDS.alternativen, method.alternativen || []);
+        const materialdraft = bySel(FIELDS.materialien);
+        if (materialdraft) {
+            materialdraft.value = '0';
+        }
+        refreshAlternativeOptions();
+        setFormMultiDropdownValues(FIELDS.alternativen, method.alternativen || []);
+        const addbutton = bySel('#kg-add-method');
+        if (addbutton) {
+            if (!addButtonDefaultHtml) {
+                addButtonDefaultHtml = addbutton.innerHTML;
+            }
+            addbutton.innerHTML = 'Methode aktualisieren';
+        }
+        setStatus(`Methode "${method.titel || ''}" zur Bearbeitung geladen.`, false);
     };
 
     const buildMethod = async () => {
@@ -273,38 +470,51 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         normalizeAlternatives();
         const host = bySel('#kg-methods');
         const state = bySel('#kg-state-json');
-        if (!host) {
-            return;
-        }
+        if (host) {
+            host.innerHTML = '';
+            methods.forEach((method) => {
+                const card = document.createElement('div');
+                card.className = 'sp-card';
+	                card.innerHTML = `
+	                  <div class="sp-card-compact">
+	                    <div class="sp-card-title"><strong>${escapeHtml(method.titel)}</strong></div>
+	                    <div class="sp-card-meta">
+	                      <span class="sp-badge kg-method-badge">${renderLucideIcon('clock-3', 'kg-lucide--badge')}<span>${escapeHtml(method.zeitbedarf || '-')}</span></span>
+	                      <span class="sp-badge kg-method-badge">${renderLucideIcon('users', 'kg-lucide--badge')}<span>${escapeHtml(method.gruppengroesse || '-')}</span></span>
+	                      <span class="sp-badge kg-method-badge">${renderLucideIcon('handshake', 'kg-lucide--badge')}<span>${escapeHtml((method.sozialform || []).join(', ') || '-')}</span></span>
+	                    </div>
+	                    <div class="sp-card-description sp-card-description--rich">${sanitizeHtml(method.kurzbeschreibung || '')}</div>
+	                  </div>
+	                `;
 
-        host.innerHTML = '';
-        methods.forEach((method) => {
-            const card = document.createElement('div');
-            card.className = 'sp-card';
-            card.innerHTML = `
-              <div class="sp-card-compact">
-                <div class="sp-card-title"><strong>${method.titel}</strong></div>
-                <div class="sp-card-meta">
-                  <span class="sp-badge">⏱️ ${method.zeitbedarf || '-'}</span>
-                  <span class="sp-badge">👥 ${method.gruppengroesse || '-'}</span>
-                  <span class="sp-badge">🤝 ${(method.sozialform || []).join(', ') || '-'}</span>
-                </div>
-                <div class="sp-card-description">${method.kurzbeschreibung || ''}</div>
-              </div>
-            `;
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'sp-remove';
+                remove.textContent = '✕';
+                remove.addEventListener('click', () => {
+                    methods = methods.filter((m) => m.id !== method.id);
+                    if (String(editingMethodId) === String(method.id)) {
+                        clearForm();
+                    }
+                    render();
+                });
 
-            const remove = document.createElement('button');
-            remove.type = 'button';
-            remove.className = 'sp-remove';
-            remove.textContent = '✕';
-            remove.addEventListener('click', () => {
-                methods = methods.filter((m) => m.id !== method.id);
-                render();
+                const edit = document.createElement('button');
+                edit.type = 'button';
+                edit.className = 'sp-remove';
+                edit.textContent = 'Bearbeiten';
+                edit.style.marginRight = '6px';
+                edit.addEventListener('click', () => {
+                    loadMethodIntoForm(method.id);
+                });
+
+                const actions = document.createElement('div');
+                actions.appendChild(edit);
+                actions.appendChild(remove);
+                card.appendChild(actions);
+                host.appendChild(card);
             });
-
-            card.appendChild(remove);
-            host.appendChild(card);
-        });
+        }
 
         if (state) {
             state.value = JSON.stringify(methods, null, 2);
@@ -312,10 +522,32 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         refreshAlternativeOptions();
     };
 
+    const serializeMethodsForSave = () => methods.map((method) => {
+        const payload = Object.assign({}, method);
+        if (Array.isArray(payload.materialien)) {
+            payload.materialien = payload.materialien.map((entry) => {
+                if (entry && typeof entry === 'object' && entry.name) {
+                    return {name: String(entry.name)};
+                }
+                return entry;
+            });
+        }
+        if (Array.isArray(payload.h5p)) {
+            payload.h5p = payload.h5p.map((entry) => {
+                if (entry && typeof entry === 'object' && entry.name) {
+                    return {name: String(entry.name)};
+                }
+                return entry;
+            });
+        }
+        return payload;
+    });
+
     const saveMethods = (cmid) => {
-        asCall('mod_konzeptgenerator_save_method_cards', {
+        normalizeAlternatives();
+        asCall('mod_seminarplaner_save_method_cards', {
             cmid,
-            methodsjson: JSON.stringify(methods)
+            methodsjson: JSON.stringify(serializeMethodsForSave())
         }).then((res) => {
             setStatus(`Methoden gespeichert (${res.count}).`, false);
         }).catch((e) => {
@@ -324,20 +556,54 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         });
     };
 
+    const upsertMethodFromForm = async (cmid) => {
+        const method = await buildMethod();
+        if (!method) {
+            setStatus('Titel ist Pflichtfeld.', true);
+            return false;
+        }
+
+        if (editingMethodId) {
+            const idx = methods.findIndex((entry) => String(entry.id) === String(editingMethodId));
+            if (idx >= 0) {
+                const existing = methods[idx];
+                const updated = Object.assign({}, existing, method, {id: existing.id});
+                if (!(Number(updated.materialiendraftitemid || 0) > 0)) {
+                    updated.materialien = Array.isArray(existing.materialien) ? existing.materialien : [];
+                }
+                methods[idx] = updated;
+            } else {
+                method.id = editingMethodId;
+                methods.push(method);
+            }
+            const current = methods.find((entry) => String(entry.id) === String(editingMethodId));
+            reconcileAlternativesForMethod(editingMethodId, current && Array.isArray(current.alternativen) ? current.alternativen : []);
+            saveMethods(cmid);
+            render();
+            clearForm();
+            setStatus('Methode aktualisiert und gespeichert.', false);
+            return true;
+        }
+
+        methods.push(method);
+        reconcileAlternativesForMethod(method.id, method.alternativen || []);
+        saveMethods(cmid);
+        clearForm();
+        render();
+        setStatus('Methode hinzugefügt und gespeichert.', false);
+        return true;
+    };
+
     const loadMethods = (cmid) => {
-        asCall('mod_konzeptgenerator_get_method_cards', {cmid}).then((res) => {
+        asCall('mod_seminarplaner_get_method_cards', {cmid}).then((res) => {
             let decoded = [];
             try {
                 decoded = res.methodsjson ? JSON.parse(res.methodsjson) : [];
             } catch (e) {
                 decoded = [];
             }
-            methods = Array.isArray(decoded) ? decoded : [];
-            methods = methods.map((method) => {
-                const normalized = Object.assign({}, method);
-                normalized.alternativen = Array.isArray(method.alternativen) ? method.alternativen : [];
-                return normalized;
-            });
+            methods = Array.isArray(decoded) ? decoded.map((method) => normalizeLoadedMethod(method)) : [];
+            normalizeAlternatives();
             render();
             setStatus(`Methoden geladen (${methods.length}).`, false);
         }).catch((e) => {
@@ -464,6 +730,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return '';
     };
 
+    const readRichTextField = (row, keys) => String(readFirst(row, keys) || '').trim();
+
     const mapLegacyRowToMethod = (row) => {
         const titel = stripHtml(readFirst(row, ['Titel', 'title', 'Name']));
         if (!titel) {
@@ -473,18 +741,18 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const seminarphase = splitMultiString(readFirst(row, ['Seminarphase', 'seminarphase']));
         const zeitbedarf = stripHtml(readFirst(row, ['Zeitbedarf', 'zeitbedarf']));
         const gruppengroesse = stripHtml(readFirst(row, ['Gruppengröße', 'Gruppengroesse', 'gruppengroesse']));
-        const kurzbeschreibung = stripHtml(readFirst(row, ['Kurzbeschreibung', 'kurzbeschreibung']));
+        const kurzbeschreibung = readRichTextField(row, ['Kurzbeschreibung', 'kurzbeschreibung']);
         const autor = stripHtml(readFirst(row, ['Autor*in / Kontakt', 'Autor/in / Kontakt', 'autor_kontakt', 'autor']));
-        const lernziele = stripHtml(readFirst(row, ['Lernziele (Ich-kann ...)', 'lernziele']));
+        const lernziele = readRichTextField(row, ['Lernziele (Ich-kann ...)', 'lernziele']);
         const komplexitaet = stripHtml(readFirst(row, ['Komplexitätsgrad', 'Komplexitaetsgrad', 'komplexitaet']));
         const vorbereitung = stripHtml(readFirst(row, ['Vorbereitung nötig', 'Vorbereitung noetig', 'vorbereitung']));
         const raum = splitMultiString(readFirst(row, ['Raumanforderungen', 'raumanforderungen']));
         const sozialform = splitMultiString(readFirst(row, ['Sozialform', 'sozialform']));
-        const risiken = stripHtml(readFirst(row, ['Risiken/Tipps', 'risiken_tipps', 'risiken']));
-        const debrief = stripHtml(readFirst(row, ['Debrief/Reflexionsfragen', 'debrief']));
+        const risiken = readRichTextField(row, ['Risiken/Tipps', 'risiken_tipps', 'risiken']);
+        const debrief = readRichTextField(row, ['Debrief/Reflexionsfragen', 'debrief']);
         const materialien = splitMultiString(readFirst(row, ['Materialien', 'materialien']));
-        const materialtechnik = stripHtml(readFirst(row, ['Material/Technik', 'material_technik', 'materialtechnik']));
-        const ablauf = stripHtml(readFirst(row, ['Ablauf', 'ablauf']));
+        const materialtechnik = readRichTextField(row, ['Material/Technik', 'material_technik', 'materialtechnik']);
+        const ablauf = readRichTextField(row, ['Ablauf', 'ablauf']);
         const tags = stripHtml(readFirst(row, ['Tags / Schlüsselworte', 'Tags / Schluesselworte', 'tags', 'Tags']));
         const kognitive = splitMultiString(readFirst(row, ['Kognitive Dimension', 'kognitive_dimension', 'kognitive']));
 
@@ -602,18 +870,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         init: function(cmid) {
             bindFormMultiDropdowns();
             refreshAlternativeOptions();
+            const addbutton = bySel('#kg-add-method');
+            if (addbutton) {
+                addButtonDefaultHtml = addbutton.innerHTML;
+            }
             bySel('#kg-add-method')?.addEventListener('click', async () => {
                 try {
-                    const method = await buildMethod();
-                    if (!method) {
-                        setStatus('Titel ist Pflichtfeld.', true);
-                        return;
-                    }
-                    methods.push(method);
-                    saveMethods(cmid);
-                    clearForm();
-                    render();
-                    setStatus('Methode hinzugefügt und gespeichert.', false);
+                    await upsertMethodFromForm(cmid);
                 } catch (e) {
                     setStatus(`Datei konnte nicht verarbeitet werden: ${e.message || e}`, true);
                 }
@@ -621,7 +884,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
             bySel('#kg-clear-form')?.addEventListener('click', clearForm);
             bySel(FIELDS.titel)?.addEventListener('input', refreshAlternativeOptions);
-            bySel('#kg-save-methods')?.addEventListener('click', () => saveMethods(cmid));
+            bySel('#kg-save-methods')?.addEventListener('click', async () => {
+                if (editingMethodId) {
+                    await upsertMethodFromForm(cmid);
+                    return;
+                }
+                saveMethods(cmid);
+            });
             bySel('#kg-export-methods')?.addEventListener('click', exportMethods);
             bySel('#kg-import-methods')?.addEventListener('change', (e) => importMethods(e.target.files[0]));
 

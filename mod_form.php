@@ -7,7 +7,7 @@ require_once($CFG->dirroot . '/course/moodleform_mod.php');
 /**
  * Activity settings form for Seminarplaner.
  */
-class mod_konzeptgenerator_mod_form extends moodleform_mod {
+class mod_seminarplaner_mod_form extends moodleform_mod {
     /**
      * Form definition.
      */
@@ -26,35 +26,7 @@ class mod_konzeptgenerator_mod_form extends moodleform_mod {
             $this->add_intro_editor();
         }
 
-        $mform->addElement('header', 'konzeptgeneratorfieldset', get_string('pluginname', 'mod_konzeptgenerator'));
-
-        $mform->addElement(
-            'text',
-            'defaultmethodsetid',
-            get_string('defaultmethodsetid', 'mod_konzeptgenerator'),
-            ['size' => '20']
-        );
-        $mform->setType('defaultmethodsetid', PARAM_INT);
-        $mform->addHelpButton('defaultmethodsetid', 'defaultmethodsetid', 'mod_konzeptgenerator');
-
         $this->standard_coursemodule_elements();
         $this->add_action_buttons();
-    }
-
-    /**
-     * Extra validation.
-     *
-     * @param array $data Submitted data.
-     * @param array $files Uploaded files.
-     * @return array Validation errors.
-     */
-    public function validation($data, $files) {
-        $errors = parent::validation($data, $files);
-
-        if ($data['defaultmethodsetid'] !== '' && (int)$data['defaultmethodsetid'] < 0) {
-            $errors['defaultmethodsetid'] = get_string('err_numeric', 'form');
-        }
-
-        return $errors;
     }
 }

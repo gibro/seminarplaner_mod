@@ -3,12 +3,12 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-use mod_konzeptgenerator\local\service\soft_lock_service;
+use mod_seminarplaner\local\service\soft_lock_service;
 
 /**
  * DB-backed tests for soft lock service.
  */
-final class mod_konzeptgenerator_soft_lock_service_test extends advanced_testcase {
+final class mod_seminarplaner_soft_lock_service_test extends advanced_testcase {
     public function test_acquire_and_release_lock(): void {
         $this->resetAfterTest(true);
 

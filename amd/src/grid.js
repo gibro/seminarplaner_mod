@@ -1,7 +1,10 @@
 define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+    const VIEW_MODE_WEEK = 'week';
+    const VIEW_MODE_DAY = 'day';
+    const TIME_AXIS_WIDTH = 80;
     const ZOOM_LEVELS = [
-        {id: 'fine', label: '5 Min', slotMinutes: 5, slotPx: 18, labelEverySlots: 3, showMinor: true},
+        {id: 'fine', label: '5 Min', slotMinutes: 5, slotPx: 30, labelEverySlots: 3, showMinor: true},
         {id: 'medium', label: '15 Min', slotMinutes: 15, slotPx: 26, labelEverySlots: 1, showMinor: true},
         {id: 'coarse', label: '30 Min', slotMinutes: 30, slotPx: 30, labelEverySlots: 2, showMinor: false}
     ];
@@ -106,6 +109,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const escapeHtml = (str) => String(str || '').replace(/[&<>"']/g, (ch) => {
         return ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[ch] || ch;
     });
+    const lucideIconUrl = (name) => {
+        const root = (typeof M !== 'undefined' && M && M.cfg && M.cfg.wwwroot) ? String(M.cfg.wwwroot).replace(/\/$/, '') : '';
+        return `${root}/mod/seminarplaner/pix/lucide/${String(name || '').trim()}.svg`;
+    };
+    const lucideIcon = (name, cssclass = 'sp-menu-icon') => `<img class="${escapeHtml(cssclass)}" src="${escapeHtml(lucideIconUrl(name))}" alt="" aria-hidden="true">`;
     const sanitizeHtml = (html) => {
         const tpl = document.createElement('template');
         tpl.innerHTML = String(html || '');
@@ -126,6 +134,34 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         });
         return tpl.innerHTML;
     };
+    const decodeHtmlEntities = (value) => {
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = String(value || '');
+        return String(textarea.value || '');
+    };
+    const formatRichText = (value) => {
+        const raw = String(value || '').trim();
+        if (!raw) {
+            return '';
+        }
+        const decoded = decodeHtmlEntities(raw).trim();
+        const hasRawHtmlTags = /<[a-z][\s\S]*>/i.test(raw);
+        const hasDecodedHtmlTags = /<[a-z][\s\S]*>/i.test(decoded);
+        if (hasRawHtmlTags) {
+            return sanitizeHtml(raw);
+        }
+        if (hasDecodedHtmlTags) {
+            return sanitizeHtml(decoded);
+        }
+        return escapeHtml(raw).replace(/\r?\n/g, '<br>');
+    };
+    const getTodayDayName = () => {
+        const jsDay = new Date().getDay();
+        const mondayBased = (jsDay + 6) % 7;
+        return DAYS_ALL[mondayBased] || 'Montag';
+    };
+    const CONFLICT_MARKER = 'GRID_TIME_CONFLICT:';
+    const UNIT_SLOT_COLORS = ['#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#6366f1'];
 
     class Seminarplaner {
         constructor(cmid) {
@@ -133,18 +169,25 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.wrapper = bySel('.sp-wrapper');
             this.msg = bySel('#sp-msg');
             this.status = bySel('#kg-status');
+            this.savedState = bySel('#sp-saved-state');
             this.zoomIndex = 1;
             this.versionhash = '';
             this.methods = [];
             this.planningState = {units: [], slotorder: []};
+            this.methodAlternativeSelection = {};
             this.filterIndex = [];
             this.debounceTimer = null;
             this.autosaveTimer = null;
             this.dirty = false;
             this.breakModal = null;
+            this.breakEditRef = null;
             this.methodDetailModal = null;
             this.saveInFlight = null;
             this.pendingSaveOptions = null;
+            this.resizeState = null;
+            this.expandedUnitSlotKey = null;
+            this.roterFadenState = {ispublished: false, gridid: 0};
+            this.isUpdatingPublishControl = false;
 
             this.state = {
                 gridid: 0,
@@ -157,6 +200,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     breaks: [{days: ['all'], start: '12:00', duration: 60}],
                     tableColumns: Object.assign({}, DEFAULT_COLUMNS)
                 },
+                view: {mode: VIEW_MODE_WEEK, day: 'Montag'},
                 plan: {days: {}},
                 sourceMode: 'methods'
             };
@@ -183,6 +227,203 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             this.status.textContent = text;
             this.status.style.color = isError ? '#b91c1c' : '#166534';
+        }
+
+        setSavedState(text, isError = false) {
+            if (!this.savedState) {
+                return;
+            }
+            this.savedState.innerHTML = `<span class="kg-btn-content">${lucideIcon('clipboard-check', 'kg-lucide kg-lucide--sm')}<span>${escapeHtml(String(text || ''))}</span></span>`;
+            this.savedState.classList.toggle('is-error', !!isError);
+        }
+
+        getLoadedGridStorageKey() {
+            return `mod_seminarplaner_loaded_grid_${this.cmid}`;
+        }
+
+        readRememberedLoadedGridId() {
+            try {
+                const raw = sessionStorage.getItem(this.getLoadedGridStorageKey()) || '';
+                const gridid = Number.parseInt(String(raw), 10);
+                return Number.isFinite(gridid) && gridid > 0 ? String(gridid) : '';
+            } catch (e) {
+                return '';
+            }
+        }
+
+        rememberLoadedGridId(gridid) {
+            const normalized = Number.parseInt(String(gridid || ''), 10);
+            if (!Number.isFinite(normalized) || normalized <= 0) {
+                this.clearRememberedLoadedGridId();
+                return;
+            }
+            try {
+                sessionStorage.setItem(this.getLoadedGridStorageKey(), String(normalized));
+            } catch (e) {
+                // Ignore storage issues (private mode or blocked storage).
+            }
+        }
+
+        clearRememberedLoadedGridId() {
+            try {
+                sessionStorage.removeItem(this.getLoadedGridStorageKey());
+            } catch (e) {
+                // Ignore storage issues (private mode or blocked storage).
+            }
+        }
+
+        getPublishStatusNode() {
+            return bySel('#kg-publish-roterfaden-status');
+        }
+
+        setPublishStatus(text, isError = false) {
+            const node = this.getPublishStatusNode();
+            if (!node) {
+                return;
+            }
+            node.textContent = text || '';
+            node.style.color = isError ? '#b91c1c' : '';
+        }
+
+        buildGridPayload() {
+            return {
+                config: this.state.config,
+                view: this.state.view,
+                plan: this.state.plan,
+                zoomIndex: this.zoomIndex,
+                sourceMode: this.state.sourceMode || 'methods'
+            };
+        }
+
+        loadRoterFadenState() {
+            return asCall('mod_seminarplaner_get_roterfaden_state', {cmid: this.cmid}).then((res) => {
+                this.roterFadenState = {
+                    ispublished: !!(res && res.ispublished),
+                    gridid: Number((res && res.gridid) || 0) || 0
+                };
+                this.syncPublishControl();
+            }).catch(() => {
+                this.roterFadenState = {ispublished: false, gridid: 0};
+                this.syncPublishControl();
+            });
+        }
+
+        syncPublishControl() {
+            const checkbox = bySel('#kg-publish-roterfaden');
+            if (!checkbox) {
+                return;
+            }
+            const currentgridid = this.getGridId();
+            const currentpublished = this.roterFadenState.ispublished && Number(this.roterFadenState.gridid) === Number(currentgridid);
+            this.isUpdatingPublishControl = true;
+            checkbox.checked = !!currentpublished;
+            checkbox.disabled = !currentgridid;
+            this.isUpdatingPublishControl = false;
+            if (!currentgridid) {
+                this.setPublishStatus('');
+            } else if (currentpublished) {
+                this.setPublishStatus('Dieser Seminarplan ist als Roter Faden veröffentlicht.');
+            } else if (this.roterFadenState.ispublished && this.roterFadenState.gridid > 0) {
+                this.setPublishStatus(`Aktuell ist Seminarplan #${this.roterFadenState.gridid} veröffentlicht.`);
+            } else {
+                this.setPublishStatus('Aktuell ist kein Roter Faden veröffentlicht.');
+            }
+        }
+
+        publishCurrentGrid(options = {}) {
+            const silent = !!options.silent;
+            const gridid = this.getGridId();
+            if (!gridid) {
+                return Promise.resolve(false);
+            }
+            return asCall('mod_seminarplaner_publish_roterfaden', {
+                cmid: this.cmid,
+                gridid: gridid,
+                statejson: JSON.stringify(this.buildGridPayload())
+            }).then((res) => {
+                const success = !!(res && res.success);
+                if (!success) {
+                    throw new Error('Publish failed');
+                }
+                this.roterFadenState = {ispublished: true, gridid: Number(gridid)};
+                this.syncPublishControl();
+                if (!silent) {
+                    this.setStatus('Roter Faden veröffentlicht.', false);
+                }
+                return true;
+            });
+        }
+
+        unpublishRoterFaden(options = {}) {
+            const silent = !!options.silent;
+            return asCall('mod_seminarplaner_unpublish_roterfaden', {cmid: this.cmid}).then((res) => {
+                const success = !!(res && res.success);
+                if (!success) {
+                    throw new Error('Unpublish failed');
+                }
+                this.roterFadenState = Object.assign({}, this.roterFadenState, {ispublished: false});
+                this.syncPublishControl();
+                if (!silent) {
+                    this.setStatus('Roter Faden ist nicht sichtbar.', false);
+                }
+                return true;
+            });
+        }
+
+        extractErrorMessage(error) {
+            if (!error) {
+                return '';
+            }
+            if (typeof error === 'string') {
+                return error;
+            }
+            if (typeof error.message === 'string' && error.message) {
+                return error.message;
+            }
+            if (typeof error.error === 'string' && error.error) {
+                return error.error;
+            }
+            if (typeof error.debuginfo === 'string' && error.debuginfo) {
+                return error.debuginfo;
+            }
+            return '';
+        }
+
+        parseConflictPayload(error) {
+            const message = this.extractErrorMessage(error);
+            const idx = message.indexOf(CONFLICT_MARKER);
+            if (idx === -1) {
+                return null;
+            }
+            const payloadraw = message.slice(idx + CONFLICT_MARKER.length).trim();
+            if (!payloadraw) {
+                return {days: [], count: 0};
+            }
+            try {
+                const payload = JSON.parse(payloadraw);
+                return {
+                    days: Array.isArray(payload.days) ? payload.days : [],
+                    count: Number(payload.count || 0) || 0
+                };
+            } catch (e) {
+                return {days: [], count: 0};
+            }
+        }
+
+        highlightConflictDays(days = []) {
+            const uniquedays = Array.from(new Set((days || []).map((day) => String(day || '').trim()).filter(Boolean)));
+            if (!uniquedays.length) {
+                return;
+            }
+            uniquedays.forEach((day) => {
+                const grid = Array.from(document.querySelectorAll('.sp-daycol .sp-grid')).find((entry) => entry.getAttribute('data-day') === day);
+                const col = grid ? grid.closest('.sp-daycol') : null;
+                if (!col) {
+                    return;
+                }
+                col.classList.add('sp-conflict-highlight');
+                window.setTimeout(() => col.classList.remove('sp-conflict-highlight'), 2600);
+            });
         }
 
         syncSourceTabs() {
@@ -220,6 +461,216 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (this.msg) {
                 this.msg.textContent = '';
             }
+        }
+
+        ensureViewState() {
+            const mode = this.state && this.state.view ? String(this.state.view.mode || '') : '';
+            const validMode = mode === VIEW_MODE_DAY ? VIEW_MODE_DAY : VIEW_MODE_WEEK;
+            const availableDays = (this.state.config.days && this.state.config.days.length) ? this.state.config.days : DAYS_ALL;
+            const day = this.state && this.state.view ? String(this.state.view.day || '') : '';
+            const validDay = availableDays.includes(day) ? day : (availableDays[0] || 'Montag');
+            this.state.view = Object.assign({}, this.state.view || {}, {
+                mode: validMode,
+                day: validDay
+            });
+        }
+
+        getVisibleDays() {
+            this.ensureViewState();
+            return this.state.view.mode === VIEW_MODE_DAY ? [this.state.view.day] : this.state.config.days.slice();
+        }
+
+        updateViewLabel() {
+            const labelNode = bySel('#sp-view-label');
+            if (!labelNode) {
+                return;
+            }
+            this.ensureViewState();
+            if (this.state.view.mode === VIEW_MODE_DAY) {
+                const start = String((this.state.config.timeRange || {}).start || '08:30');
+                const end = String((this.state.config.timeRange || {}).end || '17:30');
+                labelNode.textContent = `Tagesansicht - ${this.state.view.day} (${start} - ${end})`;
+                return;
+            }
+            labelNode.textContent = 'Wochenansicht';
+        }
+
+        updateViewControls() {
+            this.ensureViewState();
+            const isDay = this.state.view.mode === VIEW_MODE_DAY;
+            const weekBtn = bySel('#sp-view-week');
+            const dayBtn = bySel('#sp-view-day');
+            const daySwitch = bySel('.sp-day-switch');
+            const daySelect = bySel('#sp-day-select');
+            if (weekBtn) {
+                weekBtn.classList.toggle('is-active', !isDay);
+            }
+            if (dayBtn) {
+                dayBtn.classList.toggle('is-active', isDay);
+            }
+            if (daySwitch) {
+                daySwitch.classList.toggle('is-hidden', !isDay);
+            }
+            if (daySelect) {
+                daySelect.innerHTML = this.state.config.days
+                    .map((day) => `<option value="${escapeHtml(day)}">${escapeHtml(day)}</option>`)
+                    .join('');
+                daySelect.value = this.state.view.day;
+            }
+            this.updateViewLabel();
+        }
+
+        setViewMode(mode) {
+            this.state.view.mode = mode === VIEW_MODE_DAY ? VIEW_MODE_DAY : VIEW_MODE_WEEK;
+            if (this.state.view.mode === VIEW_MODE_DAY && !this.state.config.days.includes(this.state.view.day)) {
+                const today = getTodayDayName();
+                this.state.view.day = this.state.config.days.includes(today) ? today : (this.state.config.days[0] || 'Montag');
+            }
+            this.ensureViewState();
+            this.refreshLayout();
+            this.scheduleAutosave();
+        }
+
+        setViewDay(dayName) {
+            const selected = String(dayName || '').trim();
+            if (!this.state.config.days.includes(selected)) {
+                return;
+            }
+            this.state.view.day = selected;
+            this.ensureViewState();
+            this.refreshLayout();
+            this.scheduleAutosave();
+        }
+
+        shiftViewDay(offset) {
+            this.ensureViewState();
+            const idx = this.state.config.days.indexOf(this.state.view.day);
+            if (idx < 0) {
+                return;
+            }
+            const delta = Number(offset || 0);
+            const nextIdx = (idx + delta + this.state.config.days.length) % this.state.config.days.length;
+            this.setViewDay(this.state.config.days[nextIdx]);
+        }
+
+        getPointerClientY(event) {
+            if (!event) {
+                return 0;
+            }
+            if (typeof event.clientY === 'number') {
+                return event.clientY;
+            }
+            if (event.touches && event.touches[0] && typeof event.touches[0].clientY === 'number') {
+                return event.touches[0].clientY;
+            }
+            if (event.changedTouches && event.changedTouches[0] && typeof event.changedTouches[0].clientY === 'number') {
+                return event.changedTouches[0].clientY;
+            }
+            return 0;
+        }
+
+        startItemResize(event, item, day, edge) {
+            if (!item || (item.kind !== 'method' && item.kind !== 'break')) {
+                return;
+            }
+            if (item.flowid && Number(item.flowTotal || 1) > 1) {
+                this.warn('Fortsetzungen können nicht segmentweise per Ziehen angepasst werden.');
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            const itemElement = event.currentTarget && typeof event.currentTarget.closest === 'function'
+                ? event.currentTarget.closest('.sp-item')
+                : null;
+            if (itemElement) {
+                itemElement.dataset.wasDraggable = itemElement.draggable ? '1' : '0';
+                itemElement.draggable = false;
+            }
+            this.resizeState = {
+                day,
+                uid: String(item.uid),
+                edge: edge === 'start' ? 'start' : 'end',
+                originY: Number(this.getPointerClientY(event) || 0),
+                startMin: Number(item.startMin || 0),
+                endMin: Number(item.endMin || 0),
+                itemElement
+            };
+            document.body.classList.add('sp-resizing');
+        }
+
+        updateItemResize(event) {
+            if (!this.resizeState) {
+                return;
+            }
+            const list = this.state.plan.days[this.resizeState.day] || [];
+            const idx = list.findIndex((entry) => String(entry.uid) === this.resizeState.uid);
+            if (idx < 0) {
+                return;
+            }
+            const current = list[idx];
+            const level = ZOOM_LEVELS[this.zoomIndex];
+            const dy = Number(this.getPointerClientY(event) || 0) - this.resizeState.originY;
+            const stepPx = Number(level.slotPx || 1);
+            const stepMin = Number(level.slotMinutes || 15);
+            const movedSteps = Math.round(dy / stepPx);
+            const movedMin = movedSteps * stepMin;
+
+            const minDuration = current.kind === 'break' ? 5 : Number(this.state.config.granularity || 15);
+            let nextStart = this.resizeState.startMin;
+            let nextEnd = this.resizeState.endMin;
+            if (this.resizeState.edge === 'start') {
+                nextStart = this.resizeState.startMin + movedMin;
+                if (nextEnd - nextStart < minDuration) {
+                    nextStart = nextEnd - minDuration;
+                }
+            } else {
+                nextEnd = this.resizeState.endMin + movedMin;
+                if (nextEnd - nextStart < minDuration) {
+                    nextEnd = nextStart + minDuration;
+                }
+            }
+
+            const candidate = Object.assign({}, current, {startMin: nextStart, endMin: nextEnd});
+            if (!this.withinBounds(candidate.startMin, candidate.endMin)) {
+                return;
+            }
+            if (this.hasCollision(list.filter((entry) => String(entry.uid) !== this.resizeState.uid), candidate)) {
+                return;
+            }
+            list[idx] = candidate;
+            this.renderOverlays();
+        }
+
+        finishItemResize() {
+            if (!this.resizeState) {
+                return;
+            }
+            if (this.resizeState.itemElement) {
+                const restore = this.resizeState.itemElement.dataset.wasDraggable === '1';
+                this.resizeState.itemElement.draggable = restore;
+                delete this.resizeState.itemElement.dataset.wasDraggable;
+            }
+            this.resizeState = null;
+            document.body.classList.remove('sp-resizing');
+            this.savePlan();
+        }
+
+        closeContextMenus(exceptmenu = null) {
+            byAll('details.ml-card-menu[open]').forEach((menu) => {
+                if (exceptmenu && menu === exceptmenu) {
+                    return;
+                }
+                menu.open = false;
+            });
+        }
+
+        handleContextMenuToggle(event) {
+            const menu = event.target.closest('details.ml-card-menu');
+            if (!menu) {
+                this.closeContextMenus();
+                return;
+            }
+            this.closeContextMenus(menu);
         }
 
         toggleStepTwo(visible) {
@@ -274,6 +725,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 return granularity;
             }
             return Math.max(granularity, Math.ceil(value / granularity) * granularity);
+        }
+
+        snapBreakDuration(raw) {
+            const value = Number.parseInt(raw, 10);
+            if (!Number.isFinite(value) || value <= 0) {
+                return 5;
+            }
+            return Math.max(5, Math.ceil(value / 5) * 5);
         }
 
         ensurePlanDays() {
@@ -348,6 +807,35 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return this.getPlanningSlots().find((slot) => slot.key === slotkey) || null;
         }
 
+        isMobileViewport() {
+            return window.matchMedia('(max-width: 900px)').matches;
+        }
+
+        getUnitSlotColor(slotkey) {
+            const key = String(slotkey || '');
+            let hash = 0;
+            for (let i = 0; i < key.length; i++) {
+                hash = ((hash << 5) - hash) + key.charCodeAt(i);
+                hash |= 0;
+            }
+            const idx = Math.abs(hash) % UNIT_SLOT_COLORS.length;
+            return UNIT_SLOT_COLORS[idx];
+        }
+
+        ensureUnitAccordionState(slots) {
+            if (!this.isMobileViewport()) {
+                return;
+            }
+            const keys = (slots || []).map((slot) => String(slot.key || '')).filter(Boolean);
+            if (!keys.length) {
+                this.expandedUnitSlotKey = null;
+                return;
+            }
+            if (!this.expandedUnitSlotKey || !keys.includes(this.expandedUnitSlotKey)) {
+                this.expandedUnitSlotKey = keys[0];
+            }
+        }
+
         getUnitById(unitid) {
             return this.planningState.units.find((unit) => String(unit.id) === String(unitid)) || null;
         }
@@ -378,18 +866,23 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return (list || []).some((it) => this.overlaps(it, candidate));
         }
 
-        getBreaksByDay() {
+        getBlockedRangesByDay(skipflow = '') {
             const map = {};
             this.state.config.days.forEach((day) => {
                 map[day] = (this.state.plan.days[day] || [])
-                    .filter((entry) => entry.kind === 'break')
+                    .filter((entry) => {
+                        if (!skipflow) {
+                            return true;
+                        }
+                        return String(entry.flowid || '') !== skipflow;
+                    })
                     .map((entry) => ({start: entry.startMin, end: entry.endMin}))
                     .sort((a, b) => a.start - b.start);
             });
             return map;
         }
 
-        nextFreeMinute(dayidx, minute, breaksByDay, days) {
+        nextFreeMinute(dayidx, minute, blockedByDay, days) {
             const dayStart = parseTimeToMinutes(this.state.config.timeRange.start);
             const dayEnd = parseTimeToMinutes(this.state.config.timeRange.end);
             let idx = dayidx;
@@ -403,8 +896,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     current = dayStart;
                     continue;
                 }
-                const breaks = breaksByDay[days[idx]] || [];
-                const blocking = breaks.find((br) => current >= br.start && current < br.end);
+                const blocked = blockedByDay[days[idx]] || [];
+                const blocking = blocked.find((range) => current >= range.start && current < range.end);
                 if (!blocking) {
                     return {dayidx: idx, minute: current};
                 }
@@ -413,25 +906,26 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return {dayidx: Math.max(0, days.length - 1), minute: dayEnd};
         }
 
-        allocateAcrossPlan(startday, startmin, totalduration) {
-            const days = this.state.config.days.slice();
+        allocateAcrossPlan(startday, startmin, totalduration, options = {}) {
+            const isDayMode = this.state && this.state.view && this.state.view.mode === VIEW_MODE_DAY;
+            const days = isDayMode ? [String(startday || '')] : this.state.config.days.slice();
             if (!days.length) {
                 return {segments: [], endday: startday, endmin: startmin};
             }
             const dayStart = parseTimeToMinutes(this.state.config.timeRange.start);
             const dayEnd = parseTimeToMinutes(this.state.config.timeRange.end);
-            const breaksByDay = this.getBreaksByDay();
+            const blockedByDay = this.getBlockedRangesByDay(String(options.skipflowid || ''));
             let remaining = Math.max(0, Number(totalduration || 0));
             let dayidx = Math.max(0, days.indexOf(startday));
             let pointer = Number.isFinite(startmin) ? startmin : dayStart;
             const segments = [];
 
-            const first = this.nextFreeMinute(dayidx, pointer, breaksByDay, days);
+            const first = this.nextFreeMinute(dayidx, pointer, blockedByDay, days);
             dayidx = first.dayidx;
             pointer = first.minute;
 
             while (remaining > 0 && dayidx < days.length) {
-                const free = this.nextFreeMinute(dayidx, pointer, breaksByDay, days);
+                const free = this.nextFreeMinute(dayidx, pointer, blockedByDay, days);
                 dayidx = free.dayidx;
                 pointer = free.minute;
                 if (dayidx >= days.length) {
@@ -443,11 +937,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     continue;
                 }
                 const day = days[dayidx];
-                const breaks = breaksByDay[day] || [];
+                const blocked = blockedByDay[day] || [];
                 let stop = dayEnd;
-                const nextBreak = breaks.find((br) => br.start > pointer);
-                if (nextBreak) {
-                    stop = Math.min(stop, nextBreak.start);
+                const nextBlocked = blocked.find((range) => range.start > pointer);
+                if (nextBlocked) {
+                    stop = Math.min(stop, nextBlocked.start);
                 }
                 const chunk = Math.min(remaining, Math.max(0, stop - pointer));
                 if (chunk <= 0) {
@@ -530,6 +1024,69 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             };
         }
 
+        getUnitMethodCards(unit) {
+            if (!unit || !Array.isArray(unit.methods)) {
+                return [];
+            }
+            const cards = [];
+            unit.methods.forEach((methodentry) => {
+                const method = this.methods.find((entry) => String(entry.id) === String(methodentry.methodid));
+                if (method) {
+                    cards.push(this.toCard(method));
+                }
+            });
+            return cards;
+        }
+
+        getMethodAlternativeSlots() {
+            const methodById = new Map(
+                this.methods
+                    .map((method) => [String(method.id || '').trim(), method])
+                    .filter((entry) => !!entry[0])
+            );
+            const visited = new Set();
+            const slots = [];
+
+            this.methods.forEach((method) => {
+                const startid = String(method.id || '').trim();
+                if (!startid || visited.has(startid)) {
+                    return;
+                }
+                const queue = [startid];
+                const groupSet = new Set();
+                while (queue.length) {
+                    const currentid = String(queue.shift() || '').trim();
+                    if (!currentid || groupSet.has(currentid) || !methodById.has(currentid)) {
+                        continue;
+                    }
+                    groupSet.add(currentid);
+                    const current = methodById.get(currentid);
+                    this.getMethodAlternativeIds(current).forEach((altid) => {
+                        const normalized = String(altid || '').trim();
+                        if (normalized && !groupSet.has(normalized)) {
+                            queue.push(normalized);
+                        }
+                    });
+                }
+                if (!groupSet.size) {
+                    return;
+                }
+                groupSet.forEach((id) => visited.add(id));
+                const groupMethods = this.methods.filter((entry) => groupSet.has(String(entry.id || '').trim()));
+                if (!groupMethods.length) {
+                    return;
+                }
+                const alternatives = groupMethods.map((entry) => this.toCard(entry));
+                const slotkey = groupMethods.map((entry) => String(entry.id || '').trim()).join('|');
+                const selected = String(this.methodAlternativeSelection[slotkey] || '').trim();
+                const active = alternatives.find((entry) => String(entry.id) === selected) || alternatives[0];
+                this.methodAlternativeSelection[slotkey] = String(active.id);
+                slots.push({key: slotkey, alternatives, active});
+            });
+
+            return slots;
+        }
+
         renderMethods() {
             const methodshost = bySel('#sp-methods');
             const unitshost = bySel('#sp-units');
@@ -543,32 +1100,48 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 unitshost.innerHTML = '';
             }
 
-            const cards = this.methods.map((method) => this.toCard(method));
+            const methodslots = this.getMethodAlternativeSlots();
+            const cards = methodslots.map((slot) => slot.active).filter(Boolean);
             this.filterIndex = cards;
             this.populateTagsFilter();
 
-            cards.forEach((cardData) => {
+            methodslots.forEach((slot) => {
                 if (!methodshost) {
                     return;
                 }
+                const cardData = slot.active;
+                if (!cardData) {
+                    return;
+                }
                 const card = document.createElement('div');
-                card.className = 'sp-card';
+                card.className = 'sp-card sp-card--with-menu';
                 if (cardData.cognitiveLevel) {
                     card.classList.add(`sp-level-${cardData.cognitiveLevel}`);
                 }
                 card.draggable = true;
                 card.dataset.cardId = cardData.id;
+                const methodalternativeselector = slot.alternatives.length > 1
+                    ? `<div class="sp-method-slot__alt"><label class="kg-label">Alternative</label><select class="kg-input" data-act="source-method-alt">${slot.alternatives.map((entry) => `<option value="${escapeHtml(String(entry.id))}" ${String(entry.id) === String(cardData.id) ? 'selected' : ''}>${escapeHtml(entry.title)} (${escapeHtml(String(entry.duration))} Min)</option>`).join('')}</select></div>`
+                    : '';
 
                 card.innerHTML = `
                     <div class="sp-card-compact">
                         <div class="sp-card-title">
                             <span class="sp-title-text sp-card-title-main"><strong class="sp-titletext">${escapeHtml(cardData.title)}</strong></span>
-                            <button type="button" class="sp-card-preview" data-action="preview-method" title="Methodenkarte anzeigen" aria-label="Methodenkarte anzeigen" draggable="false">🔍</button>
+                            <details class="ml-card-menu">
+                                <summary class="ml-card-menu-toggle" data-action="toggle-context-menu" title="Kontextmenü" aria-label="Kontextmenü" draggable="false">⋮</summary>
+                                <div class="ml-card-menu-panel">
+                                    <button type="button" class="ml-card-menu-btn" data-action="preview-method">Ansehen</button>
+                                    <button type="button" class="ml-card-menu-btn" data-action="edit-method">Bearbeiten</button>
+                                </div>
+                            </details>
                         </div>
                         <div class="sp-card-meta">
                             <span class="sp-badge">${escapeHtml(String(cardData.duration))} Min</span>
                             <span class="sp-badge">${escapeHtml(cardData.group || '-')}</span>
+                            ${slot.alternatives.length > 1 ? '<span class="sp-badge">Alternative</span>' : ''}
                         </div>
+                        ${methodalternativeselector}
                         <div class="sp-card-description">${sanitizeHtml(cardData.description)}</div>
                     </div>
                     <span class="sp-hidden" data-field="description">${escapeHtml(cardData.details.description)}</span>
@@ -580,6 +1153,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     <span class="sp-hidden" data-field="zeitbedarf">${escapeHtml(String(cardData.duration))}</span>
                     <span class="sp-hidden" data-field="gruppengroesse">${escapeHtml(cardData.group)}</span>
                 `;
+                const sourcemethodaltselector = card.querySelector('[data-act="source-method-alt"]');
+                if (sourcemethodaltselector) {
+                    sourcemethodaltselector.addEventListener('change', () => {
+                        const selectedid = String(sourcemethodaltselector.value || '').trim();
+                        this.methodAlternativeSelection[slot.key] = selectedid;
+                        this.renderMethods();
+                    });
+                }
 
                 card.addEventListener('dragstart', (e) => {
                     const payload = {
@@ -595,12 +1176,22 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     };
                     e.dataTransfer.setData('text/plain', JSON.stringify(payload));
                 });
-                const previewBtn = card.querySelector('[data-action="preview-method"]');
+                const previewBtn = card.querySelector('.ml-card-menu-btn[data-action="preview-method"]');
                 if (previewBtn) {
                     previewBtn.addEventListener('click', (event) => {
                         event.preventDefault();
                         event.stopPropagation();
+                        this.closeContextMenus();
                         this.openMethodDetailModal(cardData);
+                    });
+                }
+                const editBtn = card.querySelector('.ml-card-menu-btn[data-action="edit-method"]');
+                if (editBtn) {
+                    editBtn.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        this.closeContextMenus();
+                        this.openMethodLibraryEditor(cardData.id);
                     });
                 }
 
@@ -612,27 +1203,42 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 if (!slots.length) {
                     unitshost.innerHTML = '<p class="sp-filter-status">Keine Bausteine vorhanden. Im Baustein anlegen.</p>';
                 } else {
+                    this.ensureUnitAccordionState(slots);
+                    const ismobile = this.isMobileViewport();
                     slots.forEach((slot) => {
                         const unit = slot.active;
                         if (!unit) {
                             return;
                         }
-                        const card = document.createElement('div');
-                        card.className = 'sp-card';
+                        const methodcards = this.getUnitMethodCards(unit);
+                        const slotcolor = this.getUnitSlotColor(slot.key);
+                        const expanded = !ismobile || String(this.expandedUnitSlotKey || '') === String(slot.key);
+                        const card = document.createElement('article');
+                        card.className = 'sp-card sp-unit-slot';
+                        card.style.setProperty('--sp-unit-color', slotcolor);
+                        card.setAttribute('data-slot-key', String(slot.key));
                         card.draggable = true;
+                        const alternativeselector = slot.units.length > 1
+                            ? `<div class="sp-unit-slot__alt"><label class="kg-label">Alternative</label><select class="kg-input" data-act="source-unit-alt">${slot.units.map((entry) => `<option value="${escapeHtml(String(entry.id))}" ${String(entry.id) === String(unit.id) ? 'selected' : ''}>${escapeHtml(entry.title)} (${escapeHtml(String(entry.duration))} Min)</option>`).join('')}</select></div>`
+                            : '';
                         card.innerHTML = `
-                            <div class="sp-card-compact">
-                                <div class="sp-card-title">
-                                    <span class="sp-title-text sp-card-title-main">
-                                        <strong class="sp-titletext" data-full-title="${escapeHtml(unit.title)}">${escapeHtml(unit.title)}</strong>
-                                    </span>
+                            <button type="button" class="sp-unit-slot__header" data-action="toggle-unit-slot" data-slot-key="${escapeHtml(String(slot.key))}" aria-expanded="${expanded ? 'true' : 'false'}">
+                                <div class="sp-unit-slot__title">
+                                    <strong class="sp-titletext" data-full-title="${escapeHtml(unit.title)}">${escapeHtml(unit.title)}</strong>
                                 </div>
-                                <div class="sp-card-meta">
+                                <div class="sp-unit-slot__meta">
                                     <span class="sp-badge">${escapeHtml(String(unit.duration))} Min</span>
                                     <span class="sp-badge">${escapeHtml(String((unit.methods || []).length))} Methoden</span>
                                     ${slot.units.length > 1 ? '<span class="sp-badge">Alternative</span>' : ''}
+                                    <span class="sp-unit-slot__chevron" aria-hidden="true">${expanded ? '▾' : '▸'}</span>
                                 </div>
-                                <div class="sp-card-description">${sanitizeHtml(unit.topics || '')}</div>
+                            </button>
+                            <div class="sp-unit-slot__content ${expanded ? '' : 'kg-hidden'}" data-slot-content="${escapeHtml(String(slot.key))}">
+                                ${alternativeselector}
+                                <div class="sp-unit-methods">
+                                    <div class="sp-unit-methods__label">Methodenpool dieses Bausteins</div>
+                                    <div class="sp-unit-methods__list">${methodcards.length ? methodcards.map((methodcard) => `<button type="button" class="sp-unit-method-link" data-action="preview-unit-method" data-method-id="${escapeHtml(String(methodcard.id))}" draggable="false">${escapeHtml(methodcard.title)}</button>`).join('') : '<span class="sp-filter-status">Keine Methoden zugeordnet</span>'}</div>
+                                </div>
                             </div>
                         `;
                         card.addEventListener('dragstart', (event) => {
@@ -643,6 +1249,48 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                                 duration: unit.duration,
                                 title: unit.title
                             }));
+                        });
+                        const toggle = card.querySelector('[data-action="toggle-unit-slot"]');
+                        if (toggle) {
+                            toggle.addEventListener('click', (event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                if (!this.isMobileViewport()) {
+                                    return;
+                                }
+                                const slotkey = String(toggle.getAttribute('data-slot-key') || '');
+                                if (!slotkey) {
+                                    return;
+                                }
+                                this.expandedUnitSlotKey = this.expandedUnitSlotKey === slotkey ? '' : slotkey;
+                                this.renderMethods();
+                            });
+                        }
+                        const sourcealtselector = card.querySelector('[data-act="source-unit-alt"]');
+                        if (sourcealtselector) {
+                            sourcealtselector.addEventListener('change', () => {
+                                const selectedid = String(sourcealtselector.value || '').trim();
+                                const slotunitids = slot.units.map((entry) => String(entry.id || '').trim());
+                                this.planningState.units = this.planningState.units.map((entry) => {
+                                    const entryid = String(entry.id || '').trim();
+                                    if (!slotunitids.includes(entryid)) {
+                                        return entry;
+                                    }
+                                    return Object.assign({}, entry, {active: entryid === selectedid});
+                                });
+                                this.renderMethods();
+                            });
+                        }
+                        card.querySelectorAll('[data-action="preview-unit-method"]').forEach((button) => {
+                            button.addEventListener('click', (event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                const method = this.methods.find((entry) => String(entry.id) === String(button.getAttribute('data-method-id')));
+                                if (!method) {
+                                    return;
+                                }
+                                this.openMethodDetailModal(this.toCard(method));
+                            });
                         });
                         unitshost.appendChild(card);
                     });
@@ -803,28 +1451,48 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         generateDynamicColumns() {
             const header = bySel('#sp-header');
             const row = bySel('#sp-grid-row');
+            const allDayRow = bySel('#sp-allday-row');
             if (!header || !row) {
                 return;
             }
 
             header.querySelectorAll('.sp-colhead').forEach((el) => el.remove());
             row.querySelectorAll('.sp-daycol').forEach((el) => el.remove());
+            if (allDayRow) {
+                allDayRow.querySelectorAll('.sp-allday-cell').forEach((el) => el.remove());
+            }
 
-            this.state.config.days.forEach((day) => {
+            const visibleDays = this.getVisibleDays();
+            visibleDays.forEach((day) => {
                 const h = document.createElement('div');
                 h.className = 'sp-colhead';
-                h.innerHTML = `${escapeHtml(day)} <div class="sp-sum" data-sum="${escapeHtml(day)}">0 Min</div>`;
+                h.innerHTML = `
+                    <div class="sp-colhead-day">${escapeHtml(day)}</div>
+                    <div class="sp-sum" data-sum="${escapeHtml(day)}">0 Min</div>
+                `;
                 header.appendChild(h);
 
                 const dayCol = document.createElement('div');
                 dayCol.className = 'sp-daycol';
                 dayCol.innerHTML = `<div class="sp-grid" data-day="${escapeHtml(day)}"></div><div class="sp-overlay" data-overlay="${escapeHtml(day)}"></div>`;
                 row.appendChild(dayCol);
+
+                if (allDayRow) {
+                    const allDayCell = document.createElement('div');
+                    allDayCell.className = 'sp-allday-cell';
+                    allDayCell.setAttribute('data-allday', day);
+                    allDayCell.innerHTML = '<span class="sp-allday-empty">Keine Einträge</span>';
+                    allDayRow.appendChild(allDayCell);
+                }
             });
 
-            const count = this.state.config.days.length;
-            header.style.gridTemplateColumns = `120px repeat(${count}, minmax(180px, 1fr))`;
-            row.style.gridTemplateColumns = `120px repeat(${count}, minmax(180px, 1fr))`;
+            const count = visibleDays.length;
+            header.style.gridTemplateColumns = `${TIME_AXIS_WIDTH}px repeat(${count}, minmax(180px, 1fr))`;
+            row.style.gridTemplateColumns = `${TIME_AXIS_WIDTH}px repeat(${count}, minmax(180px, 1fr))`;
+            if (allDayRow) {
+                allDayRow.style.gridTemplateColumns = `${TIME_AXIS_WIDTH}px repeat(${count}, minmax(180px, 1fr))`;
+            }
+            this.updateViewControls();
         }
 
         setupDayGrids() {
@@ -861,18 +1529,59 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             });
         }
 
+        renderAllDayRow() {
+            if (!bySel('#sp-allday-row')) {
+                return;
+            }
+            this.getVisibleDays().forEach((day) => {
+                const target = bySel(`[data-allday="${day}"]`);
+                if (!target) {
+                    return;
+                }
+                const items = this.state.plan.days[day] || [];
+                if (!items.length) {
+                    target.innerHTML = '<span class="sp-allday-empty">Keine Einträge</span>';
+                    return;
+                }
+                const totalMin = items.reduce((sum, item) => sum + Math.max(0, Number(item.endMin || 0) - Number(item.startMin || 0)), 0);
+                const methods = items.filter((item) => item.kind === 'method').length;
+                const units = items.filter((item) => item.kind === 'unit').length;
+                const breaks = items.filter((item) => item.kind === 'break').length;
+                const chips = [
+                    `${items.length} Einträge`,
+                    `${Math.floor(totalMin / 60)}h ${totalMin % 60}m`,
+                    methods ? `${methods} Methoden` : '',
+                    units ? `${units} Bausteine` : '',
+                    breaks ? `${breaks} Pausen` : ''
+                ].filter(Boolean);
+                target.innerHTML = chips.map((chip) => `<span class="sp-allday-chip">${escapeHtml(chip)}</span>`).join('');
+            });
+        }
+
         renderOverlays() {
             const start = parseTimeToMinutes(this.state.config.timeRange.start);
             const end = parseTimeToMinutes(this.state.config.timeRange.end);
             const slotMinutes = ZOOM_LEVELS[this.zoomIndex].slotMinutes;
             const slotsPerDay = Math.max(1, Math.round((end - start) / slotMinutes));
 
-            this.state.config.days.forEach((day) => {
+            const todayName = getTodayDayName();
+            this.getVisibleDays().forEach((day) => {
                 const overlay = document.querySelector(`[data-overlay="${day}"]`);
                 if (!overlay) {
                     return;
                 }
                 overlay.innerHTML = '';
+                const now = new Date();
+                const nowMinute = toMin(now.getHours(), now.getMinutes());
+                const isToday = day === todayName;
+                if (isToday && nowMinute >= start && nowMinute <= end) {
+                    const topPx = ((nowMinute - start) / slotMinutes) * ZOOM_LEVELS[this.zoomIndex].slotPx;
+                    const indicator = document.createElement('div');
+                    indicator.className = 'sp-nowline';
+                    indicator.style.top = `${topPx}px`;
+                    indicator.innerHTML = `<span class="sp-nowline__label">${escapeHtml(label(nowMinute))}</span>`;
+                    overlay.appendChild(indicator);
+                }
 
                 const items = (this.state.plan.days[day] || []).slice().sort((a, b) => a.startMin - b.startMin);
                 items.forEach((it) => {
@@ -892,6 +1601,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     if (it.kind === 'method' && it.parentunit) {
                         className += ' sp-entry--unit-method';
                     }
+                    if ((Number(it.endMin || 0) - Number(it.startMin || 0)) <= 10) {
+                        className += ' sp-item--compact';
+                    }
                     if (it.cognitiveLevel) {
                         className += ` sp-level-${it.cognitiveLevel}`;
                     }
@@ -901,6 +1613,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     div.draggable = true;
 
                     div.addEventListener('dragstart', (e) => {
+                        const fromResizeHandle = e.target && typeof e.target.closest === 'function' && e.target.closest('.sp-resize-handle');
+                        if (fromResizeHandle || this.resizeState) {
+                            e.preventDefault();
+                            return;
+                        }
                         e.dataTransfer.setData('text/plain', JSON.stringify({type: 'move', day, uid: it.uid}));
                     });
 
@@ -908,49 +1625,162 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     if (it.flowTotal > 1 && it.flowOrder > 1) {
                         title = `${title} (Fortsetzung ${it.flowOrder}/${it.flowTotal})`;
                     }
+                    const timeLabel = `${label(it.startMin)} - ${label(it.endMin)}`;
+                    const isDayView = this.state.view.mode === VIEW_MODE_DAY;
+                    const titleWithTime = isDayView ? `${title} - ${timeLabel}` : title;
 
-                    let extraActions = '';
+                    let menuActions = '';
+                    let unitmethodshtml = '';
+                    let unitLabelHtml = '';
+                    let unitColorKey = '';
                     if (it.kind === 'unit') {
                         const slot = this.getPlanningSlot(it.slotkey);
                         const alternatives = slot && Array.isArray(slot.units) ? slot.units : [];
+                        unitColorKey = String(it.slotkey || it.unitid || '');
                         const selector = alternatives.length > 1
-                            ? `<select class="kg-input" data-act="unit-alt" data-uid="${escapeHtml(it.uid)}">${alternatives.map((unit) => `<option value="${escapeHtml(unit.id)}" ${String(unit.id) === String(it.unitid) ? 'selected' : ''}>${escapeHtml(unit.title)}</option>`).join('')}</select>`
+                            ? `<div class="sp-menu-select-wrap"><label class="sp-menu-select-label">${lucideIcon('arrow-left-right', 'sp-menu-select-label-icon')}Alternativer Baustein</label><select class="kg-input" data-act="unit-alt" data-uid="${escapeHtml(it.uid)}">${alternatives.map((unit) => `<option value="${escapeHtml(unit.id)}" ${String(unit.id) === String(it.unitid) ? 'selected' : ''}>${escapeHtml(unit.title)}</option>`).join('')}</select></div>`
                             : '';
-                        extraActions = `${selector}<button type="button" class="sp-btn" data-act="resolve-unit" data-uid="${escapeHtml(it.uid)}">Auflösen</button>`;
+                        menuActions = `${selector}
+                            <button type="button" class="ml-card-menu-btn" data-action="edit-unit" data-uid="${escapeHtml(it.uid)}"><span class="sp-menu-btn__icon">${lucideIcon('notebook-pen')}</span><span class="sp-menu-btn__label">Bearbeiten</span></button>
+                            <button type="button" class="ml-card-menu-btn" data-act="resolve-unit" data-uid="${escapeHtml(it.uid)}"><span class="sp-menu-btn__icon">${lucideIcon('blocks')}</span><span class="sp-menu-btn__label">Auflösen</span></button>`;
+                        const unit = this.getUnitById(it.unitid);
+                        const methodcards = this.getUnitMethodCards(unit);
+                        if (methodcards.length) {
+                            unitmethodshtml = `
+                                <div class="sp-item-unit-methods">
+                                    <div class="sp-item-unit-methods__label">Methoden</div>
+                                    <div class="sp-item-unit-methods__scroller">
+                                        ${methodcards.map((methodcard) => `
+                                            <button type="button" class="sp-unit-method-card${methodcard.cognitiveLevel ? ` sp-level-${escapeHtml(String(methodcard.cognitiveLevel))}` : ''}" data-action="preview-unit-method" data-method-id="${escapeHtml(String(methodcard.id))}">
+                                                <div class="sp-card-compact">
+                                                    <div class="sp-card-title">
+                                                        <span class="sp-title-text sp-card-title-main"><strong class="sp-titletext">${escapeHtml(methodcard.title)}</strong></span>
+                                                    </div>
+                                                    <div class="sp-card-meta">
+                                                        <span class="sp-badge">${escapeHtml(String(methodcard.duration || '-'))} Min</span>
+                                                        <span class="sp-badge">${escapeHtml(methodcard.group || '-')}</span>
+                                                    </div>
+                                                    <div class="sp-card-description">${sanitizeHtml(methodcard.description || '')}</div>
+                                                </div>
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        unitLabelHtml = `<div class="sp-entry-unitlabel">Baustein: ${escapeHtml((unit && unit.title) || title)}</div>`;
                     } else if (it.kind === 'method') {
+                        menuActions = '';
                         const method = this.methods.find((m) => String(m.id) === String(it.entryId));
                         const alternatives = method ? this.getMethodAlternativeIds(method) : [];
                         if (alternatives.length > 1) {
-                            extraActions = `<select class="kg-input" data-act="method-alt" data-uid="${escapeHtml(it.uid)}">${alternatives.map((id) => {
+                            menuActions += `<div class="sp-menu-select-wrap"><label class="sp-menu-select-label">${lucideIcon('git-compare-arrows', 'sp-menu-select-label-icon')}Alternative Methode</label><select class="kg-input" data-act="method-alt" data-uid="${escapeHtml(it.uid)}">${alternatives.map((id) => {
                                 const alt = this.methods.find((m) => String(m.id) === String(id));
                                 return alt ? `<option value="${escapeHtml(id)}" ${String(id) === String(it.entryId) ? 'selected' : ''}>${escapeHtml(alt.titel || id)}</option>` : '';
-                            }).join('')}</select>`;
+                            }).join('')}</select></div>`;
+                        }
+                        menuActions += `
+                            <button type="button" class="ml-card-menu-btn" data-action="preview-plan-method" data-uid="${escapeHtml(it.uid)}"><span class="sp-menu-btn__icon">${lucideIcon('file-text')}</span><span class="sp-menu-btn__label">Ansehen</span></button>
+                            <button type="button" class="ml-card-menu-btn" data-action="edit-plan-method" data-uid="${escapeHtml(it.uid)}"><span class="sp-menu-btn__icon">${lucideIcon('notebook-pen')}</span><span class="sp-menu-btn__label">Bearbeiten</span></button>
+                        `;
+                        if (it.parentunit) {
+                            const parentunit = this.getUnitById(it.parentunit);
+                            if (parentunit) {
+                                unitColorKey = String(parentunit.slotkey || parentunit.id || '');
+                                unitLabelHtml = `<div class="sp-entry-unitlabel">Baustein: ${escapeHtml(parentunit.title || '')}</div>`;
+                            }
                         }
                     }
 
-                    let defaultActions = '';
-                    if (it.kind !== 'unit' && it.kind !== 'break') {
-                        defaultActions += `<button type="button" class="sp-btn" data-act="shorten" data-uid="${escapeHtml(it.uid)}">-15</button>`;
-                        defaultActions += `<button type="button" class="sp-btn" data-act="extend" data-uid="${escapeHtml(it.uid)}">+15</button>`;
+                    if (unitColorKey) {
+                        div.classList.add('sp-item--unit-colored');
+                        div.style.setProperty('--sp-unit-color', this.getUnitSlotColor(unitColorKey));
                     }
-                    defaultActions += `<button type="button" class="sp-btn" data-act="delete" data-uid="${escapeHtml(it.uid)}">Löschen</button>`;
+
+                    let defaultActions = '';
+                    defaultActions += `<button type="button" class="ml-card-menu-btn ml-card-menu-btn-delete" data-act="delete" data-uid="${escapeHtml(it.uid)}"><span class="sp-menu-btn__icon">${lucideIcon('trash-2')}</span><span class="sp-menu-btn__label">Löschen</span></button>`;
 
                     div.innerHTML = `
                         <div class="sp-item-content">
-                            <div class="sp-title">${escapeHtml(title)}</div>
-                            <div class="sp-meta">${escapeHtml(label(it.startMin))} - ${escapeHtml(label(it.endMin))}</div>
+                            ${unitLabelHtml}
+                            <div class="sp-title" data-full-title="${escapeHtml(titleWithTime)}">${escapeHtml(titleWithTime)}</div>
+                            ${isDayView ? '' : `<div class="sp-meta">${escapeHtml(timeLabel)}</div>`}
+                            ${unitmethodshtml}
                         </div>
-                        <div class="sp-item-actions" role="group" aria-label="Aktionen">
-                            ${extraActions}
-                            ${defaultActions}
-                        </div>
+                        <details class="ml-card-menu sp-item-context">
+                            <summary class="ml-card-menu-toggle" data-action="toggle-context-menu" aria-label="Kontextmenü">⋮</summary>
+                            <div class="ml-card-menu-panel" role="menu" aria-label="Eintrag Aktionen">
+                                ${menuActions}
+                                ${defaultActions}
+                            </div>
+                        </details>
                     `;
+                    if (it.kind === 'method' || it.kind === 'break') {
+                        const topHandle = document.createElement('div');
+                        topHandle.className = 'sp-resize-handle sp-resize-handle--top';
+                        topHandle.setAttribute('data-resize', 'start');
+                        topHandle.setAttribute('aria-hidden', 'true');
+                        topHandle.addEventListener('pointerdown', (event) => this.startItemResize(event, it, day, 'start'));
+                        div.appendChild(topHandle);
+
+                        const bottomHandle = document.createElement('div');
+                        bottomHandle.className = 'sp-resize-handle sp-resize-handle--bottom';
+                        bottomHandle.setAttribute('data-resize', 'end');
+                        bottomHandle.setAttribute('aria-hidden', 'true');
+                        bottomHandle.addEventListener('pointerdown', (event) => this.startItemResize(event, it, day, 'end'));
+                        div.appendChild(bottomHandle);
+                    }
+                    if (it.kind === 'method') {
+                        div.classList.add('sp-item--method-clickable');
+                        div.setAttribute('role', 'button');
+                        div.setAttribute('tabindex', '0');
+                        div.setAttribute('aria-label', `${title || 'Methode'} öffnen`);
+                        div.addEventListener('click', (event) => {
+                            if (event.target.closest('.ml-card-menu, .sp-btn, select, button, input, textarea, a, .sp-resize-handle')) {
+                                return;
+                            }
+                            this.openMethodDetailFromPlanItem(it);
+                        });
+                        div.addEventListener('keydown', (event) => {
+                            if (event.key !== 'Enter' && event.key !== ' ') {
+                                return;
+                            }
+                            if (event.target.closest('.ml-card-menu, .sp-btn, select, button, input, textarea, a, .sp-resize-handle')) {
+                                return;
+                            }
+                            event.preventDefault();
+                            this.openMethodDetailFromPlanItem(it);
+                        });
+                    }
+                    if (it.kind === 'break') {
+                        div.classList.add('sp-item--method-clickable');
+                        div.setAttribute('role', 'button');
+                        div.setAttribute('tabindex', '0');
+                        div.setAttribute('aria-label', 'Pause bearbeiten');
+                        div.addEventListener('click', (event) => {
+                            if (event.target.closest('.ml-card-menu, .sp-btn, select, button, input, textarea, a, .sp-resize-handle')) {
+                                return;
+                            }
+                            this.openBreakModalForItem(day, it);
+                        });
+                        div.addEventListener('keydown', (event) => {
+                            if (event.key !== 'Enter' && event.key !== ' ') {
+                                return;
+                            }
+                            if (event.target.closest('.ml-card-menu, .sp-btn, select, button, input, textarea, a, .sp-resize-handle')) {
+                                return;
+                            }
+                            event.preventDefault();
+                            this.openBreakModalForItem(day, it);
+                        });
+                    }
                     overlay.appendChild(div);
                 });
             });
 
             bySel('#sp-grid-row')?.querySelectorAll('[data-act="method-alt"]').forEach((select) => {
                 select.addEventListener('change', () => {
+                    this.closeContextMenus();
                     const found = this.findItemByUid(select.getAttribute('data-uid'));
                     if (!found.item) {
                         return;
@@ -983,8 +1813,69 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 });
             });
 
+            bySel('#sp-grid-row')?.querySelectorAll('[data-action="preview-unit-method"]').forEach((button) => {
+                button.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.closeContextMenus();
+                    const method = this.methods.find((entry) => String(entry.id) === String(button.getAttribute('data-method-id')));
+                    if (!method) {
+                        return;
+                    }
+                    this.openMethodDetailModal(this.toCard(method));
+                });
+            });
+
+            bySel('#sp-grid-row')?.querySelectorAll('[data-action="preview-plan-method"]').forEach((button) => {
+                button.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.closeContextMenus();
+                    const found = this.findItemByUid(button.getAttribute('data-uid'));
+                    if (!found.item || found.item.kind !== 'method') {
+                        return;
+                    }
+                    this.openMethodDetailFromPlanItem(found.item);
+                });
+            });
+
+            bySel('#sp-grid-row')?.querySelectorAll('[data-action="edit-plan-method"]').forEach((button) => {
+                button.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.closeContextMenus();
+                    const found = this.findItemByUid(button.getAttribute('data-uid'));
+                    if (!found.item || found.item.kind !== 'method') {
+                        return;
+                    }
+                    const methodid = String(found.item.entryId || '').trim();
+                    if (!methodid) {
+                        return;
+                    }
+                    this.openMethodLibraryEditor(methodid);
+                });
+            });
+
+            bySel('#sp-grid-row')?.querySelectorAll('[data-action="edit-unit"]').forEach((button) => {
+                button.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.closeContextMenus();
+                    const found = this.findItemByUid(button.getAttribute('data-uid'));
+                    if (!found.item || found.item.kind !== 'unit') {
+                        return;
+                    }
+                    const unitid = String(found.item.unitid || '').trim();
+                    if (!unitid) {
+                        return;
+                    }
+                    this.openPlanningModeEditor(unitid);
+                });
+            });
+
             bySel('#sp-grid-row')?.querySelectorAll('[data-act="unit-alt"]').forEach((select) => {
                 select.addEventListener('change', () => {
+                    this.closeContextMenus();
                     const found = this.findItemByUid(select.getAttribute('data-uid'));
                     if (!found.item) {
                         return;
@@ -1031,10 +1922,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             });
 
             this.updateSums();
+            this.renderAllDayRow();
         }
 
         updateSums() {
-            this.state.config.days.forEach((day) => {
+            this.getVisibleDays().forEach((day) => {
                 const sum = (this.state.plan.days[day] || []).reduce((acc, item) => acc + (item.endMin - item.startMin), 0);
                 const el = document.querySelector(`[data-sum="${day}"]`);
                 if (el) {
@@ -1044,6 +1936,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         refreshLayout() {
+            this.ensureViewState();
+            this.wrapper.classList.remove('sp-zoom-fine', 'sp-zoom-medium', 'sp-zoom-coarse');
+            this.wrapper.classList.add(`sp-zoom-${ZOOM_LEVELS[this.zoomIndex].id}`);
             this.wrapper.style.setProperty('--slot-height', `${ZOOM_LEVELS[this.zoomIndex].slotPx}px`);
             this.buildTimeColumn();
             this.setupDayGrids();
@@ -1064,17 +1959,21 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (indicator) {
                 indicator.textContent = ZOOM_LEVELS[this.zoomIndex].label;
             }
+            const scale = bySel('#sp-time-scale');
+            if (scale) {
+                scale.value = String(ZOOM_LEVELS[this.zoomIndex].slotMinutes);
+            }
         }
 
         addSegmentedItems(kind, payload, day, startMin, options = {}) {
             const duration = this.snapDuration(payload.duration || this.state.config.granularity);
-            const allocation = this.allocateAcrossPlan(day, startMin, duration);
+            const skipflow = String(options.skipflowid || '');
+            const allocation = this.allocateAcrossPlan(day, startMin, duration, {skipflowid: skipflow});
             if (!allocation.segments.length) {
                 this.warn('Kein freier Zeitraum im Raster verfügbar.');
                 return null;
             }
 
-            const skipflow = String(options.skipflowid || '');
             const collisions = allocation.segments.some((segment) => {
                 const list = (this.state.plan.days[segment.day] || []).filter((entry) => {
                     if (!skipflow) {
@@ -1139,6 +2038,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 return;
             }
             this.clearWarn();
+            this.setStatus('Neues Element hinzugefügt. Speichern läuft ...', false);
             this.savePlan();
         }
 
@@ -1158,6 +2058,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 return;
             }
             this.clearWarn();
+            this.setStatus('Neues Element hinzugefügt. Speichern läuft ...', false);
             this.savePlan();
         }
 
@@ -1259,6 +2160,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.state.plan.days[payload.day] = items.filter((x) => x.uid !== payload.uid);
             this.state.plan.days[day].push(candidate);
             this.clearWarn();
+            this.setStatus('Neue Elemente hinzugefügt. Speichern läuft ...', false);
             this.savePlan();
         }
 
@@ -1292,7 +2194,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         handleItemAction(event) {
-            const btn = event.target.closest('button.sp-btn');
+            const btn = event.target.closest('button[data-act]');
             if (!btn) {
                 return;
             }
@@ -1316,9 +2218,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
 
             const item = list[idx];
-            const delta = 15;
 
             if (act === 'resolve-unit') {
+                this.closeContextMenus();
                 this.resolveUnitItem(itemuid);
                 return;
             }
@@ -1329,31 +2231,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 } else {
                     list.splice(idx, 1);
                 }
+                this.closeContextMenus();
                 this.savePlan();
                 return;
             }
             if (act === 'extend' || act === 'shorten') {
-                if (item.flowid && Number(item.flowTotal || 1) > 1) {
-                    this.warn('Fortsetzungen können nicht segmentweise verlängert werden.');
-                    return;
-                }
-                const diff = act === 'extend' ? delta : -delta;
-                const nextDuration = (item.endMin - item.startMin) + diff;
-                if (nextDuration < delta) {
-                    this.warn(`Mindestdauer ${delta} Minuten.`);
-                    return;
-                }
-                const candidate = Object.assign({}, item, {endMin: item.startMin + nextDuration});
-                if (!this.withinBounds(candidate.startMin, candidate.endMin)) {
-                    this.warn('Grenze des Tagesrasters erreicht.');
-                    return;
-                }
-                if (this.hasCollision(list.filter((entry) => entry.uid !== item.uid), candidate)) {
-                    this.warn('Überschneidung bei Anpassung.');
-                    return;
-                }
-                list[idx] = candidate;
-                this.savePlan();
+                return;
             }
         }
 
@@ -1435,7 +2318,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 return;
             }
             this.closeConfigPanel();
-            asCall('mod_konzeptgenerator_delete_grid', {
+            asCall('mod_seminarplaner_delete_grid', {
                 cmid: this.cmid,
                 gridid
             }).then(() => {
@@ -1446,6 +2329,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     if (!hasCurrent) {
                         this.resetLoadedGridState();
                         this.toggleStepTwo(false);
+                        this.setSavedState('Gespeichert: -');
                     }
                     this.setStatus('Seminarplan gelöscht.', false);
                 });
@@ -1497,12 +2381,15 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     event.preventDefault();
                     const day = modal.querySelector('#sp-break-day').value;
                     const startMin = parseTimeToMinutes(modal.querySelector('#sp-break-start').value);
-                    const duration = this.snapDuration(modal.querySelector('#sp-break-duration').value);
+                    const duration = this.snapBreakDuration(modal.querySelector('#sp-break-duration').value);
                     if (!this.state.plan.days[day]) {
                         this.state.plan.days[day] = [];
                     }
+                    const baseUid = this.breakEditRef && this.breakEditRef.itemuid
+                        ? String(this.breakEditRef.itemuid)
+                        : uid();
                     const item = {
-                        uid: uid(),
+                        uid: baseUid,
                         title: 'Pause',
                         startMin,
                         endMin: startMin + duration,
@@ -1513,11 +2400,18 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         this.warn('Pause liegt außerhalb des Zeitrasters.');
                         return;
                     }
-                    if (this.hasCollision(this.state.plan.days[day], item)) {
+                    const collisionList = (this.state.plan.days[day] || []).filter((entry) => String(entry.uid) !== baseUid);
+                    if (this.hasCollision(collisionList, item)) {
                         this.warn('Pause überschneidet sich mit einer Methode.');
                         return;
                     }
+                    if (this.breakEditRef && this.breakEditRef.day) {
+                        const oldday = this.breakEditRef.day;
+                        this.state.plan.days[oldday] = (this.state.plan.days[oldday] || [])
+                            .filter((entry) => String(entry.uid) !== baseUid);
+                    }
                     this.state.plan.days[day].push(item);
+                    this.breakEditRef = null;
                     this.closeBreakModal();
                     this.savePlan();
                 });
@@ -1556,11 +2450,59 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const sectionsHtml = sections.length ? sections.map((entry) => `
                 <section class="sp-method-detail__section">
                     <h3>${escapeHtml(entry.title)}</h3>
-                    <div class="sp-method-detail__text">${sanitizeHtml(entry.value)}</div>
+                    <div class="sp-method-detail__text">${formatRichText(entry.value)}</div>
                 </section>
             `).join('') : '<p class="sp-method-detail__empty">Keine zusätzlichen Details vorhanden.</p>';
 
             return `${metaHtml}${sectionsHtml}`;
+        }
+
+        openMethodLibraryEditor(methodid = '') {
+            const base = (typeof M !== 'undefined' && M && M.cfg && M.cfg.wwwroot) ? String(M.cfg.wwwroot) : '';
+            const cmid = encodeURIComponent(String(this.cmid || ''));
+            const editparam = methodid ? `&editmethodid=${encodeURIComponent(String(methodid))}` : '';
+            window.location.href = `${base}/mod/seminarplaner/methodlibrary.php?id=${cmid}${editparam}#ml-edit-section`;
+        }
+
+        openPlanningModeEditor(unitid = '') {
+            const base = (typeof M !== 'undefined' && M && M.cfg && M.cfg.wwwroot) ? String(M.cfg.wwwroot) : '';
+            const cmid = encodeURIComponent(String(this.cmid || ''));
+            const editparam = unitid ? `&editunitid=${encodeURIComponent(String(unitid))}` : '';
+            window.location.href = `${base}/mod/seminarplaner/planningmode.php?id=${cmid}${editparam}&focus=step2#kg-pm-step-2`;
+        }
+
+        openMethodDetailFromPlanItem(item) {
+            if (!item || item.kind !== 'method') {
+                return;
+            }
+            const method = this.methods.find((entry) => String(entry.id) === String(item.entryId || ''));
+            if (method) {
+                this.openMethodDetailModal(this.toCard(method));
+                return;
+            }
+            const fallback = {
+                id: item.entryId || '',
+                title: item.title || 'Methodenkarte',
+                duration: Math.max(5, Number((item.endMin || 0) - (item.startMin || 0)) || 5),
+                group: '',
+                phase: item.phase || '',
+                cognitive: item.cognitive || '',
+                tags: '',
+                details: Object.assign({
+                    description: '',
+                    reflection: '',
+                    requirements: '',
+                    socialform: '',
+                    preparation: '',
+                    materials: '',
+                    flow: '',
+                    risks: '',
+                    resources: '',
+                    objectives: '',
+                    contact: ''
+                }, item.details || {})
+            };
+            this.openMethodDetailModal(fallback);
         }
 
         createMethodDetailModal() {
@@ -1575,6 +2517,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         <button type="button" class="sp-modal__close" data-modal-close="method-detail" aria-label="Popup schließen">X</button>
                     </header>
                     <div class="sp-modal__body sp-method-detail__body" id="sp-method-detail-body"></div>
+                    <div class="sp-modal__actions">
+                        <button type="button" class="kg-btn kg-btn-primary" id="sp-method-detail-edit">Bearbeiten</button>
+                        <button type="button" class="kg-btn" data-modal-close="method-detail">Schließen</button>
+                    </div>
                 </div>
             `;
             this.wrapper.appendChild(modal);
@@ -1585,6 +2531,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     this.closeMethodDetailModal();
                 }
             });
+            const editBtn = modal.querySelector('#sp-method-detail-edit');
+            if (editBtn) {
+                editBtn.addEventListener('click', () => {
+                    const methodid = String(editBtn.getAttribute('data-method-id') || '').trim();
+                    this.closeMethodDetailModal();
+                    this.openMethodLibraryEditor(methodid);
+                });
+            }
         }
 
         openMethodDetailModal(cardData) {
@@ -1593,11 +2547,22 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             const title = this.methodDetailModal.querySelector('#sp-method-detail-title');
             const body = this.methodDetailModal.querySelector('#sp-method-detail-body');
+            const editBtn = this.methodDetailModal.querySelector('#sp-method-detail-edit');
             if (title) {
                 title.textContent = cardData.title || 'Methodenkarte';
             }
             if (body) {
                 body.innerHTML = this.buildMethodDetailBody(cardData);
+            }
+            if (editBtn) {
+                const methodid = String(cardData && cardData.id ? cardData.id : '').trim();
+                if (methodid) {
+                    editBtn.setAttribute('data-method-id', methodid);
+                    editBtn.disabled = false;
+                } else {
+                    editBtn.setAttribute('data-method-id', '');
+                    editBtn.disabled = true;
+                }
             }
             this.methodDetailModal.classList.add('sp-modal--visible');
             this.methodDetailModal.removeAttribute('aria-hidden');
@@ -1615,6 +2580,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (!this.breakModal) {
                 return;
             }
+            this.breakEditRef = null;
+            const title = this.breakModal.querySelector('#sp-break-modal-title');
+            if (title) {
+                title.textContent = 'Pause hinzufügen';
+            }
             const start = parseTimeToMinutes(this.state.config.timeRange.start);
             const end = parseTimeToMinutes(this.state.config.timeRange.end);
             this.breakModal.querySelector('#sp-break-day').value = this.state.config.days[0] || DAYS_ALL[0];
@@ -1623,12 +2593,78 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.breakModal.removeAttribute('aria-hidden');
         }
 
+        openBreakModalForItem(day, item) {
+            if (!this.breakModal || !item || item.kind !== 'break') {
+                return;
+            }
+            this.breakEditRef = {
+                day: String(day || ''),
+                itemuid: String(item.uid || '')
+            };
+            const title = this.breakModal.querySelector('#sp-break-modal-title');
+            if (title) {
+                title.textContent = 'Pause bearbeiten';
+            }
+            this.breakModal.querySelector('#sp-break-day').value = String(day || this.state.config.days[0] || DAYS_ALL[0]);
+            this.breakModal.querySelector('#sp-break-start').value = label(Number(item.startMin || 0));
+            this.breakModal.querySelector('#sp-break-duration').value = String(Math.max(5, Number(item.endMin || 0) - Number(item.startMin || 0)));
+            this.breakModal.classList.add('sp-modal--visible');
+            this.breakModal.removeAttribute('aria-hidden');
+        }
+
         closeBreakModal() {
             if (!this.breakModal) {
                 return;
             }
+            this.breakEditRef = null;
             this.breakModal.classList.remove('sp-modal--visible');
             this.breakModal.setAttribute('aria-hidden', 'true');
+        }
+
+        findFirstGapInDay(day, duration) {
+            const dayStart = parseTimeToMinutes(this.state.config.timeRange.start);
+            const dayEnd = parseTimeToMinutes(this.state.config.timeRange.end);
+            const items = (this.state.plan.days[day] || []).slice().sort((a, b) => a.startMin - b.startMin);
+            let pointer = dayStart;
+            for (const item of items) {
+                if (item.startMin - pointer >= duration) {
+                    return pointer;
+                }
+                if (item.endMin > pointer) {
+                    pointer = item.endMin;
+                }
+                if (pointer + duration > dayEnd) {
+                    return null;
+                }
+            }
+            return pointer + duration <= dayEnd ? pointer : null;
+        }
+
+        addBreakAtFirstGap() {
+            this.ensurePlanDays();
+            this.ensureViewState();
+            const duration = this.snapBreakDuration(5);
+            const days = this.state.view.mode === VIEW_MODE_DAY ? [this.state.view.day] : this.state.config.days.slice();
+            for (const day of days) {
+                const startMin = this.findFirstGapInDay(day, duration);
+                if (!Number.isFinite(startMin)) {
+                    continue;
+                }
+                const item = {
+                    uid: uid(),
+                    title: 'Pause',
+                    startMin,
+                    endMin: startMin + duration,
+                    kind: 'break',
+                    details: {}
+                };
+                this.state.plan.days[day].push(item);
+                this.clearWarn();
+                this.setStatus(`Pause hinzugefügt: ${day} ${label(startMin)} (${duration} Min).`, false);
+                this.savePlan();
+                return;
+            }
+            this.warn('Kein freier Zeitraum für Pause verfügbar.');
         }
 
         bindToolbar() {
@@ -1648,15 +2684,70 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     this.scheduleAutosave();
                 });
             }
-            const clearbtn = bySel('#sp-clear');
-            if (clearbtn) {
-                clearbtn.addEventListener('click', () => this.deleteSelectedGrid());
+            const viewWeek = bySel('#sp-view-week');
+            if (viewWeek) {
+                viewWeek.addEventListener('click', () => this.setViewMode(VIEW_MODE_WEEK));
             }
-            const addbreakbtn = bySel('#sp-addbreak');
-            if (addbreakbtn) {
-                addbreakbtn.addEventListener('click', () => this.openBreakModal());
+            const viewDay = bySel('#sp-view-day');
+            if (viewDay) {
+                viewDay.addEventListener('click', () => this.setViewMode(VIEW_MODE_DAY));
             }
-            document.addEventListener('click', (event) => this.handleItemAction(event));
+            const daySelect = bySel('#sp-day-select');
+            if (daySelect) {
+                daySelect.addEventListener('change', () => this.setViewDay(daySelect.value));
+            }
+            const dayPrev = bySel('#sp-day-prev');
+            if (dayPrev) {
+                dayPrev.addEventListener('click', () => this.shiftViewDay(-1));
+            }
+            const dayNext = bySel('#sp-day-next');
+            if (dayNext) {
+                dayNext.addEventListener('click', () => this.shiftViewDay(1));
+            }
+            const timeScale = bySel('#sp-time-scale');
+            if (timeScale) {
+                timeScale.addEventListener('change', () => {
+                    const minutes = Number.parseInt(timeScale.value, 10);
+                    const index = ZOOM_LEVELS.findIndex((entry) => Number(entry.slotMinutes) === minutes);
+                    if (index < 0) {
+                        return;
+                    }
+                    this.zoomIndex = index;
+                    this.refreshLayout();
+                    this.scheduleAutosave();
+                });
+            }
+            document.addEventListener('click', (event) => {
+                const tabLink = event.target.closest('.kg-tabs a.kg-tab');
+                if (tabLink && tabLink.href) {
+                    event.preventDefault();
+                    window.location.href = tabLink.href;
+                    return;
+                }
+                const addBreakTrigger = event.target.closest('#sp-addbreak');
+                if (addBreakTrigger) {
+                    event.preventDefault();
+                    this.addBreakAtFirstGap();
+                    return;
+                }
+                const clearTrigger = event.target.closest('#sp-clear');
+                if (clearTrigger) {
+                    event.preventDefault();
+                    this.deleteSelectedGrid();
+                    return;
+                }
+                this.handleContextMenuToggle(event);
+                this.handleItemAction(event);
+            });
+            document.addEventListener('pointermove', (event) => this.updateItemResize(event), {passive: false});
+            document.addEventListener('pointerup', () => this.finishItemResize());
+            document.addEventListener('pointercancel', () => this.finishItemResize());
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    this.closeContextMenus();
+                    this.finishItemResize();
+                }
+            });
         }
 
         bindFilters() {
@@ -1800,7 +2891,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     };
 
                     if (pendingname) {
-                        asCall('mod_konzeptgenerator_create_grid', {cmid: this.cmid, name: pendingname, description: ''})
+                        asCall('mod_seminarplaner_create_grid', {cmid: this.cmid, name: pendingname, description: ''})
                             .then((created) => {
                                 const createdid = String(created.gridid || '');
                                 return this.listGrids(createdid).then(() => createdid);
@@ -1940,7 +3031,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         this.state.plan.days[day] = [];
                     }
                     const startMin = parseTimeToMinutes(br.start);
-                    const dur = this.snapDuration(br.duration);
+                    const dur = this.snapBreakDuration(br.duration);
                     const item = {
                         uid: uid(),
                         title: 'Pause',
@@ -1986,8 +3077,17 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     if (input) {
                         input.value = '';
                     }
+                    const selectedgridid = String(selectgrid.value || '').trim();
+                    const loadedgridid = String(this.state.gridid || '').trim();
+                    if (selectedgridid === loadedgridid && selectedgridid) {
+                        this.toggleStepTwo(true);
+                        this.setStatus('Aktueller Seminarplan ist bereits geladen.', false);
+                        this.syncPublishControl();
+                        return;
+                    }
                     this.toggleStepTwo(false);
                     this.setStatus('Seminarplan ausgewählt. Bitte "Seminarplan laden" klicken.', false);
+                    this.syncPublishControl();
                 });
             }
             const loadbtn = bySel('#kg-load-grid');
@@ -2003,17 +3103,45 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         nameinput.value = '';
                     }
                     this.toggleStepTwo(true);
-                    this.loadGridState();
+                    this.loadGridState().then(() => this.syncPublishControl());
                 });
             }
             const savebtn = bySel('#kg-save-grid');
             if (savebtn) {
                 savebtn.addEventListener('click', () => this.saveGridState({silent: false, manual: true}));
             }
+            const publishcheckbox = bySel('#kg-publish-roterfaden');
+            if (publishcheckbox) {
+                publishcheckbox.addEventListener('change', () => {
+                    if (this.isUpdatingPublishControl) {
+                        return;
+                    }
+                    const shouldpublish = !!publishcheckbox.checked;
+                    const rollback = () => {
+                        this.isUpdatingPublishControl = true;
+                        publishcheckbox.checked = !shouldpublish;
+                        this.isUpdatingPublishControl = false;
+                        this.syncPublishControl();
+                    };
+                    if (shouldpublish) {
+                        this.saveGridState({silent: true, autosave: true})
+                            .then(() => this.publishCurrentGrid({silent: false}))
+                            .catch((error) => {
+                                Notification.exception(error);
+                                rollback();
+                            });
+                        return;
+                    }
+                    this.unpublishRoterFaden({silent: false}).catch((error) => {
+                        Notification.exception(error);
+                        rollback();
+                    });
+                });
+            }
         }
 
         listGrids(preferred = '') {
-            return asCall('mod_konzeptgenerator_list_grids', {cmid: this.cmid}).then((res) => {
+            return asCall('mod_seminarplaner_list_grids', {cmid: this.cmid}).then((res) => {
                 const select = bySel('#kg-grid-select');
                 const prev = select ? select.value : '';
                 if (!select) {
@@ -2035,7 +3163,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         loadMethodCards() {
-            return asCall('mod_konzeptgenerator_get_method_cards', {cmid: this.cmid}).then((res) => {
+            return asCall('mod_seminarplaner_get_method_cards', {cmid: this.cmid}).then((res) => {
                 let decoded = [];
                 try {
                     decoded = res.methodsjson ? JSON.parse(res.methodsjson) : [];
@@ -2047,7 +3175,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         loadPlanningState() {
-            return asCall('mod_konzeptgenerator_get_planning_state', {cmid: this.cmid}).then((res) => {
+            return asCall('mod_seminarplaner_get_planning_state', {cmid: this.cmid}).then((res) => {
                 let decoded = {};
                 try {
                     decoded = res.statejson ? JSON.parse(res.statejson) : {};
@@ -2077,6 +3205,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     breaks: [{days: ['all'], start: '12:00', duration: 60}],
                     tableColumns: Object.assign({}, DEFAULT_COLUMNS)
                 },
+                view: {mode: VIEW_MODE_WEEK, day: 'Montag'},
                 plan: {days: {}},
                 sourceMode: 'methods'
             };
@@ -2096,6 +3225,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         breaks: [],
                         tableColumns: Object.assign({}, DEFAULT_COLUMNS)
                     },
+                    view: {mode: VIEW_MODE_WEEK, day: 'Montag'},
                     plan: {days: {}},
                     sourceMode: raw.sourceMode === 'units' ? 'units' : 'methods'
                 };
@@ -2126,25 +3256,29 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 config: Object.assign({}, defaults.config, raw.config || {}, {
                     tableColumns: Object.assign({}, DEFAULT_COLUMNS, (raw.config || {}).tableColumns || {})
                 }),
+                view: Object.assign({}, defaults.view, raw.view || {}),
                 plan: raw.plan && raw.plan.days ? raw.plan : {days: {}},
                 sourceMode: raw.sourceMode === 'units' ? 'units' : 'methods'
             };
         }
 
-        loadGridState() {
+        loadGridState(options = {}) {
+            const silent = !!options.silent;
             const gridid = this.getGridId();
             this.state.gridid = gridid;
             if (!gridid) {
+                this.clearRememberedLoadedGridId();
                 this.state = Object.assign({}, this.state, this.normalizeLoadedState({}));
                 this.ensurePlanDays();
                 this.syncSourceTabs();
                 this.renderMethods();
                 this.applyConfigToModal();
                 this.refreshLayout();
+                this.syncPublishControl();
                 return Promise.resolve();
             }
 
-            return asCall('mod_konzeptgenerator_get_user_state', {cmid: this.cmid, gridid}).then((res) => {
+            return asCall('mod_seminarplaner_get_user_state', {cmid: this.cmid, gridid}).then((res) => {
                 let parsed = {};
                 try {
                     parsed = res.statejson ? JSON.parse(res.statejson) : {};
@@ -2154,15 +3288,21 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 const normalized = this.normalizeLoadedState(parsed);
                 this.state = Object.assign({}, this.state, normalized, {gridid});
                 this.versionhash = res.versionhash || '';
+                this.rememberLoadedGridId(gridid);
                 this.ensurePlanDays();
                 this.syncSourceTabs();
                 this.applyConfigToModal();
                 this.renderMethods();
                 this.refreshLayout();
-                this.setStatus('Seminarplan geladen.', false);
+                this.syncPublishControl();
+                if (!silent) {
+                    this.setStatus('Seminarplan geladen.', false);
+                    this.setSavedState('Gespeichert: Geladen');
+                }
             }).catch((error) => {
                 Notification.exception(error);
                 this.setStatus('Seminarplan laden fehlgeschlagen.', true);
+                this.setSavedState('Gespeichert: Fehler', true);
             });
         }
 
@@ -2194,14 +3334,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
 
             this.state.gridid = gridid;
-            const payload = {
-                config: this.state.config,
-                plan: this.state.plan,
-                zoomIndex: this.zoomIndex,
-                sourceMode: this.state.sourceMode || 'methods'
-            };
+            const payload = this.buildGridPayload();
 
-            const request = asCall('mod_konzeptgenerator_save_user_state', {
+            const request = asCall('mod_seminarplaner_save_user_state', {
                 cmid: this.cmid,
                 gridid,
                 statejson: JSON.stringify(payload),
@@ -2209,16 +3344,36 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }).then((res) => {
                 this.versionhash = res.versionhash || '';
                 this.dirty = false;
+                const timestr = new Date().toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'});
+                this.setSavedState(`Gespeichert: ${timestr}`);
                 if (!silent) {
-                    const timestr = new Date().toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'});
                     this.setStatus(`Seminarplan erfolgreich gespeichert (${timestr}).`, false);
                 } else if (autosave) {
-                    const timestr = new Date().toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'});
                     this.setStatus(`Automatisch gespeichert (${timestr}).`, false);
                 }
+                const shouldsyncpublished = this.roterFadenState.ispublished
+                    && Number(this.roterFadenState.gridid) === Number(gridid);
+                if (shouldsyncpublished) {
+                    return this.publishCurrentGrid({silent: true}).then(() => res).catch(() => res);
+                }
+                return res;
             }).catch((error) => {
-                Notification.exception(error);
                 this.dirty = true;
+                const conflict = this.parseConflictPayload(error);
+                if (conflict) {
+                    const daycount = (conflict.days || []).length;
+                    const message = daycount > 0
+                        ? `Speichern abgelehnt: Zeitkonflikt in ${daycount} Tag(en). Plan wird neu geladen.`
+                        : 'Speichern abgelehnt: Zeitkonflikt. Plan wird neu geladen.';
+                    this.setStatus(message, true);
+                    this.setSavedState('Gespeichert: Konflikt', true);
+                    return this.loadGridState({silent: true}).then(() => {
+                        this.highlightConflictDays(conflict.days || []);
+                        this.setStatus(message, true);
+                    });
+                }
+                Notification.exception(error);
+                this.setSavedState('Gespeichert: Fehler', true);
                 if (!silent) {
                     this.setStatus('Seminarplan speichern fehlgeschlagen (möglicher Konflikt).', true);
                 } else if (autosave) {
@@ -2259,15 +3414,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         bindAutoSaveLifecycle() {
             clearInterval(this.autosaveTimer);
             this.autosaveTimer = setInterval(() => {
+                if (document.visibilityState !== 'visible') {
+                    return;
+                }
                 if (this.state.gridid && this.dirty) {
                     this.saveGridState({silent: true, autosave: true});
                 }
             }, 20000);
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'hidden' && this.state.gridid && this.dirty) {
-                    this.saveGridState({silent: true, autosave: true});
-                }
-            });
         }
 
         savePlan() {
@@ -2276,20 +3429,24 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         initData() {
-            Promise.all([this.listGrids(), this.loadSources()])
+            const rememberedgridid = this.readRememberedLoadedGridId();
+            Promise.all([this.listGrids(rememberedgridid), this.loadSources(), this.loadRoterFadenState()])
                 .then(() => {
                     const hasselected = this.getGridId() > 0;
+                    const shouldrestore = rememberedgridid && hasselected && String(this.getGridId()) === String(rememberedgridid);
                     this.toggleStepTwo(false);
+                    this.syncPublishControl();
+                    if (shouldrestore) {
+                        this.toggleStepTwo(true);
+                        return this.loadGridState({silent: true}).then(() => {
+                            this.setStatus('Seminarplan aus Sitzung automatisch geladen.', false);
+                            this.setSavedState('Gespeichert: Wiederhergestellt');
+                        });
+                    }
                     if (!hasselected) {
                         this.setStatus('Schritt 1: Bitte Seminarplan erstellen oder aus der Liste auswählen.', false);
                     }
-                    window.setInterval(() => {
-                        this.loadSources()
-                            .then(() => this.refreshLayout())
-                            .catch(() => {
-                                // Keep current UI on silent refresh failures.
-                            });
-                    }, 30000);
+                    return null;
                 })
                 .catch((error) => {
                     Notification.exception(error);

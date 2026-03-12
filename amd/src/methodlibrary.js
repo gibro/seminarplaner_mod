@@ -125,6 +125,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             .filter(Boolean);
     };
 
+    const normalizeMultiToken = (value) => {
+        return normalize(String(value || '').split(/[:\-–]/)[0]);
+    };
+
     const joinMulti = (arr) => (Array.isArray(arr) ? arr.join(', ') : '');
 
     const readMulti = (selector) => {
@@ -148,9 +152,38 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const setFormMultiDropdownValues = (selector, values) => {
         const dropdown = getFormMultiDropdown(selector);
         const hidden = bySel(selector);
-        const cleanvalues = Array.isArray(values)
+        let cleanvalues = Array.isArray(values)
             ? values.map((v) => String(v).trim()).filter(Boolean)
             : [];
+        if (dropdown) {
+            const options = Array.from(dropdown.querySelectorAll('[data-kg-form-multi-option="1"]'))
+                .map((checkbox) => String(checkbox.value || '').trim())
+                .filter(Boolean);
+            if (options.length) {
+                const optionSet = new Set(options);
+                const normalizedMap = {};
+                options.forEach((value) => {
+                    const key = normalizeMultiToken(value);
+                    if (key && !normalizedMap[key]) {
+                        normalizedMap[key] = value;
+                    }
+                });
+                const resolved = [];
+                cleanvalues.forEach((value) => {
+                    if (optionSet.has(value)) {
+                        if (!resolved.includes(value)) {
+                            resolved.push(value);
+                        }
+                        return;
+                    }
+                    const mapped = normalizedMap[normalizeMultiToken(value)];
+                    if (mapped && !resolved.includes(mapped)) {
+                        resolved.push(mapped);
+                    }
+                });
+                cleanvalues = resolved;
+            }
+        }
         if (hidden) {
             hidden.value = cleanvalues.join('##');
         }
@@ -303,6 +336,33 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return value.map((entry) => attachmentName(entry)).filter(Boolean);
     };
 
+    const suppressLeavePrompt = () => {
+        if (typeof window !== 'undefined') {
+            window.onbeforeunload = null;
+        }
+        if (typeof M !== 'undefined'
+            && M.core_formchangechecker
+            && typeof M.core_formchangechecker.set_form_submitted === 'function') {
+            M.core_formchangechecker.set_form_submitted();
+        }
+    };
+
+    const readMaterialDraftItemId = () => {
+        const candidates = [
+            bySel('#id_ml_materialiendraftitemid'),
+            bySel('input[name="ml_materialiendraftitemid"]'),
+            bySel('input[type="hidden"][id^="id_ml_materialiendraftitemid"]')
+        ].filter(Boolean);
+        for (const el of candidates) {
+            const value = Number(el.value || 0);
+            if (Number.isFinite(value) && value > 0) {
+                return value;
+            }
+        }
+        return 0;
+    };
+
+
     const clearAddForm = () => {
         Object.values(FIELDS).forEach((selector) => {
             const el = bySel(selector);
@@ -323,6 +383,75 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 return;
             }
             el.value = '';
+        });
+    };
+
+    const normalizeMethodAlternatives = () => {
+        const order = [];
+        const byid = new Map();
+        methods.forEach((method) => {
+            const normalized = Object.assign({}, method);
+            const id = String(normalized.id || '').trim();
+            if (!id) {
+                return;
+            }
+            normalized.id = id;
+            const rawalts = normalized.alternativen;
+            const values = Array.isArray(rawalts)
+                ? rawalts
+                : (typeof rawalts === 'string' ? rawalts.split(/##|[\r\n,;]+/u) : []);
+            normalized.alternativen = values.map((value) => String(value || '').trim()).filter(Boolean);
+            byid.set(id, normalized);
+            order.push(id);
+        });
+
+        const links = new Map();
+        order.forEach((id) => links.set(id, new Set()));
+        order.forEach((id) => {
+            const method = byid.get(id);
+            method.alternativen.forEach((altid) => {
+                if (!altid || altid === id || !byid.has(altid)) {
+                    return;
+                }
+                links.get(id).add(altid);
+                links.get(altid).add(id);
+            });
+        });
+
+        methods = order.map((id) => {
+            const method = byid.get(id);
+            method.alternativen = order.filter((otherid) => otherid !== id && links.get(id).has(otherid));
+            return method;
+        });
+    };
+
+    const reconcileAlternativesForMethod = (methodid, selectedalternatives) => {
+        const currentid = String(methodid || '').trim();
+        if (!currentid) {
+            return;
+        }
+        const selected = new Set(
+            (Array.isArray(selectedalternatives) ? selectedalternatives : [])
+                .map((id) => String(id || '').trim())
+                .filter((id) => id && id !== currentid)
+        );
+
+        methods = methods.map((method) => {
+            const id = String(method.id || '').trim();
+            if (!id) {
+                return method;
+            }
+            if (id === currentid) {
+                return Object.assign({}, method, {alternativen: Array.from(selected)});
+            }
+            const existing = Array.isArray(method.alternativen)
+                ? method.alternativen.map((altid) => String(altid || '').trim()).filter(Boolean)
+                : [];
+            const withoutcurrent = existing.filter((altid) => altid !== currentid);
+            if (selected.has(id)) {
+                withoutcurrent.push(currentid);
+            }
+            return Object.assign({}, method, {alternativen: Array.from(new Set(withoutcurrent))});
         });
     };
 
@@ -481,7 +610,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     };
 
     const loadAutosyncSetIds = (cmid) => {
-        return asCall('mod_konzeptgenerator_get_methodset_sync_status', {cmid}).then((res) => {
+        return asCall('mod_seminarplaner_get_methodset_sync_status', {cmid}).then((res) => {
             const links = Array.isArray(res && res.links) ? res.links : [];
             autosyncSetIds = new Set(
                 links
@@ -629,6 +758,25 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (editbtn) {
                 editbtn.addEventListener('click', () => {
                     closeMenu(editbtn);
+                    if (typeof window !== 'undefined' && window.location) {
+                        suppressLeavePrompt();
+                        const url = new URL(window.location.href);
+                        const materialitemid = Array.isArray(m.materialien)
+                            ? Number(
+                                ((m.materialien.find((entry) => entry && typeof entry === 'object'
+                                    && Number(entry.itemid || 0) > 0) || {}).itemid) || 0
+                            )
+                            : 0;
+                        url.searchParams.set('editmethodid', String(m.id));
+                        if (materialitemid > 0) {
+                            url.searchParams.set('editmaterialitemid', String(materialitemid));
+                        } else {
+                            url.searchParams.delete('editmaterialitemid');
+                        }
+                        url.searchParams.set('_mlts', String(Date.now()));
+                        window.location.assign(url.toString());
+                        return;
+                    }
                     openEditor(m.id);
                 });
             }
@@ -644,7 +792,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (deletebtn) {
                 deletebtn.addEventListener('click', () => {
                     closeMenu(deletebtn);
-                    deleteMethod(m.id);
+                    deleteMethod(m.id).catch((e) => {
+                        Notification.exception(e);
+                        setStatus('Löschen fehlgeschlagen.', true);
+                    });
                 });
             }
             host.appendChild(card);
@@ -694,6 +845,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         if (editsection) {
             editsection.classList.remove('kg-hidden');
         }
+        const materialssection = bySel('#ml-section-materials');
+        if (materialssection && typeof materialssection.setAttribute === 'function') {
+            materialssection.setAttribute('open', 'open');
+        }
 
         setFieldValue('#ml-edit-id', method.id);
         setFieldValue('#ml-e-titel', method.titel);
@@ -712,7 +867,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const materialcurrent = bySel('#ml-e-materialien-current');
         const materialdraft = bySel('#id_ml_materialiendraftitemid');
         if (materialdraft) {
-            materialdraft.value = String(method.materialiendraftitemid || 0);
+            const prepareddraft = Number(materialdraft.value || 0);
+            materialdraft.value = String(prepareddraft || 0);
+            if (!prepareddraft) {
+                setStatus('Dateien konnten nicht zum Bearbeiten vorbereitet werden. Bitte Methode erneut über "Bearbeiten" öffnen.', true);
+            }
         }
         if (materialcurrent) {
             const names = attachmentNames(method.materialien);
@@ -723,8 +882,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         setSelectMulti('#ml-e-kognitive', method.kognitive);
         setSelectMulti('#ml-e-raum', method.raum);
         setSelectMulti('#ml-e-sozialform', method.sozialform);
-        setSelectMulti('#ml-e-alternativen', method.alternativen || []);
         refreshEditAlternativeOptions(method.id);
+        setSelectMulti('#ml-e-alternativen', method.alternativen || []);
         if (editsection) {
             editsection.scrollIntoView({behavior: 'auto', block: 'start'});
             window.setTimeout(() => {
@@ -735,10 +894,32 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         setStatus(`Methode "${method.titel || ''}" zum Bearbeiten geladen.`, false);
     };
 
+    const serializeMethodsForSave = () => methods.map((method) => {
+        const payload = Object.assign({}, method);
+        if (Array.isArray(payload.materialien)) {
+            payload.materialien = payload.materialien.map((entry) => {
+                if (entry && typeof entry === 'object' && entry.name) {
+                    return {name: String(entry.name)};
+                }
+                return entry;
+            });
+        }
+        if (Array.isArray(payload.h5p)) {
+            payload.h5p = payload.h5p.map((entry) => {
+                if (entry && typeof entry === 'object' && entry.name) {
+                    return {name: String(entry.name)};
+                }
+                return entry;
+            });
+        }
+        return payload;
+    });
+
     const persist = (cmid) => {
-        return asCall('mod_konzeptgenerator_save_method_cards', {
+        normalizeMethodAlternatives();
+        return asCall('mod_seminarplaner_save_method_cards', {
             cmid,
-            methodsjson: JSON.stringify(methods)
+            methodsjson: JSON.stringify(serializeMethodsForSave())
         });
     };
 
@@ -749,13 +930,15 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return;
         }
         methods.push(method);
+        reconcileAlternativesForMethod(method.id, method.alternativen || []);
+        normalizeMethodAlternatives();
         await persist(cmid);
         clearAddForm();
         renderList();
         setStatus('Methode hinzugefügt und gespeichert.', false);
     };
 
-    const deleteMethod = (id) => {
+    const deleteMethod = async (id) => {
         const method = methods.find((m) => String(m.id) === String(id));
         if (!method) {
             return;
@@ -764,8 +947,16 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         if (!yes) {
             return;
         }
-        methods = methods.filter((m) => String(m.id) !== String(id));
-        if (String(currentEditId) === String(id)) {
+        const previousMethods = methods.slice();
+        const wasEditingDeletedMethod = String(currentEditId) === String(id);
+        methods = methods
+            .filter((m) => String(m.id) !== String(id))
+            .map((m) => Object.assign({}, m, {
+                alternativen: (Array.isArray(m.alternativen) ? m.alternativen : [])
+                    .filter((altid) => String(altid) !== String(id))
+            }));
+        normalizeMethodAlternatives();
+        if (wasEditingDeletedMethod) {
             currentEditId = '';
             bySel('#ml-edit-section')?.classList.add('kg-hidden');
             const form = bySel('#ml-edit-form');
@@ -774,6 +965,17 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
         }
         renderList();
+        try {
+            await persist(runtimeCmid);
+            setStatus('Methode gelöscht und gespeichert.', false);
+        } catch (error) {
+            methods = previousMethods;
+            renderList();
+            if (wasEditingDeletedMethod) {
+                openEditor(id);
+            }
+            throw error;
+        }
     };
 
     const toggleMethodFreeze = async (id) => {
@@ -813,7 +1015,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return;
         }
 
-        const currentdraftitemid = Number(bySel('#id_ml_materialiendraftitemid')?.value || methods[idx].materialiendraftitemid || 0);
+        const currentdraftitemid = readMaterialDraftItemId();
         methods[idx] = Object.assign({}, methods[idx], {
             titel: title,
             seminarphase: getSelectMulti('#ml-e-seminarphase'),
@@ -837,9 +1039,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             alternativen: getSelectMulti('#ml-e-alternativen')
         });
         methods[idx].alternativen = (methods[idx].alternativen || []).filter((id) => String(id) !== String(methods[idx].id));
+        reconcileAlternativesForMethod(methods[idx].id, methods[idx].alternativen);
+        normalizeMethodAlternatives();
 
         await persist(cmid);
-        renderList();
+        await loadMethods(cmid);
         currentEditId = '';
         const form = bySel('#ml-edit-form');
         if (form && typeof form.reset === 'function') {
@@ -849,16 +1053,24 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             '#ml-e-risiken', '#ml-e-debrief', '#ml-e-materialtechnik'].forEach((selector) => {
             setFieldValue(selector, '');
         });
-        const materialdraft = bySel('#id_ml_materialiendraftitemid');
-        if (materialdraft) {
-            materialdraft.value = '0';
+        const materialcurrent = bySel('#ml-e-materialien-current');
+        if (materialcurrent) {
+            materialcurrent.textContent = '';
         }
         bySel('#ml-edit-section')?.classList.add('kg-hidden');
+        if (typeof window !== 'undefined' && window.history && window.location) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('editmethodid');
+            url.searchParams.delete('editmaterialitemid');
+            url.searchParams.delete('_mlts');
+            window.history.replaceState({}, '', url.toString());
+        }
+        suppressLeavePrompt();
         setStatus('Methode gespeichert.', false);
     };
 
     const loadMethods = (cmid) => {
-        return asCall('mod_konzeptgenerator_get_method_cards', {cmid}).then((res) => {
+        return asCall('mod_seminarplaner_get_method_cards', {cmid}).then((res) => {
             let parsed = [];
             try {
                 parsed = res.methodsjson ? JSON.parse(res.methodsjson) : [];
@@ -868,9 +1080,15 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             methods = Array.isArray(parsed) ? parsed : [];
             methods = methods.map((method) => {
                 const normalized = Object.assign({}, method);
-                normalized.alternativen = Array.isArray(method.alternativen) ? method.alternativen : [];
+                const rawalternatives = method.alternativen;
+                normalized.alternativen = Array.isArray(rawalternatives)
+                    ? rawalternatives
+                    : (typeof rawalternatives === 'string' ? rawalternatives.split(/##|[\r\n,;]+/u) : []);
+                delete normalized.materialiendraftitemid;
+                delete normalized.h5pdraftitemid;
                 return normalized;
             });
+            normalizeMethodAlternatives();
             renderList();
             setStatus(`Methoden geladen (${methods.length}).`, false);
         });
@@ -893,6 +1111,27 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 Object.keys(FILTER_DROPDOWNS).forEach((key) => clearFilterSelections(key));
                 applyFilters();
             });
+        }
+    };
+
+    const applyRequestedEditFromUrl = () => {
+        if (typeof window === 'undefined' || !window.location) {
+            return;
+        }
+        const params = new URLSearchParams(window.location.search || '');
+        const requested = String(params.get('editmethodid') || '').trim();
+        if (!requested) {
+            return;
+        }
+        const exists = methods.some((m) => String(m.id) === requested);
+        if (!exists) {
+            setStatus('Methode aus Link wurde nicht gefunden.', true);
+            return;
+        }
+        openEditor(requested);
+        const section = bySel('#ml-edit-section');
+        if (section) {
+            section.scrollIntoView({behavior: 'smooth', block: 'start'});
         }
     };
 
@@ -949,16 +1188,18 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         '#ml-e-risiken', '#ml-e-debrief', '#ml-e-materialtechnik'].forEach((selector) => {
                         setFieldValue(selector, '');
                     });
-                    const materialdraft = bySel('#id_ml_materialiendraftitemid');
-                    if (materialdraft) {
-                        materialdraft.value = '0';
+                    const materialcurrent = bySel('#ml-e-materialien-current');
+                    if (materialcurrent) {
+                        materialcurrent.textContent = '';
                     }
                     bySel('#ml-edit-section')?.classList.add('kg-hidden');
+                    suppressLeavePrompt();
                 });
             }
 
             Promise.all([loadMethods(cmid), loadAutosyncSetIds(cmid)]).then(() => {
                 renderList();
+                applyRequestedEditFromUrl();
             }).catch((e) => {
                 Notification.exception(e);
                 setStatus('Laden fehlgeschlagen.', true);

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/konzeptgenerator/db" VERSION="2026022340" COMMENT="Schema for mod_konzeptgenerator">
+<XMLDB PATH="mod/seminarplaner/db" VERSION="2026030511" COMMENT="Schema for mod_seminarplaner">
   <TABLES>
-    <TABLE NAME="konzeptgenerator" COMMENT="Main activity table">
+    <TABLE NAME="seminarplaner" COMMENT="Main activity table">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="course" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
@@ -115,6 +115,26 @@
       </KEYS>
       <INDEXES>
         <INDEX NAME="grid_user_uix" UNIQUE="true" FIELDS="gridid,userid"/>
+        <INDEX NAME="grid_idx" UNIQUE="false" FIELDS="gridid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="kgen_roterfaden_state" COMMENT="Published Common Thread snapshot per activity">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="gridid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="statejson" TYPE="text" LENGTH="big" NOTNULL="false"/>
+        <FIELD NAME="ispublished" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="publishedby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="cmid_uix" UNIQUE="true" FIELDS="cmid"/>
         <INDEX NAME="grid_idx" UNIQUE="false" FIELDS="gridid"/>
       </INDEXES>
     </TABLE>

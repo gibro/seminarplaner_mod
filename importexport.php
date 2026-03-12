@@ -5,24 +5,28 @@ require_once(__DIR__ . '/../../config.php');
 require_once(__DIR__ . '/locallib.php');
 
 $id = required_param('id', PARAM_INT);
-$activity = konzeptgenerator_require_activity_context($id, 'mod/konzeptgenerator:view');
+$activity = seminarplaner_require_activity_context($id, 'mod/seminarplaner:view');
 $cm = $activity['cm'];
 $course = $activity['course'];
-$konzeptgenerator = $activity['konzeptgenerator'];
+$seminarplaner = $activity['seminarplaner'];
 
-konzeptgenerator_prepare_page('/mod/konzeptgenerator/importexport.php', $cm, $course, $konzeptgenerator, 'importexport');
+seminarplaner_prepare_page('/mod/seminarplaner/importexport.php', $cm, $course, $seminarplaner, null);
+$PAGE->requires->js_call_amd('mod_seminarplaner/importexport', 'init', [(int)$cm->id]);
 
 echo $OUTPUT->header();
 
-echo $OUTPUT->heading(format_string($konzeptgenerator->name));
-echo konzeptgenerator_render_tabs((int)$cm->id, 'importexport');
+echo $OUTPUT->heading(format_string($seminarplaner->name));
+echo seminarplaner_render_tabs((int)$cm->id, 'importexport');
 
-echo '<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>';
-echo '<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>';
-echo '<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>';
+$vendorbase = $CFG->wwwroot . '/mod/seminarplaner/thirdparty';
+echo '<script>window.__kg_prev_define = window.define; try { window.define = undefined; } catch (e) {}</script>';
+echo '<script src="' . s($vendorbase . '/jszip/jszip.min.js') . '"></script>';
+echo '<script src="' . s($vendorbase . '/jspdf/jspdf.umd.min.js') . '"></script>';
+echo '<script src="' . s($vendorbase . '/jspdf-autotable/jspdf.plugin.autotable.min.js') . '"></script>';
+echo '<script>try { if (window.__kg_prev_define !== undefined) { window.define = window.__kg_prev_define; } else { delete window.define; } } catch (e) {} delete window.__kg_prev_define;</script>';
 
 echo html_writer::start_div('kg-shell');
-echo html_writer::tag('h3', 'Import / Export von Methodenkarten');
+echo html_writer::tag('h3', 'Import / Export');
 
 echo html_writer::start_div('kg-ie-layout');
 
@@ -35,6 +39,7 @@ echo html_writer::end_div();
 
 echo html_writer::start_div('', ['id' => 'kg-ie-panel-1']);
 echo html_writer::tag('p', 'Unterstützte Formate: mod_data CSV-Export, ZIP mit CSV, JSON-Export.');
+echo html_writer::tag('p', 'Wähle per Mehrfachauswahl, welche Inhalte importiert werden sollen: Methoden, Bausteine und/oder Seminarpläne.');
 echo html_writer::empty_tag('input', [
     'type' => 'file',
     'id' => 'kg-ie-file',
@@ -45,7 +50,7 @@ echo html_writer::tag('button', 'Datei analysieren', ['type' => 'button', 'id' =
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-hidden', ['id' => 'kg-ie-panel-2']);
-echo html_writer::tag('p', 'Vorschau der gefundenen Methodenkarten. Bei doppelten Titeln kann pro Eintrag entschieden werden: Ersetzen, als Duplikat hinzufügen oder nicht hinzufügen.');
+echo html_writer::tag('p', 'Vorschau der gefundenen Inhalte. Bei doppelten Methoden-Titeln kann pro Eintrag entschieden werden: Ersetzen, als Duplikat hinzufügen oder nicht hinzufügen.');
 echo html_writer::start_div('kg-row');
 echo html_writer::tag('button', 'Alle auswählen', ['type' => 'button', 'id' => 'kg-ie-select-all', 'class' => 'kg-btn']);
 echo html_writer::tag('button', 'Keine auswählen', ['type' => 'button', 'id' => 'kg-ie-select-none', 'class' => 'kg-btn']);
@@ -80,11 +85,15 @@ echo html_writer::tag('div', '', ['id' => 'kg-global-set-status', 'class' => 'kg
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h4', 'Export');
-echo html_writer::tag('p', 'Exportiere die aktuell gespeicherten Methodenkarten im gewünschten Format.');
+echo html_writer::tag('h4', 'Export für Seminarplaner');
+echo html_writer::tag('p', 'Für den Austausch zwischen zwei Seminarplanern (Methoden, Bausteine und Seminarpläne).');
+echo '<div class="kg-row" style="margin-top:8px;gap:14px;flex-wrap:wrap">'
+    . '<label class="kg-label" style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="kg-ie-export-methods" checked><span>Methoden</span></label>'
+    . '<label class="kg-label" style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="kg-ie-export-units" checked><span>Bausteine</span></label>'
+    . '<label class="kg-label" style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="kg-ie-export-grids"><span>Seminarpläne</span></label>'
+    . '</div>';
 echo html_writer::start_div('kg-row');
-echo html_writer::tag('button', 'JSON exportieren', ['type' => 'button', 'id' => 'kg-ie-export-json', 'class' => 'kg-btn kg-btn-primary']);
-echo html_writer::tag('button', 'ZIP (mod_data) exportieren', ['type' => 'button', 'id' => 'kg-ie-export-csv', 'class' => 'kg-btn']);
+echo html_writer::tag('button', 'Seminarplaner-JSON exportieren', ['type' => 'button', 'id' => 'kg-ie-export-json-full', 'class' => 'kg-btn kg-btn-primary']);
 echo html_writer::end_div();
 echo html_writer::end_div();
 

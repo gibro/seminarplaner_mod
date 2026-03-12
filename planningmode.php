@@ -6,17 +6,17 @@ require_once($CFG->libdir . '/editorlib.php');
 require_once(__DIR__ . '/locallib.php');
 
 $id = required_param('id', PARAM_INT);
-$activity = konzeptgenerator_require_activity_context($id, 'mod/konzeptgenerator:managegrids');
+$activity = seminarplaner_require_activity_context($id, 'mod/seminarplaner:view');
 $cm = $activity['cm'];
 $course = $activity['course'];
-$konzeptgenerator = $activity['konzeptgenerator'];
+$seminarplaner = $activity['seminarplaner'];
 
-konzeptgenerator_prepare_page('/mod/konzeptgenerator/planningmode.php', $cm, $course, $konzeptgenerator, 'planningmode');
+seminarplaner_prepare_page('/mod/seminarplaner/planningmode.php', $cm, $course, $seminarplaner, 'planningmode');
 
 echo $OUTPUT->header();
 
-echo $OUTPUT->heading(format_string($konzeptgenerator->name));
-echo konzeptgenerator_render_tabs((int)$cm->id, 'planningmode');
+echo $OUTPUT->heading(format_string($seminarplaner->name));
+echo seminarplaner_render_tabs((int)$cm->id, 'planningmode');
 
 echo html_writer::start_div('kg-shell');
 echo html_writer::tag('div', '', ['id' => 'kg-pm-status', 'class' => 'kg-status']);
@@ -31,8 +31,30 @@ echo html_writer::tag('label', 'Titel', ['for' => 'kg-pm-unit-title', 'class' =>
 echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'kg-pm-unit-title', 'class' => 'kg-input']);
 echo html_writer::tag('label', 'Dauer (Min.)', ['for' => 'kg-pm-unit-duration', 'class' => 'kg-label']);
 echo html_writer::empty_tag('input', ['type' => 'number', 'id' => 'kg-pm-unit-duration', 'class' => 'kg-input', 'value' => '90', 'min' => '5', 'step' => '5']);
-echo html_writer::tag('label', 'Alternativgruppe (optional)', ['for' => 'kg-pm-unit-slotkey', 'class' => 'kg-label']);
-echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'kg-pm-unit-slotkey', 'class' => 'kg-input', 'placeholder' => 'z. B. A']);
+echo html_writer::tag('label', 'Baustein-Alternative überschreiben', ['for' => 'kg-pm-unit-altunits', 'class' => 'kg-label']);
+echo html_writer::start_div('kg-tag-dropdown', [
+    'id' => 'kg-pm-unit-alt-dropdown',
+    'data-pm-unit-alt-dropdown' => '1',
+]);
+echo html_writer::tag('button', 'Bausteine wählen', [
+    'type' => 'button',
+    'class' => 'kg-input kg-tag-dropdown-toggle',
+    'id' => 'kg-pm-unit-alt-toggle',
+    'data-pm-unit-alt-toggle' => '1',
+]);
+echo html_writer::start_div('kg-tag-dropdown-panel kg-hidden', [
+    'id' => 'kg-pm-unit-alt-panel',
+    'data-pm-unit-alt-panel' => '1',
+]);
+echo html_writer::start_div('', ['id' => 'kg-pm-unit-alt-options']);
+echo html_writer::end_div();
+echo html_writer::end_div();
+echo html_writer::end_div();
+echo html_writer::empty_tag('input', [
+    'type' => 'hidden',
+    'id' => 'kg-pm-unit-altunits',
+    'value' => '',
+]);
 echo html_writer::tag('label', 'Lernziele', ['for' => 'kg-pm-unit-objectives', 'class' => 'kg-label']);
 echo html_writer::tag('textarea', '', [
     'id' => 'kg-pm-unit-objectives',
@@ -61,8 +83,11 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_div();
 
-echo html_writer::start_div('kg-ie-block kg-library-step');
+echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'kg-pm-step-2']);
 echo html_writer::tag('h4', '2. Feinplanung');
+echo html_writer::tag('p',
+    'Hinweis: Die geplante Dauer aus Schritt 1 darf in Schritt 2 überschritten werden. Bei Überschreitung erscheint ein Warnhinweis; gespeichert wird die in Schritt 2 tatsächlich entstandene Dauer.',
+    ['class' => 'sp-filter-status']);
 echo html_writer::start_div('kg-row');
 echo html_writer::tag('button', 'Baustein speichern', ['type' => 'button', 'id' => 'kg-pm-save', 'class' => 'kg-btn kg-btn-primary']);
 echo html_writer::tag('button', 'Didaktik prüfen', ['type' => 'button', 'id' => 'kg-pm-check', 'class' => 'kg-btn']);

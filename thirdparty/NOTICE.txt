@@ -1,0 +1,13 @@
+Third-party libraries bundled for offline/air-gapped production use:
+
+1) JSZip 3.10.1
+   Source: https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js
+   License: MIT
+
+2) jsPDF 2.5.1
+   Source: https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js
+   License: MIT
+
+3) jsPDF-AutoTable 3.5.31
+   Source: https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js
+   License: MIT

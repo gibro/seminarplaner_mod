@@ -396,22 +396,48 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     };
 
     const normalizeMethods = () => {
-        const ids = new Set(state.methods.map((m) => String(m.id || '')));
-        state.methods = state.methods.map((method) => {
-            const m = Object.assign({}, method);
-            m.alternativen = Array.isArray(method.alternativen) ? method.alternativen : [];
-            m.alternativen = m.alternativen
-                .map((id) => String(id || ''))
-                .filter((id) => id !== '' && id !== String(m.id) && ids.has(id));
-            return m;
+        const order = [];
+        const byid = new Map();
+        state.methods.forEach((method) => {
+            const normalized = Object.assign({}, method);
+            const id = String(normalized.id || '').trim();
+            if (!id) {
+                return;
+            }
+            normalized.id = id;
+            const rawalternatives = normalized.alternativen;
+            const values = Array.isArray(rawalternatives)
+                ? rawalternatives
+                : (typeof rawalternatives === 'string' ? rawalternatives.split(/##|[\r\n,;]+/u) : []);
+            normalized.alternativen = values.map((value) => String(value || '').trim()).filter(Boolean);
+            byid.set(id, normalized);
+            order.push(id);
+        });
+
+        const links = new Map();
+        order.forEach((id) => links.set(id, new Set()));
+        order.forEach((id) => {
+            const method = byid.get(id);
+            method.alternativen.forEach((altid) => {
+                if (!altid || altid === id || !byid.has(altid)) {
+                    return;
+                }
+                links.get(id).add(altid);
+                links.get(altid).add(id);
+            });
+        });
+
+        state.methods = order.map((id) => {
+            const method = byid.get(id);
+            method.alternativen = order.filter((otherid) => otherid !== id && links.get(id).has(otherid));
+            return method;
         });
     };
 
     const normalizePlanningState = (raw) => {
         const units = Array.isArray(raw.units) ? raw.units : [];
         const slotorder = Array.isArray(raw.slotorder) ? raw.slotorder.map((s) => String(s || '')) : [];
-        return {
-            units: units.map((unit) => ({
+        const normalizedunits = units.map((unit) => ({
                 id: String(unit.id || uid()),
                 title: String(unit.title || 'Ohne Titel').trim(),
                 duration: Math.max(5, Number.parseInt(unit.duration, 10) || 90),
@@ -421,7 +447,27 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     id: String(entry.id || uid()),
                     methodid: String(entry.methodid || '')
                 })).filter((entry) => entry.methodid) : []
-            })),
+            }));
+        const grouped = {};
+        normalizedunits.forEach((unit) => {
+            const key = String(unit.slotkey || '').trim();
+            if (!key) {
+                return;
+            }
+            if (!grouped[key]) {
+                grouped[key] = [];
+            }
+            grouped[key].push(unit);
+        });
+        Object.keys(grouped).forEach((key) => {
+            if (grouped[key].length < 2) {
+                grouped[key].forEach((unit) => {
+                    unit.slotkey = '';
+                });
+            }
+        });
+        return {
+            units: normalizedunits,
             slotorder
         };
     };
@@ -860,7 +906,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     };
 
     const listGrids = (cmid) => {
-        return asCall('mod_konzeptgenerator_list_grids', {cmid}).then((res) => {
+        return asCall('mod_seminarplaner_list_grids', {cmid}).then((res) => {
             const select = bySel('#kg-grid-select');
             const prev = select ? select.value : '';
             if (select) {
@@ -882,8 +928,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     const loadPlanningSources = (cmid) => {
         return Promise.all([
-            asCall('mod_konzeptgenerator_get_method_cards', {cmid}),
-            asCall('mod_konzeptgenerator_get_planning_state', {cmid})
+            asCall('mod_seminarplaner_get_method_cards', {cmid}),
+            asCall('mod_seminarplaner_get_planning_state', {cmid})
         ]).then(([methodsres, planningres]) => {
             let methods = [];
             let planning = {};
@@ -913,7 +959,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return Promise.resolve();
         }
 
-        return asCall('mod_konzeptgenerator_get_user_state', {cmid, gridid}).then((res) => {
+        return asCall('mod_seminarplaner_get_user_state', {cmid, gridid}).then((res) => {
             let loaded = {};
             try {
                 loaded = res.statejson ? JSON.parse(res.statejson) : {};
@@ -955,7 +1001,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             sourceMode: state.sourceMode
         };
 
-        asCall('mod_konzeptgenerator_save_user_state', {
+        asCall('mod_seminarplaner_save_user_state', {
             cmid,
             gridid,
             statejson: JSON.stringify(payload),
@@ -976,7 +1022,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 setStatus('Bitte Seminarplan-Name eingeben.', true);
                 return;
             }
-            asCall('mod_konzeptgenerator_create_grid', {cmid, name, description: ''}).then(() => {
+            asCall('mod_seminarplaner_create_grid', {cmid, name, description: ''}).then(() => {
                 bySel('#kg-grid-name').value = '';
                 return listGrids(cmid);
             }).then(() => {
@@ -1004,7 +1050,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             state.methods.push(method);
             normalizeMethods();
-            asCall('mod_konzeptgenerator_save_method_cards', {
+            asCall('mod_seminarplaner_save_method_cards', {
                 cmid,
                 methodsjson: JSON.stringify(state.methods)
             }).then(() => {
@@ -1050,14 +1096,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 return loadState(cmid);
             }).then(() => {
                 renderAll();
-                window.setInterval(() => {
-                    loadPlanningSources(cmid).then(() => {
-                        renderSourceCards();
-                        renderGrid();
-                    }).catch(() => {
-                        // Silent refresh; keep current UI state on failures.
-                    });
-                }, 30000);
             }).catch((e) => {
                 Notification.exception(e);
             });

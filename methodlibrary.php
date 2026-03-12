@@ -7,32 +7,53 @@ require_once($CFG->libdir . '/formslib.php');
 require_once(__DIR__ . '/locallib.php');
 
 $id = required_param('id', PARAM_INT);
-$activity = konzeptgenerator_require_activity_context($id, 'mod/konzeptgenerator:managemethods');
+$activity = seminarplaner_require_activity_context($id, 'mod/seminarplaner:managemethods');
 $cm = $activity['cm'];
 $course = $activity['course'];
-$konzeptgenerator = $activity['konzeptgenerator'];
+$seminarplaner = $activity['seminarplaner'];
 $context = $activity['context'];
+seminarplaner_cleanup_invalid_fileprefs((int)$USER->id);
 
-konzeptgenerator_prepare_page('/mod/konzeptgenerator/methodlibrary.php', $cm, $course, $konzeptgenerator, 'methodlibrary');
+seminarplaner_prepare_page('/mod/seminarplaner/methodlibrary.php', $cm, $course, $seminarplaner, 'methodlibrary');
+$PAGE->requires->js_init_code('window.onbeforeunload = null;');
 
 $maxuploadbytes = get_user_max_upload_file_size($context, $CFG->maxbytes);
+$requestededitmethodid = optional_param('editmethodid', '', PARAM_ALPHANUMEXT);
+$requestededitmaterialitemid = optional_param('editmaterialitemid', 0, PARAM_INT);
+$methodcardservice = new \mod_seminarplaner\local\service\method_card_service();
 $materialseditdraftitemid = file_get_submitted_draft_itemid('ml_materialiendraftitemid');
-file_prepare_draft_area($materialseditdraftitemid, $context->id, 'mod_konzeptgenerator', 'method_materialien', 0, [
-    'subdirs' => 0,
-    'maxfiles' => 25,
-    'maxbytes' => $maxuploadbytes,
-    'accepted_types' => '*',
-]);
-$materialseditform = new \mod_konzeptgenerator\form\material_filemanager_form(null, [
+if ($requestededitmethodid !== '') {
+    $materialseditdraftitemid = $methodcardservice->prepare_material_draft_itemid(
+        (int)$cm->id,
+        (int)$context->id,
+        $requestededitmethodid,
+        (int)$materialseditdraftitemid,
+        (int)$requestededitmaterialitemid
+    );
+}
+if ($requestededitmethodid === '') {
+    file_prepare_draft_area($materialseditdraftitemid, $context->id, 'mod_seminarplaner', 'method_materialien', 0, [
+        'subdirs' => 0,
+        'maxfiles' => 25,
+        'maxbytes' => $maxuploadbytes,
+        'areamaxbytes' => $maxuploadbytes,
+        'accepted_types' => '*',
+    ]);
+}
+$materialseditform = new \mod_seminarplaner\form\material_filemanager_form(null, [
     'fieldname' => 'ml_materialiendraftitemid',
     'maxbytes' => $maxuploadbytes,
+    'context' => $context,
 ]);
+if (method_exists($materialseditform, 'disable_form_change_checker')) {
+    $materialseditform->disable_form_change_checker();
+}
 $materialseditform->set_data((object)['ml_materialiendraftitemid' => $materialseditdraftitemid]);
 
 echo $OUTPUT->header();
 
-echo $OUTPUT->heading(format_string($konzeptgenerator->name));
-echo konzeptgenerator_render_tabs((int)$cm->id, 'methodlibrary');
+echo $OUTPUT->heading(format_string($seminarplaner->name));
+echo seminarplaner_render_tabs((int)$cm->id, 'methodlibrary');
 
 echo html_writer::start_div('kg-shell');
 echo html_writer::tag('h3', 'Methodenbibliothek verwalten');
@@ -115,7 +136,11 @@ echo html_writer::tag('h4', '2. Methode auswählen');
 echo html_writer::tag('div', '', ['id' => 'ml-method-list', 'class' => 'kg-library-list']);
 echo html_writer::end_div();
 
-echo html_writer::start_div('kg-ie-block kg-library-step kg-hidden', ['id' => 'ml-edit-section']);
+$editsectionclasses = 'kg-ie-block kg-library-step';
+if ($requestededitmethodid === '') {
+    $editsectionclasses .= ' kg-hidden';
+}
+echo html_writer::start_div($editsectionclasses, ['id' => 'ml-edit-section']);
 echo html_writer::tag('h4', '3. Methode bearbeiten');
 echo html_writer::start_div('kg-form ig-container kg-container-full', ['id' => 'ml-edit-form']);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'id' => 'ml-edit-id']);
@@ -130,7 +155,7 @@ echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
 echo html_writer::start_div();
 echo html_writer::tag('label', 'Seminarphase', ['for' => 'ml-e-seminarphase', 'class' => 'kg-label']);
-echo konzeptgenerator_render_multi_dropdown('ml-e-seminarphase', [
+echo seminarplaner_render_multi_dropdown('ml-e-seminarphase', [
     'Warm-Up' => 'Warm-Up',
     'Einstieg' => 'Einstieg',
     'Erwartungsabfrage' => 'Erwartungsabfrage',
@@ -205,7 +230,7 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Kognitive Dimension', ['for' => 'ml-e-kognitive', 'class' => 'kg-label']);
-echo konzeptgenerator_render_multi_dropdown('ml-e-kognitive', [
+echo seminarplaner_render_multi_dropdown('ml-e-kognitive', [
     'Erinnern' => 'Erinnern: Wissen wiedergeben oder abrufen (z.B. benennen, definieren)',
     'Verstehen' => 'Verstehen: Informationen interpretieren oder erklären (z.B. zusammenfassen, vergleichen)',
     'Anwenden' => 'Anwenden: Wissen in neuen Situationen umsetzen (z.B. ausführen, verallgemeinern)',
@@ -216,11 +241,11 @@ echo konzeptgenerator_render_multi_dropdown('ml-e-kognitive', [
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Kurzbeschreibung', ['for' => 'ml-e-kurzbeschreibung', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'ml-e-kurzbeschreibung', 'name' => 'ml_e_kurzbeschreibung', 'class' => 'kg-input', 'rows' => '3']);
+echo html_writer::tag('textarea', '', ['id' => 'ml-e-kurzbeschreibung', 'name' => 'ml_e_kurzbeschreibung', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Ablauf', ['for' => 'ml-e-ablauf', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'ml-e-ablauf', 'name' => 'ml_e_ablauf', 'class' => 'kg-input', 'rows' => '4']);
+echo html_writer::tag('textarea', '', ['id' => 'ml-e-ablauf', 'name' => 'ml_e_ablauf', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_tag('details');
@@ -230,7 +255,7 @@ echo html_writer::tag('summary', '2) Qualität & Rahmen');
 echo html_writer::start_div('kg-stack field-stack ig-inner');
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Lernziele (Ich-kann ...)', ['for' => 'ml-e-lernziele', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'ml-e-lernziele', 'name' => 'ml_e_lernziele', 'class' => 'kg-input', 'rows' => '3']);
+echo html_writer::tag('textarea', '', ['id' => 'ml-e-lernziele', 'name' => 'ml_e_lernziele', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
@@ -260,7 +285,7 @@ echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
 echo html_writer::start_div();
 echo html_writer::tag('label', 'Raumanforderungen', ['for' => 'ml-e-raum', 'class' => 'kg-label']);
-echo konzeptgenerator_render_multi_dropdown('ml-e-raum', [
+echo seminarplaner_render_multi_dropdown('ml-e-raum', [
     'Plenum' => 'Plenum',
     'Stuhlkreis' => 'Stuhlkreis',
     'Stehtische' => 'Stehtische',
@@ -272,7 +297,7 @@ echo konzeptgenerator_render_multi_dropdown('ml-e-raum', [
 echo html_writer::end_div();
 echo html_writer::start_div();
 echo html_writer::tag('label', 'Sozialform', ['for' => 'ml-e-sozialform', 'class' => 'kg-label']);
-echo konzeptgenerator_render_multi_dropdown('ml-e-sozialform', [
+echo seminarplaner_render_multi_dropdown('ml-e-sozialform', [
     'Vortrag' => 'Vortrag',
     'Diskussion' => 'Diskussion',
     'Einzelarbeit' => 'Einzelarbeit',
@@ -286,16 +311,16 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Risiken/Tipps', ['for' => 'ml-e-risiken', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'ml-e-risiken', 'name' => 'ml_e_risiken', 'class' => 'kg-input', 'rows' => '3']);
+echo html_writer::tag('textarea', '', ['id' => 'ml-e-risiken', 'name' => 'ml_e_risiken', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Debrief/Reflexionsfragen', ['for' => 'ml-e-debrief', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'ml-e-debrief', 'name' => 'ml_e_debrief', 'class' => 'kg-input', 'rows' => '3']);
+echo html_writer::tag('textarea', '', ['id' => 'ml-e-debrief', 'name' => 'ml_e_debrief', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_tag('details');
 
-echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'ml-section-materials']);
+echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'ml-section-materials', 'open' => 'open']);
 echo html_writer::tag('summary', '3) Materialien & Technik');
 echo html_writer::start_div('kg-stack field-stack ig-inner');
 echo html_writer::start_div('field-card');
@@ -305,7 +330,7 @@ echo html_writer::tag('div', '', ['id' => 'ml-e-materialien-current', 'class' =>
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Material/Technik', ['for' => 'ml-e-materialtechnik', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'ml-e-materialtechnik', 'name' => 'ml_e_materialtechnik', 'class' => 'kg-input', 'rows' => '3']);
+echo html_writer::tag('textarea', '', ['id' => 'ml-e-materialtechnik', 'name' => 'ml_e_materialtechnik', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_tag('details');
@@ -323,12 +348,17 @@ echo html_writer::end_div();
 
 // Enable preferred Moodle editor (Tiny in Moodle 5.x by default) on rich text fields.
 $editor = editors_get_preferred_editor(FORMAT_HTML);
+$contentstyle = 'html,body{max-width:100%;overflow-x:hidden;box-sizing:border-box;}'
+    . 'body{white-space:normal;word-break:break-word;overflow-wrap:anywhere;}'
+    . 'p,div,span,li,td,th{max-width:100%;word-break:break-word;overflow-wrap:anywhere;}'
+    . 'img,table,iframe,pre,code{max-width:100%;}';
 $editoroptions = [
     'context' => $context,
     'maxfiles' => 0,
     'maxbytes' => 0,
     'trusttext' => false,
     'subdirs' => 0,
+    'content_style' => $contentstyle,
 ];
 foreach ([
     'ml-e-kurzbeschreibung',

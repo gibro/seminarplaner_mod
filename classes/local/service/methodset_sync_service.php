@@ -1,7 +1,7 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
 
-namespace mod_konzeptgenerator\local\service;
+namespace mod_seminarplaner\local\service;
 
 use coding_exception;
 use context_module;
@@ -264,7 +264,7 @@ class methodset_sync_service {
             $linkedcmids[(int)$link->cmid] = true;
         }
 
-        $moduleid = (int)$DB->get_field('modules', 'id', ['name' => 'konzeptgenerator'], IGNORE_MISSING);
+        $moduleid = (int)$DB->get_field('modules', 'id', ['name' => 'seminarplaner'], IGNORE_MISSING);
         if ($moduleid <= 0) {
             return;
         }
@@ -287,7 +287,7 @@ class methodset_sync_service {
         $cms = $DB->get_records_sql(
             "SELECT cm.id AS cmid
                FROM {course_modules} cm
-               JOIN {konzeptgenerator} kg ON kg.id = cm.instance
+               JOIN {seminarplaner} kg ON kg.id = cm.instance
               WHERE cm.module = :moduleid
                 AND kg.defaultmethodsetid = :methodsetid",
             ['moduleid' => $moduleid, 'methodsetid' => $methodsetid]
@@ -637,7 +637,7 @@ class methodset_sync_service {
                  AND filename <> :dot
                  AND filesize > 0",
             $itemparams + [
-                'component' => 'local_konzeptgenerator',
+                'component' => 'local_seminarplaner',
                 'filearea' => 'method_material',
                 'dot' => '.',
             ]);

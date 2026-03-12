@@ -5,17 +5,17 @@ require_once(__DIR__ . '/../../config.php');
 require_once(__DIR__ . '/locallib.php');
 
 $id = required_param('id', PARAM_INT);
-$activity = konzeptgenerator_require_activity_context($id, 'mod/konzeptgenerator:managemethods');
+$activity = seminarplaner_require_activity_context($id, 'mod/seminarplaner:view');
 $cm = $activity['cm'];
 $course = $activity['course'];
-$konzeptgenerator = $activity['konzeptgenerator'];
+$seminarplaner = $activity['seminarplaner'];
 
-konzeptgenerator_prepare_page('/mod/konzeptgenerator/review.php', $cm, $course, $konzeptgenerator, 'review');
+seminarplaner_prepare_page('/mod/seminarplaner/review.php', $cm, $course, $seminarplaner, 'review');
 
 echo $OUTPUT->header();
 
-echo $OUTPUT->heading(format_string($konzeptgenerator->name));
-echo konzeptgenerator_render_tabs((int)$cm->id, 'review');
+echo $OUTPUT->heading(format_string($seminarplaner->name));
+echo seminarplaner_render_tabs((int)$cm->id, 'review');
 
 echo html_writer::start_div('kg-shell');
 echo html_writer::tag('h3', 'Review');

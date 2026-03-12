@@ -1,7 +1,7 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
 
-namespace mod_konzeptgenerator\external;
+namespace mod_seminarplaner\external;
 
 use context_coursecat;
 use context_module;
@@ -12,11 +12,11 @@ use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
 use invalid_parameter_exception;
-use mod_konzeptgenerator\local\service\grid_service;
-use mod_konzeptgenerator\local\service\import_export_service;
-use mod_konzeptgenerator\local\service\method_card_service;
-use mod_konzeptgenerator\local\service\planning_state_service;
-use mod_konzeptgenerator\local\service\soft_lock_service;
+use mod_seminarplaner\local\service\grid_service;
+use mod_seminarplaner\local\service\import_export_service;
+use mod_seminarplaner\local\service\method_card_service;
+use mod_seminarplaner\local\service\planning_state_service;
+use mod_seminarplaner\local\service\soft_lock_service;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -25,7 +25,17 @@ defined('MOODLE_INTERNAL') || die();
  */
 class api extends external_api {
     /** @var int Max allowed size for methodsjson payload. */
-    private const MAX_METHODS_JSON_BYTES = 5242880; // 5 MB.
+    private const MAX_METHODS_JSON_BYTES = 26214400; // 25 MB.
+    /** @var int Max allowed size for state JSON payloads. */
+    private const MAX_STATE_JSON_BYTES = 2097152; // 2 MB.
+    /** @var int Max allowed size for import/export validation payloads. */
+    private const MAX_VALIDATION_PAYLOAD_JSON_BYTES = 3145728; // 3 MB.
+    /** @var int Max allowed length for changelog text. */
+    private const MAX_CHANGELOG_CHARS = 4000;
+    /** @var int Max allowed length for method set description. */
+    private const MAX_METHODSET_DESCRIPTION_CHARS = 12000;
+    /** @var int Max number of method ids accepted in one review submit/create request. */
+    private const MAX_REVIEW_METHODIDS = 500;
     /** @var string[] Method fields tracked for local-change protection during sync. */
     private const SYNC_TRACKED_FIELDS = [
         'titel', 'seminarphase', 'zeitbedarf', 'gruppengroesse', 'kurzbeschreibung', 'autor',
@@ -35,7 +45,7 @@ class api extends external_api {
     private static function resolve_cm_context(int $cmid): array {
         global $DB;
 
-        $cm = get_coursemodule_from_id('konzeptgenerator', $cmid, 0, false, MUST_EXIST);
+        $cm = get_coursemodule_from_id('seminarplaner', $cmid, 0, false, MUST_EXIST);
         $course = $DB->get_record('course', ['id' => $cm->course], '*', MUST_EXIST);
         require_login($course, true, $cm);
 
@@ -46,7 +56,7 @@ class api extends external_api {
     }
 
     private static function global_plugin_available(): bool {
-        return class_exists('\\local_konzeptgenerator\\local\\repository\\methodset_repository');
+        return class_exists('\\local_seminarplaner\\local\\repository\\methodset_repository');
     }
 
     private static function can_view_global_methodsets(\stdClass $course): bool {
@@ -55,8 +65,8 @@ class api extends external_api {
         }
         $syscontext = context_system::instance();
         $catcontext = context_coursecat::instance((int)$course->category);
-        return has_capability('local/konzeptgenerator:viewglobalsets', $syscontext)
-            || has_capability('local/konzeptgenerator:viewglobalsets', $catcontext);
+        return has_capability('local/seminarplaner:viewglobalsets', $syscontext)
+            || has_capability('local/seminarplaner:viewglobalsets', $catcontext);
     }
 
     private static function split_multi_text($value): array {
@@ -143,7 +153,7 @@ class api extends external_api {
     }
 
     /**
-     * Load material attachments for global methods from local_konzeptgenerator storage.
+     * Load material attachments for global methods from local_seminarplaner storage.
      *
      * @param int[] $methodids Global method ids.
      * @return array<int, array<int, array<string, mixed>>> methodid => attachment descriptors
@@ -181,7 +191,7 @@ class api extends external_api {
                  AND filename <> :dot
                  AND filesize > 0",
             $itemparams + [
-                'component' => 'local_konzeptgenerator',
+                'component' => 'local_seminarplaner',
                 'filearea' => 'method_material',
                 'dot' => '.',
             ]);
@@ -287,7 +297,7 @@ class api extends external_api {
     private static function load_set_methods_by_title(int $methodsetid): array {
         global $DB;
 
-        $repo = new \local_konzeptgenerator\local\repository\methodset_repository();
+        $repo = new \local_seminarplaner\local\repository\methodset_repository();
         $set = $repo->get_methodset($methodsetid);
         if (!$set) {
             return [];
@@ -375,14 +385,67 @@ class api extends external_api {
     private static function resolve_submit_scope_contexts(\stdClass $course): array {
         $contexts = [];
         $catcontext = context_coursecat::instance((int)$course->category);
-        if (has_capability('local/konzeptgenerator:submitforreview', $catcontext)) {
+        if (has_capability('local/seminarplaner:submitforreview', $catcontext)) {
             $contexts[] = $catcontext;
         }
         $syscontext = context_system::instance();
-        if (has_capability('local/konzeptgenerator:submitforreview', $syscontext)) {
+        if (has_capability('local/seminarplaner:submitforreview', $syscontext)) {
             $contexts[] = $syscontext;
         }
         return $contexts;
+    }
+
+    /**
+     * Require at least one of the given capabilities in module context.
+     *
+     * @param context_module $context
+     * @param string[] $capabilities
+     * @return void
+     */
+    private static function require_any_module_capability(context_module $context, array $capabilities): void {
+        foreach ($capabilities as $capability) {
+            if (has_capability($capability, $context)) {
+                return;
+            }
+        }
+        require_capability($capabilities[0], $context);
+    }
+
+    /**
+     * Lightweight in-session write throttling for expensive endpoints.
+     *
+     * @param string $action Action key.
+     * @param int $maxrequests Max requests in window.
+     * @param int $windowseconds Time window in seconds.
+     * @return void
+     */
+    private static function enforce_write_rate_limit(string $action, int $maxrequests, int $windowseconds): void {
+        global $SESSION;
+
+        if ($maxrequests <= 0 || $windowseconds <= 0) {
+            return;
+        }
+        if (!isset($SESSION->mod_seminarplaner_ratelimit) || !is_array($SESSION->mod_seminarplaner_ratelimit)) {
+            $SESSION->mod_seminarplaner_ratelimit = [];
+        }
+
+        $now = time();
+        $windowstart = $now - $windowseconds;
+        $entries = $SESSION->mod_seminarplaner_ratelimit[$action] ?? [];
+        if (!is_array($entries)) {
+            $entries = [];
+        }
+
+        $entries = array_values(array_filter($entries, static function($ts) use ($windowstart) {
+            return is_int($ts) && $ts >= $windowstart;
+        }));
+
+        if (count($entries) >= $maxrequests) {
+            throw new invalid_parameter_exception('Zu viele Schreibanfragen in kurzer Zeit. Bitte kurz warten und erneut versuchen.');
+        }
+
+        $entries[] = $now;
+        $SESSION->mod_seminarplaner_ratelimit[$action] = $entries;
     }
 
     public static function get_method_cards_parameters(): external_function_parameters {
@@ -394,7 +457,10 @@ class api extends external_api {
     public static function get_method_cards(int $cmid): array {
         $params = self::validate_parameters(self::get_method_cards_parameters(), ['cmid' => $cmid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:view', $resolved['context']);
+        self::require_any_module_capability($resolved['context'], [
+            'mod/seminarplaner:managemethods',
+            'mod/seminarplaner:managegrids',
+        ]);
 
         $service = new method_card_service();
         $methods = $service->get_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id, (int)$resolved['context']->id);
@@ -422,7 +488,8 @@ class api extends external_api {
         ]);
 
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managemethods', $resolved['context']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
+        self::enforce_write_rate_limit('save_method_cards', 120, 60);
         if (strlen($methodsjson) > self::MAX_METHODS_JSON_BYTES) {
             throw new invalid_parameter_exception('methodsjson exceeds allowed size');
         }
@@ -456,25 +523,25 @@ class api extends external_api {
 
         $params = self::validate_parameters(self::list_global_methodsets_parameters(), ['cmid' => $cmid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:view', $resolved['context']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
 
         if (!self::global_plugin_available()) {
-            return ['available' => false, 'message' => 'local_konzeptgenerator ist nicht installiert.', 'methodsets' => []];
+            return ['available' => false, 'message' => 'local_seminarplaner ist nicht installiert.', 'methodsets' => []];
         }
         if (!self::can_view_global_methodsets($resolved['course'])) {
             return ['available' => true, 'message' => 'Keine Berechtigung für globale Methodensets.', 'methodsets' => []];
         }
 
-        $repo = new \local_konzeptgenerator\local\repository\methodset_repository();
+        $repo = new \local_seminarplaner\local\repository\methodset_repository();
         $syscontext = context_system::instance();
         $catcontext = context_coursecat::instance((int)$resolved['course']->category);
         $sets = [];
-        if (has_capability('local/konzeptgenerator:viewglobalsets', $syscontext)) {
+        if (has_capability('local/seminarplaner:viewglobalsets', $syscontext)) {
             foreach ($repo->list_methodsets((int)$syscontext->id, 'published') as $set) {
                 $sets[(int)$set->id] = $set;
             }
         }
-        if (has_capability('local/konzeptgenerator:viewglobalsets', $catcontext)) {
+        if (has_capability('local/seminarplaner:viewglobalsets', $catcontext)) {
             foreach ($repo->list_methodsets((int)$catcontext->id, 'published') as $set) {
                 $sets[(int)$set->id] = $set;
             }
@@ -524,16 +591,17 @@ class api extends external_api {
             'methodsetid' => $methodsetid,
         ]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managemethods', $resolved['context']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
+        self::enforce_write_rate_limit('import_global_methodset', 20, 60);
 
         if (!self::global_plugin_available()) {
-            throw new invalid_parameter_exception('local_konzeptgenerator ist nicht installiert');
+            throw new invalid_parameter_exception('local_seminarplaner ist nicht installiert');
         }
         if (!self::can_view_global_methodsets($resolved['course'])) {
             throw new invalid_parameter_exception('Keine Berechtigung für globale Methodensets');
         }
 
-        $repo = new \local_konzeptgenerator\local\repository\methodset_repository();
+        $repo = new \local_seminarplaner\local\repository\methodset_repository();
         $set = $repo->get_methodset((int)$params['methodsetid']);
         if (!$set) {
             throw new invalid_parameter_exception('Unbekanntes Methodenset');
@@ -572,7 +640,7 @@ class api extends external_api {
         $merged = array_merge($existing, $imported);
         $service->save_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id, (int)$resolved['context']->id, $merged);
         if (!empty($set->currentversion)) {
-            $syncservice = new \mod_konzeptgenerator\local\service\methodset_sync_service();
+            $syncservice = new \mod_seminarplaner\local\service\methodset_sync_service();
             $syncservice->upsert_activity_set_link((int)$resolved['cm']->id, (int)$set->id, (int)$set->currentversion,
                 (int)$GLOBALS['USER']->id, false);
         }
@@ -603,9 +671,9 @@ class api extends external_api {
     public static function get_methodset_sync_status(int $cmid): array {
         $params = self::validate_parameters(self::get_methodset_sync_status_parameters(), ['cmid' => $cmid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managemethods', $resolved['context']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
 
-        $syncservice = new \mod_konzeptgenerator\local\service\methodset_sync_service();
+        $syncservice = new \mod_seminarplaner\local\service\methodset_sync_service();
         return ['links' => $syncservice->list_activity_links((int)$resolved['cm']->id)];
     }
 
@@ -640,9 +708,10 @@ class api extends external_api {
             'autosyncenabled' => $autosyncenabled,
         ]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managemethods', $resolved['context']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
+        self::enforce_write_rate_limit('set_methodset_sync_policy', 60, 60);
 
-        $syncservice = new \mod_konzeptgenerator\local\service\methodset_sync_service();
+        $syncservice = new \mod_seminarplaner\local\service\methodset_sync_service();
         $updated = $syncservice->set_autosync((int)$resolved['cm']->id, (int)$params['methodsetid'],
             !empty($params['autosyncenabled']));
         return ['updated' => (bool)$updated];
@@ -667,9 +736,10 @@ class api extends external_api {
             'methodsetid' => $methodsetid,
         ]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managemethods', $resolved['context']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
+        self::enforce_write_rate_limit('apply_methodset_updates', 30, 60);
 
-        $syncservice = new \mod_konzeptgenerator\local\service\methodset_sync_service();
+        $syncservice = new \mod_seminarplaner\local\service\methodset_sync_service();
         $updated = $syncservice->apply_pending_update_for_activity((int)$resolved['cm']->id, (int)$params['methodsetid'],
             (int)$GLOBALS['USER']->id);
         return ['updated' => (bool)$updated];
@@ -692,10 +762,10 @@ class api extends external_api {
 
         $params = self::validate_parameters(self::list_review_targets_parameters(), ['cmid' => $cmid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managemethods', $resolved['context']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
 
         if (!self::global_plugin_available()) {
-            return ['available' => false, 'message' => 'local_konzeptgenerator ist nicht installiert.', 'methodsets' => []];
+            return ['available' => false, 'message' => 'local_seminarplaner ist nicht installiert.', 'methodsets' => []];
         }
 
         $scopecontexts = self::resolve_submit_scope_contexts($resolved['course']);
@@ -703,7 +773,7 @@ class api extends external_api {
             return ['available' => true, 'message' => 'Keine Berechtigung zum Einreichen für Review.', 'methodsets' => []];
         }
 
-        $repo = new \local_konzeptgenerator\local\repository\methodset_repository();
+        $repo = new \local_seminarplaner\local\repository\methodset_repository();
         $sets = [];
         foreach ($scopecontexts as $scopectx) {
             foreach ($repo->list_methodsets((int)$scopectx->id) as $set) {
@@ -753,10 +823,10 @@ class api extends external_api {
     public static function list_reviewer_candidates(int $cmid): array {
         $params = self::validate_parameters(self::list_reviewer_candidates_parameters(), ['cmid' => $cmid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managemethods', $resolved['context']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
 
         if (!self::global_plugin_available()) {
-            return ['available' => false, 'message' => 'local_konzeptgenerator ist nicht installiert.', 'reviewers' => []];
+            return ['available' => false, 'message' => 'local_seminarplaner ist nicht installiert.', 'reviewers' => []];
         }
 
         $scopecontexts = self::resolve_submit_scope_contexts($resolved['course']);
@@ -766,7 +836,7 @@ class api extends external_api {
 
         $users = [];
         foreach ($scopecontexts as $scopectx) {
-            $candidates = get_users_by_capability($scopectx, 'local/konzeptgenerator:reviewset',
+            $candidates = get_users_by_capability($scopectx, 'local/seminarplaner:reviewset',
                 'u.id,u.firstname,u.lastname,u.email,u.deleted,u.suspended', 'u.lastname ASC, u.firstname ASC');
             foreach ($candidates as $candidate) {
                 if (!empty($candidate->deleted) || !empty($candidate->suspended)) {
@@ -808,13 +878,13 @@ class api extends external_api {
             'methodsetid' => $methodsetid,
         ]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managemethods', $resolved['context']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
 
         if (!self::global_plugin_available()) {
-            throw new invalid_parameter_exception('local_konzeptgenerator ist nicht installiert');
+            throw new invalid_parameter_exception('local_seminarplaner ist nicht installiert');
         }
 
-        $repo = new \local_konzeptgenerator\local\repository\methodset_repository();
+        $repo = new \local_seminarplaner\local\repository\methodset_repository();
         $set = $repo->get_methodset((int)$params['methodsetid']);
         if (!$set) {
             throw new invalid_parameter_exception('Unbekanntes Methodenset');
@@ -897,10 +967,17 @@ class api extends external_api {
             'methodids' => $methodids,
         ]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managemethods', $resolved['context']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
+        self::enforce_write_rate_limit('submit_methodset_for_review', 20, 60);
+        if (\core_text::strlen((string)$params['changelog']) > self::MAX_CHANGELOG_CHARS) {
+            throw new invalid_parameter_exception('changelog exceeds allowed length');
+        }
+        if (count((array)$params['methodids']) > self::MAX_REVIEW_METHODIDS) {
+            throw new invalid_parameter_exception('Too many method ids submitted at once');
+        }
 
         if (!self::global_plugin_available()) {
-            throw new invalid_parameter_exception('local_konzeptgenerator ist nicht installiert');
+            throw new invalid_parameter_exception('local_seminarplaner ist nicht installiert');
         }
 
         $scopecontexts = self::resolve_submit_scope_contexts($resolved['course']);
@@ -912,9 +989,9 @@ class api extends external_api {
         }, $scopecontexts);
 
         $actorid = (int)$GLOBALS['USER']->id;
-        $repo = new \local_konzeptgenerator\local\repository\methodset_repository();
-        $reviewerrepo = new \local_konzeptgenerator\local\repository\reviewer_repository();
-        $workflow = new \local_konzeptgenerator\local\service\workflow_service();
+        $repo = new \local_seminarplaner\local\repository\methodset_repository();
+        $reviewerrepo = new \local_seminarplaner\local\repository\reviewer_repository();
+        $workflow = new \local_seminarplaner\local\service\workflow_service();
 
         if ((int)$params['methodsetid'] <= 0) {
             throw new invalid_parameter_exception('Bitte ein bestehendes Methodenset auswählen');
@@ -986,14 +1063,34 @@ class api extends external_api {
 
         $versionid = $repo->create_version((int)$set->id, (int)$versionnum, 'draft', $snapshotjson, $actorid);
 
+        $scopecontext = \context::instance_by_id((int)$set->scopecontextid, MUST_EXIST);
         $assignedreviewers = $reviewerrepo->get_reviewer_userids((int)$set->id);
         if (!$assignedreviewers) {
-            throw new invalid_parameter_exception('Für dieses Methodenset sind keine Konzeptverantwortliche zugeordnet');
+            // Fallback for legacy sets without explicit reviewer assignment:
+            // auto-assign active users that currently hold review capability in scope.
+            $autocandidates = get_users_by_capability($scopecontext, 'local/seminarplaner:reviewset',
+                'u.id,u.deleted,u.suspended', 'u.id ASC');
+            $autorreviewerids = [];
+            foreach ($autocandidates as $candidate) {
+                if (!empty($candidate->deleted) || !empty($candidate->suspended)) {
+                    continue;
+                }
+                $autorreviewerids[] = (int)$candidate->id;
+            }
+            $autorreviewerids = array_values(array_unique(array_filter($autorreviewerids)));
+            if (!$autorreviewerids) {
+                throw new invalid_parameter_exception('Keine Konzeptverantwortliche mit Review-Berechtigung gefunden');
+            }
+            $reviewerrepo->replace_reviewers((int)$set->id, $autorreviewerids, $actorid);
+            $assignedreviewers = $autorreviewerids;
         }
-        $scopecontext = \context::instance_by_id((int)$set->scopecontextid, MUST_EXIST);
-        $reviewerswithcap = get_users_by_capability($scopecontext, 'local/konzeptgenerator:reviewset', 'u.id', 'u.id ASC');
+        $reviewerswithcap = get_users_by_capability($scopecontext, 'local/seminarplaner:reviewset',
+            'u.id,u.deleted,u.suspended', 'u.id ASC');
         $allowedreviewers = [];
         foreach ($reviewerswithcap as $capuser) {
+            if (!empty($capuser->deleted) || !empty($capuser->suspended)) {
+                continue;
+            }
             $allowedreviewers[(int)$capuser->id] = true;
         }
         foreach ($assignedreviewers as $reviewerid) {
@@ -1025,7 +1122,7 @@ class api extends external_api {
             $savedcount++;
         }
 
-        $comment = trim((string)$params['changelog']) !== '' ? trim((string)$params['changelog']) : 'Submitted from mod_konzeptgenerator';
+        $comment = trim((string)$params['changelog']) !== '' ? trim((string)$params['changelog']) : 'Submitted from mod_seminarplaner';
         $workflow->transition((int)$set->id, (int)$versionid, 'review', $actorid, $comment);
 
         return [
@@ -1072,10 +1169,20 @@ class api extends external_api {
             'methodids' => $methodids,
         ]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managemethods', $resolved['context']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
+        self::enforce_write_rate_limit('create_methodset_for_review', 20, 60);
+        if (\core_text::strlen((string)$params['description']) > self::MAX_METHODSET_DESCRIPTION_CHARS) {
+            throw new invalid_parameter_exception('description exceeds allowed length');
+        }
+        if (\core_text::strlen((string)$params['changelog']) > self::MAX_CHANGELOG_CHARS) {
+            throw new invalid_parameter_exception('changelog exceeds allowed length');
+        }
+        if (count((array)$params['methodids']) > self::MAX_REVIEW_METHODIDS) {
+            throw new invalid_parameter_exception('Too many method ids submitted at once');
+        }
 
         if (!self::global_plugin_available()) {
-            throw new invalid_parameter_exception('local_konzeptgenerator ist nicht installiert');
+            throw new invalid_parameter_exception('local_seminarplaner ist nicht installiert');
         }
 
         $scopecontexts = self::resolve_submit_scope_contexts($resolved['course']);
@@ -1117,9 +1224,9 @@ class api extends external_api {
             throw new invalid_parameter_exception('Keine Methoden für Einreichung ausgewählt');
         }
 
-        $repo = new \local_konzeptgenerator\local\repository\methodset_repository();
-        $reviewerrepo = new \local_konzeptgenerator\local\repository\reviewer_repository();
-        $workflow = new \local_konzeptgenerator\local\service\workflow_service();
+        $repo = new \local_seminarplaner\local\repository\methodset_repository();
+        $reviewerrepo = new \local_seminarplaner\local\repository\reviewer_repository();
+        $workflow = new \local_seminarplaner\local\service\workflow_service();
 
         $newsetid = $repo->create_methodset_draft((string)$params['shortname'], (string)$params['displayname'],
             (string)$params['description'], (int)$targetscope->id, $actorid);
@@ -1130,7 +1237,7 @@ class api extends external_api {
         }
         $versionid = $repo->create_version((int)$newsetid, 1, 'draft', $snapshotjson, $actorid);
 
-        $reviewers = get_users_by_capability($targetscope, 'local/konzeptgenerator:reviewset', 'u.id,u.deleted,u.suspended');
+        $reviewers = get_users_by_capability($targetscope, 'local/seminarplaner:reviewset', 'u.id,u.deleted,u.suspended');
         $reviewerids = [];
         foreach ($reviewers as $reviewer) {
             if (!empty($reviewer->deleted) || !empty($reviewer->suspended)) {
@@ -1163,7 +1270,7 @@ class api extends external_api {
             $savedcount++;
         }
 
-        $comment = trim((string)$params['changelog']) !== '' ? trim((string)$params['changelog']) : 'Submitted from mod_konzeptgenerator';
+        $comment = trim((string)$params['changelog']) !== '' ? trim((string)$params['changelog']) : 'Submitted from mod_seminarplaner';
         $workflow->transition((int)$newsetid, (int)$versionid, 'review', $actorid, $comment);
 
         return [
@@ -1201,7 +1308,8 @@ class api extends external_api {
         ]);
 
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managegrids', $resolved['context']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('create_grid', 40, 60);
 
         $service = new grid_service();
         $gridid = $service->create_grid((int)$resolved['cm']->id, (string)$params['name'], (int)$GLOBALS['USER']->id,
@@ -1230,7 +1338,8 @@ class api extends external_api {
             'gridid' => $gridid,
         ]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managegrids', $resolved['context']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('delete_grid', 40, 60);
 
         $service = new grid_service();
         $deleted = $service->delete_grid((int)$resolved['cm']->id, (int)$params['gridid'], (int)$GLOBALS['USER']->id);
@@ -1253,7 +1362,7 @@ class api extends external_api {
     public static function list_grids(int $cmid): array {
         $params = self::validate_parameters(self::list_grids_parameters(), ['cmid' => $cmid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:view', $resolved['context']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
 
         $service = new grid_service();
         $grids = $service->list_grids((int)$resolved['cm']->id);
@@ -1284,6 +1393,94 @@ class api extends external_api {
         ]);
     }
 
+    public static function get_roterfaden_state_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+        ]);
+    }
+
+    public static function get_roterfaden_state(int $cmid): array {
+        $params = self::validate_parameters(self::get_roterfaden_state_parameters(), ['cmid' => $cmid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:viewroterfaden', $resolved['context']);
+
+        $service = new grid_service();
+        $result = $service->get_roterfaden_state((int)$resolved['cm']->id);
+        return [
+            'ispublished' => !empty($result['ispublished']),
+            'gridid' => (int)($result['gridid'] ?? 0),
+            'statejson' => json_encode($result['state'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ];
+    }
+
+    public static function get_roterfaden_state_returns(): external_single_structure {
+        return new external_single_structure([
+            'ispublished' => new external_value(PARAM_BOOL, 'Whether Common Thread is visible'),
+            'gridid' => new external_value(PARAM_INT, 'Published grid id'),
+            'statejson' => new external_value(PARAM_RAW, 'Published Common Thread state as JSON'),
+        ]);
+    }
+
+    public static function publish_roterfaden_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'gridid' => new external_value(PARAM_INT, 'Grid id to publish'),
+            'statejson' => new external_value(PARAM_RAW, 'Grid state payload'),
+        ]);
+    }
+
+    public static function publish_roterfaden(int $cmid, int $gridid, string $statejson): array {
+        $params = self::validate_parameters(self::publish_roterfaden_parameters(), [
+            'cmid' => $cmid,
+            'gridid' => $gridid,
+            'statejson' => $statejson,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('publish_roterfaden', 30, 60);
+        if (strlen((string)$params['statejson']) > self::MAX_STATE_JSON_BYTES) {
+            throw new invalid_parameter_exception('statejson exceeds allowed size');
+        }
+
+        $decoded = json_decode((string)$params['statejson'], true);
+        if (!is_array($decoded)) {
+            throw new invalid_parameter_exception('statejson must decode to an object/array');
+        }
+
+        $service = new grid_service();
+        $ok = $service->publish_roterfaden((int)$resolved['cm']->id, (int)$params['gridid'], $decoded, (int)$GLOBALS['USER']->id);
+        return ['success' => $ok];
+    }
+
+    public static function publish_roterfaden_returns(): external_single_structure {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'Publish result'),
+        ]);
+    }
+
+    public static function unpublish_roterfaden_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+        ]);
+    }
+
+    public static function unpublish_roterfaden(int $cmid): array {
+        $params = self::validate_parameters(self::unpublish_roterfaden_parameters(), ['cmid' => $cmid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('unpublish_roterfaden', 30, 60);
+
+        $service = new grid_service();
+        $ok = $service->set_roterfaden_visibility((int)$resolved['cm']->id, false, (int)$GLOBALS['USER']->id);
+        return ['success' => $ok];
+    }
+
+    public static function unpublish_roterfaden_returns(): external_single_structure {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'Unpublish result'),
+        ]);
+    }
+
     public static function get_user_state_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -1294,7 +1491,7 @@ class api extends external_api {
     public static function get_user_state(int $cmid, int $gridid): array {
         $params = self::validate_parameters(self::get_user_state_parameters(), ['cmid' => $cmid, 'gridid' => $gridid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:view', $resolved['context']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
 
         $service = new grid_service();
         $result = $service->get_user_state((int)$params['gridid'], (int)$GLOBALS['USER']->id);
@@ -1330,7 +1527,11 @@ class api extends external_api {
         ]);
 
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managegrids', $resolved['context']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('save_user_state', 240, 60);
+        if (strlen((string)$params['statejson']) > self::MAX_STATE_JSON_BYTES) {
+            throw new invalid_parameter_exception('statejson exceeds allowed size');
+        }
 
         $decoded = json_decode((string)$params['statejson'], true);
         if (!is_array($decoded)) {
@@ -1359,7 +1560,7 @@ class api extends external_api {
     public static function get_planning_state(int $cmid): array {
         $params = self::validate_parameters(self::get_planning_state_parameters(), ['cmid' => $cmid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:view', $resolved['context']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
 
         $service = new planning_state_service();
         $result = $service->get_state((int)$resolved['cm']->id);
@@ -1391,7 +1592,11 @@ class api extends external_api {
             'expectedhash' => $expectedhash,
         ]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managegrids', $resolved['context']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('save_planning_state', 180, 60);
+        if (strlen((string)$params['statejson']) > self::MAX_STATE_JSON_BYTES) {
+            throw new invalid_parameter_exception('statejson exceeds allowed size');
+        }
 
         $decoded = json_decode((string)$params['statejson'], true);
         if (!is_array($decoded)) {
@@ -1424,7 +1629,11 @@ class api extends external_api {
         ]);
 
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:importfrommoddata', $resolved['context']);
+        require_capability('mod/seminarplaner:importfrommoddata', $resolved['context']);
+        self::enforce_write_rate_limit('validate_import_payload', 60, 60);
+        if (strlen((string)$params['payloadjson']) > self::MAX_VALIDATION_PAYLOAD_JSON_BYTES) {
+            throw new invalid_parameter_exception('payloadjson exceeds allowed size');
+        }
 
         $payload = json_decode((string)$params['payloadjson'], true);
         if (!is_array($payload)) {
@@ -1468,7 +1677,11 @@ class api extends external_api {
         ]);
 
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:exporttomoddata', $resolved['context']);
+        require_capability('mod/seminarplaner:exporttomoddata', $resolved['context']);
+        self::enforce_write_rate_limit('validate_export_payload', 60, 60);
+        if (strlen((string)$params['payloadjson']) > self::MAX_VALIDATION_PAYLOAD_JSON_BYTES) {
+            throw new invalid_parameter_exception('payloadjson exceeds allowed size');
+        }
 
         $payload = json_decode((string)$params['payloadjson'], true);
         if (!is_array($payload)) {
@@ -1513,7 +1726,8 @@ class api extends external_api {
         ]);
 
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managegrids', $resolved['context']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('acquire_lock', 120, 60);
 
         $service = new soft_lock_service();
         $result = $service->acquire((int)$params['gridid'], (int)$GLOBALS['USER']->id, (int)$params['ttlseconds']);
@@ -1553,7 +1767,8 @@ class api extends external_api {
         ]);
 
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managegrids', $resolved['context']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('refresh_lock', 240, 60);
 
         $service = new soft_lock_service();
         $ok = $service->refresh((int)$params['gridid'], (int)$GLOBALS['USER']->id, (string)$params['token'],
@@ -1583,7 +1798,8 @@ class api extends external_api {
         ]);
 
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:managegrids', $resolved['context']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('release_lock', 120, 60);
 
         $service = new soft_lock_service();
         $ok = $service->release((int)$params['gridid'], (int)$GLOBALS['USER']->id, (string)$params['token']);
@@ -1606,7 +1822,7 @@ class api extends external_api {
     public static function lock_status(int $cmid, int $gridid): array {
         $params = self::validate_parameters(self::lock_status_parameters(), ['cmid' => $cmid, 'gridid' => $gridid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/konzeptgenerator:view', $resolved['context']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
 
         $service = new soft_lock_service();
         $status = $service->status((int)$params['gridid']);

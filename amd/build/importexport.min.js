@@ -6,8 +6,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     let methods = [];
     let previewRows = [];
+    let previewUnits = [];
+    let previewGrids = [];
     let grids = [];
     let currentGridState = null;
+    let planningUnitsById = {};
+    let planningState = {};
+    let planningVersionHash = '';
+    let currentImportPayload = null;
     let globalMethodsets = [];
     let globalSyncLinks = [];
     let pendingAutosyncPrefs = {};
@@ -62,6 +68,104 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         el.style.color = isError ? '#b91c1c' : '#166534';
     };
 
+    const getComponentSelection = (prefix) => {
+        const methodsel = bySel(`#kg-ie-${prefix}-methods`);
+        const unitsel = bySel(`#kg-ie-${prefix}-units`);
+        const gridsel = bySel(`#kg-ie-${prefix}-grids`);
+        return {
+            methods: !methodsel || !!methodsel.checked,
+            units: !!unitsel && !!unitsel.checked,
+            grids: !!gridsel && !!gridsel.checked
+        };
+    };
+
+    const selectedComponentCount = (selection) => {
+        return (selection.methods ? 1 : 0) + (selection.units ? 1 : 0) + (selection.grids ? 1 : 0);
+    };
+
+    let externalLibrariesPromise = null;
+
+    const getVendorBaseUrl = () => {
+        const root = window.M && window.M.cfg && window.M.cfg.wwwroot ? String(window.M.cfg.wwwroot) : '';
+        return `${root.replace(/\/$/, '')}/mod/seminarplaner/thirdparty`;
+    };
+
+    const loadScriptWithoutAmd = (url) => new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = url;
+        script.async = false;
+
+        const previousDefine = window.define;
+        const hadOwnDefine = Object.prototype.hasOwnProperty.call(window, 'define');
+        try {
+            // Force UMD bundles to register globals instead of anonymous AMD modules.
+            window.define = undefined;
+        } catch (e) {
+            // Ignore and continue; some runtimes may protect globals.
+        }
+
+        const restoreDefine = () => {
+            try {
+                if (hadOwnDefine) {
+                    window.define = previousDefine;
+                } else {
+                    delete window.define;
+                }
+            } catch (e) {
+                // Best-effort restore only.
+            }
+        };
+
+        script.onload = () => {
+            restoreDefine();
+            resolve();
+        };
+        script.onerror = () => {
+            restoreDefine();
+            reject(new Error(`Script konnte nicht geladen werden: ${url}`));
+        };
+
+        document.head.appendChild(script);
+    });
+
+    const ensureExternalLibraries = () => {
+        if (externalLibrariesPromise) {
+            return externalLibrariesPromise;
+        }
+        const base = getVendorBaseUrl();
+        externalLibrariesPromise = Promise.resolve()
+            .then(() => {
+                if (window.JSZip) {
+                    return null;
+                }
+                return loadScriptWithoutAmd(`${base}/jszip/jszip.min.js`);
+            })
+            .then(() => {
+                if (window.jspdf && typeof window.jspdf.jsPDF === 'function') {
+                    return null;
+                }
+                return loadScriptWithoutAmd(`${base}/jspdf/jspdf.umd.min.js`);
+            })
+            .then(() => {
+                const jsPDF = window.jspdf && window.jspdf.jsPDF;
+                const hasAutoTable = jsPDF && jsPDF.API && typeof jsPDF.API.autoTable === 'function';
+                if (hasAutoTable) {
+                    return null;
+                }
+                return loadScriptWithoutAmd(`${base}/jspdf-autotable/jspdf.plugin.autotable.min.js`);
+            })
+            .then(() => {
+                if (!window.JSZip) {
+                    throw new Error('JSZip konnte nicht initialisiert werden.');
+                }
+                if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function') {
+                    throw new Error('jsPDF konnte nicht initialisiert werden.');
+                }
+            });
+
+        return externalLibrariesPromise;
+    };
+
 
     const step = (n) => {
         ['1', '2'].forEach((v) => {
@@ -93,26 +197,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             .split(/##|\r?\n|,|;/)
             .map((v) => stripHtml(v))
             .filter(Boolean);
-    };
-
-    const attachmentName = (entry) => {
-        if (!entry) {
-            return '';
-        }
-        if (typeof entry === 'string') {
-            return entry.trim();
-        }
-        if (typeof entry === 'object') {
-            return String(entry.name || '').trim();
-        }
-        return '';
-    };
-
-    const attachmentNames = (value) => {
-        if (!Array.isArray(value)) {
-            return [];
-        }
-        return value.map((entry) => attachmentName(entry)).filter(Boolean);
     };
 
     const parseCsvTable = (csvText) => {
@@ -222,6 +306,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return '';
     };
 
+    const readRichTextField = (row, keys) => String(readFirst(row, keys) || '').trim();
+
     const mapLegacyRowToMethod = (row) => {
         const titel = stripHtml(readFirst(row, ['Titel', 'title', 'Name']));
         if (!titel) {
@@ -234,21 +320,37 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             seminarphase: splitMultiString(readFirst(row, ['Seminarphase', 'seminarphase'])),
             zeitbedarf: stripHtml(readFirst(row, ['Zeitbedarf', 'zeitbedarf'])),
             gruppengroesse: stripHtml(readFirst(row, ['Gruppengröße', 'Gruppengroesse', 'gruppengroesse'])),
-            kurzbeschreibung: stripHtml(readFirst(row, ['Kurzbeschreibung', 'kurzbeschreibung'])),
+            kurzbeschreibung: readRichTextField(row, ['Kurzbeschreibung', 'kurzbeschreibung']),
             autor: stripHtml(readFirst(row, ['Autor*in / Kontakt', 'Autor/in / Kontakt', 'autor_kontakt', 'autor'])),
-            lernziele: stripHtml(readFirst(row, ['Lernziele (Ich-kann ...)', 'lernziele'])),
+            lernziele: readRichTextField(row, ['Lernziele (Ich-kann ...)', 'lernziele']),
             komplexitaet: stripHtml(readFirst(row, ['Komplexitätsgrad', 'Komplexitaetsgrad', 'komplexitaet'])),
             vorbereitung: stripHtml(readFirst(row, ['Vorbereitung nötig', 'Vorbereitung noetig', 'vorbereitung'])),
             raum: splitMultiString(readFirst(row, ['Raumanforderungen', 'raumanforderungen'])),
             sozialform: splitMultiString(readFirst(row, ['Sozialform', 'sozialform'])),
-            risiken: stripHtml(readFirst(row, ['Risiken/Tipps', 'risiken_tipps', 'risiken'])),
-            debrief: stripHtml(readFirst(row, ['Debrief/Reflexionsfragen', 'debrief'])),
+            risiken: readRichTextField(row, ['Risiken/Tipps', 'risiken_tipps', 'risiken']),
+            debrief: readRichTextField(row, ['Debrief/Reflexionsfragen', 'debrief']),
             materialien: splitMultiString(readFirst(row, ['Materialien', 'materialien'])),
-            materialtechnik: stripHtml(readFirst(row, ['Material/Technik', 'material_technik', 'materialtechnik'])),
-            ablauf: stripHtml(readFirst(row, ['Ablauf', 'ablauf'])),
+            materialtechnik: readRichTextField(row, ['Material/Technik', 'material_technik', 'materialtechnik']),
+            ablauf: readRichTextField(row, ['Ablauf', 'ablauf']),
             tags: stripHtml(readFirst(row, ['Tags / Schlüsselworte', 'Tags / Schluesselworte', 'tags', 'Tags'])),
             kognitive: splitMultiString(readFirst(row, ['Kognitive Dimension', 'kognitive_dimension', 'kognitive']))
         };
+    };
+
+    const countMethodsInGridState = (state) => {
+        if (!state || !state.plan || !state.plan.days || typeof state.plan.days !== 'object') {
+            return 0;
+        }
+        let count = 0;
+        Object.keys(state.plan.days).forEach((day) => {
+            const entries = Array.isArray(state.plan.days[day]) ? state.plan.days[day] : [];
+            entries.forEach((entry) => {
+                if (entry && entry.kind === 'method') {
+                    count++;
+                }
+            });
+        });
+        return count;
     };
 
     const renderPreview = () => {
@@ -257,6 +359,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return;
         }
         host.innerHTML = '';
+
+        if (previewRows.length) {
+            const title = document.createElement('h5');
+            title.textContent = 'Methoden';
+            host.appendChild(title);
+        }
 
         previewRows.forEach((row, idx) => {
             const box = document.createElement('label');
@@ -278,6 +386,39 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             host.appendChild(box);
         });
 
+        if (previewUnits.length) {
+            const title = document.createElement('h5');
+            title.textContent = 'Bausteine';
+            host.appendChild(title);
+            previewUnits.forEach((item, idx) => {
+                const box = document.createElement('label');
+                box.className = 'kg-ie-item';
+                box.innerHTML = `
+                    <input type="checkbox" class="kg-ie-check-unit" data-idx="${idx}" ${item.selected ? 'checked' : ''}>
+                    <span class="kg-ie-title">${escapeHtml(item.unit.title || '(ohne Titel)')}</span>
+                    <span class="kg-ie-meta">ID: ${escapeHtml(item.unit.id || '-')}</span>
+                `;
+                host.appendChild(box);
+            });
+        }
+
+        if (previewGrids.length) {
+            const title = document.createElement('h5');
+            title.textContent = 'Seminarpläne';
+            host.appendChild(title);
+            previewGrids.forEach((item, idx) => {
+                const methodcount = countMethodsInGridState(item.plan.state);
+                const box = document.createElement('label');
+                box.className = 'kg-ie-item';
+                box.innerHTML = `
+                    <input type="checkbox" class="kg-ie-check-grid" data-idx="${idx}" ${item.selected ? 'checked' : ''}>
+                    <span class="kg-ie-title">${escapeHtml(item.plan.name || '(ohne Namen)')}</span>
+                    <span class="kg-ie-meta">${methodcount} Methoden im Plan</span>
+                `;
+                host.appendChild(box);
+            });
+        }
+
         host.querySelectorAll('.kg-ie-check').forEach((cb) => {
             cb.addEventListener('change', () => {
                 const idx = Number.parseInt(cb.getAttribute('data-idx'), 10);
@@ -294,111 +435,95 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 }
             });
         });
-    };
-
-    const toCsvCell = (value) => {
-        const text = String(value === undefined || value === null ? '' : value);
-        if (/[",\n\r]/.test(text)) {
-            return `"${text.replace(/"/g, '""')}"`;
-        }
-        return text;
-    };
-
-    const buildCsvForModData = () => {
-        const headers = [
-            'Titel', 'Seminarphase', 'Zeitbedarf', 'Gruppengröße', 'Kurzbeschreibung', 'Autor*in / Kontakt',
-            'Lernziele (Ich-kann ...)', 'Komplexitätsgrad', 'Vorbereitung nötig', 'Raumanforderungen', 'Sozialform',
-            'Risiken/Tipps', 'Debrief/Reflexionsfragen', 'Materialien', 'Material/Technik', 'Ablauf',
-            'Tags / Schlüsselworte', 'Kognitive Dimension', 'Tags'
-        ];
-
-        const lines = [headers.map(toCsvCell).join(',')];
-        methods.forEach((m) => {
-            const row = [
-                m.titel || '',
-                (m.seminarphase || []).join('##'),
-                m.zeitbedarf || '',
-                m.gruppengroesse || '',
-                m.kurzbeschreibung || '',
-                m.autor || '',
-                m.lernziele || '',
-                m.komplexitaet || '',
-                m.vorbereitung || '',
-                (m.raum || []).join('##'),
-                (m.sozialform || []).join('##'),
-                m.risiken || '',
-                m.debrief || '',
-                attachmentNames(m.materialien).join('##'),
-                m.materialtechnik || '',
-                m.ablauf || '',
-                m.tags || '',
-                (m.kognitive || []).join('##'),
-                m.tags || ''
-            ];
-            lines.push(row.map(toCsvCell).join(','));
+        host.querySelectorAll('.kg-ie-check-unit').forEach((cb) => {
+            cb.addEventListener('change', () => {
+                const idx = Number.parseInt(cb.getAttribute('data-idx'), 10);
+                if (Number.isInteger(idx) && previewUnits[idx]) {
+                    previewUnits[idx].selected = !!cb.checked;
+                }
+            });
         });
-        return lines.join('\n');
+        host.querySelectorAll('.kg-ie-check-grid').forEach((cb) => {
+            cb.addEventListener('change', () => {
+                const idx = Number.parseInt(cb.getAttribute('data-idx'), 10);
+                if (Number.isInteger(idx) && previewGrids[idx]) {
+                    previewGrids[idx].selected = !!cb.checked;
+                }
+            });
+        });
     };
 
-    const fetchAttachmentAsUint8 = async (url) => {
-        const res = await fetch(url, {credentials: 'same-origin'});
-        if (!res.ok) {
-            throw new Error(`Datei konnte nicht geladen werden (${res.status})`);
-        }
-        const ab = await res.arrayBuffer();
-        return new Uint8Array(ab);
-    };
-
-    const exportCsv = async () => {
-        if (!window.JSZip) {
-            throw new Error('ZIP-Export benötigt JSZip');
-        }
-        const zip = new window.JSZip();
-        const filesFolder = zip.folder('files');
-        const csvfilename = `konzeptgenerator-records-${new Date().toISOString().replace(/[-:]/g, '').slice(0, 13)}.csv`;
-        zip.file(csvfilename, buildCsvForModData());
-
-        const addedfiles = new Set();
-        for (const method of methods) {
-            const entries = []
-                .concat(Array.isArray(method.materialien) ? method.materialien : []);
-            for (const entry of entries) {
-                if (!entry || typeof entry !== 'object' || !entry.fileurl) {
-                    continue;
-                }
-                const name = attachmentName(entry);
-                if (!name || addedfiles.has(name)) {
-                    continue;
-                }
-                const bytes = await fetchAttachmentAsUint8(entry.fileurl);
-                filesFolder.file(name, bytes);
-                addedfiles.add(name);
+    const collectSeminarplaeneForExport = async (cmid) => {
+        const out = [];
+        const visibleGrids = Array.isArray(grids) ? grids.filter((grid) => Number(grid && grid.isarchived ? grid.isarchived : 0) === 0) : [];
+        for (const grid of visibleGrids) {
+            const gridid = Number(grid && grid.id ? grid.id : 0);
+            if (!gridid) {
+                continue;
             }
+            let state = {};
+            try {
+                const res = await asCall('mod_seminarplaner_get_user_state', {cmid, gridid});
+                state = res && res.statejson ? JSON.parse(res.statejson) : {};
+            } catch (e) {
+                state = {};
+            }
+            out.push({
+                name: String(grid.name || ''),
+                description: String(grid.description || ''),
+                state
+            });
         }
-
-        const blob = await zip.generateAsync({type: 'blob'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'konzeptgenerator-moddata-export.zip';
-        a.click();
-        URL.revokeObjectURL(url);
-        setStatus(`ZIP exportiert (${addedfiles.size} Dateien).`, false);
+        return out;
     };
 
-    const exportJson = () => {
-        const blob = new Blob([JSON.stringify(methods, null, 2)], {type: 'application/json'});
+    const exportJsonFull = async (cmid) => {
+        const selection = getComponentSelection('export');
+        if (selectedComponentCount(selection) === 0) {
+            throw new Error('Bitte mindestens eine Komponente auswählen (Methoden, Bausteine oder Seminarpläne).');
+        }
+        const bausteine = Object.entries(planningUnitsById || {}).map(([id, unit]) => ({
+            id: String(id),
+            title: String(unit && unit.title ? unit.title : ''),
+            topics: String(unit && unit.topics ? unit.topics : ''),
+            objectives: String(unit && unit.objectives ? unit.objectives : '')
+        }));
+        const seminarplaene = selection.grids ? await collectSeminarplaeneForExport(cmid) : [];
+        const payload = {
+            format: 'seminarplaner-component-export',
+            version: 3,
+            exportedat: (new Date()).toISOString(),
+            components: {
+                methods: !!selection.methods,
+                bausteine: !!selection.units,
+                seminarplaene: !!selection.grids
+            }
+        };
+        if (selection.methods) {
+            payload.methods = Array.isArray(methods) ? methods : [];
+        }
+        if (selection.units) {
+            payload.bausteine = bausteine;
+            payload.planningstate = planningState && typeof planningState === 'object' ? planningState : {units: bausteine};
+        }
+        if (selection.grids) {
+            payload.seminarplaene = seminarplaene;
+        }
+        const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'methodenkarten-export.json';
+        a.download = 'seminarplaner-full-export.json';
         a.click();
         URL.revokeObjectURL(url);
-        setStatus('JSON exportiert.', false);
+        const exportedMethods = Array.isArray(payload.methods) ? payload.methods.length : 0;
+        const exportedUnits = Array.isArray(payload.bausteine) ? payload.bausteine.length : 0;
+        const exportedGrids = Array.isArray(payload.seminarplaene) ? payload.seminarplaene.length : 0;
+        setStatus(`Seminarplaner-JSON exportiert (${exportedMethods} Methoden, ${exportedUnits} Bausteine, ${exportedGrids} Seminarpläne).`, false);
     };
 
     const loadMethods = (cmid) => {
-        return asCall('mod_konzeptgenerator_get_method_cards', {cmid}).then((res) => {
+        return asCall('mod_seminarplaner_get_method_cards', {cmid}).then((res) => {
             try {
                 methods = res.methodsjson ? JSON.parse(res.methodsjson) : [];
             } catch (e) {
@@ -411,7 +536,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     };
 
     const loadGrids = (cmid) => {
-        return asCall('mod_konzeptgenerator_list_grids', {cmid}).then((res) => {
+        return asCall('mod_seminarplaner_list_grids', {cmid}).then((res) => {
             grids = Array.isArray(res.grids) ? res.grids : [];
             const select = bySel('#kg-pdf-grid');
             if (!select) {
@@ -432,7 +557,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         if (!select) {
             return Promise.resolve();
         }
-        return asCall('mod_konzeptgenerator_list_global_methodsets', {cmid}).then((res) => {
+        return asCall('mod_seminarplaner_list_global_methodsets', {cmid}).then((res) => {
             globalMethodsets = Array.isArray(res.methodsets) ? res.methodsets : [];
             select.innerHTML = '<option value="">Bitte wählen</option>';
             globalMethodsets.forEach((set) => {
@@ -456,7 +581,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     };
 
     const loadGlobalSyncStatus = (cmid) => {
-        return asCall('mod_konzeptgenerator_get_methodset_sync_status', {cmid}).then((res) => {
+        return asCall('mod_seminarplaner_get_methodset_sync_status', {cmid}).then((res) => {
             globalSyncLinks = Array.isArray(res.links) ? res.links : [];
         }).catch(() => {
             globalSyncLinks = [];
@@ -519,7 +644,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             currentGridState = null;
             return Promise.resolve(null);
         }
-        return asCall('mod_konzeptgenerator_get_user_state', {cmid, gridid}).then((res) => {
+        return asCall('mod_seminarplaner_get_user_state', {cmid, gridid}).then((res) => {
             let parsed = {};
             try {
                 parsed = res.statejson ? JSON.parse(res.statejson) : {};
@@ -528,6 +653,38 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             currentGridState = parsed || {};
             return currentGridState;
+        });
+    };
+
+    const loadPlanningState = (cmid) => {
+        planningUnitsById = {};
+        planningState = {};
+        planningVersionHash = '';
+        return asCall('mod_seminarplaner_get_planning_state', {cmid}).then((res) => {
+            let parsed = {};
+            try {
+                parsed = res.statejson ? JSON.parse(res.statejson) : {};
+            } catch (e) {
+                parsed = {};
+            }
+            planningState = parsed || {};
+            planningVersionHash = String(res && res.versionhash ? res.versionhash : '');
+            const units = Array.isArray(parsed.units) ? parsed.units : [];
+            units.forEach((unit) => {
+                const id = String(unit && unit.id ? unit.id : '').trim();
+                if (!id) {
+                    return;
+                }
+                planningUnitsById[id] = {
+                    title: String(unit.title || '').trim(),
+                    topics: String(unit.topics || ''),
+                    objectives: String(unit.objectives || '')
+                };
+            });
+        }).catch(() => {
+            planningUnitsById = {};
+            planningState = {};
+            planningVersionHash = '';
         });
     };
 
@@ -572,6 +729,38 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return `${h}:${String(m).padStart(2, '0')}`;
     };
 
+    const normalizePdfText = (value, collapseSpaces = true) => {
+        const letterClass = 'A-Za-zÀ-ÖØ-öø-ÿ0-9';
+        const tightenSpacedLetters = (input) => {
+            const pattern = new RegExp(`\\b[${letterClass}](?:\\s+[${letterClass}]){3,}\\b`, 'g');
+            return input.replace(pattern, (match) => match.replace(/\s+/g, ''));
+        };
+        let text = String(value || '');
+        if (typeof text.normalize === 'function') {
+            text = text.normalize('NFC');
+        }
+        text = text
+            .replace(/\u00A0/g, ' ')
+            .replace(/[\u2000-\u200A\u202F]/g, ' ')
+            .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')
+            .replace(/\u00AD/g, '')
+            .replace(/\u2011/g, '-')
+            .replace(/[\u2013\u2014]/g, '-')
+            .replace(/[„“”]/g, '"')
+            .replace(/[‚‘’]/g, '\'')
+            .replace(/…/g, '...')
+            .replace(/\s+([,.;:!?])/g, '$1')
+            .replace(/([([{])\s+/g, '$1')
+            .replace(/\s+([)\]}])/g, '$1');
+        text = tightenSpacedLetters(text);
+        text = text.replace(/\b([A-Za-zÀ-ÖØ-öø-ÿ])\.\s+([A-Za-zÀ-ÖØ-öø-ÿ])\./g, '$1.$2.');
+        text = text.replace(/\s+\/\s+/g, '/');
+        if (!collapseSpaces) {
+            return text;
+        }
+        return text.replace(/\s+/g, ' ').trim();
+    };
+
     const escapeTextForPdf = (text) => {
         if (!text) {
             return '';
@@ -579,7 +768,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const div = document.createElement('div');
         div.innerHTML = String(text);
         const plain = (div.textContent || div.innerText || '').replace(/\r?\n/g, ' ');
-        return plain.replace(/\s+/g, ' ').trim();
+        return normalizePdfText(plain, true);
     };
 
     const renderHtmlToPdf = (doc, html, x, y, maxWidth) => {
@@ -590,22 +779,35 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         div.innerHTML = String(html);
 
         let currentY = y;
-        const lineHeight = 5;
+        const lineHeight = 4;
+        const paragraphGap = 1.2;
+        const listGap = 0.4;
+        const listItemGap = 0.15;
+        const listIndent = 6;
         let isFirstElement = true;
 
-        const processNode = (node, indent = 0) => {
+        const processNode = (node, indent = 0, linkUrl = '') => {
             if (currentY > 280) {
                 doc.addPage();
                 currentY = 20;
             }
             if (node.nodeType === Node.TEXT_NODE) {
-                const text = node.textContent || '';
+                const text = normalizePdfText(node.textContent || '', false);
                 if (text.trim()) {
-                    const lines = doc.splitTextToSize(text, Math.max(20, maxWidth - indent));
-                    doc.text(lines, x + indent, currentY);
-                    currentY += lines.length * lineHeight;
-                } else if (text.includes('\n')) {
-                    currentY += lineHeight;
+                    const compactText = text.replace(/[ \t]+/g, ' ');
+                    const lines = doc.splitTextToSize(compactText, Math.max(20, maxWidth - indent));
+                    if (linkUrl && typeof doc.textWithLink === 'function') {
+                        const oldColor = doc.getTextColor();
+                        doc.setTextColor(25, 92, 179);
+                        lines.forEach((line) => {
+                            doc.textWithLink(String(line), x + indent, currentY, {url: linkUrl});
+                            currentY += lineHeight;
+                        });
+                        doc.setTextColor(oldColor);
+                    } else {
+                        doc.text(lines, x + indent, currentY);
+                        currentY += lines.length * lineHeight;
+                    }
                 }
                 return;
             }
@@ -617,49 +819,55 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
             if (tag === 'strong' || tag === 'b') {
                 doc.setFont(undefined, 'bold');
-                Array.from(node.childNodes).forEach((child) => processNode(child, indent));
+                Array.from(node.childNodes).forEach((child) => processNode(child, indent, linkUrl));
                 doc.setFont(undefined, saved);
                 return;
             }
             if (tag === 'em' || tag === 'i') {
                 doc.setFont(undefined, 'italic');
-                Array.from(node.childNodes).forEach((child) => processNode(child, indent));
+                Array.from(node.childNodes).forEach((child) => processNode(child, indent, linkUrl));
                 doc.setFont(undefined, saved);
                 return;
             }
+            if (tag === 'a') {
+                const hrefRaw = String(node.getAttribute('href') || '').trim();
+                const href = /^(https?:\/\/|mailto:)/i.test(hrefRaw) ? hrefRaw : '';
+                Array.from(node.childNodes).forEach((child) => processNode(child, indent, href || linkUrl));
+                return;
+            }
             if (tag === 'br') {
-                currentY += lineHeight;
+                currentY += 2;
                 return;
             }
             if (tag === 'p') {
                 if (!isFirstElement && currentY > y) {
-                    currentY += lineHeight;
+                    currentY += paragraphGap;
                 }
                 isFirstElement = false;
-                Array.from(node.childNodes).forEach((child) => processNode(child, indent));
-                currentY += lineHeight;
+                Array.from(node.childNodes).forEach((child) => processNode(child, indent, linkUrl));
+                currentY += paragraphGap;
                 return;
             }
             if (tag === 'ul' || tag === 'ol') {
                 if (!isFirstElement) {
-                    currentY += lineHeight * 0.1;
+                    currentY += listGap;
                 }
                 isFirstElement = false;
                 Array.from(node.childNodes).forEach((child) => {
                     if (child.nodeType === Node.ELEMENT_NODE && child.tagName.toLowerCase() === 'li') {
-                        processNode(child, indent);
+                        processNode(child, indent, linkUrl);
                     }
                 });
-                currentY += lineHeight * 0.1;
+                currentY += listGap;
                 return;
             }
             if (tag === 'li') {
                 doc.text('• ', x + indent, currentY);
-                Array.from(node.childNodes).forEach((child) => processNode(child, indent + 10));
-                currentY += lineHeight * 0.35;
+                Array.from(node.childNodes).forEach((child) => processNode(child, indent + listIndent, linkUrl));
+                currentY += listItemGap;
                 return;
             }
-            Array.from(node.childNodes).forEach((child) => processNode(child, indent));
+            Array.from(node.childNodes).forEach((child) => processNode(child, indent, linkUrl));
         };
 
         Array.from(div.childNodes).forEach((child) => {
@@ -809,6 +1017,199 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return lines;
     };
 
+    const drawPdfTitlePage = (doc, title, meta, subtitle = '') => {
+        const pageHeight = doc.internal.pageSize.getHeight();
+        let y = 48;
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(26);
+        doc.text(escapeTextForPdf(title), 14, y);
+        y += 12;
+        if (subtitle) {
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(14);
+            doc.text(escapeTextForPdf(subtitle), 14, y);
+            y += 16;
+        } else {
+            y += 4;
+        }
+
+        const metaRows = [
+            ['Titel', meta.title || ''],
+            ['Datum', meta.date || ''],
+            ['Seminarnummer', meta.number || ''],
+            ['Kontakt', meta.contact || '']
+        ];
+
+        doc.setDrawColor(220, 224, 233);
+        doc.setLineWidth(0.3);
+        doc.line(14, y, 196, y);
+        y += 10;
+
+        doc.setFontSize(11);
+        metaRows.forEach(([label, value]) => {
+            doc.setFont(undefined, 'bold');
+            doc.text(`${label}:`, 14, y);
+            doc.setFont(undefined, 'normal');
+            doc.text(escapeTextForPdf(value) || '—', 52, y);
+            y += 9;
+        });
+
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(9);
+        doc.text('Seminarplaner', 14, pageHeight - 14);
+    };
+
+    const addBausteinCoverPage = (doc, day, unit, methodCount) => {
+        doc.addPage();
+        let y = 24;
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(20);
+        doc.text('Baustein', 14, y);
+        y += 10;
+
+        doc.setFontSize(14);
+        doc.text(escapeTextForPdf(unit.title || 'Baustein'), 14, y);
+        y += 10;
+
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+        doc.text(`${escapeTextForPdf(day)} · ${methodCount} Methode(n)`, 14, y);
+        y += 12;
+
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text('Bausteininhalt:', 14, y);
+        y += 6;
+        doc.setFont(undefined, 'normal');
+        y = renderHtmlToPdf(doc, unit.topics || '', 14, y, 180);
+        if (y === 24 + 10 + 10 + 12 + 6) {
+            doc.text('Keine Angaben.', 14, y);
+            y += 6;
+        }
+        y += 6;
+
+        doc.setFont(undefined, 'bold');
+        doc.text('Bausteinziele:', 14, y);
+        y += 6;
+        doc.setFont(undefined, 'normal');
+        const beforeObjectives = y;
+        y = renderHtmlToPdf(doc, unit.objectives || '', 14, y, 180);
+        if (y === beforeObjectives) {
+            doc.text('Keine Angaben.', 14, y);
+        }
+    };
+
+    const renderFlowMethodPage = (doc, day, item) => {
+        let y = 20;
+        const details = item && item.details ? item.details : {};
+        const duration = Math.max(5, (Number(item.endMin) || 0) - (Number(item.startMin) || 0));
+
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        doc.text(day, 14, y);
+        y += 10;
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        doc.text(escapeTextForPdf(item.title || ''), 14, y);
+        y += 8;
+
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
+        doc.text(`${formatTimeForPdf(item.startMin)}–${formatTimeForPdf(item.endMin)} · ${duration} Min`, 14, y);
+        y += 8;
+
+        const sections = [
+            {label: 'Seminarphase', content: item.phase || details.phase || ''},
+            {label: 'Kognitive Dimension', content: getCognitiveLabel(item)},
+            {label: 'Gruppengröße', content: item.group || details.group || ''},
+            {label: 'Tags', content: item.tags || details.tags || ''},
+            {label: 'Kurzbeschreibung', content: details.description || ''},
+            {label: 'Raumanforderungen', content: details.requirements || ''},
+            {label: 'Sozialform', content: details.socialform || ''},
+            {label: 'Vorbereitungszeit', content: details.preparation || ''},
+            {label: 'Ablauf', content: details.flow || ''},
+            {label: 'Lernziele', content: details.objectives || ''},
+            {label: 'Risiken/Tipps', content: details.risks || ''},
+            {label: 'Debrief-/Reflexionsfragen', content: details.reflection || ''},
+            {label: 'Material/Technik', content: details.materials || ''},
+            {label: 'Zusätzliche Materialien', content: details.resources || ''},
+            {label: 'Kontakt', content: details.contact || ''}
+        ];
+
+        sections.forEach((section) => {
+            if (!escapeTextForPdf(section.content)) {
+                return;
+            }
+            if (y > 252) {
+                doc.addPage();
+                y = 20;
+            }
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'bold');
+            doc.text(`${section.label}:`, 14, y);
+            y += 6;
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            y = renderHtmlToPdf(doc, section.content, 14, y, 180);
+            y += 5;
+        });
+    };
+
+    const buildFlowUnitGroups = (day, entries) => {
+        const sorted = entries.slice().sort((a, b) => (a.startMin || 0) - (b.startMin || 0));
+        const unitsInOrder = [];
+        const seenUnitIds = new Set();
+        const methods = [];
+        sorted.forEach((entry) => {
+            if (!entry || entry.kind === 'break') {
+                return;
+            }
+            if (entry.kind === 'unit') {
+                const unitid = String(entry.unitid || '').trim();
+                const marker = unitid || `unit-title:${String(entry.title || '').trim().toLowerCase()}:${unitsInOrder.length}`;
+                if (seenUnitIds.has(marker)) {
+                    return;
+                }
+                seenUnitIds.add(marker);
+                const planningUnit = unitid && planningUnitsById[unitid] ? planningUnitsById[unitid] : {};
+                unitsInOrder.push({
+                    unitId: unitid,
+                    title: planningUnit.title || String(entry.title || 'Baustein'),
+                    topics: planningUnit.topics || '',
+                    objectives: planningUnit.objectives || '',
+                    methods: []
+                });
+                return;
+            }
+            if (entry.kind === 'method') {
+                methods.push(entry);
+            }
+        });
+
+        methods.forEach((method) => {
+            const parentunit = String(method.parentunit || '').trim();
+            if (!parentunit) {
+                return;
+            }
+            let target = unitsInOrder.find((unit) => unit.unitId === parentunit);
+            if (!target) {
+                const fallback = planningUnitsById[parentunit] || {};
+                target = {
+                    unitId: parentunit,
+                    title: fallback.title || 'Baustein',
+                    topics: fallback.topics || '',
+                    objectives: fallback.objectives || '',
+                    methods: []
+                };
+                unitsInOrder.push(target);
+            }
+            target.methods.push(method);
+        });
+
+        const methodsWithoutUnit = methods.filter((method) => !String(method.parentunit || '').trim());
+        return {day, units: unitsInOrder, methodsWithoutUnit};
+    };
+
     const ensurePdfReady = () => {
         if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function') {
             throw new Error('PDF-Library ist nicht geladen');
@@ -830,6 +1231,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             throw new Error('PDF-Tabellenbibliothek nicht geladen');
         }
 
+        drawPdfTitlePage(doc, 'ZIM', meta, 'Deckblatt');
+        doc.addPage();
         let header = 'ZIM-Papier';
         if (meta.title) {
             header += ` - ${meta.title}`;
@@ -838,7 +1241,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             header += ` (${meta.date})`;
         }
         doc.setFontSize(16);
+        doc.setFont(undefined, 'bold');
         doc.text(header, 14, 20);
+        doc.setFont(undefined, 'normal');
         doc.setFontSize(10);
         const line2 = [meta.number ? `Nr. ${meta.number}` : '', meta.contact].filter(Boolean).join(' · ');
         if (line2) {
@@ -908,115 +1313,38 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const plan = getPlanByDay();
         const doc = new jsPDF();
 
-        let header = 'Konzeptsammlung';
-        if (meta.title) {
-            header += ` - ${meta.title}`;
-        }
-        if (meta.date) {
-            header += ` (${meta.date})`;
-        }
-        doc.setFontSize(16);
-        doc.text(header, 14, 20);
-        doc.setFontSize(10);
-        if (meta.number || meta.contact) {
-            doc.text([meta.number ? `Nr. ${meta.number}` : '', meta.contact].filter(Boolean).join(' · '), 14, 26);
-        }
+        drawPdfTitlePage(doc, 'ZIM', meta, 'Konzeptsammlung');
 
-        const baseStartY = (meta.number || meta.contact) ? 34 : 30;
-        let y = baseStartY;
-        let firstDay = true;
         days.forEach((day) => {
-            const items = (plan[day] || [])
-                .filter((item) => item && item.kind !== 'break')
-                .slice()
-                .sort((a, b) => (a.startMin || 0) - (b.startMin || 0));
-            if (!items.length) {
+            const allItems = (plan[day] || []).filter((item) => !!item);
+            if (!allItems.length) {
                 return;
             }
-
-            // New day always starts on a new page (except first rendered day).
-            if (!firstDay) {
-                doc.addPage();
-                y = 20;
-            }
-            firstDay = false;
-            doc.setFontSize(14);
-            doc.setFont(undefined, 'bold');
-            doc.text(day, 14, y);
-            y += 10;
-
-            items.forEach((item, methodIndex) => {
-                const details = item && item.details ? item.details : {};
-                const duration = Math.max(5, (Number(item.endMin) || 0) - (Number(item.startMin) || 0));
-
-                // Each method begins on a new page (except first method of current day).
-                if (methodIndex > 0) {
-                    doc.addPage();
-                    y = 20;
-                    doc.setFontSize(14);
-                    doc.setFont(undefined, 'bold');
-                    doc.text(day, 14, y);
-                    y += 10;
-                }
-                doc.setFontSize(14);
-                doc.setFont(undefined, 'bold');
-                doc.text(escapeTextForPdf(item.title || ''), 14, y);
-                y += 8;
-
-                doc.setFontSize(10);
-                doc.setFont(undefined, 'normal');
-                doc.text(`${formatTimeForPdf(item.startMin)}–${formatTimeForPdf(item.endMin)} · ${duration} Min`, 14, y);
-                y += 8;
-
-                const sections = [
-                    {label: 'Seminarphase', content: item.phase || details.phase || ''},
-                    {label: 'Kognitive Dimension', content: getCognitiveLabel(item)},
-                    {label: 'Gruppengröße', content: item.group || details.group || ''},
-                    {label: 'Tags', content: item.tags || details.tags || ''},
-                    {label: 'Kurzbeschreibung', content: details.description || ''},
-                    {label: 'Raumanforderungen', content: details.requirements || ''},
-                    {label: 'Sozialform', content: details.socialform || ''},
-                    {label: 'Vorbereitungszeit', content: details.preparation || ''},
-                    {label: 'Ablauf', content: details.flow || ''},
-                    {label: 'Lernziele', content: details.objectives || ''},
-                    {label: 'Risiken/Tipps', content: details.risks || ''},
-                    {label: 'Debrief-/Reflexionsfragen', content: details.reflection || ''},
-                    {label: 'Material/Technik', content: details.materials || ''},
-                    {label: 'Zusätzliche Materialien', content: details.resources || ''},
-                    {label: 'Kontakt', content: details.contact || ''}
-                ];
-
-                sections.forEach((section) => {
-                    if (!escapeTextForPdf(section.content)) {
-                        return;
-                    }
-                    if (y > 252) {
+            const grouped = buildFlowUnitGroups(day, allItems);
+            grouped.units.forEach((unit) => {
+                addBausteinCoverPage(doc, day, unit, unit.methods.length);
+                unit.methods
+                    .slice()
+                    .sort((a, b) => (a.startMin || 0) - (b.startMin || 0))
+                    .forEach((method) => {
                         doc.addPage();
-                        y = 20;
-                    }
-                    doc.setFontSize(11);
-                    doc.setFont(undefined, 'bold');
-                    doc.text(`${section.label}:`, 14, y);
-                    y += 6;
-                    doc.setFontSize(10);
-                    doc.setFont(undefined, 'normal');
-                    y = renderHtmlToPdf(doc, section.content, 14, y, 180);
-                    y += 5;
-                });
-
-                y += 8;
+                        renderFlowMethodPage(doc, day, method);
+                    });
             });
-            y += 6;
-            if (y < baseStartY) {
-                y = baseStartY;
-            }
+            grouped.methodsWithoutUnit
+                .slice()
+                .sort((a, b) => (a.startMin || 0) - (b.startMin || 0))
+                .forEach((method) => {
+                    doc.addPage();
+                    renderFlowMethodPage(doc, day, method);
+                });
         });
         const filename = meta.title ? `Konzeptsammlung-${meta.title}.pdf` : 'Konzeptsammlung.pdf';
         doc.save(filename);
     };
 
     const saveMethods = (cmid, newMethods) => {
-        return asCall('mod_konzeptgenerator_save_method_cards', {
+        return asCall('mod_seminarplaner_save_method_cards', {
             cmid,
             methodsjson: JSON.stringify(newMethods)
         });
@@ -1068,22 +1396,97 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return {merged, stats};
     };
 
+    const normalizeImportedPlanningUnits = (units) => {
+        if (!Array.isArray(units)) {
+            return [];
+        }
+        return units.map((unit, idx) => {
+            const baseid = String(unit && unit.id ? unit.id : '').trim();
+            return {
+                id: baseid || uid(),
+                title: String(unit && unit.title ? unit.title : '').trim(),
+                topics: String(unit && unit.topics ? unit.topics : ''),
+                objectives: String(unit && unit.objectives ? unit.objectives : '')
+            };
+        }).filter((unit) => !!unit.id);
+    };
+
+    const buildPayloadFromParsedObject = (parsed) => {
+        const object = parsed && typeof parsed === 'object' ? parsed : {};
+        const methodsArr = Array.isArray(object.methods) ? object.methods : [];
+        const planningstate = object.planningstate && typeof object.planningstate === 'object' ? object.planningstate : null;
+        const bausteineFromObject = Array.isArray(object.bausteine) ? object.bausteine : [];
+        const bausteineFromState = planningstate && Array.isArray(planningstate.units) ? planningstate.units : [];
+        const bausteineArr = normalizeImportedPlanningUnits(bausteineFromObject.length ? bausteineFromObject : bausteineFromState);
+        const seminarplaene = Array.isArray(object.seminarplaene) ? object.seminarplaene : [];
+        const explicitComponents = object.components && typeof object.components === 'object' ? object.components : {};
+
+        const hasMethods = !!(explicitComponents.methods || methodsArr.length);
+        const hasUnits = !!(explicitComponents.bausteine || explicitComponents.units || bausteineArr.length || planningstate);
+        const hasGrids = !!(explicitComponents.seminarplaene || explicitComponents.grids || seminarplaene.length);
+
+        return {
+            sourceformat: 'json',
+            components: {
+                methods: hasMethods,
+                units: hasUnits,
+                grids: hasGrids
+            },
+            methods: methodsArr,
+            bausteine: bausteineArr,
+            planningstate: planningstate || (bausteineArr.length ? {units: bausteineArr} : null),
+            seminarplaene
+        };
+    };
+
+    const buildMethodPreviewRows = (importMethods) => {
+        const incoming = Array.isArray(importMethods) ? importMethods : [];
+        const existingTitles = new Set(methods.map((m) => normalizeTitle(m.titel)));
+        return incoming.map((m) => {
+            const duplicate = existingTitles.has(normalizeTitle(m.titel));
+            return {
+                method: m,
+                selected: true,
+                duplicate,
+                resolution: duplicate ? 'replace' : 'add'
+            };
+        });
+    };
+
     const parseFile = async (file) => {
         const name = (file.name || '').toLowerCase();
 
         if (name.endsWith('.json')) {
             const text = await file.text();
             const parsed = JSON.parse(text);
-            if (!Array.isArray(parsed)) {
-                throw new Error('JSON muss ein Array sein');
+            if (Array.isArray(parsed)) {
+                return {
+                    sourceformat: 'json',
+                    components: {methods: true, units: false, grids: false},
+                    methods: parsed,
+                    bausteine: [],
+                    planningstate: null,
+                    seminarplaene: []
+                };
             }
-            return parsed;
+            if (parsed && typeof parsed === 'object') {
+                return buildPayloadFromParsedObject(parsed);
+            }
+            throw new Error('JSON muss ein Array oder ein gültiges Exportobjekt sein');
         }
 
         if (name.endsWith('.csv')) {
             const text = await file.text();
             const rows = parseCsvTable(text);
-            return rows.map(mapLegacyRowToMethod).filter((m) => m !== null);
+            const parsedMethods = rows.map(mapLegacyRowToMethod).filter((m) => m !== null);
+            return {
+                sourceformat: 'csv',
+                components: {methods: true, units: false, grids: false},
+                methods: parsedMethods,
+                bausteine: [],
+                planningstate: null,
+                seminarplaene: []
+            };
         }
 
         if (name.endsWith('.zip')) {
@@ -1102,7 +1505,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             const text = await zip.files[best].async('string');
             const rows = parseCsvTable(text);
-            const parsed = rows.map(mapLegacyRowToMethod).filter((m) => m !== null);
+            const parsedMethods = rows.map(mapLegacyRowToMethod).filter((m) => m !== null);
 
             const zipfiles = Object.keys(zip.files)
                 .filter((n) => !zip.files[n].dir && n.toLowerCase().startsWith('files/'))
@@ -1114,7 +1517,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     return acc;
                 }, {});
 
-            for (const method of parsed) {
+            for (const method of parsedMethods) {
                 method.materialien = await Promise.all((method.materialien || []).map(async (name) => {
                     const f = zipfiles[name];
                     if (!f) {
@@ -1128,7 +1531,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 }));
             }
 
-            return parsed;
+            return {
+                sourceformat: 'zip',
+                components: {methods: true, units: false, grids: false},
+                methods: parsedMethods,
+                bausteine: [],
+                planningstate: null,
+                seminarplaene: []
+            };
         }
 
         throw new Error('Dateityp nicht unterstützt');
@@ -1140,8 +1550,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const selectall = bySel('#kg-ie-select-all');
         const selectnone = bySel('#kg-ie-select-none');
         const importNow = bySel('#kg-ie-import-now');
-        const exportJsonBtn = bySel('#kg-ie-export-json');
-        const exportCsvBtn = bySel('#kg-ie-export-csv');
+        const exportJsonFullBtn = bySel('#kg-ie-export-json-full');
         const pdfGrid = bySel('#kg-pdf-grid');
         const pdfZimBtn = bySel('#kg-pdf-zim');
         const pdfFlowBtn = bySel('#kg-pdf-flow');
@@ -1152,6 +1561,15 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         bindPdfColumnsDropdown();
 
         if (parsebtn && fileinput) {
+            fileinput.addEventListener('change', () => {
+                currentImportPayload = null;
+                previewRows = [];
+                previewUnits = [];
+                previewGrids = [];
+                renderPreview();
+                step(1);
+                setImportStatus('', false);
+            });
             parsebtn.addEventListener('click', async () => {
                 setImportStatus('', false);
                 if (!fileinput.files || !fileinput.files[0]) {
@@ -1159,24 +1577,34 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     return;
                 }
                 try {
-                    const parsed = await parseFile(fileinput.files[0]);
-                    if (!Array.isArray(parsed) || !parsed.length) {
-                        throw new Error('Keine importierbaren Methoden gefunden');
-                    }
-                    const existingTitles = new Set(methods.map((m) => normalizeTitle(m.titel)));
-                    previewRows = parsed.map((m) => {
-                        const duplicate = existingTitles.has(normalizeTitle(m.titel));
-                        return {
-                            method: m,
-                            selected: true,
-                            duplicate,
-                            resolution: duplicate ? 'replace' : 'add'
-                        };
-                    });
+                    currentImportPayload = await parseFile(fileinput.files[0]);
+                    previewRows = buildMethodPreviewRows(currentImportPayload.methods);
+                    previewUnits = (Array.isArray(currentImportPayload.bausteine) ? currentImportPayload.bausteine : []).map((unit) => ({
+                        unit,
+                        selected: true
+                    }));
+                    previewGrids = (Array.isArray(currentImportPayload.seminarplaene) ? currentImportPayload.seminarplaene : []).map((plan) => ({
+                        plan,
+                        selected: true
+                    }));
                     renderPreview();
                     step(2);
-                    setStatus(`${previewRows.length} Methoden erkannt.`, false);
+                    const found = currentImportPayload.components || {};
+                    const foundSummary = [
+                        found.methods ? `${previewRows.length} Methoden` : 'keine Methoden',
+                        found.units ? `${previewUnits.length} Bausteine` : 'keine Bausteine',
+                        found.grids ? `${previewGrids.length} Seminarpläne` : 'keine Seminarpläne'
+                    ].join(', ');
+                    const msg = previewRows.length
+                        ? `Datei analysiert: ${foundSummary}.`
+                        : `Datei analysiert: ${foundSummary}. Es wurden keine Methoden zur Vorschau gefunden.`;
+                    setStatus(msg, false);
                 } catch (e) {
+                    currentImportPayload = null;
+                    previewRows = [];
+                    previewUnits = [];
+                    previewGrids = [];
+                    renderPreview();
                     setStatus(`Analyse fehlgeschlagen: ${e.message || e}`, true);
                 }
             });
@@ -1185,6 +1613,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         if (selectall) {
             selectall.addEventListener('click', () => {
                 previewRows.forEach((r) => {
+                    r.selected = true;
+                });
+                previewUnits.forEach((r) => {
+                    r.selected = true;
+                });
+                previewGrids.forEach((r) => {
                     r.selected = true;
                 });
                 renderPreview();
@@ -1196,21 +1630,95 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 previewRows.forEach((r) => {
                     r.selected = false;
                 });
+                previewUnits.forEach((r) => {
+                    r.selected = false;
+                });
+                previewGrids.forEach((r) => {
+                    r.selected = false;
+                });
                 renderPreview();
             });
         }
 
         if (importNow) {
-            importNow.addEventListener('click', () => {
-                const selectedRows = previewRows.filter((r) => r.selected);
-                if (!selectedRows.length) {
-                    setImportStatus('Keine Methoden ausgewählt.', true);
+            importNow.addEventListener('click', async () => {
+                if (!currentImportPayload) {
+                    setImportStatus('Bitte zuerst eine Datei analysieren.', true);
                     return;
                 }
-                const result = mergeImportedMethods(methods, selectedRows);
-                saveMethods(cmid, result.merged).then((res) => {
-                    methods = result.merged;
+                const successParts = [];
+                const postLoads = [];
+                try {
+                    const selectedRows = previewRows.filter((r) => r.selected);
+                    const selectedUnits = previewUnits.filter((row) => row.selected).map((row) => row.unit);
+                    const seminarplaene = previewGrids.filter((row) => row.selected).map((row) => row.plan);
+
+                    if (!selectedRows.length && !selectedUnits.length && !seminarplaene.length) {
+                        setImportStatus('Keine Einträge ausgewählt.', true);
+                        return;
+                    }
+
+                    if (selectedRows.length) {
+                        const result = mergeImportedMethods(methods, selectedRows);
+                        const saveres = await saveMethods(cmid, result.merged);
+                        methods = result.merged;
+                        successParts.push(
+                            `Methoden: ${selectedRows.length} verarbeitet (+${result.stats.added}, überschrieben ${result.stats.overwritten}, Kopien ${result.stats.copied}, nicht hinzugefügt ${result.stats.skipped}; gesamt ${saveres.count})`
+                        );
+                        postLoads.push(loadMethods(cmid));
+                    }
+
+                    if (selectedUnits.length) {
+                        const importedstate = currentImportPayload.planningstate && typeof currentImportPayload.planningstate === 'object'
+                            ? Object.assign({}, currentImportPayload.planningstate)
+                            : {units: selectedUnits};
+                        const selectedUnitIds = new Set(selectedUnits.map((unit) => String(unit && unit.id ? unit.id : '').trim()).filter(Boolean));
+                        if (!Array.isArray(importedstate.units)) {
+                            importedstate.units = selectedUnits;
+                        } else {
+                            importedstate.units = importedstate.units.filter((unit) => {
+                                const id = String(unit && unit.id ? unit.id : '').trim();
+                                return id && selectedUnitIds.has(id);
+                            });
+                        }
+                        const saveres = await asCall('mod_seminarplaner_save_planning_state', {
+                            cmid,
+                            statejson: JSON.stringify(importedstate),
+                            expectedhash: planningVersionHash || ''
+                        });
+                        planningVersionHash = String(saveres && saveres.versionhash ? saveres.versionhash : planningVersionHash);
+                        successParts.push(`Bausteine: ${(importedstate.units || []).length} importiert`);
+                        postLoads.push(loadPlanningState(cmid));
+                    }
+
+                    if (seminarplaene.length) {
+                        let importedCount = 0;
+                        for (const plan of seminarplaene) {
+                            const name = String(plan && plan.name ? plan.name : '').trim() || `Seminarplan ${importedCount + 1}`;
+                            const description = String(plan && plan.description ? plan.description : '');
+                            const state = plan && typeof plan.state === 'object' ? plan.state : {};
+                            const created = await asCall('mod_seminarplaner_create_grid', {cmid, name, description});
+                            const gridid = Number(created && created.gridid ? created.gridid : 0);
+                            if (!gridid) {
+                                continue;
+                            }
+                            await asCall('mod_seminarplaner_save_user_state', {
+                                cmid,
+                                gridid,
+                                statejson: JSON.stringify(state),
+                                expectedhash: ''
+                            });
+                            importedCount++;
+                        }
+                        successParts.push(`Seminarpläne: ${importedCount} importiert`);
+                        postLoads.push(loadGrids(cmid));
+                    }
+
+                    await Promise.all(postLoads);
                     previewRows = [];
+                    previewUnits = [];
+                    previewGrids = [];
+                    currentImportPayload = null;
                     const host = bySel('#kg-ie-preview');
                     if (host) {
                         host.innerHTML = '';
@@ -1219,27 +1727,20 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         fileinput.value = '';
                     }
                     step(1);
-                    setImportStatus(
-                        `Import erfolgreich: ${selectedRows.length} verarbeitet ` +
-                        `(+${result.stats.added}, überschrieben ${result.stats.overwritten}, Kopien ${result.stats.copied}, nicht hinzugefügt ${result.stats.skipped}; insgesamt ${res.count} gespeichert).`,
-                        false
-                    );
-                }).catch((e) => {
+                    setImportStatus(`Import erfolgreich: ${successParts.join(' | ')}`, false);
+                } catch (e) {
                     Notification.exception(e);
-                    setImportStatus('Import fehlgeschlagen.', true);
-                });
+                    setImportStatus(`Import fehlgeschlagen: ${e.message || e}`, true);
+                }
             });
         }
 
-        if (exportJsonBtn) {
-            exportJsonBtn.addEventListener('click', exportJson);
-        }
-        if (exportCsvBtn) {
-            exportCsvBtn.addEventListener('click', async () => {
+        if (exportJsonFullBtn) {
+            exportJsonFullBtn.addEventListener('click', async () => {
                 try {
-                    await exportCsv();
+                    await exportJsonFull(cmid);
                 } catch (e) {
-                    setStatus(`ZIP-Export fehlgeschlagen: ${e.message || e}`, true);
+                    setStatus(`JSON-Export fehlgeschlagen: ${e.message || e}`, true);
                 }
             });
         }
@@ -1295,10 +1796,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     setGlobalStatus('Bitte zuerst ein globales Methodenset auswählen.', true);
                     return;
                 }
-                asCall('mod_konzeptgenerator_import_global_methodset', {cmid, methodsetid: setid})
+                asCall('mod_seminarplaner_import_global_methodset', {cmid, methodsetid: setid})
                     .then((res) => {
                         if (pendingAutosyncPrefs[setid]) {
-                            return asCall('mod_konzeptgenerator_set_methodset_sync_policy', {
+                            return asCall('mod_seminarplaner_set_methodset_sync_policy', {
                                 cmid,
                                 methodsetid: setid,
                                 autosyncenabled: true
@@ -1341,7 +1842,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     }
                     return;
                 }
-                asCall('mod_konzeptgenerator_set_methodset_sync_policy', {
+                asCall('mod_seminarplaner_set_methodset_sync_policy', {
                     cmid,
                     methodsetid: Number(selected.methodsetid),
                     autosyncenabled: !!globalSetAutosync.checked
@@ -1361,7 +1862,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     setGlobalStatus('Bitte zuerst ein verknüpftes globales Set auswählen.', true);
                     return;
                 }
-                asCall('mod_konzeptgenerator_apply_methodset_updates', {
+                asCall('mod_seminarplaner_apply_methodset_updates', {
                     cmid,
                     methodsetid: Number(selected.methodsetid)
                 }).then((res) => {
@@ -1385,14 +1886,22 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     return {
         init: function(cmid) {
-            Promise.all([loadMethods(cmid), loadGrids(cmid), loadGlobalMethodsets(cmid), loadGlobalSyncStatus(cmid)]).then(() => {
-                bind(cmid);
-                step(1);
-                refreshGlobalSyncUi();
-            }).catch((e) => {
-                Notification.exception(e);
-                setStatus('Initialisierung fehlgeschlagen.', true);
-            });
+            ensureExternalLibraries().then(() => {
+                return Promise.all([
+                    loadMethods(cmid),
+                    loadGrids(cmid),
+                    loadPlanningState(cmid),
+                    loadGlobalMethodsets(cmid),
+                    loadGlobalSyncStatus(cmid)
+                ]);
+            }).then(() => {
+                    bind(cmid);
+                    step(1);
+                    refreshGlobalSyncUi();
+                }).catch((e) => {
+                    Notification.exception(e);
+                    setStatus('Initialisierung fehlgeschlagen.', true);
+                });
         }
     };
 });

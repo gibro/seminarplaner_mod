@@ -1,10 +1,10 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
 
-namespace mod_konzeptgenerator\local\service;
+namespace mod_seminarplaner\local\service;
 
 use coding_exception;
-use mod_konzeptgenerator\local\repository\planning_state_repository;
+use mod_seminarplaner\local\repository\planning_state_repository;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -42,6 +42,7 @@ class planning_state_service {
         if (!is_array($decoded)) {
             $decoded = [];
         }
+        $decoded = $this->normalize_state($decoded);
         return ['state' => $decoded, 'versionhash' => (string)$record->versionhash];
     }
 
@@ -62,6 +63,7 @@ class planning_state_service {
         if ($existing && $expectedhash !== null && $expectedhash !== '' && (string)$existing->versionhash !== $expectedhash) {
             throw new \invalid_parameter_exception('Planning state conflict: version hash mismatch');
         }
+        $state = $this->normalize_state($state);
         $json = json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($json === false) {
             throw new coding_exception('Failed to encode planning state');
@@ -70,5 +72,44 @@ class planning_state_service {
         $this->repository->upsert_state($cmid, $json, $newhash, $userid);
         return $newhash;
     }
-}
 
+    /**
+     * Normalize state payload before read/write.
+     *
+     * Ensures alternative units are reciprocal by keeping only valid slot groups
+     * with at least two units.
+     *
+     * @param array $state
+     * @return array
+     */
+    private function normalize_state(array $state): array {
+        if (!isset($state['units']) || !is_array($state['units'])) {
+            return $state;
+        }
+
+        $units = [];
+        $grouped = [];
+        foreach (array_values($state['units']) as $idx => $unit) {
+            if (!is_array($unit)) {
+                continue;
+            }
+            $slotkey = trim((string)($unit['slotkey'] ?? ''));
+            $unit['slotkey'] = $slotkey;
+            $units[] = $unit;
+            if ($slotkey !== '') {
+                $grouped[$slotkey][] = count($units) - 1;
+            }
+        }
+
+        foreach ($grouped as $slotkey => $indices) {
+            if (count($indices) < 2) {
+                foreach ($indices as $index) {
+                    $units[$index]['slotkey'] = '';
+                }
+            }
+        }
+
+        $state['units'] = $units;
+        return $state;
+    }
+}

@@ -95,7 +95,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         if (!select) {
             return Promise.resolve();
         }
-        return asCall('mod_konzeptgenerator_list_review_targets', {cmid}).then((res) => {
+        return asCall('mod_seminarplaner_list_review_targets', {cmid}).then((res) => {
             reviewTargets = Array.isArray(res.methodsets) ? res.methodsets : [];
             select.innerHTML = '<option value="0">Bitte wählen</option>';
             reviewTargets.forEach((set) => {
@@ -117,7 +117,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         const calls = reviewTargets.map((set) =>
-            asCall('mod_konzeptgenerator_get_review_method_candidates', {cmid, methodsetid: Number(set.id)})
+            asCall('mod_seminarplaner_get_review_method_candidates', {cmid, methodsetid: Number(set.id)})
                 .then((res) => Array.isArray(res.candidates) ? res.candidates : [])
                 .catch(() => [])
         );
@@ -167,7 +167,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             setStatus('#kg-review-existing-status', 'Bitte zuerst ein globales Methodenset wählen.', true);
             return Promise.resolve();
         }
-        return asCall('mod_konzeptgenerator_get_review_method_candidates', {cmid, methodsetid}).then((res) => {
+        return asCall('mod_seminarplaner_get_review_method_candidates', {cmid, methodsetid}).then((res) => {
             const rows = Array.isArray(res.candidates) ? res.candidates : [];
             existingCandidates = rows.map((row) => Object.assign({}, row, {selected: false}));
             renderExistingCandidates();
@@ -194,7 +194,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return;
         }
         const changelog = String((bySel('#kg-review-existing-changelog') || {}).value || '').trim();
-        asCall('mod_konzeptgenerator_submit_methodset_for_review', {
+        asCall('mod_seminarplaner_submit_methodset_for_review', {
             cmid,
             methodsetid,
             changelog,
@@ -229,7 +229,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return;
         }
 
-        asCall('mod_konzeptgenerator_create_methodset_for_review', {
+        asCall('mod_seminarplaner_create_methodset_for_review', {
             cmid,
             shortname,
             displayname,

@@ -1,7 +1,7 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
 
-namespace mod_konzeptgenerator\local\repository;
+namespace mod_seminarplaner\local\repository;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -147,5 +147,102 @@ class grid_repository {
     public function get_user_state(int $gridid, int $userid) {
         global $DB;
         return $DB->get_record('kgen_grid_user_state', ['gridid' => $gridid, 'userid' => $userid]);
+    }
+
+    /**
+     * Get the newest existing state for a grid (legacy per-user fallback).
+     *
+     * @param int $gridid Grid id.
+     * @return \stdClass|false
+     */
+    public function get_latest_state_for_grid(int $gridid) {
+        global $DB;
+        $records = $DB->get_records('kgen_grid_user_state', ['gridid' => $gridid], 'timemodified DESC, id DESC', '*', 0, 1);
+        if (!$records) {
+            return false;
+        }
+        return reset($records);
+    }
+
+    /**
+     * Get published Common Thread snapshot for one activity.
+     *
+     * @param int $cmid Course module id.
+     * @return \stdClass|false
+     */
+    public function get_roterfaden_state(int $cmid) {
+        global $DB;
+        return $DB->get_record('kgen_roterfaden_state', ['cmid' => $cmid]);
+    }
+
+    /**
+     * Publish one grid snapshot as Common Thread for the activity.
+     *
+     * @param int $cmid Course module id.
+     * @param int $gridid Grid id.
+     * @param string $statejson Serialized state payload.
+     * @param int $userid Actor id.
+     * @return int Record id.
+     */
+    public function upsert_roterfaden_state(int $cmid, int $gridid, string $statejson, int $userid): int {
+        global $DB;
+
+        $now = time();
+        $existing = $DB->get_record('kgen_roterfaden_state', ['cmid' => $cmid]);
+        if ($existing) {
+            $existing->gridid = $gridid;
+            $existing->statejson = $statejson;
+            $existing->ispublished = 1;
+            $existing->publishedby = $userid;
+            $existing->timemodified = $now;
+            $DB->update_record('kgen_roterfaden_state', $existing);
+            return (int)$existing->id;
+        }
+
+        $record = (object)[
+            'cmid' => $cmid,
+            'gridid' => $gridid,
+            'statejson' => $statejson,
+            'ispublished' => 1,
+            'publishedby' => $userid,
+            'timecreated' => $now,
+            'timemodified' => $now,
+        ];
+        return (int)$DB->insert_record('kgen_roterfaden_state', $record);
+    }
+
+    /**
+     * Set visibility flag for an existing Common Thread snapshot.
+     *
+     * @param int $cmid Course module id.
+     * @param bool $visible Visibility flag.
+     * @param int $userid Actor id.
+     * @return bool
+     */
+    public function set_roterfaden_visibility(int $cmid, bool $visible, int $userid): bool {
+        global $DB;
+
+        $existing = $DB->get_record('kgen_roterfaden_state', ['cmid' => $cmid]);
+        if (!$existing) {
+            if ($visible) {
+                return false;
+            }
+            $record = (object)[
+                'cmid' => $cmid,
+                'gridid' => 0,
+                'statejson' => null,
+                'ispublished' => 0,
+                'publishedby' => $userid,
+                'timecreated' => time(),
+                'timemodified' => time(),
+            ];
+            $DB->insert_record('kgen_roterfaden_state', $record);
+            return true;
+        }
+
+        $existing->ispublished = $visible ? 1 : 0;
+        $existing->publishedby = $userid;
+        $existing->timemodified = time();
+        return $DB->update_record('kgen_roterfaden_state', $existing);
     }
 }
