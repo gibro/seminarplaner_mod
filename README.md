@@ -34,22 +34,13 @@ Kernfunktionen:
 - Roter-Faden-Ansicht für Teilnehmende mit veröffentlichbarem Snapshot aus dem Seminarplan
 - Roter-Faden-Struktur nach Tag und der Differenzierung in Vormittag (08:00-12:30) und Nachmittag (12:30-18:00) in Boxen mit Header- und Contentbereich
 - Responsive Umschaltung für Mobilgeräte
-- Import globaler Methodensets aus dem Moodle-Datenbank-Plugin ()
+- Import globaler Methodensets aus dem Moodle-Datenbank-Plugin (https://github.com/gibro/Konzeptgenerator_git)
 - Review-Einreichung von neuen/geänderten Methoden aus der Aktivität
 - Import/Export von Methoden (JSON, CSV/ZIP kompatible Flows)
 - PDF-Export-Flows (ZIM / Seminarverlauf)
 - Datei-Uploads für Methodenmaterialien
 
-Wichtige Webservice-Funktionen (AJAX):
-
-- Methoden: `get_method_cards`, `save_method_cards`
-- Globale Sets: `list_global_methodsets`, `import_global_methodset`
-- Review: `list_review_targets`, `list_reviewer_candidates`, `get_review_method_candidates`, `submit_methodset_for_review`, `create_methodset_for_review`
-- Grids: `create_grid`, `list_grids`, `get_user_state`, `save_user_state`
-- Validierung: `validate_import_payload`, `validate_export_payload`
-- Locks: `acquire_lock`, `refresh_lock`, `release_lock`, `lock_status`
-
-### 2) `local_seminarplaner` (globale Governance)
+### 2) `local_seminarplaner` (globale Verwaltung von Methodenkarten)
 
 Kernfunktionen:
 
@@ -65,12 +56,6 @@ Kernfunktionen:
 - Import von mod_data-kompatiblen CSV/ZIP in neue oder bestehende Sets
 - Export globaler Sets als mod_data-kompatible CSV/ZIP
 - Benachrichtigungslogik im Review-Prozess
-
-Wichtige Webservice-Funktionen (AJAX):
-
-- `create_draft_methodset`
-- `transition_methodset`
-- `list_methodsets`
 
 ## Aktuelle Änderungen (März 2026)
 
@@ -136,7 +121,6 @@ php admin/cli/upgrade.php
 
 - Kurs öffnen
 - Aktivität `Seminarplaner` hinzufügen
-- Optional Standard-Methodenset-ID konfigurieren
 
 ## Rolle `Reviewer` in Moodle anlegen
 
@@ -158,9 +142,6 @@ Damit Nutzende in `local/seminarplaner/reviewrequests.php` als Konzeptverantwort
 ## Wichtige Hinweise
 
 - Beide Plugins sind als **Paar** gedacht. Viele Flows (globale Sets, Review) setzen `local_seminarplaner` voraus.
-- Releasestand ist `alpha` (beide Plugins). Vor Produktion Staging/Tests durchführen.
 - Import von ZIP benötigt `ZipArchive` in PHP.
-- Export-/PDF-UI-Flows nutzen lokal eingebundene Third-Party-Bibliotheken (kein CDN erforderlich).
 - Große Importdateien sind limitiert (z. B. Uploadgröße/CSV-Reihen/ZIP-Einträge), um Performance und Sicherheit zu schützen.
-- Nach Updates: Cache leeren (`Website-Administration -> Entwicklung -> Caches leeren`) falls UI/JS nicht aktuell erscheint.
 - Bei paralleler Bearbeitung mit 2 oder mehr Lehrenden: immer zuerst den Button `Seminarplan laden` klicken, bevor weitergearbeitet oder gespeichert wird. So wird der aktuelle Stand geladen und unbeabsichtigtes Überschreiben/Nicht-Übernehmen von Änderungen vermieden.
