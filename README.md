@@ -5,7 +5,7 @@ Dieses Repository enthält zwei zusammenarbeitende Moodle-Plugins:
 - `mod_seminarplaner` (Aktivitätsmodul für Kurskontext)
 - `local_seminarplaner` (globale Methodenset-Verwaltung, Review-Workflow)
 
-Stand laut Codebasis:
+Plugin Status:
 
 <!-- README_SYNC:START -->
 - `mod_seminarplaner`: `0.6.6-beta` (`2026030512`)
