@@ -20,7 +20,8 @@ Plugin Status:
 
 UI-Bereiche:
 
-- Grid
+- Seminarplan
+- Roter Faden
 - Methodenbibliothek
 - Methodenkarten
 - Review
@@ -29,23 +30,14 @@ UI-Bereiche:
 Kernfunktionen:
 
 - Anlegen und Verwalten von Methodenkarten in einer Aktivität
-- Grid-Planung (Seminarplaner) mit nutzerspezifischem Zustand
-- Roter-Faden-Ansicht für Teilnehmende (Common Thread) mit veröffentlichbarem Snapshot aus dem Seminarplan
-- Roter-Faden-Struktur nach Tag -> Vormittag (08:00-12:30) / Nachmittag (12:30-18:00) inkl. Boxen mit Header- und Contentbereich
-- Timeline-Darstellung: Wochentage auf der Pfeilachse, Tages-Contentboxen alternierend oberhalb/unterhalb der Achse
-- Tages-Boxen zeigen Vormittag/Nachmittag nebeneinander; Themen sind je Eintrag ein-/ausklappbar (standardmäßig eingeklappt)
-- Zeilenbasiertes Timeline-Raster (oben/mitte/unten) mit gerichteter Verbindungsline je Tag (nur nach oben oder unten)
-- Tagesboxen werden symmetrisch um den Marker verbreitert und nutzen den Zwischenraum bis zur Nachbarbox; Außenabstand > Innenabstand (Vor/Nachmittag)
-- Tagesboxen sind marker-zentriert absolut positioniert (keine Spaltenbindung), damit sie horizontal über Rastergrenzen hinweg laufen können
-- Zwei Timeline-Achsenstile verfügbar (`clean`, `modern`), umschaltbar per UI-Dropdown oder über `window.KG_ROTERFADEN_AXIS_THEME`
-- Theme-Wirkung umfasst Achse, Karten, Entry-Header/Content, Marker-Dot und Verbindungsline (`clean` kontraststark, `modern` spielerisch)
-- Farben und visuelle Akzente orientieren sich am IG-Metall-Designsystem (Palette + Sunrise/Dreiecks-Element) und werden in den Roter-Faden-Themes konsistent verwendet
-- Responsive Umschaltung für Mobilgeräte: vertikale Timeline mit Tagesmarkern und gestapelten Karten (Desktop bleibt horizontale Achse)
-- Import globaler Methodensets aus dem `local`-Plugin
+- Seminarplaner mit der Möglichkeit verschiedene Pläne in einem Seminarplaner abzuspeichern
+- Roter-Faden-Ansicht für Teilnehmende mit veröffentlichbarem Snapshot aus dem Seminarplan
+- Roter-Faden-Struktur nach Tag und der Differenzierung in Vormittag (08:00-12:30) und Nachmittag (12:30-18:00) in Boxen mit Header- und Contentbereich
+- Responsive Umschaltung für Mobilgeräte
+- Import globaler Methodensets aus dem Moodle-Datenbank-Plugin ()
 - Review-Einreichung von neuen/geänderten Methoden aus der Aktivität
 - Import/Export von Methoden (JSON, CSV/ZIP kompatible Flows)
 - PDF-Export-Flows (ZIM / Seminarverlauf)
-- Soft-Lock-Mechanismus für Grid-Bearbeitung
 - Datei-Uploads für Methodenmaterialien
 
 Wichtige Webservice-Funktionen (AJAX):
