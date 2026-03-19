@@ -21,8 +21,8 @@ echo html_writer::start_div('kg-shell');
 echo html_writer::tag('h3', 'Review');
 
 echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h4', '1. Geänderte oder neue Methode bereitstellen');
-echo html_writer::tag('label', 'Bestehendes Set auswählen', ['for' => 'kg-review-existing-set-select', 'class' => 'kg-label']);
+echo html_writer::tag('h4', '1. Geänderte oder neue Seminareinheit bereitstellen');
+echo html_writer::tag('label', 'Bestehendes Konzept auswählen', ['for' => 'kg-review-existing-set-select', 'class' => 'kg-label']);
 echo html_writer::start_tag('select', ['id' => 'kg-review-existing-set-select', 'class' => 'kg-input']);
 echo html_writer::tag('option', 'Bitte wählen', ['value' => '0']);
 echo html_writer::end_tag('select');
@@ -32,8 +32,8 @@ echo html_writer::tag('div', '', ['id' => 'kg-review-existing-status', 'class' =
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h4', 'Geänderte oder neue Methoden bereitstellen');
-echo html_writer::tag('p', 'Nach Set-Auswahl erscheinen hier neue/geänderte Methodenkarten für das bestehende Set.');
+echo html_writer::tag('h4', 'Geänderte oder neue Seminareinheiten bereitstellen');
+echo html_writer::tag('p', 'Nach Auswahl eines Konzepts erscheinen hier neue/geänderte Lernkarten für das bestehende Konzept.');
 echo html_writer::start_div('kg-row');
 echo html_writer::tag('button', 'Alle auswählen', ['type' => 'button', 'id' => 'kg-review-existing-select-all', 'class' => 'kg-btn']);
 echo html_writer::tag('button', 'Keine auswählen', ['type' => 'button', 'id' => 'kg-review-existing-select-none', 'class' => 'kg-btn']);
@@ -50,8 +50,8 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h4', '2. Globales Methodenset zur Review bereitstellen');
-echo html_writer::tag('p', 'Wähle aus allen vorhandenen Methoden aus und bündele sie zu einem neuen globalen Methodenset.');
+echo html_writer::tag('h4', '2. Globales Konzept zur Review bereitstellen');
+echo html_writer::tag('p', 'Wähle aus allen vorhandenen Seminareinheiten aus und bündele sie zu einem neuen globalen Konzept.');
 echo html_writer::start_div('kg-two');
 echo html_writer::start_div();
 echo html_writer::tag('label', 'Name', ['for' => 'kg-review-new-displayname', 'class' => 'kg-label']);
@@ -74,7 +74,7 @@ echo html_writer::tag('button', 'Keine auswählen', ['type' => 'button', 'id' =>
 echo html_writer::end_div();
 echo html_writer::tag('div', '', ['id' => 'kg-review-new-methods', 'class' => 'kg-ie-preview']);
 echo html_writer::start_div('kg-row kg-pdf-actions');
-echo html_writer::tag('button', 'Neues Methodenset zur Review einreichen', [
+echo html_writer::tag('button', 'Neues Konzept zur Review einreichen', [
     'type' => 'button',
     'id' => 'kg-review-new-submit',
     'class' => 'kg-btn kg-btn-primary',

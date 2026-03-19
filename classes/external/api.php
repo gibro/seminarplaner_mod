@@ -529,7 +529,7 @@ class api extends external_api {
             return ['available' => false, 'message' => 'local_seminarplaner ist nicht installiert.', 'methodsets' => []];
         }
         if (!self::can_view_global_methodsets($resolved['course'])) {
-            return ['available' => true, 'message' => 'Keine Berechtigung für globale Methodensets.', 'methodsets' => []];
+            return ['available' => true, 'message' => 'Keine Berechtigung für globale Konzepte.', 'methodsets' => []];
         }
 
         $repo = new \local_seminarplaner\local\repository\methodset_repository();
@@ -598,13 +598,13 @@ class api extends external_api {
             throw new invalid_parameter_exception('local_seminarplaner ist nicht installiert');
         }
         if (!self::can_view_global_methodsets($resolved['course'])) {
-            throw new invalid_parameter_exception('Keine Berechtigung für globale Methodensets');
+            throw new invalid_parameter_exception('Keine Berechtigung für globale Konzepte');
         }
 
         $repo = new \local_seminarplaner\local\repository\methodset_repository();
         $set = $repo->get_methodset((int)$params['methodsetid']);
         if (!$set) {
-            throw new invalid_parameter_exception('Unbekanntes Methodenset');
+            throw new invalid_parameter_exception('Unbekanntes Konzept');
         }
 
         $rows = [];
@@ -887,7 +887,7 @@ class api extends external_api {
         $repo = new \local_seminarplaner\local\repository\methodset_repository();
         $set = $repo->get_methodset((int)$params['methodsetid']);
         if (!$set) {
-            throw new invalid_parameter_exception('Unbekanntes Methodenset');
+            throw new invalid_parameter_exception('Unbekanntes Konzept');
         }
 
         $scopecontexts = self::resolve_submit_scope_contexts($resolved['course']);
@@ -895,7 +895,7 @@ class api extends external_api {
             return (int)$ctx->id;
         }, $scopecontexts);
         if (!in_array((int)$set->scopecontextid, $allowedscopeids, true)) {
-            throw new invalid_parameter_exception('Keine Berechtigung für das gewählte Methodenset');
+            throw new invalid_parameter_exception('Keine Berechtigung für das gewählte Konzept');
         }
 
         $activitymethods = (new method_card_service())->get_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id,
@@ -994,14 +994,14 @@ class api extends external_api {
         $workflow = new \local_seminarplaner\local\service\workflow_service();
 
         if ((int)$params['methodsetid'] <= 0) {
-            throw new invalid_parameter_exception('Bitte ein bestehendes Methodenset auswählen');
+            throw new invalid_parameter_exception('Bitte ein bestehendes Konzept auswählen');
         }
         $set = $repo->get_methodset((int)$params['methodsetid']);
         if (!$set) {
-            throw new invalid_parameter_exception('Unbekanntes Methodenset');
+            throw new invalid_parameter_exception('Unbekanntes Konzept');
         }
         if (!in_array((int)$set->scopecontextid, $allowedscopeids, true)) {
-            throw new invalid_parameter_exception('Keine Berechtigung für das gewählte Methodenset');
+            throw new invalid_parameter_exception('Keine Berechtigung für das gewählte Konzept');
         }
         if ((string)$set->status !== 'draft') {
             $repo->update_methodset_status((int)$set->id, 'draft', $actorid);
@@ -1011,7 +1011,7 @@ class api extends external_api {
             ['methodsetid' => (int)$set->id]
         );
         if (!$set) {
-            throw new invalid_parameter_exception('Methodenset konnte nicht erstellt/geladen werden');
+            throw new invalid_parameter_exception('Konzept konnte nicht erstellt/geladen werden');
         }
 
         $methodservice = new method_card_service();
@@ -1046,7 +1046,7 @@ class api extends external_api {
             $selectedmethods[] = $method;
         }
         if (!$selectedmethods) {
-            throw new invalid_parameter_exception('Keine Methoden für Einreichung ausgewählt');
+            throw new invalid_parameter_exception('Keine Seminareinheiten für Einreichung ausgewählt');
         }
 
         $existingbymethod = self::load_set_methods_by_title((int)$set->id);
@@ -1221,7 +1221,7 @@ class api extends external_api {
             $selectedmethods[] = $method;
         }
         if (!$selectedmethods) {
-            throw new invalid_parameter_exception('Keine Methoden für Einreichung ausgewählt');
+            throw new invalid_parameter_exception('Keine Seminareinheiten für Einreichung ausgewählt');
         }
 
         $repo = new \local_seminarplaner\local\repository\methodset_repository();

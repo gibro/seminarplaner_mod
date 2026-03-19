@@ -63,11 +63,11 @@ echo seminarplaner_render_tabs((int)$cm->id, 'methods');
 
 echo html_writer::start_div('kg-shell');
 echo html_writer::start_div('ig-container kg-container-full', ['id' => 'kg-add-method-section']);
-echo html_writer::tag('h3', 'Neue Methodenkarte erstellen');
+echo html_writer::tag('h3', 'Neue Lernkarte erstellen');
 echo html_writer::start_div('ig-nav');
 echo html_writer::link('#kg-section-quick', '1) Schnellfassung');
-echo html_writer::link('#kg-section-quality', '2) Qualität & Rahmen');
-echo html_writer::link('#kg-section-materials', '3) Materialien & Technik');
+echo html_writer::link('#kg-section-quality', '2) Ablauf und Rahmen');
+echo html_writer::link('#kg-section-materials', '3) Materialien und Technik');
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-form', ['id' => 'kg-method-form']);
@@ -77,6 +77,10 @@ echo html_writer::start_div('kg-stack field-stack ig-inner');
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', $rendericontext('file-text', 'Titel *'), ['for' => 'kg-f-titel', 'class' => 'kg-label']);
 echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'kg-f-titel', 'class' => 'kg-input', 'required' => 'required']);
+echo html_writer::end_div();
+echo html_writer::start_div('field-card');
+echo html_writer::tag('label', $rendericontext('target', 'Lernziele (Ich-kann ...)'), ['for' => 'kg-f-lernziele', 'class' => 'kg-label']);
+echo html_writer::tag('textarea', '', ['id' => 'kg-f-lernziele', 'name' => 'kg_f_lernziele', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
@@ -99,36 +103,6 @@ echo html_writer::tag('label', $rendericontext('tags', 'Tags / Schlüsselworte')
 echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'kg-f-tags', 'class' => 'kg-input']);
 echo html_writer::end_div();
 echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', $rendericontext('git-compare-arrows', 'Alternativmethoden'), ['for' => 'kg-f-alternativen', 'class' => 'kg-label']);
-echo html_writer::start_div('kg-tag-dropdown', [
-    'id' => 'kg-f-alternativen-dropdown',
-    'data-kg-form-multi-dropdown' => '1',
-    'data-kg-field' => '#kg-f-alternativen',
-    'data-kg-label-prefix' => 'Alternativen',
-    'data-kg-placeholder' => 'Alternativen wählen',
-]);
-echo html_writer::tag('button', 'Alternativen wählen', [
-    'type' => 'button',
-    'class' => 'kg-input kg-tag-dropdown-toggle',
-    'id' => 'kg-f-alternativen-toggle',
-    'data-kg-form-multi-toggle' => '1',
-]);
-echo html_writer::start_div('kg-tag-dropdown-panel kg-hidden', [
-    'id' => 'kg-f-alternativen-panel',
-    'data-kg-form-multi-panel' => '1',
-]);
-echo html_writer::start_div('', ['id' => 'kg-f-alternativen-options']);
-echo html_writer::end_div();
-echo html_writer::tag('div', '', ['id' => 'kg-f-alternativen-hint', 'class' => 'sp-filter-status']);
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::empty_tag('input', [
-    'type' => 'hidden',
-    'id' => 'kg-f-alternativen',
-    'value' => '',
-]);
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
@@ -165,19 +139,15 @@ echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Kurzbeschreibung', ['for' => 'kg-f-kurzbeschreibung', 'class' => 'kg-label']);
 echo html_writer::tag('textarea', '', ['id' => 'kg-f-kurzbeschreibung', 'name' => 'kg_f_kurzbeschreibung', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Ablauf', ['for' => 'kg-f-ablauf', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'kg-f-ablauf', 'name' => 'kg_f_ablauf', 'class' => 'kg-input', 'rows' => '10']);
-echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_tag('details');
 
 echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'kg-section-quality']);
-echo html_writer::tag('summary', $rendersummary('2) Qualität & Rahmen', 'shield-check'));
+echo html_writer::tag('summary', $rendersummary('2) Ablauf und Rahmen', 'shield-check'));
 echo html_writer::start_div('kg-stack field-stack ig-inner');
 echo html_writer::start_div('field-card');
-echo html_writer::tag('label', $rendericontext('target', 'Lernziele (Ich-kann ...)'), ['for' => 'kg-f-lernziele', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'kg-f-lernziele', 'name' => 'kg_f_lernziele', 'class' => 'kg-input', 'rows' => '10']);
+echo html_writer::tag('label', 'Ablauf', ['for' => 'kg-f-ablauf', 'class' => 'kg-label']);
+echo html_writer::tag('textarea', '', ['id' => 'kg-f-ablauf', 'name' => 'kg_f_ablauf', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
@@ -194,14 +164,6 @@ echo html_writer::tag('label', 'Autor*in / Kontakt', ['for' => 'kg-f-autor', 'cl
 echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'kg-f-autor', 'class' => 'kg-input']);
 echo html_writer::end_div();
 echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Vorbereitung nötig', ['for' => 'kg-f-vorbereitung', 'class' => 'kg-label']);
-echo html_writer::start_tag('select', ['id' => 'kg-f-vorbereitung', 'class' => 'kg-input']);
-foreach (['keine', '<10 Min', '10–30 Min', '>30 Min'] as $v) {
-    echo html_writer::tag('option', s($v), ['value' => $v]);
-}
-echo html_writer::end_tag('select');
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
@@ -232,6 +194,14 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
+echo html_writer::tag('label', 'Vorbereitung nötig', ['for' => 'kg-f-vorbereitung', 'class' => 'kg-label']);
+echo html_writer::start_tag('select', ['id' => 'kg-f-vorbereitung', 'class' => 'kg-input']);
+foreach (['keine', '<10 Min', '10–30 Min', '>30 Min'] as $v) {
+    echo html_writer::tag('option', s($v), ['value' => $v]);
+}
+echo html_writer::end_tag('select');
+echo html_writer::end_div();
+echo html_writer::start_div('field-card');
 echo html_writer::tag('label', $rendericontext('triangle-alert', 'Risiken/Tipps'), ['for' => 'kg-f-risiken', 'class' => 'kg-label']);
 echo html_writer::tag('textarea', '', ['id' => 'kg-f-risiken', 'name' => 'kg_f_risiken', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
@@ -243,7 +213,7 @@ echo html_writer::end_div();
 echo html_writer::end_tag('details');
 
 echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'kg-section-materials']);
-echo html_writer::tag('summary', $rendersummary('3) Materialien & Technik', 'wrench'));
+echo html_writer::tag('summary', $rendersummary('3) Materialien und Technik', 'wrench'));
 echo html_writer::start_div('kg-stack field-stack ig-inner');
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', $rendericontext('paperclip', 'Materialien'), ['for' => 'kg-f-materialien', 'class' => 'kg-label']);
@@ -253,11 +223,41 @@ echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Material/Technik', ['for' => 'kg-f-materialtechnik', 'class' => 'kg-label']);
 echo html_writer::tag('textarea', '', ['id' => 'kg-f-materialtechnik', 'name' => 'kg_f_materialtechnik', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
+echo html_writer::start_div('field-card');
+echo html_writer::tag('label', $rendericontext('git-compare-arrows', 'Alternative Seminareinheiten'), ['for' => 'kg-f-alternativen', 'class' => 'kg-label']);
+echo html_writer::start_div('kg-tag-dropdown', [
+    'id' => 'kg-f-alternativen-dropdown',
+    'data-kg-form-multi-dropdown' => '1',
+    'data-kg-field' => '#kg-f-alternativen',
+    'data-kg-label-prefix' => 'Alternativen',
+    'data-kg-placeholder' => 'Alternativen wählen',
+]);
+echo html_writer::tag('button', 'Alternativen wählen', [
+    'type' => 'button',
+    'class' => 'kg-input kg-tag-dropdown-toggle',
+    'id' => 'kg-f-alternativen-toggle',
+    'data-kg-form-multi-toggle' => '1',
+]);
+echo html_writer::start_div('kg-tag-dropdown-panel kg-hidden', [
+    'id' => 'kg-f-alternativen-panel',
+    'data-kg-form-multi-panel' => '1',
+]);
+echo html_writer::start_div('', ['id' => 'kg-f-alternativen-options']);
+echo html_writer::end_div();
+echo html_writer::tag('div', '', ['id' => 'kg-f-alternativen-hint', 'class' => 'sp-filter-status']);
+echo html_writer::end_div();
+echo html_writer::end_div();
+echo html_writer::empty_tag('input', [
+    'type' => 'hidden',
+    'id' => 'kg-f-alternativen',
+    'value' => '',
+]);
+echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_tag('details');
 
 echo html_writer::start_div('kg-row');
-echo html_writer::tag('button', $renderbuttonlabel('Methode hinzufügen', 'plus'), ['type' => 'button', 'id' => 'kg-add-method', 'class' => 'kg-btn kg-btn-primary kg-btn-with-icon']);
+echo html_writer::tag('button', $renderbuttonlabel('Seminareinheit hinzufügen', 'plus'), ['type' => 'button', 'id' => 'kg-add-method', 'class' => 'kg-btn kg-btn-primary kg-btn-with-icon']);
 echo html_writer::end_div();
 
 echo html_writer::end_div();

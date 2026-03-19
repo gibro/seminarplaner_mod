@@ -245,7 +245,7 @@ echo html_writer::end_div();
   <div class="sp-layout">
     <aside class="sp-sidebar">
       <div class="sp-sidebar-tabs" id="sp-source-tabs" role="tablist" aria-label="Quellenanzeige">
-        <span class="sp-source-tab is-active" id="sp-source-tab-methods" data-tab-value="#sp-tab-methods" data-source="methods" role="tab" aria-selected="true" tabindex="0">Methodenkarten</span>
+        <span class="sp-source-tab is-active" id="sp-source-tab-methods" data-tab-value="#sp-tab-methods" data-source="methods" role="tab" aria-selected="true" tabindex="0">Lernkarten</span>
         <span class="sp-source-tab" id="sp-source-tab-units" data-tab-value="#sp-tab-units" data-source="units" role="tab" aria-selected="false" tabindex="0">Bausteine</span>
       </div>
       <div class="sp-tab-content">

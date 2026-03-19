@@ -540,7 +540,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         <div class="sp-card-title"><strong>${active.title}</strong></div>
                         <div class="sp-card-meta">
                             <span class="sp-badge">⏱️ ${active.duration} Min</span>
-                            <span class="sp-badge">🧩 ${active.methods.length} Methoden</span>
+                            <span class="sp-badge">🧩 ${active.methods.length} Seminareinheiten</span>
                             ${slot.units.length > 1 ? '<span class="sp-badge">Alternative</span>' : ''}
                         </div>
                     </div>
@@ -831,7 +831,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             chip.style.borderLeft = `4px solid ${unitcolor}`;
                             parentBadge = `<small class="sp-entry-unitlabel" style="color:${unitcolor}">${parentunit ? parentunit.title : 'Baustein'}</small>`;
                         }
-                        chip.innerHTML = `<span>${method ? method.titel : '(Methode fehlt)'} (${entry.duration} Min)</span>${parentBadge}${optionHtml}`;
+                        chip.innerHTML = `<span>${method ? method.titel : '(Seminareinheit fehlt)'} (${entry.duration} Min)</span>${parentBadge}${optionHtml}`;
                     }
 
                     const remove = document.createElement('button');
@@ -1056,10 +1056,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }).then(() => {
                 clearForm();
                 renderAll();
-                setStatus('Methode hinzugefügt. Ziehe sie in den Seminarplan.', false);
+                setStatus('Seminareinheit hinzugefügt. Ziehe sie in den Seminarplan.', false);
             }).catch((e) => {
                 Notification.exception(e);
-                setStatus('Methode konnte nicht gespeichert werden.', true);
+                setStatus('Seminareinheit konnte nicht gespeichert werden.', true);
             });
         });
 
@@ -1073,7 +1073,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         bySel('#kg-refresh-sources')?.addEventListener('click', () => {
             loadPlanningSources(cmid).then(() => {
                 renderSourceCards();
-                setStatus('Methoden und Bausteine aktualisiert.', false);
+                setStatus('Seminareinheiten und Bausteine aktualisiert.', false);
             }).catch((e) => {
                 Notification.exception(e);
                 setStatus('Quellen konnten nicht aktualisiert werden.', true);

@@ -1228,7 +1228,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                                 </div>
                                 <div class="sp-unit-slot__meta">
                                     <span class="sp-badge">${escapeHtml(String(unit.duration))} Min</span>
-                                    <span class="sp-badge">${escapeHtml(String((unit.methods || []).length))} Methoden</span>
+                                    <span class="sp-badge">${escapeHtml(String((unit.methods || []).length))} Seminareinheiten</span>
                                     ${slot.units.length > 1 ? '<span class="sp-badge">Alternative</span>' : ''}
                                     <span class="sp-unit-slot__chevron" aria-hidden="true">${expanded ? '▾' : '▸'}</span>
                                 </div>
@@ -1236,8 +1236,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             <div class="sp-unit-slot__content ${expanded ? '' : 'kg-hidden'}" data-slot-content="${escapeHtml(String(slot.key))}">
                                 ${alternativeselector}
                                 <div class="sp-unit-methods">
-                                    <div class="sp-unit-methods__label">Methodenpool dieses Bausteins</div>
-                                    <div class="sp-unit-methods__list">${methodcards.length ? methodcards.map((methodcard) => `<button type="button" class="sp-unit-method-link" data-action="preview-unit-method" data-method-id="${escapeHtml(String(methodcard.id))}" draggable="false">${escapeHtml(methodcard.title)}</button>`).join('') : '<span class="sp-filter-status">Keine Methoden zugeordnet</span>'}</div>
+                                    <div class="sp-unit-methods__label">Pool der Seminareinheiten dieses Bausteins</div>
+                                    <div class="sp-unit-methods__list">${methodcards.length ? methodcards.map((methodcard) => `<button type="button" class="sp-unit-method-link" data-action="preview-unit-method" data-method-id="${escapeHtml(String(methodcard.id))}" draggable="false">${escapeHtml(methodcard.title)}</button>`).join('') : '<span class="sp-filter-status">Keine Seminareinheiten zugeordnet</span>'}</div>
                                 </div>
                             </div>
                         `;
@@ -1550,7 +1550,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 const chips = [
                     `${items.length} Einträge`,
                     `${Math.floor(totalMin / 60)}h ${totalMin % 60}m`,
-                    methods ? `${methods} Methoden` : '',
+                    methods ? `${methods} Seminareinheiten` : '',
                     units ? `${units} Bausteine` : '',
                     breaks ? `${breaks} Pausen` : ''
                 ].filter(Boolean);
@@ -1648,7 +1648,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         if (methodcards.length) {
                             unitmethodshtml = `
                                 <div class="sp-item-unit-methods">
-                                    <div class="sp-item-unit-methods__label">Methoden</div>
+                                    <div class="sp-item-unit-methods__label">Seminareinheiten</div>
                                     <div class="sp-item-unit-methods__scroller">
                                         ${methodcards.map((methodcard) => `
                                             <button type="button" class="sp-unit-method-card${methodcard.cognitiveLevel ? ` sp-level-${escapeHtml(String(methodcard.cognitiveLevel))}` : ''}" data-action="preview-unit-method" data-method-id="${escapeHtml(String(methodcard.id))}">
@@ -1674,7 +1674,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         const method = this.methods.find((m) => String(m.id) === String(it.entryId));
                         const alternatives = method ? this.getMethodAlternativeIds(method) : [];
                         if (alternatives.length > 1) {
-                            menuActions += `<div class="sp-menu-select-wrap"><label class="sp-menu-select-label">${lucideIcon('git-compare-arrows', 'sp-menu-select-label-icon')}Alternative Methode</label><select class="kg-input" data-act="method-alt" data-uid="${escapeHtml(it.uid)}">${alternatives.map((id) => {
+                            menuActions += `<div class="sp-menu-select-wrap"><label class="sp-menu-select-label">${lucideIcon('git-compare-arrows', 'sp-menu-select-label-icon')}Alternative Seminareinheit</label><select class="kg-input" data-act="method-alt" data-uid="${escapeHtml(it.uid)}">${alternatives.map((id) => {
                                 const alt = this.methods.find((m) => String(m.id) === String(id));
                                 return alt ? `<option value="${escapeHtml(id)}" ${String(id) === String(it.entryId) ? 'selected' : ''}>${escapeHtml(alt.titel || id)}</option>` : '';
                             }).join('')}</select></div>`;
@@ -1734,7 +1734,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         div.classList.add('sp-item--method-clickable');
                         div.setAttribute('role', 'button');
                         div.setAttribute('tabindex', '0');
-                        div.setAttribute('aria-label', `${title || 'Methode'} öffnen`);
+                        div.setAttribute('aria-label', `${title || 'Seminareinheit'} öffnen`);
                         div.addEventListener('click', (event) => {
                             if (event.target.closest('.ml-card-menu, .sp-btn, select, button, input, textarea, a, .sp-resize-handle')) {
                                 return;
@@ -1996,7 +1996,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     flowid,
                     flowOrder: index + 1,
                     flowTotal: total,
-                    title: payload.title || (kind === 'unit' ? 'Baustein' : 'Methode'),
+                    title: payload.title || (kind === 'unit' ? 'Baustein' : 'Seminareinheit'),
                     day: segment.day,
                     startMin: segment.startMin,
                     endMin: segment.endMin,
@@ -2287,7 +2287,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     parentunit
                 }, pointerday, pointermin);
                 if (!added) {
-                    this.warn('Einheit teilweise aufgelöst: nicht alle Methoden konnten eingeplant werden.');
+                    this.warn('Einheit teilweise aufgelöst: nicht alle Seminareinheiten konnten eingeplant werden.');
                     break;
                 }
                 pointerday = added.endday;
@@ -2402,7 +2402,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     }
                     const collisionList = (this.state.plan.days[day] || []).filter((entry) => String(entry.uid) !== baseUid);
                     if (this.hasCollision(collisionList, item)) {
-                        this.warn('Pause überschneidet sich mit einer Methode.');
+                        this.warn('Pause überschneidet sich mit einer Seminareinheit.');
                         return;
                     }
                     if (this.breakEditRef && this.breakEditRef.day) {
@@ -2482,7 +2482,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             const fallback = {
                 id: item.entryId || '',
-                title: item.title || 'Methodenkarte',
+                title: item.title || 'Lernkarte',
                 duration: Math.max(5, Number((item.endMin || 0) - (item.startMin || 0)) || 5),
                 group: '',
                 phase: item.phase || '',
@@ -2513,7 +2513,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 <div class="sp-modal__backdrop" data-modal-close="method-detail"></div>
                 <div class="sp-modal__dialog sp-modal__dialog--large" role="dialog" aria-modal="true" aria-labelledby="sp-method-detail-title">
                     <header class="sp-modal__header">
-                        <h2 id="sp-method-detail-title">Methodenkarte</h2>
+                        <h2 id="sp-method-detail-title">Lernkarte</h2>
                         <button type="button" class="sp-modal__close" data-modal-close="method-detail" aria-label="Popup schließen">X</button>
                     </header>
                     <div class="sp-modal__body sp-method-detail__body" id="sp-method-detail-body"></div>
@@ -2549,7 +2549,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const body = this.methodDetailModal.querySelector('#sp-method-detail-body');
             const editBtn = this.methodDetailModal.querySelector('#sp-method-detail-edit');
             if (title) {
-                title.textContent = cardData.title || 'Methodenkarte';
+                title.textContent = cardData.title || 'Lernkarte';
             }
             if (body) {
                 body.innerHTML = this.buildMethodDetailBody(cardData);
@@ -2833,7 +2833,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             });
             const status = bySel('#sp-filter-status');
             if (status) {
-                status.textContent = this.filterIndex.length ? `${visible} von ${this.filterIndex.length} Methoden angezeigt.` : 'Keine Methoden geladen.';
+                status.textContent = this.filterIndex.length ? `${visible} von ${this.filterIndex.length} Seminareinheiten angezeigt.` : 'Keine Seminareinheiten geladen.';
             }
         }
 
@@ -3240,7 +3240,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     const dur = Number.parseInt(entry.duration || '15', 10) || 15;
                     migrated.plan.days[entry.day].push({
                         uid: entry.id || uid(),
-                        title: entry.title || `Methode ${entry.methodid || ''}`,
+                        title: entry.title || `Seminareinheit ${entry.methodid || ''}`,
                         startMin: start,
                         endMin: start + dur,
                         kind: 'method',

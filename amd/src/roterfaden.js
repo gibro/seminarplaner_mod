@@ -190,7 +190,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     if (entry.kind === 'method') {
                         entries.push(Object.assign(base, {
                             kind: 'method',
-                            title: String(entry.title || 'Methode'),
+                            title: String(entry.title || 'Seminareinheit'),
                             topicsHtml: ''
                         }));
                     }

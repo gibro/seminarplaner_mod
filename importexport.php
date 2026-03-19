@@ -39,7 +39,7 @@ echo html_writer::end_div();
 
 echo html_writer::start_div('', ['id' => 'kg-ie-panel-1']);
 echo html_writer::tag('p', 'Unterstützte Formate: mod_data CSV-Export, ZIP mit CSV, JSON-Export.');
-echo html_writer::tag('p', 'Wähle per Mehrfachauswahl, welche Inhalte importiert werden sollen: Methoden, Bausteine und/oder Seminarpläne.');
+echo html_writer::tag('p', 'Wähle per Mehrfachauswahl, welche Inhalte importiert werden sollen: Seminareinheiten, Bausteine und/oder Seminarpläne.');
 echo html_writer::empty_tag('input', [
     'type' => 'file',
     'id' => 'kg-ie-file',
@@ -50,7 +50,7 @@ echo html_writer::tag('button', 'Datei analysieren', ['type' => 'button', 'id' =
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-hidden', ['id' => 'kg-ie-panel-2']);
-echo html_writer::tag('p', 'Vorschau der gefundenen Inhalte. Bei doppelten Methoden-Titeln kann pro Eintrag entschieden werden: Ersetzen, als Duplikat hinzufügen oder nicht hinzufügen.');
+echo html_writer::tag('p', 'Vorschau der gefundenen Inhalte. Bei doppelten Titeln von Seminareinheiten kann pro Eintrag entschieden werden: Ersetzen, als Duplikat hinzufügen oder nicht hinzufügen.');
 echo html_writer::start_div('kg-row');
 echo html_writer::tag('button', 'Alle auswählen', ['type' => 'button', 'id' => 'kg-ie-select-all', 'class' => 'kg-btn']);
 echo html_writer::tag('button', 'Keine auswählen', ['type' => 'button', 'id' => 'kg-ie-select-none', 'class' => 'kg-btn']);
@@ -65,18 +65,18 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h4', 'Globale Methodensets (local Plugin)');
-echo html_writer::tag('p', 'Importiere veröffentlichte globale Methodensets aus dem lokalen Seminarplaner-Plugin.');
+echo html_writer::tag('h4', 'Globale Konzepte (local Plugin)');
+echo html_writer::tag('p', 'Importiere veröffentlichte globale Konzepte aus dem lokalen Seminarplaner-Plugin.');
 echo html_writer::start_div('kg-row');
 echo html_writer::start_tag('select', ['id' => 'kg-global-set-select', 'class' => 'kg-input']);
 echo html_writer::tag('option', 'Bitte wählen', ['value' => '']);
 echo html_writer::end_tag('select');
-echo html_writer::tag('button', 'Globales Set importieren', ['type' => 'button', 'id' => 'kg-global-set-import', 'class' => 'kg-btn kg-btn-primary']);
+echo html_writer::tag('button', 'Globales Konzept importieren', ['type' => 'button', 'id' => 'kg-global-set-import', 'class' => 'kg-btn kg-btn-primary']);
 echo html_writer::end_div();
 echo html_writer::start_div('kg-row');
 echo '<label class="kg-label" style="display:flex;align-items:center;gap:8px;margin:0">'
     . '<input type="checkbox" id="kg-global-set-autosync">'
-    . '<span>Auto-Update für dieses Set aktivieren</span>'
+    . '<span>Auto-Update für dieses Konzept aktivieren</span>'
     . '</label>';
 echo html_writer::tag('button', 'Ausstehende Updates übernehmen', ['type' => 'button', 'id' => 'kg-global-set-apply', 'class' => 'kg-btn']);
 echo html_writer::end_div();
@@ -86,9 +86,9 @@ echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block');
 echo html_writer::tag('h4', 'Export für Seminarplaner');
-echo html_writer::tag('p', 'Für den Austausch zwischen zwei Seminarplanern (Methoden, Bausteine und Seminarpläne).');
+echo html_writer::tag('p', 'Für den Austausch zwischen zwei Seminarplanern (Seminareinheiten, Bausteine und Seminarpläne).');
 echo '<div class="kg-row" style="margin-top:8px;gap:14px;flex-wrap:wrap">'
-    . '<label class="kg-label" style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="kg-ie-export-methods" checked><span>Methoden</span></label>'
+    . '<label class="kg-label" style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="kg-ie-export-methods" checked><span>Seminareinheiten</span></label>'
     . '<label class="kg-label" style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="kg-ie-export-units" checked><span>Bausteine</span></label>'
     . '<label class="kg-label" style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="kg-ie-export-grids"><span>Seminarpläne</span></label>'
     . '</div>';

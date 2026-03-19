@@ -198,9 +198,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         });
         if (hint) {
             if (!methods.length) {
-                hint.textContent = 'Noch keine Methoden geladen. Bitte zuerst Methoden importieren oder speichern.';
+                hint.textContent = 'Noch keine Seminareinheiten geladen. Bitte zuerst Seminareinheiten importieren oder speichern.';
             } else if (!optioncount) {
-                hint.textContent = 'Keine Alternativmethoden verfügbar (aktueller Titel ist bereits vergeben oder es gibt nur diese eine Methode).';
+                hint.textContent = 'Keine alternativen Seminareinheiten verfügbar (aktueller Titel ist bereits vergeben oder es gibt nur diese eine Seminareinheit).';
             } else {
                 hint.textContent = '';
             }
@@ -350,8 +350,17 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const editor = (typeof window !== 'undefined' && window.tinyMCE && el.id) ? window.tinyMCE.get(el.id) : null;
             if (editor) {
                 editor.setContent('');
+                if (typeof editor.save === 'function') {
+                    editor.save();
+                }
             }
             el.value = '';
+            if ('defaultValue' in el) {
+                el.defaultValue = '';
+            }
+            if (el.hasAttribute && el.hasAttribute('value')) {
+                el.setAttribute('value', '');
+            }
         });
         editingMethodId = '';
         const addbutton = bySel('#kg-add-method');
@@ -362,6 +371,34 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             addbutton.innerHTML = addButtonDefaultHtml;
         }
         refreshAlternativeOptions();
+    };
+
+    const resetPageFormState = () => {
+        const runReset = () => {
+            clearForm();
+            const needsRetry = Object.values(FIELDS).some((selector) => {
+                const el = bySel(selector);
+                return !!(el && el.tagName === 'TEXTAREA' && el.id
+                    && typeof window !== 'undefined' && window.tinyMCE
+                    && !window.tinyMCE.get(el.id));
+            });
+            return needsRetry;
+        };
+
+        let attempts = 0;
+        const maxAttempts = 10;
+        const tick = () => {
+            const needsRetry = runReset();
+            attempts += 1;
+            if (needsRetry && attempts < maxAttempts && typeof window !== 'undefined') {
+                window.setTimeout(tick, 150);
+            }
+        };
+
+        tick();
+        if (typeof window !== 'undefined') {
+            window.setTimeout(clearForm, 1200);
+        }
     };
 
     const setFieldValue = (selector, value) => {
@@ -429,9 +466,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (!addButtonDefaultHtml) {
                 addButtonDefaultHtml = addbutton.innerHTML;
             }
-            addbutton.innerHTML = 'Methode aktualisieren';
+            addbutton.innerHTML = 'Seminareinheit aktualisieren';
         }
-        setStatus(`Methode "${method.titel || ''}" zur Bearbeitung geladen.`, false);
+        setStatus(`Seminareinheit "${method.titel || ''}" zur Bearbeitung geladen.`, false);
     };
 
     const buildMethod = async () => {
@@ -549,7 +586,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             cmid,
             methodsjson: JSON.stringify(serializeMethodsForSave())
         }).then((res) => {
-            setStatus(`Methoden gespeichert (${res.count}).`, false);
+            setStatus(`Seminareinheiten gespeichert (${res.count}).`, false);
         }).catch((e) => {
             Notification.exception(e);
             setStatus('Speichern fehlgeschlagen.', true);
@@ -581,7 +618,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             saveMethods(cmid);
             render();
             clearForm();
-            setStatus('Methode aktualisiert und gespeichert.', false);
+            setStatus('Seminareinheit aktualisiert und gespeichert.', false);
             return true;
         }
 
@@ -590,7 +627,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         saveMethods(cmid);
         clearForm();
         render();
-        setStatus('Methode hinzugefügt und gespeichert.', false);
+        setStatus('Seminareinheit hinzugefügt und gespeichert.', false);
         return true;
     };
 
@@ -605,7 +642,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             methods = Array.isArray(decoded) ? decoded.map((method) => normalizeLoadedMethod(method)) : [];
             normalizeAlternatives();
             render();
-            setStatus(`Methoden geladen (${methods.length}).`, false);
+            setStatus(`Seminareinheiten geladen (${methods.length}).`, false);
         }).catch((e) => {
             Notification.exception(e);
             setStatus('Laden fehlgeschlagen.', true);
@@ -617,10 +654,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'methodenkarten-export.json';
+        a.download = 'lernkarten-export.json';
         a.click();
         URL.revokeObjectURL(url);
-        setStatus('Methodenkarten exportiert.', false);
+        setStatus('Lernkarten exportiert.', false);
     };
 
     const parseCsvTable = (csvText) => {
@@ -786,7 +823,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
         methods = parsed.map((m) => ({id: m.id || uid(), ...m}));
         render();
-        setStatus(`Methodenkarten importiert (${methods.length}).`, false);
+        setStatus(`Lernkarten importiert (${methods.length}).`, false);
     };
 
     const importFromCsvText = (text) => {
@@ -802,7 +839,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
         methods = mapped;
         render();
-        setStatus(`CSV importiert (${methods.length} Methodenkarten).`, false);
+        setStatus(`CSV importiert (${methods.length} Lernkarten).`, false);
     };
 
     const importFromZipFile = async (file) => {
@@ -870,6 +907,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         init: function(cmid) {
             bindFormMultiDropdowns();
             refreshAlternativeOptions();
+            resetPageFormState();
+            if (typeof window !== 'undefined') {
+                window.addEventListener('load', resetPageFormState);
+                window.addEventListener('pageshow', resetPageFormState);
+            }
             const addbutton = bySel('#kg-add-method');
             if (addbutton) {
                 addButtonDefaultHtml = addbutton.innerHTML;

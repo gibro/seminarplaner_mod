@@ -56,10 +56,10 @@ echo $OUTPUT->heading(format_string($seminarplaner->name));
 echo seminarplaner_render_tabs((int)$cm->id, 'methodlibrary');
 
 echo html_writer::start_div('kg-shell');
-echo html_writer::tag('h3', 'Methodenbibliothek verwalten');
+echo html_writer::tag('h3', 'Bibliothek verwalten');
 
 echo html_writer::start_div('kg-ie-block kg-library-step');
-echo html_writer::tag('h4', '1. Methode suchen');
+echo html_writer::tag('h4', '1. Seminareinheit suchen');
 echo html_writer::start_div('sp-filterbar');
 
 echo '<label class="sp-filter"><span class="sp-filter__label">Suche</span><input id="ml-filter-search" class="kg-input" type="search" placeholder="Titel, Beschreibung, Tags"></label>';
@@ -132,7 +132,7 @@ echo html_writer::tag('div', '', ['id' => 'ml-filter-status', 'class' => 'sp-fil
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block kg-library-step');
-echo html_writer::tag('h4', '2. Methode auswählen');
+echo html_writer::tag('h4', '2. Seminareinheit auswählen');
 echo html_writer::tag('div', '', ['id' => 'ml-method-list', 'class' => 'kg-library-list']);
 echo html_writer::end_div();
 
@@ -141,7 +141,7 @@ if ($requestededitmethodid === '') {
     $editsectionclasses .= ' kg-hidden';
 }
 echo html_writer::start_div($editsectionclasses, ['id' => 'ml-edit-section']);
-echo html_writer::tag('h4', '3. Methode bearbeiten');
+echo html_writer::tag('h4', '3. Seminareinheit bearbeiten');
 echo html_writer::start_div('kg-form ig-container kg-container-full', ['id' => 'ml-edit-form']);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'id' => 'ml-edit-id']);
 echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'ml-section-quick', 'open' => 'open']);
@@ -150,6 +150,10 @@ echo html_writer::start_div('kg-stack field-stack ig-inner');
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Titel *', ['for' => 'ml-e-titel', 'class' => 'kg-label']);
 echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'ml-e-titel', 'class' => 'kg-input', 'required' => 'required']);
+echo html_writer::end_div();
+echo html_writer::start_div('field-card');
+echo html_writer::tag('label', 'Lernziele (Ich-kann ...)', ['for' => 'ml-e-lernziele', 'class' => 'kg-label']);
+echo html_writer::tag('textarea', '', ['id' => 'ml-e-lernziele', 'name' => 'ml_e_lernziele', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
@@ -172,41 +176,6 @@ echo html_writer::tag('label', 'Tags / Schlüsselworte', ['for' => 'ml-e-tags', 
 echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'ml-e-tags', 'class' => 'kg-input']);
 echo html_writer::end_div();
 echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Alternativmethoden', ['for' => 'ml-e-alternativen', 'class' => 'kg-label']);
-echo html_writer::start_div('kg-tag-dropdown', [
-    'id' => 'ml-e-alternativen-dropdown',
-    'data-kg-form-multi-dropdown' => '1',
-    'data-kg-field' => '#ml-e-alternativen',
-    'data-kg-label-prefix' => 'Alternativen',
-    'data-kg-placeholder' => 'Alternativen wählen',
-]);
-echo html_writer::tag('button', 'Alternativen wählen', [
-    'type' => 'button',
-    'class' => 'kg-input kg-tag-dropdown-toggle',
-    'id' => 'ml-e-alternativen-toggle',
-    'data-kg-form-multi-toggle' => '1',
-]);
-echo html_writer::start_div('kg-tag-dropdown-panel kg-hidden', [
-    'id' => 'ml-e-alternativen-panel',
-    'data-kg-form-multi-panel' => '1',
-]);
-echo html_writer::empty_tag('input', [
-    'type' => 'search',
-    'class' => 'kg-input kg-multi-search',
-    'placeholder' => 'Methodentitel suchen',
-    'data-kg-form-multi-search' => '1',
-]);
-echo html_writer::start_div('', ['id' => 'ml-e-alternativen-options']);
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::empty_tag('input', [
-    'type' => 'hidden',
-    'id' => 'ml-e-alternativen',
-    'value' => '',
-]);
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
@@ -243,19 +212,15 @@ echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Kurzbeschreibung', ['for' => 'ml-e-kurzbeschreibung', 'class' => 'kg-label']);
 echo html_writer::tag('textarea', '', ['id' => 'ml-e-kurzbeschreibung', 'name' => 'ml_e_kurzbeschreibung', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Ablauf', ['for' => 'ml-e-ablauf', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'ml-e-ablauf', 'name' => 'ml_e_ablauf', 'class' => 'kg-input', 'rows' => '10']);
-echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_tag('details');
 
 echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'ml-section-quality']);
-echo html_writer::tag('summary', '2) Qualität & Rahmen');
+echo html_writer::tag('summary', '2) Ablauf und Rahmen');
 echo html_writer::start_div('kg-stack field-stack ig-inner');
 echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Lernziele (Ich-kann ...)', ['for' => 'ml-e-lernziele', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'ml-e-lernziele', 'name' => 'ml_e_lernziele', 'class' => 'kg-input', 'rows' => '10']);
+echo html_writer::tag('label', 'Ablauf', ['for' => 'ml-e-ablauf', 'class' => 'kg-label']);
+echo html_writer::tag('textarea', '', ['id' => 'ml-e-ablauf', 'name' => 'ml_e_ablauf', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
@@ -272,14 +237,6 @@ echo html_writer::tag('label', 'Autor*in / Kontakt', ['for' => 'ml-e-autor', 'cl
 echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'ml-e-autor', 'class' => 'kg-input']);
 echo html_writer::end_div();
 echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Vorbereitung nötig', ['for' => 'ml-e-vorbereitung', 'class' => 'kg-label']);
-echo html_writer::start_tag('select', ['id' => 'ml-e-vorbereitung', 'class' => 'kg-input']);
-foreach (['keine', '<10 Min', '10–30 Min', '>30 Min'] as $v) {
-    echo html_writer::tag('option', s($v), ['value' => $v]);
-}
-echo html_writer::end_tag('select');
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
@@ -310,6 +267,14 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
+echo html_writer::tag('label', 'Vorbereitung nötig', ['for' => 'ml-e-vorbereitung', 'class' => 'kg-label']);
+echo html_writer::start_tag('select', ['id' => 'ml-e-vorbereitung', 'class' => 'kg-input']);
+foreach (['keine', '<10 Min', '10–30 Min', '>30 Min'] as $v) {
+    echo html_writer::tag('option', s($v), ['value' => $v]);
+}
+echo html_writer::end_tag('select');
+echo html_writer::end_div();
+echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Risiken/Tipps', ['for' => 'ml-e-risiken', 'class' => 'kg-label']);
 echo html_writer::tag('textarea', '', ['id' => 'ml-e-risiken', 'name' => 'ml_e_risiken', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
@@ -321,7 +286,7 @@ echo html_writer::end_div();
 echo html_writer::end_tag('details');
 
 echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'ml-section-materials', 'open' => 'open']);
-echo html_writer::tag('summary', '3) Materialien & Technik');
+echo html_writer::tag('summary', '3) Materialien und Technik');
 echo html_writer::start_div('kg-stack field-stack ig-inner');
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Materialien', ['for' => 'ml-e-materialien', 'class' => 'kg-label']);
@@ -331,6 +296,41 @@ echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Material/Technik', ['for' => 'ml-e-materialtechnik', 'class' => 'kg-label']);
 echo html_writer::tag('textarea', '', ['id' => 'ml-e-materialtechnik', 'name' => 'ml_e_materialtechnik', 'class' => 'kg-input', 'rows' => '10']);
+echo html_writer::end_div();
+echo html_writer::start_div('field-card');
+echo html_writer::tag('label', 'Alternative Seminareinheiten', ['for' => 'ml-e-alternativen', 'class' => 'kg-label']);
+echo html_writer::start_div('kg-tag-dropdown', [
+    'id' => 'ml-e-alternativen-dropdown',
+    'data-kg-form-multi-dropdown' => '1',
+    'data-kg-field' => '#ml-e-alternativen',
+    'data-kg-label-prefix' => 'Alternativen',
+    'data-kg-placeholder' => 'Alternativen wählen',
+]);
+echo html_writer::tag('button', 'Alternativen wählen', [
+    'type' => 'button',
+    'class' => 'kg-input kg-tag-dropdown-toggle',
+    'id' => 'ml-e-alternativen-toggle',
+    'data-kg-form-multi-toggle' => '1',
+]);
+echo html_writer::start_div('kg-tag-dropdown-panel kg-hidden', [
+    'id' => 'ml-e-alternativen-panel',
+    'data-kg-form-multi-panel' => '1',
+]);
+echo html_writer::empty_tag('input', [
+    'type' => 'search',
+    'class' => 'kg-input kg-multi-search',
+    'placeholder' => 'Titel der Seminareinheit suchen',
+    'data-kg-form-multi-search' => '1',
+]);
+echo html_writer::start_div('', ['id' => 'ml-e-alternativen-options']);
+echo html_writer::end_div();
+echo html_writer::end_div();
+echo html_writer::end_div();
+echo html_writer::empty_tag('input', [
+    'type' => 'hidden',
+    'id' => 'ml-e-alternativen',
+    'value' => '',
+]);
 echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_tag('details');

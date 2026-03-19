@@ -699,7 +699,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
         const status = bySel('#ml-filter-status');
         if (status) {
-            status.textContent = `${visible} von ${methods.length} Methoden angezeigt.`;
+            status.textContent = `${visible} von ${methods.length} Seminareinheiten angezeigt.`;
         }
     };
 
@@ -720,7 +720,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const showlock = shouldShowFreezeLock(m);
             const frozen = showlock ? isFrozenState(m._kgsync, true) : false;
             const freezeaction = showlock
-                ? `<button type="button" class="ml-card-menu-btn" data-act="freeze" title="Nur sichtbar bei aktivem Auto-Update für dieses Set.">${frozen ? '🔒 Fixierung lösen' : '🔓 Lokal fixieren'}</button>`
+                ? `<button type="button" class="ml-card-menu-btn" data-act="freeze" title="Nur sichtbar bei aktivem Auto-Update für dieses Konzept.">${frozen ? '🔒 Fixierung lösen' : '🔓 Lokal fixieren'}</button>`
                 : '';
             card.innerHTML = `
               <div class="ml-card-head">
@@ -837,7 +837,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const openEditor = (id) => {
         const method = methods.find((m) => String(m.id) === String(id));
         if (!method) {
-            setStatus('Methode konnte nicht zum Bearbeiten geöffnet werden.', true);
+            setStatus('Seminareinheit konnte nicht zum Bearbeiten geöffnet werden.', true);
             return;
         }
         currentEditId = String(id);
@@ -870,7 +870,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const prepareddraft = Number(materialdraft.value || 0);
             materialdraft.value = String(prepareddraft || 0);
             if (!prepareddraft) {
-                setStatus('Dateien konnten nicht zum Bearbeiten vorbereitet werden. Bitte Methode erneut über "Bearbeiten" öffnen.', true);
+                setStatus('Dateien konnten nicht zum Bearbeiten vorbereitet werden. Bitte Seminareinheit erneut über "Bearbeiten" öffnen.', true);
             }
         }
         if (materialcurrent) {
@@ -891,7 +891,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 window.scrollTo({top: Math.max(0, top - 80), behavior: 'auto'});
             }, 0);
         }
-        setStatus(`Methode "${method.titel || ''}" zum Bearbeiten geladen.`, false);
+        setStatus(`Seminareinheit "${method.titel || ''}" zum Bearbeiten geladen.`, false);
     };
 
     const serializeMethodsForSave = () => methods.map((method) => {
@@ -935,7 +935,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         await persist(cmid);
         clearAddForm();
         renderList();
-        setStatus('Methode hinzugefügt und gespeichert.', false);
+        setStatus('Seminareinheit hinzugefügt und gespeichert.', false);
     };
 
     const deleteMethod = async (id) => {
@@ -943,7 +943,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         if (!method) {
             return;
         }
-        const yes = window.confirm(`Methodenkarte "${method.titel || ''}" wirklich löschen?`);
+        const yes = window.confirm(`Lernkarte "${method.titel || ''}" wirklich löschen?`);
         if (!yes) {
             return;
         }
@@ -967,7 +967,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         renderList();
         try {
             await persist(runtimeCmid);
-            setStatus('Methode gelöscht und gespeichert.', false);
+            setStatus('Seminareinheit gelöscht und gespeichert.', false);
         } catch (error) {
             methods = previousMethods;
             renderList();
@@ -984,7 +984,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return;
         }
         if (!shouldShowFreezeLock(methods[idx])) {
-            setStatus('Fixierung nur bei Methoden mit aktivem Auto-Update verfügbar.', true);
+            setStatus('Fixierung nur bei Seminareinheiten mit aktivem Auto-Update verfügbar.', true);
             return;
         }
         if (!methods[idx]._kgsync || typeof methods[idx]._kgsync !== 'object') {
@@ -994,18 +994,18 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         methods[idx]._kgsync.frozen = currentlyfrozen ? 0 : 1;
         renderList();
         await persist(runtimeCmid);
-        setStatus(methods[idx]._kgsync.frozen ? 'Methode lokal fixiert (kein automatisches Überschreiben).' :
-            'Methode wieder für globale Aktualisierung freigegeben.', false);
+        setStatus(methods[idx]._kgsync.frozen ? 'Seminareinheit lokal fixiert (kein automatisches Überschreiben).' :
+            'Seminareinheit wieder für globale Aktualisierung freigegeben.', false);
     };
 
     const saveEditor = async (cmid) => {
         if (!currentEditId) {
-            setStatus('Bitte zuerst eine Methode auswählen.', true);
+            setStatus('Bitte zuerst eine Seminareinheit auswählen.', true);
             return;
         }
         const idx = methods.findIndex((m) => String(m.id) === String(currentEditId));
         if (idx < 0) {
-            setStatus('Ausgewählte Methode wurde nicht gefunden.', true);
+            setStatus('Ausgewählte Seminareinheit wurde nicht gefunden.', true);
             return;
         }
 
@@ -1066,7 +1066,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             window.history.replaceState({}, '', url.toString());
         }
         suppressLeavePrompt();
-        setStatus('Methode gespeichert.', false);
+        setStatus('Seminareinheit gespeichert.', false);
     };
 
     const loadMethods = (cmid) => {
@@ -1090,7 +1090,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             });
             normalizeMethodAlternatives();
             renderList();
-            setStatus(`Methoden geladen (${methods.length}).`, false);
+            setStatus(`Seminareinheiten geladen (${methods.length}).`, false);
         });
     };
 
@@ -1125,7 +1125,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
         const exists = methods.some((m) => String(m.id) === requested);
         if (!exists) {
-            setStatus('Methode aus Link wurde nicht gefunden.', true);
+            setStatus('Seminareinheit aus Link wurde nicht gefunden.', true);
             return;
         }
         openEditor(requested);
@@ -1159,7 +1159,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (saveallbtn) {
                 saveallbtn.addEventListener('click', () => {
                     persist(cmid).then(() => {
-                        setStatus('Methoden gespeichert.', false);
+                        setStatus('Seminareinheiten gespeichert.', false);
                     }).catch((e) => {
                         Notification.exception(e);
                         setStatus('Speichern fehlgeschlagen.', true);

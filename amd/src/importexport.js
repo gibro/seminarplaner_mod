@@ -362,7 +362,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
         if (previewRows.length) {
             const title = document.createElement('h5');
-            title.textContent = 'Methoden';
+            title.textContent = 'Seminareinheiten';
             host.appendChild(title);
         }
 
@@ -413,7 +413,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 box.innerHTML = `
                     <input type="checkbox" class="kg-ie-check-grid" data-idx="${idx}" ${item.selected ? 'checked' : ''}>
                     <span class="kg-ie-title">${escapeHtml(item.plan.name || '(ohne Namen)')}</span>
-                    <span class="kg-ie-meta">${methodcount} Methoden im Plan</span>
+                    <span class="kg-ie-meta">${methodcount} Seminareinheiten im Plan</span>
                 `;
                 host.appendChild(box);
             });
@@ -480,7 +480,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const exportJsonFull = async (cmid) => {
         const selection = getComponentSelection('export');
         if (selectedComponentCount(selection) === 0) {
-            throw new Error('Bitte mindestens eine Komponente auswählen (Methoden, Bausteine oder Seminarpläne).');
+            throw new Error('Bitte mindestens eine Komponente auswählen (Seminareinheiten, Bausteine oder Seminarpläne).');
         }
         const bausteine = Object.entries(planningUnitsById || {}).map(([id, unit]) => ({
             id: String(id),
@@ -519,7 +519,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const exportedMethods = Array.isArray(payload.methods) ? payload.methods.length : 0;
         const exportedUnits = Array.isArray(payload.bausteine) ? payload.bausteine.length : 0;
         const exportedGrids = Array.isArray(payload.seminarplaene) ? payload.seminarplaene.length : 0;
-        setStatus(`Seminarplaner-JSON exportiert (${exportedMethods} Methoden, ${exportedUnits} Bausteine, ${exportedGrids} Seminarpläne).`, false);
+        setStatus(`Seminarplaner-JSON exportiert (${exportedMethods} Seminareinheiten, ${exportedUnits} Bausteine, ${exportedGrids} Seminarpläne).`, false);
     };
 
     const loadMethods = (cmid) => {
@@ -571,12 +571,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             } else if (res.message) {
                 setGlobalStatus(res.message, true);
             } else if (!globalMethodsets.length) {
-                setGlobalStatus('Keine veröffentlichten globalen Methodensets gefunden.', false);
+                setGlobalStatus('Keine veröffentlichten globalen Konzepte gefunden.', false);
             } else {
-                setGlobalStatus(`${globalMethodsets.length} globale Methodensets verfügbar.`, false);
+                setGlobalStatus(`${globalMethodsets.length} globale Konzepte verfügbar.`, false);
             }
         }).catch((e) => {
-            setGlobalStatus(`Globale Methodensets konnten nicht geladen werden: ${e.message || e}`, true);
+            setGlobalStatus(`Globale Konzepte konnten nicht geladen werden: ${e.message || e}`, true);
         });
     };
 
@@ -610,7 +610,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             autoswitch.checked = false;
             autoswitch.disabled = true;
             applybtn.disabled = true;
-            setGlobalSyncInfo('Bitte zuerst ein globales Set auswählen.', false);
+            setGlobalSyncInfo('Bitte zuerst ein globales Konzept auswählen.', false);
             return;
         }
         if (!selected) {
@@ -618,7 +618,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             autoswitch.checked = !!pendingAutosyncPrefs[setid];
             applybtn.disabled = true;
             setGlobalSyncInfo(
-                'Dieses Set ist noch nicht verknüpft. Auto-Update wird nach dem Import angewendet.',
+                'Dieses Konzept ist noch nicht verknüpft. Auto-Update wird nach dem Import angewendet.',
                 false
             );
             return;
@@ -634,7 +634,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 false
             );
         } else {
-            setGlobalSyncInfo('Aktivität ist auf dem aktuellen Stand dieses Sets.', false);
+            setGlobalSyncInfo('Aktivität ist auf dem aktuellen Stand dieses Konzepts.', false);
         }
     };
 
@@ -1073,7 +1073,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
         doc.setFont(undefined, 'normal');
         doc.setFontSize(10);
-        doc.text(`${escapeTextForPdf(day)} · ${methodCount} Methode(n)`, 14, y);
+        doc.text(`${escapeTextForPdf(day)} · ${methodCount} Seminareinheit(en)`, 14, y);
         y += 12;
 
         doc.setFontSize(11);
@@ -1591,13 +1591,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     step(2);
                     const found = currentImportPayload.components || {};
                     const foundSummary = [
-                        found.methods ? `${previewRows.length} Methoden` : 'keine Methoden',
+                        found.methods ? `${previewRows.length} Seminareinheiten` : 'keine Seminareinheiten',
                         found.units ? `${previewUnits.length} Bausteine` : 'keine Bausteine',
                         found.grids ? `${previewGrids.length} Seminarpläne` : 'keine Seminarpläne'
                     ].join(', ');
                     const msg = previewRows.length
                         ? `Datei analysiert: ${foundSummary}.`
-                        : `Datei analysiert: ${foundSummary}. Es wurden keine Methoden zur Vorschau gefunden.`;
+                        : `Datei analysiert: ${foundSummary}. Es wurden keine Seminareinheiten zur Vorschau gefunden.`;
                     setStatus(msg, false);
                 } catch (e) {
                     currentImportPayload = null;
@@ -1663,7 +1663,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         const saveres = await saveMethods(cmid, result.merged);
                         methods = result.merged;
                         successParts.push(
-                            `Methoden: ${selectedRows.length} verarbeitet (+${result.stats.added}, überschrieben ${result.stats.overwritten}, Kopien ${result.stats.copied}, nicht hinzugefügt ${result.stats.skipped}; gesamt ${saveres.count})`
+                            `Seminareinheiten: ${selectedRows.length} verarbeitet (+${result.stats.added}, überschrieben ${result.stats.overwritten}, Kopien ${result.stats.copied}, nicht hinzugefügt ${result.stats.skipped}; gesamt ${saveres.count})`
                         );
                         postLoads.push(loadMethods(cmid));
                     }
@@ -1793,7 +1793,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             globalSetImportBtn.addEventListener('click', () => {
                 const setid = Number.parseInt(globalSetSelect ? (globalSetSelect.value || '0') : '0', 10) || 0;
                 if (!setid) {
-                    setGlobalStatus('Bitte zuerst ein globales Methodenset auswählen.', true);
+                    setGlobalStatus('Bitte zuerst ein globales Konzept auswählen.', true);
                     return;
                 }
                 asCall('mod_seminarplaner_import_global_methodset', {cmid, methodsetid: setid})
@@ -1813,13 +1813,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     .then((res) => {
                         refreshGlobalSyncUi();
                         setGlobalStatus(
-                            `Import erfolgreich: ${res.importedcount} Methoden aus "${res.setname}" importiert (insgesamt ${res.totalcount}).`,
+                            `Import erfolgreich: ${res.importedcount} Seminareinheiten aus "${res.setname}" importiert (insgesamt ${res.totalcount}).`,
                             false
                         );
                     })
                     .catch((e) => {
                         Notification.exception(e);
-                        setGlobalStatus('Import des globalen Methodensets fehlgeschlagen.', true);
+                        setGlobalStatus('Import des globalen Konzepts fehlgeschlagen.', true);
                     });
             });
         }
@@ -1859,7 +1859,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             globalSetApplyBtn.addEventListener('click', () => {
                 const selected = getSelectedSyncLink();
                 if (!selected) {
-                    setGlobalStatus('Bitte zuerst ein verknüpftes globales Set auswählen.', true);
+                    setGlobalStatus('Bitte zuerst ein verknüpftes globales Konzept auswählen.', true);
                     return;
                 }
                 asCall('mod_seminarplaner_apply_methodset_updates', {

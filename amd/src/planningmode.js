@@ -642,7 +642,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             const title = String(bySel('[data-f="title"]', root)?.value || '').trim();
             if (!title) {
-                this.setStatus('Bitte einen Titel für die Methode eingeben.', true);
+                this.setStatus('Bitte einen Titel für die Seminareinheit eingeben.', true);
                 return null;
             }
             const method = {
@@ -688,12 +688,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 methodsjson: JSON.stringify(this.methods)
             }).then(() => {
                 if (!silent) {
-                    this.setStatus('Methoden gespeichert.', false);
+                    this.setStatus('Seminareinheiten gespeichert.', false);
                 }
             }).catch((error) => {
                 if (!silent) {
                     Notification.exception(error);
-                    this.setStatus('Methoden konnten nicht gespeichert werden.', true);
+                    this.setStatus('Seminareinheiten konnten nicht gespeichert werden.', true);
                 }
             });
         }
@@ -829,7 +829,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const methods = this.methodsForSlot(slotkey);
             pool.innerHTML = '';
             if (!methods.length) {
-                pool.innerHTML = '<p class="sp-filter-status">Keine Methoden für aktuellen Filter.</p>';
+                pool.innerHTML = '<p class="sp-filter-status">Keine Seminareinheiten für aktuellen Filter.</p>';
                 return;
             }
             methods.forEach((method) => {
@@ -1032,12 +1032,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             <div class="sp-filter-status">Aktuell (Schritt 2): ${escapeHtml(String(actualduration))} Min</div>
                             ${hasalternatives ? `<div class="sp-filter-status">Alternativen: ${alternatives.map((entry) => escapeHtml(entry.title)).join(' · ')}</div>` : ''}
                             ${overrun > 0 ? `<div class="sp-filter-status kg-pm-overrun-warning"><span class="kg-pm-warning-triangle" aria-hidden="true"><span>!</span></span><span>Warnung: Geplante Dauer um ${escapeHtml(String(overrun))} Min überschritten.</span></div>` : ''}
-                            <div class="sp-filter-status kg-dnd-hint">Zielbereich: Methoden hier hineinziehen.</div>
+                            <div class="sp-filter-status kg-dnd-hint">Zielbereich: Seminareinheiten hier hineinziehen.</div>
                             <div class="kg-unit-canvas kg-dnd-zone" data-canvas="1"></div>
                         </div>
                         <div class="kg-plan-col">
-                            <h5>Methodenpool</h5>
-                            <div class="sp-filter-status kg-dnd-hint">Quelle: Methodenkarte ziehen und im Zielbereich ablegen.</div>
+                            <h5>Pool der Seminareinheiten</h5>
+                            <div class="sp-filter-status kg-dnd-hint">Quelle: Lernkarte ziehen und im Zielbereich ablegen.</div>
                             <div class="kg-inline-filter">
                                 <input class="kg-input" data-filter="search" type="search" value="${escapeHtml(filter.search)}" placeholder="Suche">
                                 ${renderFilterDropdown('phase', 'Seminarphasen', PHASE_OPTIONS, filter.phase)}
@@ -1047,27 +1047,16 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             <div class="kg-method-pool kg-dnd-source" data-pool="1"></div>
                         </div>
                         <div class="kg-plan-col">
-                            <h5>Methode erstellen</h5>
+                            <h5>Seminareinheit erstellen</h5>
                             <div class="kg-inline-form" data-inline-form="${escapeHtml(slot.key)}">
                                 <label class="kg-label">Titel *</label><input class="kg-input" data-f="title" type="text">
-                                <div class="kg-two">
-                                    <div><label class="kg-label">Zeitbedarf</label><input class="kg-input" data-f="duration" type="number" min="5" step="5" value="30"></div>
-                                    <div><label class="kg-label">Seminarphase</label><select class="kg-input" data-f="phase"><option value="">-</option>${PHASE_OPTIONS.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('')}</select></div>
-                                </div>
-                                <label class="kg-label">Tags</label>
-                                ${renderInlineTagDropdown(slot.key, this.methods)}
+                                <label class="kg-label">Lernziele (Ich kann ...)</label><textarea class="kg-input" data-f="objectives" rows="2"></textarea>
                                 <details><summary>Weitere Felder</summary>
+                                    <label class="kg-label">Zeitbedarf</label><input class="kg-input" data-f="duration" type="number" min="5" step="5" value="30">
                                     <label class="kg-label">Kurzbeschreibung</label><textarea class="kg-input" data-f="description" rows="2"></textarea>
-                                    <label class="kg-label">Lernziele</label><textarea class="kg-input" data-f="objectives" rows="2"></textarea>
-                                    <label class="kg-label">Sozialform (Komma-getrennt)</label><input class="kg-input" data-f="social" type="text">
-                                    <label class="kg-label">Kognitive Dimension (Komma-getrennt)</label><input class="kg-input" data-f="cognitive" type="text">
-                                    <label class="kg-label">Vorbereitung nötig</label><input class="kg-input" data-f="prep" type="text">
-                                    <label class="kg-label">Material/Technik</label><textarea class="kg-input" data-f="materials" rows="2"></textarea>
-                                    <label class="kg-label">Ablauf</label><textarea class="kg-input" data-f="flow" rows="2"></textarea>
-                                    <label class="kg-label">Debrief</label><textarea class="kg-input" data-f="debrief" rows="2"></textarea>
                                 </details>
                                 <div class="kg-row">
-                                    <button class="kg-btn kg-btn-primary" type="button" data-act="inline-create">Methode erstellen & einplanen</button>
+                                    <button class="kg-btn kg-btn-primary" type="button" data-act="inline-create">Seminareinheit erstellen & einplanen</button>
                                     <div class="sp-card kg-inline-drag" draggable="true" data-act="inline-drag">Drag & Drop: In Zielbereich ziehen</div>
                                 </div>
                             </div>
@@ -1079,7 +1068,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 if (canvas) {
                     this.bindCanvasDrop(canvas, unit.id);
                     if (!unit.methods.length) {
-                        canvas.innerHTML = '<p class="sp-filter-status">Methoden hierher ziehen.</p>';
+                        canvas.innerHTML = '<p class="sp-filter-status">Seminareinheiten hierher ziehen.</p>';
                     } else {
                         unit.methods.forEach((entry, index) => {
                             const method = this.getMethodById(entry.methodid);
@@ -1172,7 +1161,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     const title = String(bySel('[data-f="title"]', root)?.value || '').trim();
                     if (!title) {
                         event.preventDefault();
-                        this.setStatus('Titel fehlt für neue Methode.', true);
+                        this.setStatus('Titel fehlt für neue Seminareinheit.', true);
                         return;
                     }
                     event.dataTransfer.setData('text/plain', JSON.stringify({type: 'new-inline-method', slotkey: slot.key}));
@@ -1215,7 +1204,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const social = sequence.map((m) => splitMulti(m.sozialform)[0] || '');
             for (let i = 2; i < social.length; i++) {
                 if (social[i] && social[i] === social[i - 1] && social[i] === social[i - 2]) {
-                    warnings.push('Abwechslung: Drei Methoden hintereinander mit gleicher Sozialform.');
+                    warnings.push('Abwechslung: Drei Seminareinheiten hintereinander mit gleicher Sozialform.');
                     break;
                 }
             }
@@ -1223,7 +1212,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 .some((v) => ['analysieren', 'bewerten', 'erschaffen'].includes(v)));
             for (let i = 2; i < highload.length; i++) {
                 if (highload[i] && highload[i - 1] && highload[i - 2]) {
-                    warnings.push('Rhythmus: Mehrere kognitiv anspruchsvolle Methoden in Folge.');
+                    warnings.push('Rhythmus: Mehrere kognitiv anspruchsvolle Seminareinheiten in Folge.');
                     break;
                 }
             }
