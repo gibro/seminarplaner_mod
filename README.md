@@ -23,13 +23,13 @@ UI-Bereiche:
 - Seminarplan
 - Roter Faden
 - Methodenbibliothek
-- Methodenkarten
+- Seminareinheiten
 - Review
 - Import/Export
 
 Kernfunktionen:
 
-- Anlegen und Verwalten von Methodenkarten in einer Aktivität
+- Anlegen und Verwalten von Seminareinheiten in einer Aktivität
 - Seminarplaner mit der Möglichkeit verschiedene Pläne in einem Seminarplaner abzuspeichern
 - Roter-Faden-Ansicht für Teilnehmende mit veröffentlichbarem Snapshot aus dem Seminarplan
 - Roter-Faden-Struktur nach Tag und der Differenzierung in Vormittag (08:00-12:30) und Nachmittag (12:30-18:00) in Boxen mit Header- und Contentbereich
@@ -40,7 +40,7 @@ Kernfunktionen:
 - PDF-Export-Flows (ZIM / Seminarverlauf)
 - Datei-Uploads für Methodenmaterialien
 
-### 2) `local_seminarplaner` (globale Verwaltung von Methodenkarten)
+### 2) `local_seminarplaner` (globale Verwaltung von Seminareinheiten)
 
 Kernfunktionen:
 

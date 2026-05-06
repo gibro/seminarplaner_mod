@@ -250,9 +250,24 @@ class grid_service {
     private function merge_day_entries(array $currententries, array $incomingentries): array {
         $byuid = [];
         $anonymous = [];
+        $incomingflowids = [];
+
+        foreach ($incomingentries as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $flowid = trim((string)($entry['flowid'] ?? ''));
+            if ($flowid !== '') {
+                $incomingflowids[$flowid] = true;
+            }
+        }
 
         foreach ($currententries as $entry) {
             if (!is_array($entry)) {
+                continue;
+            }
+            $flowid = trim((string)($entry['flowid'] ?? ''));
+            if ($flowid !== '' && isset($incomingflowids[$flowid])) {
                 continue;
             }
             $uid = trim((string)($entry['uid'] ?? ''));

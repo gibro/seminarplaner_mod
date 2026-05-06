@@ -1,7 +1,7 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
 
-require_once(__DIR__ . '/../../config.php');
+require_once(__DIR__ . '/bootstrap.php');
 require_once($CFG->libdir . '/editorlib.php');
 require_once($CFG->libdir . '/formslib.php');
 require_once(__DIR__ . '/locallib.php');
@@ -63,7 +63,7 @@ echo seminarplaner_render_tabs((int)$cm->id, 'methods');
 
 echo html_writer::start_div('kg-shell');
 echo html_writer::start_div('ig-container kg-container-full', ['id' => 'kg-add-method-section']);
-echo html_writer::tag('h3', 'Neue Lernkarte erstellen');
+echo html_writer::tag('h3', 'Neue Seminareinheit erstellen');
 echo html_writer::start_div('ig-nav');
 echo html_writer::link('#kg-section-quick', '1) Schnellfassung');
 echo html_writer::link('#kg-section-quality', '2) Ablauf und Rahmen');

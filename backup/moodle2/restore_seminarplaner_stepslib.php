@@ -48,7 +48,7 @@ class restore_seminarplaner_activity_structure_step extends restore_activity_str
     }
 
     /**
-     * Process shared method cards JSON payload.
+     * Process shared seminar units JSON payload.
      *
      * @param array $data Parsed data.
      * @return void

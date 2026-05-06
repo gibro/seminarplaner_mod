@@ -233,9 +233,9 @@ class api extends external_api {
     }
 
     /**
-     * Map an activity method card to local global-set record format.
+     * Map an activity seminar unit to local global-set record format.
      *
-     * @param array $method Method card payload.
+     * @param array $method Seminar unit payload.
      * @return array<string, mixed>
      */
     private static function map_activity_method_to_global_record(array $method): array {
@@ -470,14 +470,14 @@ class api extends external_api {
 
     public static function get_method_cards_returns(): external_single_structure {
         return new external_single_structure([
-            'methodsjson' => new external_value(PARAM_RAW, 'Method cards as JSON'),
+            'methodsjson' => new external_value(PARAM_RAW, 'Seminar units as JSON'),
         ]);
     }
 
     public static function save_method_cards_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
-            'methodsjson' => new external_value(PARAM_RAW, 'Method cards as JSON'),
+            'methodsjson' => new external_value(PARAM_RAW, 'Seminar units as JSON'),
         ]);
     }
 
@@ -1139,7 +1139,7 @@ class api extends external_api {
             'success' => new external_value(PARAM_BOOL, 'Submit status'),
             'methodsetid' => new external_value(PARAM_INT, 'Method set id'),
             'versionid' => new external_value(PARAM_INT, 'Version id'),
-            'savedcount' => new external_value(PARAM_INT, 'Saved method cards into set version'),
+            'savedcount' => new external_value(PARAM_INT, 'Saved seminar units into set version'),
             'reviewercount' => new external_value(PARAM_INT, 'Assigned reviewers'),
         ]);
     }
@@ -1287,7 +1287,7 @@ class api extends external_api {
             'success' => new external_value(PARAM_BOOL, 'Submit status'),
             'methodsetid' => new external_value(PARAM_INT, 'Method set id'),
             'versionid' => new external_value(PARAM_INT, 'Version id'),
-            'savedcount' => new external_value(PARAM_INT, 'Saved method cards into set version'),
+            'savedcount' => new external_value(PARAM_INT, 'Saved seminar units into set version'),
             'reviewercount' => new external_value(PARAM_INT, 'Assigned reviewers'),
         ]);
     }

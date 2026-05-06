@@ -175,7 +175,7 @@ function seminarplaner_extend_settings_navigation(settings_navigation $settingsn
 }
 
 /**
- * Serve stored files for method card attachments.
+ * Serve stored files for seminar unit attachments.
  *
  * @param stdClass $course
  * @param stdClass $cm

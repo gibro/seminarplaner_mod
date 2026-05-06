@@ -1,7 +1,7 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
 
-require_once(__DIR__ . '/../../config.php');
+require_once(__DIR__ . '/bootstrap.php');
 require_once(__DIR__ . '/locallib.php');
 
 $id = required_param('id', PARAM_INT);
@@ -33,7 +33,7 @@ echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block');
 echo html_writer::tag('h4', 'Geänderte oder neue Seminareinheiten bereitstellen');
-echo html_writer::tag('p', 'Nach Auswahl eines Konzepts erscheinen hier neue/geänderte Lernkarten für das bestehende Konzept.');
+echo html_writer::tag('p', 'Nach Auswahl eines Konzepts erscheinen hier neue/geänderte Seminareinheiten für das bestehende Konzept.');
 echo html_writer::start_div('kg-row');
 echo html_writer::tag('button', 'Alle auswählen', ['type' => 'button', 'id' => 'kg-review-existing-select-all', 'class' => 'kg-btn']);
 echo html_writer::tag('button', 'Keine auswählen', ['type' => 'button', 'id' => 'kg-review-existing-select-none', 'class' => 'kg-btn']);

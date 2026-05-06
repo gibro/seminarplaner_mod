@@ -1,7 +1,7 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
 
-require_once(__DIR__ . '/../../config.php');
+require_once(__DIR__ . '/bootstrap.php');
 require_once($CFG->libdir . '/editorlib.php');
 require_once($CFG->libdir . '/formslib.php');
 require_once(__DIR__ . '/locallib.php');

@@ -654,10 +654,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'lernkarten-export.json';
+        a.download = 'seminareinheiten-export.json';
         a.click();
         URL.revokeObjectURL(url);
-        setStatus('Lernkarten exportiert.', false);
+        setStatus('Seminareinheiten exportiert.', false);
     };
 
     const parseCsvTable = (csvText) => {
@@ -823,7 +823,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
         methods = parsed.map((m) => ({id: m.id || uid(), ...m}));
         render();
-        setStatus(`Lernkarten importiert (${methods.length}).`, false);
+        setStatus(`Seminareinheiten importiert (${methods.length}).`, false);
     };
 
     const importFromCsvText = (text) => {
@@ -839,7 +839,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
         methods = mapped;
         render();
-        setStatus(`CSV importiert (${methods.length} Lernkarten).`, false);
+        setStatus(`CSV importiert (${methods.length} Seminareinheiten).`, false);
     };
 
     const importFromZipFile = async (file) => {

@@ -570,11 +570,47 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         startItemResize(event, item, day, edge) {
-            if (!item || (item.kind !== 'method' && item.kind !== 'break')) {
+            if (!item || (item.kind !== 'method' && item.kind !== 'unit' && item.kind !== 'break')) {
                 return;
             }
             if (item.flowid && Number(item.flowTotal || 1) > 1) {
-                this.warn('Fortsetzungen können nicht segmentweise per Ziehen angepasst werden.');
+                event.preventDefault();
+                event.stopPropagation();
+                const flowid = String(item.flowid || '');
+                const entries = this.flowEntries(flowid);
+                const first = entries[0] || null;
+                const last = entries.length ? entries[entries.length - 1] : null;
+                const isFirst = first && String(first.uid) === String(item.uid);
+                const isLast = last && String(last.uid) === String(item.uid);
+                if ((edge === 'start' && !isFirst) || (edge !== 'start' && !isLast)) {
+                    this.warn('Geteilte Elemente bitte am ersten Abschnitt oben oder am letzten Abschnitt unten anpassen.');
+                    return;
+                }
+                const itemElement = event.currentTarget && typeof event.currentTarget.closest === 'function'
+                    ? event.currentTarget.closest('.sp-item')
+                    : null;
+                if (itemElement) {
+                    itemElement.dataset.wasDraggable = itemElement.draggable ? '1' : '0';
+                    itemElement.draggable = false;
+                }
+                this.resizeState = {
+                    day,
+                    uid: String(item.uid),
+                    flowid,
+                    groupEntries: entries,
+                    edge: edge === 'start' ? 'start' : 'end',
+                    originY: Number(this.getPointerClientY(event) || 0),
+                    startMin: Number(first.startMin || 0),
+                    endMin: Number(last.endMin || 0),
+                    totalDuration: entries.reduce((sum, entry) => sum + this.getEntryDuration(entry), 0),
+                    firstDay: first.day,
+                    firstStartMin: Number(first.startMin || 0),
+                    lastDay: last.day,
+                    lastEndMin: Number(last.endMin || 0),
+                    itemElement,
+                    snapshot: this.clonePlanDays()
+                };
+                document.body.classList.add('sp-resizing');
                 return;
             }
             event.preventDefault();
@@ -600,6 +636,53 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
         updateItemResize(event) {
             if (!this.resizeState) {
+                return;
+            }
+            if (this.resizeState.flowid) {
+                const level = ZOOM_LEVELS[this.zoomIndex];
+                const dy = Number(this.getPointerClientY(event) || 0) - this.resizeState.originY;
+                const stepPx = Number(level.slotPx || 1);
+                const stepMin = Number(level.slotMinutes || 15);
+                const movedSteps = Math.round(dy / stepPx);
+                const movedMin = movedSteps * stepMin;
+                const minDuration = Number(this.state.config.granularity || 15);
+                let rangeStartDay = this.resizeState.firstDay;
+                let rangeStartMin = this.resizeState.firstStartMin;
+                let rangeEndDay = this.resizeState.lastDay;
+                let rangeEndMin = this.resizeState.lastEndMin;
+                if (this.resizeState.edge === 'start') {
+                    rangeStartDay = this.resizeState.day;
+                    rangeStartMin = Number(this.resizeState.startMin || 0) + movedMin;
+                } else {
+                    rangeEndDay = this.resizeState.day;
+                    rangeEndMin = Number(this.resizeState.endMin || 0) + movedMin;
+                }
+
+                const originalEntries = (Array.isArray(this.resizeState.groupEntries) && this.resizeState.groupEntries.length)
+                    ? this.resizeState.groupEntries
+                    : this.flowEntriesFromSnapshot(this.resizeState.snapshot, this.resizeState.flowid);
+                this.restorePlanDays(this.resizeState.snapshot);
+                this.removeFlow(this.resizeState.flowid);
+                const group = {
+                    entries: originalEntries
+                };
+                const meta = this.entryPayloadFromGroup(group);
+                const segments = this.allocateBetweenPoints(rangeStartDay, rangeStartMin, rangeEndDay, rangeEndMin);
+                const duration = segments.reduce((sum, segment) => sum + (segment.endMin - segment.startMin), 0);
+                if (duration < minDuration) {
+                    this.restorePlanDays(this.resizeState.snapshot);
+                    return;
+                }
+                meta.payload.duration = duration;
+                const added = this.addItemsFromSegments(meta.kind, meta.payload, segments, {
+                    flowid: this.resizeState.flowid,
+                    preferredUids: originalEntries.map((entry) => String(entry.uid || '')).filter(Boolean)
+                });
+                if (!added) {
+                    this.restorePlanDays(this.resizeState.snapshot);
+                    return;
+                }
+                this.renderOverlays();
                 return;
             }
             const list = this.state.plan.days[this.resizeState.day] || [];
@@ -852,6 +935,23 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return start + (idx * slotMinutes);
         }
 
+        dropEventToStartMinute(event, day, fallbackIndex = 0) {
+            const start = parseTimeToMinutes(this.state.config.timeRange.start);
+            const end = parseTimeToMinutes(this.state.config.timeRange.end);
+            const level = ZOOM_LEVELS[this.zoomIndex];
+            const slotMinutes = Number(level.slotMinutes || 15);
+            const slotPx = Number(level.slotPx || 1);
+            const target = document.querySelector(`[data-overlay="${day}"]`) || document.querySelector(`.sp-grid[data-day="${day}"]`);
+            if (!target || typeof event.clientY !== 'number') {
+                return this.indexToMinutes(fallbackIndex);
+            }
+            const rect = target.getBoundingClientRect();
+            const rawIndex = Math.round((event.clientY - rect.top) / slotPx);
+            const maxIndex = Math.max(0, Math.floor((end - start) / slotMinutes) - 1);
+            const index = Math.max(0, Math.min(maxIndex, rawIndex));
+            return this.indexToMinutes(index);
+        }
+
         withinBounds(s, e) {
             const start = parseTimeToMinutes(this.state.config.timeRange.start);
             const end = parseTimeToMinutes(this.state.config.timeRange.end);
@@ -864,6 +964,263 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
         hasCollision(list, candidate) {
             return (list || []).some((it) => this.overlaps(it, candidate));
+        }
+
+        comparePlanPoints(dayA, minA, dayB, minB) {
+            const aidx = this.state.config.days.indexOf(dayA);
+            const bidx = this.state.config.days.indexOf(dayB);
+            if (aidx !== bidx) {
+                return aidx - bidx;
+            }
+            return Number(minA || 0) - Number(minB || 0);
+        }
+
+        comparePlanEntries(a, b) {
+            const aday = this.state.config.days.indexOf(a.day);
+            const bday = this.state.config.days.indexOf(b.day);
+            if (aday !== bday) {
+                return aday - bday;
+            }
+            return Number(a.startMin || 0) - Number(b.startMin || 0);
+        }
+
+        clonePlanDays() {
+            return JSON.parse(JSON.stringify(this.state.plan.days || {}));
+        }
+
+        restorePlanDays(snapshot) {
+            this.state.plan.days = JSON.parse(JSON.stringify(snapshot || {}));
+            this.ensurePlanDays();
+        }
+
+        getEntryFlowKey(entry) {
+            const flowid = String(entry && entry.flowid ? entry.flowid : '').trim();
+            return flowid ? `flow:${flowid}` : `entry:${String(entry && entry.uid ? entry.uid : uid())}`;
+        }
+
+        getEntryDuration(entry) {
+            return Math.max(0, Number(entry.endMin || 0) - Number(entry.startMin || 0));
+        }
+
+        entryPayloadFromGroup(group) {
+            const entries = (group && Array.isArray(group.entries) ? group.entries : []).slice().sort((a, b) => this.comparePlanEntries(a, b));
+            const first = entries[0] || {};
+            const duration = entries.reduce((sum, entry) => sum + this.getEntryDuration(entry), 0);
+            if (first.kind === 'unit') {
+                return {
+                    kind: 'unit',
+                    flowid: String(first.flowid || '').trim() || uid(),
+                    payload: {
+                        title: first.title,
+                        duration,
+                        unitid: first.unitid,
+                        slotkey: first.slotkey
+                    },
+                    first
+                };
+            }
+            return {
+                kind: 'method',
+                flowid: String(first.flowid || '').trim() || uid(),
+                payload: {
+                    title: first.title,
+                    duration,
+                    cardHtml: first.cardHtml,
+                    entryId: first.entryId,
+                    details: first.details,
+                    phase: first.phase,
+                    cognitive: first.cognitive,
+                    cognitiveLevel: first.cognitiveLevel,
+                    parentunit: first.parentunit
+                },
+                first
+            };
+        }
+
+        collectReflowGroups(startDay, startMin, options = {}) {
+            const includeTouching = !!options.includeTouching;
+            const groups = new Map();
+            const qualifies = (entry, day) => {
+                if (!entry || entry.kind === 'break') {
+                    return false;
+                }
+                const dayIndex = this.state.config.days.indexOf(day);
+                const startIndex = this.state.config.days.indexOf(startDay);
+                if (dayIndex < startIndex) {
+                    return false;
+                }
+                if (dayIndex > startIndex) {
+                    return true;
+                }
+                const endMin = Number(entry.endMin || 0);
+                return includeTouching ? endMin >= startMin : endMin > startMin;
+            };
+
+            this.state.config.days.forEach((day) => {
+                (this.state.plan.days[day] || []).forEach((entry) => {
+                    if (!qualifies(entry, day)) {
+                        return;
+                    }
+                    const key = this.getEntryFlowKey(entry);
+                    if (!groups.has(key)) {
+                        groups.set(key, {key, entries: []});
+                    }
+                });
+            });
+
+            if (!groups.size) {
+                return [];
+            }
+
+            this.state.config.days.forEach((day) => {
+                const kept = [];
+                (this.state.plan.days[day] || []).forEach((entry) => {
+                    const key = this.getEntryFlowKey(entry);
+                    if (groups.has(key)) {
+                        groups.get(key).entries.push(Object.assign({day}, entry));
+                        return;
+                    }
+                    kept.push(entry);
+                });
+                this.state.plan.days[day] = kept;
+            });
+
+            return Array.from(groups.values())
+                .map((group) => Object.assign({}, group, {
+                    entries: group.entries.slice().sort((a, b) => this.comparePlanEntries(a, b))
+                }))
+                .filter((group) => group.entries.length)
+                .sort((a, b) => this.comparePlanEntries(a.entries[0], b.entries[0]));
+        }
+
+        reflowGroups(groups) {
+            for (const group of (groups || [])) {
+                const meta = this.entryPayloadFromGroup(group);
+                if (!meta.first || !this.getEntryDuration(meta.first)) {
+                    continue;
+                }
+                const added = this.addSegmentedItems(meta.kind, meta.payload, meta.first.day, meta.first.startMin, {flowid: meta.flowid});
+                if (!added) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        hasBreakCollision(candidate, ignoreUid = '') {
+            return this.state.config.days.some((day) => {
+                if (String(day) !== String(candidate.day)) {
+                    return false;
+                }
+                return (this.state.plan.days[day] || []).some((entry) => {
+                    return entry.kind === 'break'
+                        && String(entry.uid || '') !== String(ignoreUid || '')
+                        && this.overlaps(entry, candidate);
+                });
+            });
+        }
+
+        placeBreakAndReflow(candidate, options = {}) {
+            const item = Object.assign({
+                uid: uid(),
+                title: 'Pause',
+                kind: 'break',
+                details: {}
+            }, candidate || {});
+            const day = String(item.day || '');
+            const ignoreUid = String(options.ignoreUid || item.uid || '');
+            if (!day || !this.state.config.days.includes(day)) {
+                this.warn('Ungültiger Zieltag für die Pause.');
+                return false;
+            }
+            if (!this.withinBounds(item.startMin, item.endMin)) {
+                this.warn('Pause liegt außerhalb des Zeitrasters.');
+                return false;
+            }
+            if (this.hasBreakCollision(Object.assign({}, item, {day}), ignoreUid)) {
+                this.warn('Pause überschneidet sich mit einer anderen Pause.');
+                return false;
+            }
+
+            const snapshot = this.clonePlanDays();
+            const groups = this.collectReflowGroups(day, Number(item.startMin || 0));
+            if (!this.state.plan.days[day]) {
+                this.state.plan.days[day] = [];
+            }
+            const clean = Object.assign({}, item);
+            delete clean.day;
+            this.state.plan.days[day].push(clean);
+            if (!this.reflowGroups(groups)) {
+                this.restorePlanDays(snapshot);
+                return false;
+            }
+            this.clearWarn();
+            return true;
+        }
+
+        reflowAfterBreakRemoval(day, startMin) {
+            const snapshot = this.clonePlanDays();
+            const groups = this.collectReflowGroups(day, startMin, {includeTouching: true});
+            if (!this.reflowGroups(groups)) {
+                this.restorePlanDays(snapshot);
+                return false;
+            }
+            this.clearWarn();
+            return true;
+        }
+
+        allocateBetweenPoints(startDay, startMin, endDay, endMin) {
+            const dayStart = parseTimeToMinutes(this.state.config.timeRange.start);
+            const dayEnd = parseTimeToMinutes(this.state.config.timeRange.end);
+            let rangeStartDay = String(startDay || '');
+            let rangeEndDay = String(endDay || '');
+            let rangeStartMin = Number(startMin || 0);
+            let rangeEndMin = Number(endMin || 0);
+            if (!this.state.config.days.includes(rangeStartDay) || !this.state.config.days.includes(rangeEndDay)) {
+                return [];
+            }
+            if (this.comparePlanPoints(rangeStartDay, rangeStartMin, rangeEndDay, rangeEndMin) > 0) {
+                const swapDay = rangeStartDay;
+                const swapMin = rangeStartMin;
+                rangeStartDay = rangeEndDay;
+                rangeStartMin = rangeEndMin;
+                rangeEndDay = swapDay;
+                rangeEndMin = swapMin;
+            }
+
+            const startIdx = this.state.config.days.indexOf(rangeStartDay);
+            const endIdx = this.state.config.days.indexOf(rangeEndDay);
+            const segments = [];
+            for (let idx = startIdx; idx <= endIdx; idx++) {
+                const day = this.state.config.days[idx];
+                const from = idx === startIdx ? Math.max(dayStart, rangeStartMin) : dayStart;
+                const to = idx === endIdx ? Math.min(dayEnd, rangeEndMin) : dayEnd;
+                if (to <= from) {
+                    continue;
+                }
+                let pointer = from;
+                const blockers = (this.state.plan.days[day] || [])
+                    .filter((entry) => entry && entry.endMin > from && entry.startMin < to)
+                    .map((entry) => ({
+                        start: Math.max(from, Number(entry.startMin || 0)),
+                        end: Math.min(to, Number(entry.endMin || 0))
+                    }))
+                    .filter((entry) => entry.end > entry.start)
+                    .sort((a, b) => a.start - b.start);
+
+                blockers.forEach((blocker) => {
+                    if (blocker.start > pointer) {
+                        segments.push({day, startMin: pointer, endMin: blocker.start});
+                    }
+                    if (blocker.end > pointer) {
+                        pointer = blocker.end;
+                    }
+                });
+                if (pointer < to) {
+                    segments.push({day, startMin: pointer, endMin: to});
+                }
+            }
+            return segments;
         }
 
         getBlockedRangesByDay(skipflow = '') {
@@ -1618,8 +1975,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             e.preventDefault();
                             return;
                         }
+                        div.classList.add('sp-item--dragging');
                         e.dataTransfer.setData('text/plain', JSON.stringify({type: 'move', day, uid: it.uid}));
                     });
+                    div.addEventListener('dragend', () => {
+                        div.classList.remove('sp-item--dragging');
+                    });
+                    div.addEventListener('dragover', (event) => event.preventDefault());
+                    div.addEventListener('drop', (event) => this.onDrop(event, {getAttribute: () => day}, this.minutesToIndex(it.startMin)));
 
                     let title = it.title || '';
                     if (it.flowTotal > 1 && it.flowOrder > 1) {
@@ -2032,6 +2395,65 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             };
         }
 
+        addItemsFromSegments(kind, payload, segments, options = {}) {
+            const cleanSegments = (Array.isArray(segments) ? segments : [])
+                .filter((segment) => segment && segment.endMin > segment.startMin);
+            if (!cleanSegments.length) {
+                this.warn('Kein freier Zeitraum im Raster verfügbar.');
+                return null;
+            }
+
+            const collisions = cleanSegments.some((segment) => {
+                const list = this.state.plan.days[segment.day] || [];
+                return this.hasCollision(list, segment);
+            });
+            if (collisions) {
+                this.warn('Zeitüberschneidung im Zielbereich.');
+                return null;
+            }
+
+            const flowid = options.flowid || uid();
+            const preferredUids = Array.isArray(options.preferredUids) ? options.preferredUids : [];
+            const total = cleanSegments.length;
+            const created = cleanSegments.map((segment, index) => {
+                const base = {
+                    uid: preferredUids[index] || uid(),
+                    flowid,
+                    flowOrder: index + 1,
+                    flowTotal: total,
+                    title: payload.title || (kind === 'unit' ? 'Baustein' : 'Seminareinheit'),
+                    day: segment.day,
+                    startMin: segment.startMin,
+                    endMin: segment.endMin,
+                    kind
+                };
+                if (kind === 'unit') {
+                    base.unitid = String(payload.unitid || '');
+                    base.slotkey = String(payload.slotkey || '');
+                } else {
+                    base.cardHtml = payload.cardHtml || '';
+                    base.entryId = payload.entryId || null;
+                    base.details = payload.details || {};
+                    base.phase = payload.phase || '';
+                    base.cognitive = payload.cognitive || '';
+                    base.cognitiveLevel = payload.cognitiveLevel || null;
+                    if (payload.parentunit) {
+                        base.parentunit = String(payload.parentunit);
+                    }
+                }
+                return Object.assign(base, options.extra || {});
+            });
+
+            created.forEach((entry) => {
+                if (!this.state.plan.days[entry.day]) {
+                    this.state.plan.days[entry.day] = [];
+                }
+                this.state.plan.days[entry.day].push(entry);
+            });
+            const last = created[created.length - 1];
+            return {entries: created, endday: last.day, endmin: last.endMin};
+        }
+
         handleAddMethod(payload, day, startMin) {
             const result = this.addSegmentedItems('method', payload, day, startMin);
             if (!result) {
@@ -2097,6 +2519,27 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             });
         }
 
+        flowEntriesFromSnapshot(snapshot, flowid) {
+            const list = [];
+            const days = snapshot || {};
+            this.state.config.days.forEach((day) => {
+                (days[day] || []).forEach((entry) => {
+                    if (String(entry.flowid || '') === String(flowid)) {
+                        list.push(Object.assign({day}, entry));
+                    }
+                });
+            });
+            return list.sort((a, b) => {
+                if (a.flowOrder && b.flowOrder) {
+                    return a.flowOrder - b.flowOrder;
+                }
+                if (a.day === b.day) {
+                    return a.startMin - b.startMin;
+                }
+                return this.state.config.days.indexOf(a.day) - this.state.config.days.indexOf(b.day);
+            });
+        }
+
         removeFlow(flowid) {
             this.state.config.days.forEach((day) => {
                 this.state.plan.days[day] = (this.state.plan.days[day] || []).filter((entry) => String(entry.flowid || '') !== String(flowid));
@@ -2107,6 +2550,34 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const items = this.state.plan.days[payload.day] || [];
             const moving = items.find((x) => x.uid === payload.uid);
             if (!moving) {
+                return;
+            }
+            if (moving.kind === 'break') {
+                const snapshot = this.clonePlanDays();
+                const oldDay = String(payload.day || '');
+                const oldStart = Number(moving.startMin || 0);
+                const duration = this.getEntryDuration(moving);
+                this.state.plan.days[oldDay] = (this.state.plan.days[oldDay] || [])
+                    .filter((entry) => String(entry.uid) !== String(moving.uid));
+                if (!this.reflowAfterBreakRemoval(oldDay, oldStart)) {
+                    this.restorePlanDays(snapshot);
+                    return;
+                }
+                const placed = this.placeBreakAndReflow({
+                    uid: moving.uid,
+                    day,
+                    title: moving.title || 'Pause',
+                    startMin,
+                    endMin: startMin + duration,
+                    kind: 'break',
+                    details: moving.details || {}
+                }, {ignoreUid: moving.uid});
+                if (!placed) {
+                    this.restorePlanDays(snapshot);
+                    return;
+                }
+                this.setStatus('Pause verschoben. Elemente wurden neu eingeteilt. Speichern läuft ...', false);
+                this.savePlan();
                 return;
             }
             if (moving.flowid) {
@@ -2166,6 +2637,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
         onDrop(event, grid, slotIndex) {
             event.preventDefault();
+            event.stopPropagation();
             const day = grid.getAttribute('data-day');
             if (!day) {
                 return;
@@ -2181,7 +2653,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 payload = {};
             }
 
-            const startMin = this.indexToMinutes(slotIndex);
+            const startMin = this.dropEventToStartMinute(event, day, slotIndex);
             if (payload.type === 'move') {
                 this.handleMoveItem(payload, day, startMin);
             }
@@ -2226,7 +2698,15 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
 
             if (act === 'delete') {
-                if (item.flowid) {
+                if (item.kind === 'break') {
+                    const snapshot = this.clonePlanDays();
+                    const startMin = Number(item.startMin || 0);
+                    list.splice(idx, 1);
+                    if (!this.reflowAfterBreakRemoval(day, startMin)) {
+                        this.restorePlanDays(snapshot);
+                        return;
+                    }
+                } else if (item.flowid) {
                     this.removeFlow(item.flowid);
                 } else {
                     list.splice(idx, 1);
@@ -2390,27 +2870,30 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         : uid();
                     const item = {
                         uid: baseUid,
+                        day,
                         title: 'Pause',
                         startMin,
                         endMin: startMin + duration,
                         kind: 'break',
                         details: {}
                     };
-                    if (!this.withinBounds(item.startMin, item.endMin)) {
-                        this.warn('Pause liegt außerhalb des Zeitrasters.');
-                        return;
-                    }
-                    const collisionList = (this.state.plan.days[day] || []).filter((entry) => String(entry.uid) !== baseUid);
-                    if (this.hasCollision(collisionList, item)) {
-                        this.warn('Pause überschneidet sich mit einer Seminareinheit.');
-                        return;
-                    }
+                    const snapshot = this.clonePlanDays();
                     if (this.breakEditRef && this.breakEditRef.day) {
                         const oldday = this.breakEditRef.day;
+                        const olditem = (this.state.plan.days[oldday] || [])
+                            .find((entry) => String(entry.uid) === baseUid);
+                        const oldstart = olditem ? Number(olditem.startMin || 0) : startMin;
                         this.state.plan.days[oldday] = (this.state.plan.days[oldday] || [])
                             .filter((entry) => String(entry.uid) !== baseUid);
+                        if (!this.reflowAfterBreakRemoval(oldday, oldstart)) {
+                            this.restorePlanDays(snapshot);
+                            return;
+                        }
                     }
-                    this.state.plan.days[day].push(item);
+                    if (!this.placeBreakAndReflow(item, {ignoreUid: baseUid})) {
+                        this.restorePlanDays(snapshot);
+                        return;
+                    }
                     this.breakEditRef = null;
                     this.closeBreakModal();
                     this.savePlan();
@@ -2482,7 +2965,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             const fallback = {
                 id: item.entryId || '',
-                title: item.title || 'Lernkarte',
+                title: item.title || 'Seminareinheit',
                 duration: Math.max(5, Number((item.endMin || 0) - (item.startMin || 0)) || 5),
                 group: '',
                 phase: item.phase || '',
@@ -2513,7 +2996,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 <div class="sp-modal__backdrop" data-modal-close="method-detail"></div>
                 <div class="sp-modal__dialog sp-modal__dialog--large" role="dialog" aria-modal="true" aria-labelledby="sp-method-detail-title">
                     <header class="sp-modal__header">
-                        <h2 id="sp-method-detail-title">Lernkarte</h2>
+                        <h2 id="sp-method-detail-title">Seminareinheit</h2>
                         <button type="button" class="sp-modal__close" data-modal-close="method-detail" aria-label="Popup schließen">X</button>
                     </header>
                     <div class="sp-modal__body sp-method-detail__body" id="sp-method-detail-body"></div>
@@ -2549,7 +3032,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const body = this.methodDetailModal.querySelector('#sp-method-detail-body');
             const editBtn = this.methodDetailModal.querySelector('#sp-method-detail-edit');
             if (title) {
-                title.textContent = cardData.title || 'Lernkarte';
+                title.textContent = cardData.title || 'Seminareinheit';
             }
             if (body) {
                 body.innerHTML = this.buildMethodDetailBody(cardData);

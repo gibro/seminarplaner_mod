@@ -9,7 +9,7 @@ use moodle_url;
 defined('MOODLE_INTERNAL') || die();
 
 /**
- * Persists method cards shared per activity.
+ * Persists seminar units shared per activity.
  */
 class method_card_service {
     /** @var string */
@@ -169,7 +169,7 @@ class method_card_service {
     }
 
     /**
-     * Get method cards for an activity.
+     * Get seminar units for an activity.
      *
      * @param int $cmid Course module id.
      * @param int $userid User id.
@@ -254,12 +254,12 @@ class method_card_service {
     }
 
     /**
-     * Save method cards for a user/activity.
+     * Save seminar units for a user/activity.
      *
      * @param int $cmid Course module id.
      * @param int $userid User id.
      * @param int $contextid Module context id.
-     * @param array $methods Method card array.
+     * @param array $methods Seminar unit array.
      * @return void
      */
     public function save_methods(int $cmid, int $userid, int $contextid, array $methods): void {

@@ -1179,6 +1179,11 @@
   cursor: grabbing;
 }
 
+.sp-item--dragging {
+  opacity: .45;
+  pointer-events: none;
+}
+
 .sp-item:focus-within {
   outline: 2px solid rgba(14, 165, 233, .7);
   outline-offset: 2px;
@@ -1538,20 +1543,21 @@
 
 .sp-resize-handle {
   position: absolute;
-  left: 4px;
-  right: 4px;
-  height: 12px;
+  left: 0;
+  right: 0;
+  height: 18px;
   cursor: ns-resize;
-  z-index: 5;
+  z-index: 30;
   touch-action: none;
+  user-select: none;
 }
 
 .sp-resize-handle--top {
-  top: -2px;
+  top: -6px;
 }
 
 .sp-resize-handle--bottom {
-  bottom: -2px;
+  bottom: -6px;
 }
 
 .sp-resize-handle::after {
@@ -1563,6 +1569,7 @@
   height: 2px;
   border-radius: 999px;
   background: rgba(51, 65, 85, .45);
+  pointer-events: none;
 }
 
 .sp-resize-handle--top::after {
@@ -3080,7 +3087,7 @@ body.sp-resizing * {
 /* Print Styles removed - now using PDF export */
 
 /* =========================================
-   SINGLE TEMPLATE (Methodenkarte)
+   SINGLE TEMPLATE (Seminareinheit)
    ========================================= */
 .ig-wrap {
   --card-bg: var(--color-background);

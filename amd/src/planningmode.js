@@ -1037,7 +1037,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         </div>
                         <div class="kg-plan-col">
                             <h5>Pool der Seminareinheiten</h5>
-                            <div class="sp-filter-status kg-dnd-hint">Quelle: Lernkarte ziehen und im Zielbereich ablegen.</div>
+                            <div class="sp-filter-status kg-dnd-hint">Quelle: Seminareinheit ziehen und im Zielbereich ablegen.</div>
                             <div class="kg-inline-filter">
                                 <input class="kg-input" data-filter="search" type="search" value="${escapeHtml(filter.search)}" placeholder="Suche">
                                 ${renderFilterDropdown('phase', 'Seminarphasen', PHASE_OPTIONS, filter.phase)}

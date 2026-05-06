@@ -1,7 +1,7 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
 
-require_once(__DIR__ . '/../../config.php');
+require_once(__DIR__ . '/bootstrap.php');
 
 $id = optional_param('id', 0, PARAM_INT);
 $n = optional_param('n', 0, PARAM_INT);

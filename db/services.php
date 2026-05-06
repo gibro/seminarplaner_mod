@@ -7,14 +7,14 @@ $functions = [
     'mod_seminarplaner_get_method_cards' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'get_method_cards',
-        'description' => 'Get method cards for current user/activity.',
+        'description' => 'Get seminar units for current user/activity.',
         'type' => 'read',
         'ajax' => true,
     ],
     'mod_seminarplaner_save_method_cards' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'save_method_cards',
-        'description' => 'Save method cards for current user/activity.',
+        'description' => 'Save seminar units for current user/activity.',
         'type' => 'write',
         'ajax' => true,
     ],
@@ -28,7 +28,7 @@ $functions = [
     'mod_seminarplaner_import_global_methodset' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'import_global_methodset',
-        'description' => 'Import a global method set into the current activity method cards.',
+        'description' => 'Import a global method set into the current activity seminar units.',
         'type' => 'write',
         'ajax' => true,
     ],

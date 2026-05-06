@@ -9,7 +9,7 @@ use context_module;
 defined('MOODLE_INTERNAL') || die();
 
 /**
- * Synchronizes linked activity method cards with published global method set versions.
+ * Synchronizes linked activity seminar units with published global method set versions.
  */
 class methodset_sync_service {
     /** @var string[] Method-card fields managed by sync hashes. */
@@ -304,7 +304,7 @@ class methodset_sync_service {
     }
 
     /**
-     * Resolve users that currently hold method cards for an activity.
+     * Resolve users that currently hold seminar units for an activity.
      *
      * @param int $cmid
      * @param int $fallbackuserid
@@ -495,7 +495,7 @@ class methodset_sync_service {
     }
 
     /**
-     * Map global method db row to activity method card payload.
+     * Map global method db row to activity seminar unit payload.
      *
      * @param \stdClass $row
      * @param int $setid

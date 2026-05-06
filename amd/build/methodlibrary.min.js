@@ -943,7 +943,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         if (!method) {
             return;
         }
-        const yes = window.confirm(`Lernkarte "${method.titel || ''}" wirklich löschen?`);
+        const yes = window.confirm(`Seminareinheit "${method.titel || ''}" wirklich löschen?`);
         if (!yes) {
             return;
         }
