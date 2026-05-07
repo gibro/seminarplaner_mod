@@ -198,6 +198,38 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             .map((v) => stripHtml(v))
             .filter(Boolean);
     };
+    const normalizePhase = (phase) => {
+        const clean = stripHtml(phase);
+        const aliases = {
+            'warm-up': 'Orientierung',
+            'einstieg': 'Orientierung',
+            'erwartungsabfrage': 'Erfahrungserhebung',
+            'vorwissen aktivieren': 'Erfahrungserhebung',
+            'wissen vermitteln': 'Analyse',
+            'reflexion': 'Handlungsteil',
+            'evaluation/feedback': 'Transfer',
+            'evaluation / feedback': 'Transfer',
+            'abschluss': 'Transfer'
+        };
+        return aliases[clean.toLowerCase()] || clean;
+    };
+    const normalizePhases = (phases) => {
+        const seen = {};
+        return (Array.isArray(phases) ? phases : [])
+            .map(normalizePhase)
+            .filter((phase) => {
+                if (!phase) {
+                    return false;
+                }
+                const key = phase.toLowerCase();
+                if (seen[key]) {
+                    return false;
+                }
+                seen[key] = true;
+                return true;
+            });
+    };
+    const normalizePhaseText = (value) => normalizePhases(splitMultiString(value)).join(', ');
 
     const parseCsvTable = (csvText) => {
         const text = String(csvText || '').replace(/^\uFEFF/, '');
@@ -317,7 +349,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return {
             id: uid(),
             titel,
-            seminarphase: splitMultiString(readFirst(row, ['Seminarphase', 'seminarphase'])),
+            seminarphase: normalizePhases(splitMultiString(readFirst(row, ['Seminarphase', 'seminarphase']))),
             zeitbedarf: stripHtml(readFirst(row, ['Zeitbedarf', 'zeitbedarf'])),
             gruppengroesse: stripHtml(readFirst(row, ['Gruppengröße', 'Gruppengroesse', 'gruppengroesse'])),
             kurzbeschreibung: readRichTextField(row, ['Kurzbeschreibung', 'kurzbeschreibung']),
@@ -960,7 +992,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             case 'titel':
                 return escapeTextForPdf(item.title || '');
             case 'seminarphase':
-                return escapeTextForPdf(item.phase || details.phase || '');
+                return escapeTextForPdf(normalizePhaseText(item.phase || details.phase || ''));
             case 'kognitive':
                 return escapeTextForPdf(getCognitiveLabel(item));
             case 'kurzbeschreibung':
@@ -1119,7 +1151,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         y += 8;
 
         const sections = [
-            {label: 'Seminarphase', content: item.phase || details.phase || ''},
+            {label: 'Seminarphase', content: normalizePhaseText(item.phase || details.phase || '')},
             {label: 'Kognitive Dimension', content: getCognitiveLabel(item)},
             {label: 'Gruppengröße', content: item.group || details.group || ''},
             {label: 'Tags', content: item.tags || details.tags || ''},

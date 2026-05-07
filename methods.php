@@ -86,17 +86,7 @@ echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
 echo html_writer::start_div();
 echo html_writer::tag('label', 'Seminarphase', ['for' => 'kg-f-seminarphase', 'class' => 'kg-label']);
-echo seminarplaner_render_multi_dropdown('kg-f-seminarphase', [
-    'Warm-Up' => 'Warm-Up',
-    'Einstieg' => 'Einstieg',
-    'Erwartungsabfrage' => 'Erwartungsabfrage',
-    'Vorwissen aktivieren' => 'Vorwissen aktivieren',
-    'Wissen vermitteln' => 'Wissen vermitteln',
-    'Reflexion' => 'Reflexion',
-    'Transfer' => 'Transfer',
-    'Evaluation/Feedback' => 'Evaluation/Feedback',
-    'Abschluss' => 'Abschluss',
-], 'Seminarphasen wählen', 'Seminarphasen');
+echo seminarplaner_render_multi_dropdown('kg-f-seminarphase', seminarplaner_phase_options(), 'Seminarphasen wählen', 'Seminarphasen');
 echo html_writer::end_div();
 echo html_writer::start_div();
 echo html_writer::tag('label', $rendericontext('tags', 'Tags / Schlüsselworte'), ['for' => 'kg-f-tags', 'class' => 'kg-label']);

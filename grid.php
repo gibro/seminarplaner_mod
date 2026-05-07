@@ -166,15 +166,9 @@ echo html_writer::end_div();
         <div class="kg-tag-dropdown-panel kg-hidden" id="sp-filter-phase-panel">
           <label class="kg-tag-option"><input type="checkbox" id="sp-filter-phase-all" checked><span>Alle</span></label>
           <div id="sp-filter-phase-options">
-            <label class="kg-tag-option"><input type="checkbox" value="Warm-Up"><span>Warm-Up</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="Einstieg"><span>Einstieg</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="Erwartungsabfrage"><span>Erwartungsabfrage</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="Vorwissen aktivieren"><span>Vorwissen aktivieren</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="Wissen vermitteln"><span>Wissen vermitteln</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="Reflexion"><span>Reflexion</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="Transfer"><span>Transfer</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="Evaluation/Feedback"><span>Evaluation/Feedback</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="Abschluss"><span>Abschluss</span></label>
+            <?php foreach (array_keys(seminarplaner_phase_options()) as $phase): ?>
+            <label class="kg-tag-option"><input type="checkbox" value="<?= s($phase) ?>"><span><?= s($phase) ?></span></label>
+            <?php endforeach; ?>
           </div>
         </div>
       </div>

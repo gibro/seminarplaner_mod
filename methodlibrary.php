@@ -78,7 +78,7 @@ echo '<button type="button" class="kg-input kg-tag-dropdown-toggle" id="ml-filte
 echo '<div class="kg-tag-dropdown-panel kg-hidden" id="ml-filter-phase-panel">';
 echo '<label class="kg-tag-option"><input type="checkbox" id="ml-filter-phase-all" checked><span>Alle</span></label>';
 echo '<div id="ml-filter-phase-options">';
-foreach (['Warm-Up', 'Einstieg', 'Erwartungsabfrage', 'Vorwissen aktivieren', 'Wissen vermitteln', 'Reflexion', 'Transfer', 'Evaluation/Feedback', 'Abschluss'] as $v) {
+foreach (array_keys(seminarplaner_phase_options()) as $v) {
     echo '<label class="kg-tag-option"><input type="checkbox" value="' . s($v) . '"><span>' . s($v) . '</span></label>';
 }
 echo '</div></div></div></label>';
@@ -159,17 +159,7 @@ echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
 echo html_writer::start_div();
 echo html_writer::tag('label', 'Seminarphase', ['for' => 'ml-e-seminarphase', 'class' => 'kg-label']);
-echo seminarplaner_render_multi_dropdown('ml-e-seminarphase', [
-    'Warm-Up' => 'Warm-Up',
-    'Einstieg' => 'Einstieg',
-    'Erwartungsabfrage' => 'Erwartungsabfrage',
-    'Vorwissen aktivieren' => 'Vorwissen aktivieren',
-    'Wissen vermitteln' => 'Wissen vermitteln',
-    'Reflexion' => 'Reflexion',
-    'Transfer' => 'Transfer',
-    'Evaluation/Feedback' => 'Evaluation/Feedback',
-    'Abschluss' => 'Abschluss',
-], 'Seminarphasen wählen', 'Seminarphasen');
+echo seminarplaner_render_multi_dropdown('ml-e-seminarphase', seminarplaner_phase_options(), 'Seminarphasen wählen', 'Seminarphasen');
 echo html_writer::end_div();
 echo html_writer::start_div();
 echo html_writer::tag('label', 'Tags / Schlüsselworte', ['for' => 'ml-e-tags', 'class' => 'kg-label']);

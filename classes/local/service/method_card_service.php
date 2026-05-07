@@ -24,6 +24,68 @@ class method_card_service {
     private const SHARED_FILEMAP_USERID = 0;
 
     /**
+     * Map legacy seminar phase labels to the current five-phase taxonomy.
+     *
+     * @param string $phase Raw phase label.
+     * @return string
+     */
+    private function normalize_phase(string $phase): string {
+        $phase = trim(strip_tags($phase));
+        if ($phase === '') {
+            return '';
+        }
+
+        $aliases = [
+            'warm-up' => 'Orientierung',
+            'einstieg' => 'Orientierung',
+            'erwartungsabfrage' => 'Erfahrungserhebung',
+            'vorwissen aktivieren' => 'Erfahrungserhebung',
+            'wissen vermitteln' => 'Analyse',
+            'reflexion' => 'Handlungsteil',
+            'evaluation/feedback' => 'Transfer',
+            'evaluation / feedback' => 'Transfer',
+            'abschluss' => 'Transfer',
+        ];
+        $key = \core_text::strtolower($phase);
+
+        return $aliases[$key] ?? $phase;
+    }
+
+    /**
+     * Normalize the seminarphase field of one method payload.
+     *
+     * @param array $method Method payload.
+     * @return array
+     */
+    private function normalize_method_phases(array $method): array {
+        $raw = $method['seminarphase'] ?? [];
+        if (is_string($raw)) {
+            $raw = preg_split('/##|[\r\n,;]+/u', $raw) ?: [];
+        }
+        if (!is_array($raw)) {
+            $raw = [];
+        }
+
+        $out = [];
+        $seen = [];
+        foreach ($raw as $phase) {
+            $normalized = $this->normalize_phase((string)$phase);
+            if ($normalized === '') {
+                continue;
+            }
+            $key = \core_text::strtolower($normalized);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $out[] = $normalized;
+        }
+        $method['seminarphase'] = $out;
+
+        return $method;
+    }
+
+    /**
      * Normalize method alternatives as reciprocal links across valid method ids.
      *
      * @param array $methods
@@ -217,6 +279,12 @@ class method_card_service {
                 $method['id'] = $methoduid;
                 $jsonchanged = true;
             }
+            $phasebefore = json_encode($method['seminarphase'] ?? null, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $method = $this->normalize_method_phases($method);
+            $phaseafter = json_encode($method['seminarphase'] ?? null, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($phasebefore !== $phaseafter) {
+                $jsonchanged = true;
+            }
         }
         unset($method);
 
@@ -284,6 +352,7 @@ class method_card_service {
             $methoduid = substr($methoduid, 0, 255);
             $seenmethoduids[$methoduid] = true;
             $method['id'] = $methoduid;
+            $method = $this->normalize_method_phases($method);
             $activeuids[] = $methoduid;
             $itemid = $this->resolve_effective_itemid($cmid, $userid, $methoduid, true, $contextid);
             if ($itemid === null) {

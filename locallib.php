@@ -163,6 +163,74 @@ function seminarplaner_cleanup_invalid_fileprefs(int $userid): void {
 }
 
 /**
+ * Canonical seminar phase options used by forms and filters.
+ *
+ * @return array<string, string>
+ */
+function seminarplaner_phase_options(): array {
+    return [
+        'Orientierung' => 'Orientierung',
+        'Erfahrungserhebung' => 'Erfahrungserhebung',
+        'Analyse' => 'Analyse',
+        'Handlungsteil' => 'Handlungsteil',
+        'Transfer' => 'Transfer',
+    ];
+}
+
+/**
+ * Map legacy seminar phase labels to the current five-phase taxonomy.
+ *
+ * @param string $phase Raw phase label.
+ * @return string
+ */
+function seminarplaner_normalize_phase(string $phase): string {
+    $phase = trim(strip_tags($phase));
+    if ($phase === '') {
+        return '';
+    }
+
+    $aliases = [
+        'warm-up' => 'Orientierung',
+        'einstieg' => 'Orientierung',
+        'erwartungsabfrage' => 'Erfahrungserhebung',
+        'vorwissen aktivieren' => 'Erfahrungserhebung',
+        'wissen vermitteln' => 'Analyse',
+        'reflexion' => 'Handlungsteil',
+        'evaluation/feedback' => 'Transfer',
+        'evaluation / feedback' => 'Transfer',
+        'abschluss' => 'Transfer',
+    ];
+    $key = core_text::strtolower($phase);
+
+    return $aliases[$key] ?? $phase;
+}
+
+/**
+ * Normalize multiple seminar phase labels while preserving order and uniqueness.
+ *
+ * @param array<int, string> $phases Raw phase labels.
+ * @return array<int, string>
+ */
+function seminarplaner_normalize_phases(array $phases): array {
+    $out = [];
+    $seen = [];
+    foreach ($phases as $phase) {
+        $normalized = seminarplaner_normalize_phase((string)$phase);
+        if ($normalized === '') {
+            continue;
+        }
+        $key = core_text::strtolower($normalized);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $out[] = $normalized;
+    }
+
+    return $out;
+}
+
+/**
  * Render navigation tabs used across Seminarplaner pages.
  *
  * @param int $cmid Course module id.

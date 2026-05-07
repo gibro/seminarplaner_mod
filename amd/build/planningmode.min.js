@@ -4,8 +4,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
     const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
-    const PHASE_OPTIONS = ['Warm-Up', 'Einstieg', 'Erwartungsabfrage', 'Vorwissen aktivieren', 'Wissen vermitteln', 'Reflexion',
-        'Transfer', 'Evaluation/Feedback', 'Abschluss'];
+    const PHASE_OPTIONS = ['Orientierung', 'Erfahrungserhebung', 'Analyse', 'Handlungsteil', 'Transfer'];
     const COGNITIVE_OPTIONS = ['Erinnern', 'Verstehen', 'Anwenden', 'Analysieren', 'Bewerten', 'Erschaffen'];
     const COGNITIVE_LEVELS = {
         erinnern: 1,
@@ -35,6 +34,25 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             });
         });
         return tpl.innerHTML;
+    };
+    const decodeHtmlEntities = (value) => {
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = String(value || '');
+        return String(textarea.value || '');
+    };
+    const formatRichText = (value) => {
+        const raw = String(value || '').trim();
+        if (!raw) {
+            return '';
+        }
+        const decoded = decodeHtmlEntities(raw).trim();
+        if (/<[a-z][\s\S]*>/i.test(raw)) {
+            return sanitizeHtml(raw);
+        }
+        if (/<[a-z][\s\S]*>/i.test(decoded)) {
+            return sanitizeHtml(decoded);
+        }
+        return escapeHtml(raw).replace(/\r?\n/g, '<br>');
     };
     const stripHtml = (value) => {
         if (!value) {
@@ -147,8 +165,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.filters = {};
             this.editingUnitId = '';
             this.state = {units: [], slotorder: [], openslots: {}};
+            this.methodDetailModal = null;
 
             this.bindTop();
+            this.createMethodDetailModal();
             Promise.all([this.loadMethods(), this.loadPlanningState()]).then(() => {
                 this.renderAll();
                 this.applyRequestedEditFromUrl();
@@ -594,6 +614,168 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return this.methods.find((m) => String(m.id) === String(id)) || null;
         }
 
+        attachmentLabel(entry) {
+            if (!entry) {
+                return '';
+            }
+            if (typeof entry === 'string') {
+                return entry.trim();
+            }
+            if (typeof entry === 'object') {
+                return String(entry.name || '').trim();
+            }
+            return '';
+        }
+
+        toCard(method) {
+            const title = String(method && method.titel ? method.titel : '').trim();
+            const cognitive = Array.isArray(method.kognitive) ? method.kognitive : [method.kognitive || ''];
+            const levels = cognitive
+                .map((entry) => COGNITIVE_LEVELS[normalizeText(String(entry).split(/[:\-–]/)[0])] || null)
+                .filter((level) => level !== null);
+            const materialfiles = Array.isArray(method.materialien)
+                ? method.materialien.map((entry) => this.attachmentLabel(entry)).filter(Boolean).join(', ')
+                : String(method.materialien || '');
+            return {
+                id: method.id || '',
+                title,
+                duration: this.parseMethodDuration(method.zeitbedarf) || method.zeitbedarf || '',
+                group: method.gruppengroesse || '',
+                phase: Array.isArray(method.seminarphase) ? method.seminarphase.join(', ') : (method.seminarphase || ''),
+                cognitive: Array.isArray(method.kognitive) ? method.kognitive.join(', ') : (method.kognitive || ''),
+                tags: method.tags || '',
+                details: {
+                    description: method.kurzbeschreibung || '',
+                    reflection: method.debrief || '',
+                    requirements: Array.isArray(method.raum) ? method.raum.join(', ') : (method.raum || ''),
+                    socialform: Array.isArray(method.sozialform) ? method.sozialform.join(', ') : (method.sozialform || ''),
+                    preparation: method.vorbereitung || '',
+                    materials: method.materialtechnik || '',
+                    flow: method.ablauf || '',
+                    risks: method.risiken || '',
+                    resources: materialfiles,
+                    objectives: method.lernziele || '',
+                    contact: method.autor || ''
+                },
+                cognitiveLevel: levels.length ? Math.max(...levels) : null
+            };
+        }
+
+        buildMethodDetailBody(cardData) {
+            const meta = [
+                {label: 'Dauer', value: cardData.duration ? `${cardData.duration} Min` : ''},
+                {label: 'Gruppengröße', value: cardData.group},
+                {label: 'Seminarphase', value: cardData.phase},
+                {label: 'Kognitive Dimension', value: cardData.cognitive},
+                {label: 'Tags', value: cardData.tags},
+                {label: 'Autor:in', value: cardData.details.contact}
+            ].filter((entry) => String(entry.value || '').trim() !== '');
+
+            const sections = [
+                {title: 'Kurzbeschreibung', value: cardData.details.description},
+                {title: 'Ablauf', value: cardData.details.flow},
+                {title: 'Lernziele', value: cardData.details.objectives},
+                {title: 'Raum', value: cardData.details.requirements},
+                {title: 'Sozialform', value: cardData.details.socialform},
+                {title: 'Vorbereitung', value: cardData.details.preparation},
+                {title: 'Material/Technik', value: cardData.details.materials},
+                {title: 'Zusätzliche Materialien', value: cardData.details.resources},
+                {title: 'Risiken/Tipps', value: cardData.details.risks},
+                {title: 'Debrief/Reflexion', value: cardData.details.reflection}
+            ].filter((entry) => String(entry.value || '').trim() !== '');
+
+            const metaHtml = meta.length ? `
+                <div class="sp-method-detail__meta">
+                    ${meta.map((entry) => `<span class="sp-method-detail__meta-item"><strong>${escapeHtml(entry.label)}:</strong> ${escapeHtml(entry.value)}</span>`).join('')}
+                </div>
+            ` : '';
+
+            const sectionsHtml = sections.length ? sections.map((entry) => `
+                <section class="sp-method-detail__section">
+                    <h3>${escapeHtml(entry.title)}</h3>
+                    <div class="sp-method-detail__text">${formatRichText(entry.value)}</div>
+                </section>
+            `).join('') : '<p class="sp-method-detail__empty">Keine zusätzlichen Details vorhanden.</p>';
+
+            return `${metaHtml}${sectionsHtml}`;
+        }
+
+        createMethodDetailModal() {
+            const host = bySel('.kg-shell') || document.body;
+            if (!host) {
+                return;
+            }
+            const modal = document.createElement('div');
+            modal.className = 'sp-modal';
+            modal.setAttribute('aria-hidden', 'true');
+            modal.innerHTML = `
+                <div class="sp-modal__backdrop" data-modal-close="method-detail"></div>
+                <div class="sp-modal__dialog sp-modal__dialog--large" role="dialog" aria-modal="true" aria-labelledby="sp-method-detail-title">
+                    <header class="sp-modal__header">
+                        <h2 id="sp-method-detail-title">Seminareinheit</h2>
+                        <button type="button" class="sp-modal__close" data-modal-close="method-detail" aria-label="Popup schließen">X</button>
+                    </header>
+                    <div class="sp-modal__body sp-method-detail__body" id="sp-method-detail-body"></div>
+                    <div class="sp-modal__actions">
+                        <button type="button" class="kg-btn kg-btn-primary" id="sp-method-detail-edit">Bearbeiten</button>
+                        <button type="button" class="kg-btn" data-modal-close="method-detail">Schließen</button>
+                    </div>
+                </div>
+            `;
+            host.appendChild(modal);
+            this.methodDetailModal = modal;
+            modal.addEventListener('click', (event) => {
+                if (event.target.getAttribute('data-modal-close') === 'method-detail') {
+                    this.closeMethodDetailModal();
+                }
+            });
+            const editBtn = bySel('#sp-method-detail-edit', modal);
+            if (editBtn) {
+                editBtn.addEventListener('click', () => {
+                    const methodid = String(editBtn.getAttribute('data-method-id') || '').trim();
+                    this.closeMethodDetailModal();
+                    this.openMethodLibraryEditor(methodid);
+                });
+            }
+        }
+
+        openMethodDetailModal(cardData) {
+            if (!this.methodDetailModal || !cardData) {
+                return;
+            }
+            const title = bySel('#sp-method-detail-title', this.methodDetailModal);
+            const body = bySel('#sp-method-detail-body', this.methodDetailModal);
+            const editBtn = bySel('#sp-method-detail-edit', this.methodDetailModal);
+            if (title) {
+                title.textContent = cardData.title || 'Seminareinheit';
+            }
+            if (body) {
+                body.innerHTML = this.buildMethodDetailBody(cardData);
+            }
+            if (editBtn) {
+                const methodid = String(cardData.id || '').trim();
+                editBtn.setAttribute('data-method-id', methodid);
+                editBtn.disabled = !methodid;
+            }
+            this.methodDetailModal.classList.add('sp-modal--visible');
+            this.methodDetailModal.removeAttribute('aria-hidden');
+        }
+
+        closeMethodDetailModal() {
+            if (!this.methodDetailModal) {
+                return;
+            }
+            this.methodDetailModal.classList.remove('sp-modal--visible');
+            this.methodDetailModal.setAttribute('aria-hidden', 'true');
+        }
+
+        openMethodLibraryEditor(methodid = '') {
+            const base = (typeof M !== 'undefined' && M && M.cfg && M.cfg.wwwroot) ? String(M.cfg.wwwroot) : '';
+            const cmid = encodeURIComponent(String(this.cmid || ''));
+            const editparam = methodid ? `&editmethodid=${encodeURIComponent(String(methodid))}` : '';
+            window.location.href = `${base}/mod/seminarplaner/methodlibrary.php?id=${cmid}${editparam}#ml-edit-section`;
+        }
+
         ensureMethodAlternatives() {
             const order = [];
             const byid = new Map();
@@ -834,15 +1016,45 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             methods.forEach((method) => {
                 const card = document.createElement('div');
-                card.className = 'sp-card';
+                card.className = 'sp-card kg-pool-method';
                 const level = getMethodCognitiveLevel(method);
                 if (level) {
                     card.classList.add(`sp-level-${level}`);
                 }
                 card.draggable = true;
-                card.innerHTML = `<div class="sp-card-title"><strong>${escapeHtml(method.titel || '')}</strong></div><div class="sp-card-meta"><span class="sp-badge">${escapeHtml(method.zeitbedarf || '-')} Min</span></div><div class="sp-card-description">${escapeHtml(stripHtml(method.kurzbeschreibung || ''))}</div>`;
+                card.innerHTML = `
+                    <div class="sp-card-title">
+                        <strong>${escapeHtml(method.titel || '')}</strong>
+                        <details class="ml-card-menu kg-unit-method-menu">
+                            <summary class="ml-card-menu-toggle" aria-label="Kontextmenü">⋮</summary>
+                            <div class="ml-card-menu-panel" role="menu" aria-label="Seminareinheit Aktionen">
+                                <button type="button" class="ml-card-menu-btn" data-act="pool-preview" data-method-id="${escapeHtml(method.id)}">Ansicht</button>
+                                <button type="button" class="ml-card-menu-btn" data-act="pool-edit" data-method-id="${escapeHtml(method.id)}">Bearbeiten</button>
+                            </div>
+                        </details>
+                    </div>
+                    <div class="sp-card-meta"><span class="sp-badge">${escapeHtml(method.zeitbedarf || '-')} Min</span></div>
+                    <div class="sp-card-description">${escapeHtml(stripHtml(method.kurzbeschreibung || ''))}</div>
+                `;
                 card.addEventListener('dragstart', (event) => {
+                    if (event.target.closest('.ml-card-menu, button, input, select, textarea, a')) {
+                        event.preventDefault();
+                        return;
+                    }
                     event.dataTransfer.setData('text/plain', JSON.stringify({type: 'method', methodid: String(method.id)}));
+                });
+                bySel('[data-act="pool-preview"]', card)?.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    const menu = event.currentTarget.closest('.ml-card-menu');
+                    if (menu) {
+                        menu.open = false;
+                    }
+                    this.openMethodDetailModal(this.toCard(method));
+                });
+                bySel('[data-act="pool-edit"]', card)?.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    const methodid = String(event.currentTarget.getAttribute('data-method-id') || '').trim();
+                    this.openMethodLibraryEditor(methodid);
                 });
                 pool.appendChild(card);
             });
@@ -1089,7 +1301,16 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                                 item.classList.add(`sp-level-${level}`);
                             }
                             item.innerHTML = `
-                                <div class="sp-card-title"><strong>${escapeHtml(method.titel || '')}</strong></div>
+                                <div class="sp-card-title">
+                                    <strong>${escapeHtml(method.titel || '')}</strong>
+                                    <details class="ml-card-menu kg-unit-method-menu">
+                                        <summary class="ml-card-menu-toggle" aria-label="Kontextmenü">⋮</summary>
+                                        <div class="ml-card-menu-panel" role="menu" aria-label="Seminareinheit Aktionen">
+                                            <button type="button" class="ml-card-menu-btn" data-act="entry-preview" data-method-id="${escapeHtml(method.id)}">Ansicht</button>
+                                            <button type="button" class="ml-card-menu-btn" data-act="entry-edit" data-method-id="${escapeHtml(method.id)}">Bearbeiten</button>
+                                        </div>
+                                    </details>
+                                </div>
                                 <div class="sp-card-meta"><span class="sp-badge">${escapeHtml(method.zeitbedarf || '-')} Min</span></div>
                                 ${selector}
                                 <div class="kg-row">
@@ -1098,6 +1319,19 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                                     <button class="kg-btn" data-act="entry-delete" data-entry="${escapeHtml(entry.id)}">Entfernen</button>
                                 </div>
                             `;
+                            bySel('[data-act="entry-preview"]', item)?.addEventListener('click', (event) => {
+                                event.preventDefault();
+                                const menu = event.currentTarget.closest('.ml-card-menu');
+                                if (menu) {
+                                    menu.open = false;
+                                }
+                                this.openMethodDetailModal(this.toCard(method));
+                            });
+                            bySel('[data-act="entry-edit"]', item)?.addEventListener('click', (event) => {
+                                event.preventDefault();
+                                const methodid = String(event.currentTarget.getAttribute('data-method-id') || '').trim();
+                                this.openMethodLibraryEditor(methodid);
+                            });
                             canvas.appendChild(item);
                         });
                     }

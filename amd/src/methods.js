@@ -94,9 +94,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const setFormMultiDropdownValues = (selector, values) => {
         const dropdown = getFormMultiDropdown(selector);
         const hidden = bySel(selector);
-        const cleanvalues = Array.isArray(values)
+        let cleanvalues = Array.isArray(values)
             ? values.map((v) => String(v).trim()).filter(Boolean)
             : [];
+        if (selector === FIELDS.seminarphase) {
+            cleanvalues = normalizePhases(cleanvalues);
+        }
         if (hidden) {
             hidden.value = cleanvalues.join('##');
         }
@@ -326,6 +329,37 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             .split(/##|\r?\n|,|;/)
             .map((v) => stripHtml(v))
             .filter(Boolean);
+    };
+    const normalizePhase = (phase) => {
+        const clean = stripHtml(phase);
+        const aliases = {
+            'warm-up': 'Orientierung',
+            'einstieg': 'Orientierung',
+            'erwartungsabfrage': 'Erfahrungserhebung',
+            'vorwissen aktivieren': 'Erfahrungserhebung',
+            'wissen vermitteln': 'Analyse',
+            'reflexion': 'Handlungsteil',
+            'evaluation/feedback': 'Transfer',
+            'evaluation / feedback': 'Transfer',
+            'abschluss': 'Transfer'
+        };
+        return aliases[clean.toLowerCase()] || clean;
+    };
+    const normalizePhases = (phases) => {
+        const seen = {};
+        return (Array.isArray(phases) ? phases : [])
+            .map(normalizePhase)
+            .filter((phase) => {
+                if (!phase) {
+                    return false;
+                }
+                const key = phase.toLowerCase();
+                if (seen[key]) {
+                    return false;
+                }
+                seen[key] = true;
+                return true;
+            });
     };
 
     const clearForm = () => {
@@ -775,7 +809,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return null;
         }
 
-        const seminarphase = splitMultiString(readFirst(row, ['Seminarphase', 'seminarphase']));
+        const seminarphase = normalizePhases(splitMultiString(readFirst(row, ['Seminarphase', 'seminarphase'])));
         const zeitbedarf = stripHtml(readFirst(row, ['Zeitbedarf', 'zeitbedarf']));
         const gruppengroesse = stripHtml(readFirst(row, ['Gruppengröße', 'Gruppengroesse', 'gruppengroesse']));
         const kurzbeschreibung = readRichTextField(row, ['Kurzbeschreibung', 'kurzbeschreibung']);

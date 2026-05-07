@@ -506,7 +506,7 @@ class methodset_sync_service {
         return [
             'id' => 'global-' . (int)$row->id . '-' . time(),
             'titel' => (string)($row->title ?? ''),
-            'seminarphase' => $this->split_multi_text($row->seminarphase ?? ''),
+            'seminarphase' => $this->split_multi_text($row->seminarphase ?? '', true),
             'zeitbedarf' => trim((string)($row->zeitbedarf ?? '')),
             'gruppengroesse' => trim((string)($row->gruppengroesse ?? '')),
             'kurzbeschreibung' => trim((string)($row->kurzbeschreibung ?? '')),
@@ -573,15 +573,46 @@ class methodset_sync_service {
      * @param string|null $value
      * @return string[]
      */
-    private function split_multi_text(?string $value): array {
+    private function normalize_phase(string $phase): string {
+        $phase = trim(strip_tags($phase));
+        if ($phase === '') {
+            return '';
+        }
+
+        $aliases = [
+            'warm-up' => 'Orientierung',
+            'einstieg' => 'Orientierung',
+            'erwartungsabfrage' => 'Erfahrungserhebung',
+            'vorwissen aktivieren' => 'Erfahrungserhebung',
+            'wissen vermitteln' => 'Analyse',
+            'reflexion' => 'Handlungsteil',
+            'evaluation/feedback' => 'Transfer',
+            'evaluation / feedback' => 'Transfer',
+            'abschluss' => 'Transfer',
+        ];
+        $key = \core_text::strtolower($phase);
+
+        return $aliases[$key] ?? $phase;
+    }
+
+    private function split_multi_text(?string $value, bool $normalizephase = false): array {
         if ($value === null) {
             return [];
         }
         $parts = preg_split('/##|[\r\n,;]+/u', (string)$value) ?: [];
         $out = [];
+        $seen = [];
         foreach ($parts as $part) {
             $part = trim(strip_tags((string)$part));
+            if ($normalizephase) {
+                $part = $this->normalize_phase($part);
+            }
             if ($part !== '') {
+                $key = \core_text::strtolower($part);
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
                 $out[] = $part;
             }
         }

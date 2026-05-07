@@ -69,15 +69,46 @@ class api extends external_api {
             || has_capability('local/seminarplaner:viewglobalsets', $catcontext);
     }
 
-    private static function split_multi_text($value): array {
+    private static function normalize_phase(string $phase): string {
+        $phase = trim(strip_tags($phase));
+        if ($phase === '') {
+            return '';
+        }
+
+        $aliases = [
+            'warm-up' => 'Orientierung',
+            'einstieg' => 'Orientierung',
+            'erwartungsabfrage' => 'Erfahrungserhebung',
+            'vorwissen aktivieren' => 'Erfahrungserhebung',
+            'wissen vermitteln' => 'Analyse',
+            'reflexion' => 'Handlungsteil',
+            'evaluation/feedback' => 'Transfer',
+            'evaluation / feedback' => 'Transfer',
+            'abschluss' => 'Transfer',
+        ];
+        $key = \core_text::strtolower($phase);
+
+        return $aliases[$key] ?? $phase;
+    }
+
+    private static function split_multi_text($value, bool $normalizephase = false): array {
         if ($value === null) {
             return [];
         }
         $parts = preg_split('/##|[\r\n,;]+/u', (string)$value) ?: [];
         $out = [];
+        $seen = [];
         foreach ($parts as $part) {
             $part = trim(strip_tags((string)$part));
+            if ($normalizephase) {
+                $part = self::normalize_phase($part);
+            }
             if ($part !== '') {
+                $key = \core_text::strtolower($part);
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
                 $out[] = $part;
             }
         }
@@ -88,7 +119,7 @@ class api extends external_api {
         $mapped = [
             'id' => 'global-' . (int)$row->id . '-' . time(),
             'titel' => (string)($row->title ?? ''),
-            'seminarphase' => self::split_multi_text($row->seminarphase ?? ''),
+            'seminarphase' => self::split_multi_text($row->seminarphase ?? '', true),
             'zeitbedarf' => trim((string)($row->zeitbedarf ?? '')),
             'gruppengroesse' => trim((string)($row->gruppengroesse ?? '')),
             'kurzbeschreibung' => trim((string)($row->kurzbeschreibung ?? '')),
@@ -257,7 +288,7 @@ class api extends external_api {
         return [
             'externalref' => null,
             'title' => trim((string)($method['titel'] ?? '')),
-            'seminarphase' => $splitmulti($method['seminarphase'] ?? []),
+            'seminarphase' => $splitmulti(self::split_multi_text($splitmulti($method['seminarphase'] ?? []), true)),
             'zeitbedarf' => trim((string)($method['zeitbedarf'] ?? '')),
             'gruppengroesse' => trim((string)($method['gruppengroesse'] ?? '')),
             'kurzbeschreibung' => trim((string)($method['kurzbeschreibung'] ?? '')),

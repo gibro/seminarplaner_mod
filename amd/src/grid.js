@@ -109,6 +109,21 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const escapeHtml = (str) => String(str || '').replace(/[&<>"']/g, (ch) => {
         return ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[ch] || ch;
     });
+    const normalizePhase = (phase) => {
+        const clean = String(phase || '').trim();
+        const aliases = {
+            'warm-up': 'Orientierung',
+            'einstieg': 'Orientierung',
+            'erwartungsabfrage': 'Erfahrungserhebung',
+            'vorwissen aktivieren': 'Erfahrungserhebung',
+            'wissen vermitteln': 'Analyse',
+            'reflexion': 'Handlungsteil',
+            'evaluation/feedback': 'Transfer',
+            'evaluation / feedback': 'Transfer',
+            'abschluss': 'Transfer'
+        };
+        return aliases[clean.toLowerCase()] || clean;
+    };
     const lucideIconUrl = (name) => {
         const root = (typeof M !== 'undefined' && M && M.cfg && M.cfg.wwwroot) ? String(M.cfg.wwwroot).replace(/\/$/, '') : '';
         return `${root}/mod/seminarplaner/pix/lucide/${String(name || '').trim()}.svg`;
@@ -2001,11 +2016,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         const alternatives = slot && Array.isArray(slot.units) ? slot.units : [];
                         unitColorKey = String(it.slotkey || it.unitid || '');
                         const selector = alternatives.length > 1
-                            ? `<div class="sp-menu-select-wrap"><label class="sp-menu-select-label">${lucideIcon('arrow-left-right', 'sp-menu-select-label-icon')}Alternativer Baustein</label><select class="kg-input" data-act="unit-alt" data-uid="${escapeHtml(it.uid)}">${alternatives.map((unit) => `<option value="${escapeHtml(unit.id)}" ${String(unit.id) === String(it.unitid) ? 'selected' : ''}>${escapeHtml(unit.title)}</option>`).join('')}</select></div>`
+                            ? `<div class="sp-menu-select-wrap"><label class="sp-menu-select-label">Alternativer Baustein</label><select class="kg-input" data-act="unit-alt" data-uid="${escapeHtml(it.uid)}">${alternatives.map((unit) => `<option value="${escapeHtml(unit.id)}" ${String(unit.id) === String(it.unitid) ? 'selected' : ''}>${escapeHtml(unit.title)}</option>`).join('')}</select></div>`
                             : '';
                         menuActions = `${selector}
-                            <button type="button" class="ml-card-menu-btn" data-action="edit-unit" data-uid="${escapeHtml(it.uid)}"><span class="sp-menu-btn__icon">${lucideIcon('notebook-pen')}</span><span class="sp-menu-btn__label">Bearbeiten</span></button>
-                            <button type="button" class="ml-card-menu-btn" data-act="resolve-unit" data-uid="${escapeHtml(it.uid)}"><span class="sp-menu-btn__icon">${lucideIcon('blocks')}</span><span class="sp-menu-btn__label">Auflösen</span></button>`;
+                            <button type="button" class="ml-card-menu-btn" data-action="edit-unit" data-uid="${escapeHtml(it.uid)}">Bearbeiten</button>
+                            <button type="button" class="ml-card-menu-btn" data-act="resolve-unit" data-uid="${escapeHtml(it.uid)}">Auflösen</button>`;
                         const unit = this.getUnitById(it.unitid);
                         const methodcards = this.getUnitMethodCards(unit);
                         if (methodcards.length) {
@@ -2037,14 +2052,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         const method = this.methods.find((m) => String(m.id) === String(it.entryId));
                         const alternatives = method ? this.getMethodAlternativeIds(method) : [];
                         if (alternatives.length > 1) {
-                            menuActions += `<div class="sp-menu-select-wrap"><label class="sp-menu-select-label">${lucideIcon('git-compare-arrows', 'sp-menu-select-label-icon')}Alternative Seminareinheit</label><select class="kg-input" data-act="method-alt" data-uid="${escapeHtml(it.uid)}">${alternatives.map((id) => {
+                            menuActions += `<div class="sp-menu-select-wrap"><label class="sp-menu-select-label">Alternative Seminareinheit</label><select class="kg-input" data-act="method-alt" data-uid="${escapeHtml(it.uid)}">${alternatives.map((id) => {
                                 const alt = this.methods.find((m) => String(m.id) === String(id));
                                 return alt ? `<option value="${escapeHtml(id)}" ${String(id) === String(it.entryId) ? 'selected' : ''}>${escapeHtml(alt.titel || id)}</option>` : '';
                             }).join('')}</select></div>`;
                         }
                         menuActions += `
-                            <button type="button" class="ml-card-menu-btn" data-action="preview-plan-method" data-uid="${escapeHtml(it.uid)}"><span class="sp-menu-btn__icon">${lucideIcon('file-text')}</span><span class="sp-menu-btn__label">Ansehen</span></button>
-                            <button type="button" class="ml-card-menu-btn" data-action="edit-plan-method" data-uid="${escapeHtml(it.uid)}"><span class="sp-menu-btn__icon">${lucideIcon('notebook-pen')}</span><span class="sp-menu-btn__label">Bearbeiten</span></button>
+                            <button type="button" class="ml-card-menu-btn" data-action="preview-plan-method" data-uid="${escapeHtml(it.uid)}">Ansehen</button>
+                            <button type="button" class="ml-card-menu-btn" data-action="edit-plan-method" data-uid="${escapeHtml(it.uid)}">Bearbeiten</button>
                         `;
                         if (it.parentunit) {
                             const parentunit = this.getUnitById(it.parentunit);
@@ -2061,7 +2076,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     }
 
                     let defaultActions = '';
-                    defaultActions += `<button type="button" class="ml-card-menu-btn ml-card-menu-btn-delete" data-act="delete" data-uid="${escapeHtml(it.uid)}"><span class="sp-menu-btn__icon">${lucideIcon('trash-2')}</span><span class="sp-menu-btn__label">Löschen</span></button>`;
+                    defaultActions += `<button type="button" class="ml-card-menu-btn ml-card-menu-btn-delete" data-act="delete" data-uid="${escapeHtml(it.uid)}">Löschen</button>`;
 
                     div.innerHTML = `
                         <div class="sp-item-content">
@@ -3300,7 +3315,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 }
                 const hay = [card.title, card.description, card.tags, card.phase, card.group].join(' ').toLowerCase();
                 const cardtags = String(card.tags || '').toLowerCase().split(/[,;]+/).map((x) => x.trim()).filter(Boolean);
-                const cardphase = String(card.phase || '').toLowerCase().split(/[,;]+/).map((x) => x.trim()).filter(Boolean);
+                const cardphase = String(card.phase || '').split(/[,;]+/).map(normalizePhase).map((x) => x.toLowerCase()).filter(Boolean);
                 const cardduration = String(card.duration || '').toLowerCase();
                 const cardcognitive = this.normalizeCognitiveLabel((Array.isArray(card.cognitive) ? card.cognitive.join(', ') : (card.cognitive || '')));
                 const match = (!search || hay.includes(search))

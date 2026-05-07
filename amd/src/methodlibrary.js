@@ -103,6 +103,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     let currentEditId = '';
     let runtimeCmid = 0;
     let autosyncSetIds = new Set();
+    let draggedMethodId = '';
 
     const setStatus = (text, isError) => {
         const el = bySel('#ml-status');
@@ -127,6 +128,37 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     const normalizeMultiToken = (value) => {
         return normalize(String(value || '').split(/[:\-–]/)[0]);
+    };
+    const normalizePhase = (phase) => {
+        const clean = String(phase || '').trim();
+        const aliases = {
+            'warm-up': 'Orientierung',
+            'einstieg': 'Orientierung',
+            'erwartungsabfrage': 'Erfahrungserhebung',
+            'vorwissen aktivieren': 'Erfahrungserhebung',
+            'wissen vermitteln': 'Analyse',
+            'reflexion': 'Handlungsteil',
+            'evaluation/feedback': 'Transfer',
+            'evaluation / feedback': 'Transfer',
+            'abschluss': 'Transfer'
+        };
+        return aliases[clean.toLowerCase()] || clean;
+    };
+    const normalizePhases = (phases) => {
+        const seen = {};
+        return (Array.isArray(phases) ? phases : [])
+            .map(normalizePhase)
+            .filter((phase) => {
+                if (!phase) {
+                    return false;
+                }
+                const key = phase.toLowerCase();
+                if (seen[key]) {
+                    return false;
+                }
+                seen[key] = true;
+                return true;
+            });
     };
 
     const joinMulti = (arr) => (Array.isArray(arr) ? arr.join(', ') : '');
@@ -155,6 +187,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         let cleanvalues = Array.isArray(values)
             ? values.map((v) => String(v).trim()).filter(Boolean)
             : [];
+        if (selector === FIELDS.seminarphase || selector === '#ml-e-seminarphase') {
+            cleanvalues = normalizePhases(cleanvalues);
+        }
         if (dropdown) {
             const options = Array.from(dropdown.querySelectorAll('[data-kg-form-multi-option="1"]'))
                 .map((checkbox) => String(checkbox.value || '').trim())
@@ -308,12 +343,36 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         if (!el) {
             return;
         }
-        const normalized = value || '';
-        const editor = (typeof window !== 'undefined' && window.tinyMCE && el.id) ? window.tinyMCE.get(el.id) : null;
-        if (editor) {
-            editor.setContent(String(normalized));
-        }
+        const normalized = value === null || value === undefined ? '' : String(value);
         el.value = normalized;
+        const editor = (typeof window !== 'undefined' && window.tinyMCE && el.id) ? window.tinyMCE.get(el.id) : null;
+        if (!editor || typeof editor.setContent !== 'function') {
+            return;
+        }
+        const applyEditorValue = () => {
+            if (editor.destroyed) {
+                return;
+            }
+            try {
+                editor.setContent(normalized);
+            } catch (error) {
+                window.setTimeout(() => {
+                    if (editor.destroyed) {
+                        return;
+                    }
+                    try {
+                        editor.setContent(normalized);
+                    } catch (retryerror) {
+                        // Keep the textarea value; Tiny can pick it up on the next editor refresh.
+                    }
+                }, 100);
+            }
+        };
+        if (editor.initialized === false && typeof editor.once === 'function') {
+            editor.once('init', applyEditorValue);
+            return;
+        }
+        applyEditorValue();
     };
 
     const attachmentName = (entry) => {
@@ -717,6 +776,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const card = document.createElement('div');
             card.className = 'kg-library-card sp-card';
             card.setAttribute('data-id', String(m.id));
+            card.draggable = true;
             const showlock = shouldShowFreezeLock(m);
             const frozen = showlock ? isFrozenState(m._kgsync, true) : false;
             const freezeaction = showlock
@@ -724,6 +784,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 : '';
             card.innerHTML = `
               <div class="ml-card-head">
+                <span class="ml-card-drag-handle" title="Reihenfolge per Drag-and-drop ändern" aria-hidden="true">
+                  <span class="ml-card-drag-handle__arrow ml-card-drag-handle__arrow--up">↑</span>
+                  <span class="ml-card-drag-handle__arrow ml-card-drag-handle__arrow--right">→</span>
+                  <span class="ml-card-drag-handle__arrow ml-card-drag-handle__arrow--down">↓</span>
+                  <span class="ml-card-drag-handle__arrow ml-card-drag-handle__arrow--left">←</span>
+                </span>
                 <div class="sp-card-title ml-card-title"><strong>${escapeHtml(m.titel || '(ohne Titel)')}</strong></div>
                 <div class="ml-card-head-actions">
                   <details class="ml-card-menu">
@@ -749,6 +815,53 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const editbtn = card.querySelector('[data-act="edit"]');
             const freezebtn = card.querySelector('[data-act="freeze"]');
             const deletebtn = card.querySelector('[data-act="delete"]');
+            card.addEventListener('dragstart', (event) => {
+                if (event.target.closest('.ml-card-menu, button, input, select, textarea, a')) {
+                    event.preventDefault();
+                    return;
+                }
+                draggedMethodId = String(m.id);
+                card.classList.add('kg-library-card--dragging');
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', draggedMethodId);
+                event.dataTransfer.setData('application/x-seminarplaner-method-id', draggedMethodId);
+            });
+            card.addEventListener('dragend', () => {
+                draggedMethodId = '';
+                clearDropIndicators();
+                card.classList.remove('kg-library-card--dragging');
+            });
+            card.addEventListener('dragover', (event) => {
+                if (!draggedMethodId || draggedMethodId === String(m.id)) {
+                    return;
+                }
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                markDropTarget(card, getDropPlacement(card, event));
+            });
+            card.addEventListener('dragleave', (event) => {
+                if (!card.contains(event.relatedTarget)) {
+                    card.classList.remove('kg-library-card--drop-before', 'kg-library-card--drop-after');
+                }
+            });
+            card.addEventListener('drop', (event) => {
+                const sourceid = String(
+                    event.dataTransfer.getData('application/x-seminarplaner-method-id')
+                        || event.dataTransfer.getData('text/plain')
+                        || draggedMethodId
+                        || ''
+                );
+                if (!sourceid || sourceid === String(m.id)) {
+                    clearDropIndicators();
+                    return;
+                }
+                event.preventDefault();
+                const placement = getDropPlacement(card, event);
+                reorderMethods(sourceid, String(m.id), placement.position).catch((e) => {
+                    Notification.exception(e);
+                    setStatus('Reihenfolge konnte nicht gespeichert werden.', true);
+                });
+            });
             const closeMenu = (button) => {
                 const menu = button ? button.closest('.ml-card-menu') : null;
                 if (menu) {
@@ -805,6 +918,73 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         applyFilters();
         if (currentEditId) {
             refreshEditAlternativeOptions(currentEditId);
+        }
+    };
+
+    const clearDropIndicators = () => {
+        document.querySelectorAll(
+            '.kg-library-card--drop-before-x, .kg-library-card--drop-after-x, '
+                + '.kg-library-card--drop-before-y, .kg-library-card--drop-after-y'
+        ).forEach((card) => {
+            card.classList.remove(
+                'kg-library-card--drop-before-x',
+                'kg-library-card--drop-after-x',
+                'kg-library-card--drop-before-y',
+                'kg-library-card--drop-after-y'
+            );
+        });
+    };
+
+    const getDropPlacement = (card, event) => {
+        const rect = card.getBoundingClientRect();
+        const dx = event.clientX - (rect.left + rect.width / 2);
+        const dy = event.clientY - (rect.top + rect.height / 2);
+        const axis = Math.abs(dx / Math.max(rect.width, 1)) > Math.abs(dy / Math.max(rect.height, 1)) ? 'x' : 'y';
+        return {
+            axis,
+            position: (axis === 'x' ? dx : dy) < 0 ? 'before' : 'after'
+        };
+    };
+
+    const markDropTarget = (card, placement) => {
+        clearDropIndicators();
+        const axis = placement.axis === 'x' ? 'x' : 'y';
+        const position = placement.position === 'before' ? 'before' : 'after';
+        card.classList.add(`kg-library-card--drop-${position}-${axis}`);
+    };
+
+    const reorderMethods = async (sourceid, targetid, position) => {
+        const from = methods.findIndex((method) => String(method.id) === String(sourceid));
+        const target = methods.findIndex((method) => String(method.id) === String(targetid));
+        if (from < 0 || target < 0 || from === target) {
+            clearDropIndicators();
+            return;
+        }
+
+        const previousMethods = methods.slice();
+        const [moved] = methods.splice(from, 1);
+        let to = methods.findIndex((method) => String(method.id) === String(targetid));
+        if (to < 0) {
+            methods = previousMethods;
+            clearDropIndicators();
+            return;
+        }
+        if (position === 'after') {
+            to++;
+        }
+        methods.splice(to, 0, moved);
+        renderList();
+        setStatus('Neue Reihenfolge wird gespeichert ...', false);
+        try {
+            await persist(runtimeCmid);
+            setStatus('Reihenfolge gespeichert.', false);
+        } catch (error) {
+            methods = previousMethods;
+            renderList();
+            throw error;
+        } finally {
+            draggedMethodId = '';
+            clearDropIndicators();
         }
     };
 
