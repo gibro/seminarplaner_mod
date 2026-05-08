@@ -1,0 +1,2 @@
+RewriteEngine On
+RewriteRule ^grid\.min\.js$ grid.codex.js [L]
