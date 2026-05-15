@@ -3521,10 +3521,21 @@ body.sp-resizing * {
   gap: 6px;
 }
 
+.kg-unit-row--colored {
+  border-left: 6px solid var(--sp-unit-color, var(--ig-blue));
+  background: color-mix(in srgb, var(--sp-unit-color, var(--ig-blue)) 12%, #ffffff);
+}
+
 .kg-unit-row-main {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.kg-unit-row-title {
+  color: var(--ig-anthracite);
+  font-size: 20px;
+  line-height: 1.25;
 }
 
 .kg-unit-row-actions {
@@ -3555,12 +3566,29 @@ body.sp-resizing * {
   background: #fff;
 }
 
+.kg-plan-row--colored {
+  border-left: 6px solid var(--sp-unit-color, var(--ig-blue));
+  background: color-mix(in srgb, var(--sp-unit-color, var(--ig-blue)) 9%, #ffffff);
+}
+
 .kg-plan-row > summary {
   cursor: pointer;
   display: grid;
   gap: 8px;
   padding: 10px;
   font-weight: 600;
+}
+
+.kg-plan-row--colored > summary {
+  background: color-mix(in srgb, var(--sp-unit-color, var(--ig-blue)) 13%, #ffffff);
+  border-radius: 4px 10px 0 0;
+}
+
+.kg-plan-summary-title {
+  color: var(--ig-anthracite);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .kg-plan-row > summary::-webkit-details-marker {

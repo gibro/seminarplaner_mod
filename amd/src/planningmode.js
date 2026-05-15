@@ -6,6 +6,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     const PHASE_OPTIONS = ['Orientierung', 'Erfahrungserhebung', 'Analyse', 'Handlungsteil', 'Transfer'];
     const COGNITIVE_OPTIONS = ['Erinnern', 'Verstehen', 'Anwenden', 'Analysieren', 'Bewerten', 'Erschaffen'];
+    const UNIT_SLOT_COLORS = ['#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#6366f1'];
     const COGNITIVE_LEVELS = {
         erinnern: 1,
         verstehen: 2,
@@ -79,6 +80,17 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return null;
         }
         return Math.max(...levels);
+    };
+
+    const hexToRgba = (hex, alpha) => {
+        const clean = String(hex || '').replace('#', '').trim();
+        if (!/^[0-9a-f]{6}$/i.test(clean)) {
+            return `rgba(14, 165, 233, ${alpha})`;
+        }
+        const r = parseInt(clean.slice(0, 2), 16);
+        const g = parseInt(clean.slice(2, 4), 16);
+        const b = parseInt(clean.slice(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     };
 
     const renderFilterDropdown = (field, label, options, selectedValues) => {
@@ -166,11 +178,18 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.editingUnitId = '';
             this.state = {units: [], slotorder: [], openslots: {}};
             this.methodDetailModal = null;
+            this.autosaveTimer = null;
+            this.lastDraftSnapshot = '';
+            this.hasUnsavedChanges = false;
+            this.isSavingPlanningState = false;
+            this.suppressDraftCapture = false;
 
             this.bindTop();
+            this.bindLeaveProtection();
             this.createMethodDetailModal();
             Promise.all([this.loadMethods(), this.loadPlanningState()]).then(() => {
                 this.renderAll();
+                this.restoreUnitFormDraft();
                 this.applyRequestedEditFromUrl();
             }).catch((error) => {
                 Notification.exception(error);
@@ -192,6 +211,46 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             bySel('#kg-pm-check')?.addEventListener('click', () => this.runDidacticCheck());
             bySel('#kg-pm-cancel-edit')?.addEventListener('click', () => this.resetUnitForm());
             this.bindAlternativeDropdown();
+            this.bindUnitFormDraftAutosave();
+        }
+
+        bindLeaveProtection() {
+            window.addEventListener('beforeunload', (event) => {
+                const currentDraftSnapshot = JSON.stringify(this.readUnitFormDraft());
+                const hasPendingDraftChanges = this.hasMeaningfulUnitFormDraft() && currentDraftSnapshot !== this.lastDraftSnapshot;
+                if (!this.hasUnsavedChanges && !this.isSavingPlanningState && !hasPendingDraftChanges) {
+                    return;
+                }
+                this.flushDraftAutosave();
+                event.preventDefault();
+                event.returnValue = 'Es gibt noch ungespeicherte Baustein-Entwürfe.';
+            });
+            window.addEventListener('pagehide', () => {
+                this.flushDraftAutosave();
+            });
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') {
+                    this.flushDraftAutosave();
+                }
+            });
+        }
+
+        bindUnitFormDraftAutosave() {
+            ['#kg-pm-unit-title', '#kg-pm-unit-duration', '#kg-pm-unit-objectives', '#kg-pm-unit-topics', '#kg-pm-unit-altunits']
+                .forEach((selector) => {
+                    const el = bySel(selector);
+                    if (!el) {
+                        return;
+                    }
+                    ['input', 'change', 'keyup'].forEach((eventname) => {
+                        el.addEventListener(eventname, () => this.scheduleDraftAutosave());
+                    });
+                });
+            window.setInterval(() => {
+                if (this.hasMeaningfulUnitFormDraft()) {
+                    this.scheduleDraftAutosave();
+                }
+            }, 3000);
         }
 
         bindAlternativeDropdown() {
@@ -256,6 +315,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (toggle) {
                 toggle.textContent = clean.length ? `Bausteine (${clean.length})` : 'Bausteine wählen';
             }
+            this.scheduleDraftAutosave();
         }
 
         refreshAlternativeUnitOptions() {
@@ -357,6 +417,17 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return `unit:${unit.id}`;
         }
 
+        getUnitSlotColor(slotkey) {
+            const key = String(slotkey || '');
+            let hash = 0;
+            for (let i = 0; i < key.length; i++) {
+                hash = ((hash << 5) - hash) + key.charCodeAt(i);
+                hash |= 0;
+            }
+            const idx = Math.abs(hash) % UNIT_SLOT_COLORS.length;
+            return UNIT_SLOT_COLORS[idx];
+        }
+
         getSlots() {
             const grouped = {};
             this.state.units.forEach((unit) => {
@@ -426,6 +497,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 this.normalizeActiveFlags();
                 this.resetUnitForm();
                 this.renderAll();
+                this.clearUnitFormDraft();
                 this.savePlanningState(true);
                 return;
             }
@@ -452,6 +524,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             this.resetUnitForm();
             this.renderAll();
+            this.clearUnitFormDraft();
             this.savePlanningState(true);
         }
 
@@ -488,7 +561,22 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (editor) {
                 return String(editor.getContent() || '').trim();
             }
+            const iframe = el.id ? document.getElementById(`${el.id}_ifr`) : null;
+            if (iframe && iframe.contentDocument && iframe.contentDocument.body) {
+                return String(iframe.contentDocument.body.innerHTML || '').trim();
+            }
             return String(el.value || '').trim();
+        }
+
+        setEditorIframeValue(el, value) {
+            const iframe = el && el.id ? document.getElementById(`${el.id}_ifr`) : null;
+            if (!iframe || !iframe.contentDocument || !iframe.contentDocument.body) {
+                return false;
+            }
+            iframe.contentDocument.body.innerHTML = value;
+            iframe.contentDocument.dispatchEvent(new Event('input', {bubbles: true}));
+            iframe.contentDocument.body.dispatchEvent(new Event('input', {bubbles: true}));
+            return true;
         }
 
         setRichText(selector, value) {
@@ -497,12 +585,211 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 return;
             }
             const normalized = String(value || '');
+            el.value = normalized;
             const editor = (typeof window !== 'undefined' && window.tinyMCE && el.id) ? window.tinyMCE.get(el.id) : null;
             if (editor) {
                 editor.setContent(normalized);
+                this.setEditorIframeValue(el, normalized);
                 return;
             }
-            el.value = normalized;
+            this.setEditorIframeValue(el, normalized);
+            window.setTimeout(() => this.setEditorIframeValue(el, normalized), 100);
+        }
+
+        draftStorageKey() {
+            return `mod_seminarplaner_planningmode_draft_${this.cmid}`;
+        }
+
+        readUnitFormDraft() {
+            return {
+                editingUnitId: String(this.editingUnitId || ''),
+                title: String(bySel('#kg-pm-unit-title')?.value || ''),
+                duration: String(bySel('#kg-pm-unit-duration')?.value || '90'),
+                objectives: sanitizeHtml(this.readRichText('#kg-pm-unit-objectives')),
+                topics: sanitizeHtml(this.readRichText('#kg-pm-unit-topics')),
+                alternatives: this.readAlternativeUnitSelection(),
+                updatedAt: Date.now()
+            };
+        }
+
+        hasMeaningfulUnitFormDraft() {
+            const draft = this.readUnitFormDraft();
+            return !!(
+                draft.editingUnitId
+                || String(draft.title || '').trim()
+                || stripHtml(draft.objectives || '')
+                || stripHtml(draft.topics || '')
+                || (Array.isArray(draft.alternatives) && draft.alternatives.length)
+            );
+        }
+
+        storeUnitFormDraft(draft) {
+            try {
+                if (!this.hasMeaningfulUnitFormDraft()) {
+                    window.localStorage.removeItem(this.draftStorageKey());
+                    return;
+                }
+                window.localStorage.setItem(this.draftStorageKey(), JSON.stringify(draft));
+            } catch (error) {
+                // Local draft storage is best-effort; background state saving still runs.
+            }
+        }
+
+        clearUnitFormDraft() {
+            try {
+                window.localStorage.removeItem(this.draftStorageKey());
+            } catch (error) {
+                // Ignore unavailable localStorage.
+            }
+            this.lastDraftSnapshot = '';
+            this.hasUnsavedChanges = false;
+        }
+
+        restoreUnitFormDraft() {
+            let draft = null;
+            try {
+                draft = JSON.parse(window.localStorage.getItem(this.draftStorageKey()) || 'null');
+            } catch (error) {
+                draft = null;
+            }
+            if (!draft || typeof draft !== 'object') {
+                return;
+            }
+            const draftunitid = String(draft.editingUnitId || '');
+            if (draftunitid && !this.state.units.some((unit) => String(unit.id) === draftunitid)) {
+                this.clearUnitFormDraft();
+                return;
+            }
+            this.suppressDraftCapture = true;
+            if (draftunitid) {
+                this.editingUnitId = draftunitid;
+            }
+            bySel('#kg-pm-unit-title').value = String(draft.title || '');
+            bySel('#kg-pm-unit-duration').value = String(draft.duration || '90');
+            this.setRichText('#kg-pm-unit-objectives', draft.objectives || '');
+            this.setRichText('#kg-pm-unit-topics', draft.topics || '');
+            this.refreshAlternativeUnitOptions();
+            this.setAlternativeUnitSelection(Array.isArray(draft.alternatives) ? draft.alternatives : []);
+            this.updateUnitFormMode();
+            this.suppressDraftCapture = false;
+            this.lastDraftSnapshot = JSON.stringify(this.readUnitFormDraft());
+            this.hasUnsavedChanges = true;
+            this.setStatus('Baustein-Entwurf wiederhergestellt.', false);
+        }
+
+        scheduleDraftAutosave() {
+            if (this.suppressDraftCapture) {
+                return;
+            }
+            window.clearTimeout(this.autosaveTimer);
+            this.autosaveTimer = window.setTimeout(() => this.autosaveDraftNow(), 700);
+        }
+
+        applyDraftToEditingUnit(draft) {
+            if (!draft.editingUnitId) {
+                return false;
+            }
+            const idx = this.state.units.findIndex((unit) => String(unit.id) === String(draft.editingUnitId));
+            if (idx < 0) {
+                return false;
+            }
+            const title = String(draft.title || '').trim();
+            const plannedduration = Math.max(5, Number.parseInt(draft.duration || '90', 10) || 90);
+            const selectedAlternativeUnitIds = Array.isArray(draft.alternatives) ? draft.alternatives : [];
+            const selectedunits = this.state.units.filter((unit) => selectedAlternativeUnitIds.includes(String(unit.id || '')));
+            const existinggroupkey = selectedunits.find((unit) => String(unit.slotkey || '').trim()) || null;
+            const slotkey = selectedunits.length
+                ? (existinggroupkey ? String(existinggroupkey.slotkey || '').trim() : `alt-${uid()}`)
+                : '';
+            this.state.units = this.state.units.map((unit) => {
+                if (selectedAlternativeUnitIds.includes(String(unit.id || ''))) {
+                    return Object.assign({}, unit, {slotkey});
+                }
+                if (String(unit.id) !== String(draft.editingUnitId)) {
+                    return unit;
+                }
+                const methodsduration = this.getUnitMethodsDuration(unit);
+                const hasmethods = Array.isArray(unit.methods) && unit.methods.length > 0;
+                return Object.assign({}, unit, {
+                    title: title || unit.title || 'Baustein',
+                    plannedduration,
+                    duration: hasmethods ? Math.max(5, methodsduration) : plannedduration,
+                    slotkey,
+                    objectives: draft.objectives || '',
+                    topics: draft.topics || ''
+                });
+            });
+            this.normalizeActiveFlags();
+            return true;
+        }
+
+        autosaveDraftNow() {
+            const draft = this.readUnitFormDraft();
+            const snapshot = JSON.stringify(draft);
+            if (snapshot === this.lastDraftSnapshot) {
+                return Promise.resolve();
+            }
+            this.lastDraftSnapshot = snapshot;
+            this.hasUnsavedChanges = true;
+            this.storeUnitFormDraft(draft);
+            const applied = this.applyDraftToEditingUnit(draft);
+            if (!applied) {
+                this.setStatus('Baustein-Entwurf lokal zwischengespeichert.', false);
+                return Promise.resolve();
+            }
+            this.renderAll();
+            return this.savePlanningState(true).then(() => {
+                this.hasUnsavedChanges = false;
+                try {
+                    window.localStorage.removeItem(this.draftStorageKey());
+                } catch (error) {
+                    // Ignore unavailable localStorage after successful server autosave.
+                }
+                this.setStatus('Baustein-Entwurf im Hintergrund gespeichert.', false);
+            });
+        }
+
+        flushDraftAutosave() {
+            window.clearTimeout(this.autosaveTimer);
+            this.autosaveDraftNow();
+            this.savePlanningStateBeacon();
+        }
+
+        getSesskey() {
+            if (typeof M !== 'undefined' && M && M.cfg && M.cfg.sesskey) {
+                return String(M.cfg.sesskey);
+            }
+            const input = document.querySelector('input[name="sesskey"]');
+            if (input && input.value) {
+                return String(input.value);
+            }
+            const match = document.documentElement.innerHTML.match(/"sesskey"\s*:\s*"([^"]+)"/);
+            return match ? String(match[1]) : '';
+        }
+
+        savePlanningStateBeacon() {
+            if (!navigator.sendBeacon) {
+                return false;
+            }
+            const sesskey = this.getSesskey();
+            if (!sesskey) {
+                return false;
+            }
+            this.ensureUnitAlternativeSlots();
+            this.normalizeActiveFlags();
+            this.recomputeUnitDurations();
+            const payload = JSON.stringify([{
+                index: 0,
+                methodname: 'mod_seminarplaner_save_planning_state',
+                args: {
+                    cmid: this.cmid,
+                    statejson: JSON.stringify(this.state),
+                    expectedhash: this.versionhash || ''
+                }
+            }]);
+            const wwwroot = (typeof M !== 'undefined' && M && M.cfg && M.cfg.wwwroot) ? String(M.cfg.wwwroot || '') : '';
+            const url = `${wwwroot}/lib/ajax/service.php?sesskey=${encodeURIComponent(sesskey)}&info=mod_seminarplaner_save_planning_state`;
+            return navigator.sendBeacon(url, new Blob([payload], {type: 'application/json'}));
         }
 
         normalizeActiveFlags() {
@@ -548,6 +835,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (!unit) {
                 return;
             }
+            this.suppressDraftCapture = true;
             this.editingUnitId = String(unit.id);
             bySel('#kg-pm-unit-title').value = unit.title || '';
             bySel('#kg-pm-unit-duration').value = String(unit.plannedduration || unit.duration || 90);
@@ -560,9 +848,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.setAlternativeUnitSelection(selected);
             this.refreshAlternativeUnitOptions();
             this.updateUnitFormMode();
+            this.suppressDraftCapture = false;
+            this.lastDraftSnapshot = JSON.stringify(this.readUnitFormDraft());
+            this.hasUnsavedChanges = false;
         }
 
         resetUnitForm() {
+            this.suppressDraftCapture = true;
             this.editingUnitId = '';
             bySel('#kg-pm-unit-title').value = '';
             bySel('#kg-pm-unit-duration').value = '90';
@@ -571,6 +863,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.setAlternativeUnitSelection([]);
             this.refreshAlternativeUnitOptions();
             this.updateUnitFormMode();
+            this.suppressDraftCapture = false;
+            this.clearUnitFormDraft();
         }
 
         removeSlot(key) {
@@ -1150,7 +1444,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             slots.forEach((slot, idx) => {
                 const row = document.createElement('div');
-                row.className = 'kg-unit-row';
+                row.className = 'kg-unit-row kg-unit-row--colored';
+                const slotcolor = this.getUnitSlotColor(slot.key);
+                row.style.setProperty('--sp-unit-color', slotcolor);
+                row.style.backgroundColor = hexToRgba(slotcolor, 0.12);
+                row.style.borderLeftColor = slotcolor;
                 const alternatives = this.getAlternativeUnits(slot.active);
                 const hasalternatives = alternatives.length > 0;
                 const alternativesummary = hasalternatives
@@ -1158,7 +1456,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     : '';
                 row.innerHTML = `
                     <div class="kg-unit-row-main">
-                        <strong>${escapeHtml(slot.active.title)}</strong>
+                        <strong class="kg-unit-row-title">Baustein: ${escapeHtml(slot.active.title)}</strong>
                         <span class="sp-badge">${slot.active.duration} Min</span>
                         ${hasalternatives ? '<span class="sp-badge">Alternative vorhanden</span>' : ''}
                     </div>
@@ -1210,7 +1508,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 const filter = this.ensureFilter(slot.key);
 
                 const wrapper = document.createElement('details');
-                wrapper.className = 'kg-plan-row';
+                wrapper.className = 'kg-plan-row kg-plan-row--colored';
+                const slotcolor = this.getUnitSlotColor(slot.key);
+                wrapper.style.setProperty('--sp-unit-color', slotcolor);
+                wrapper.style.backgroundColor = hexToRgba(slotcolor, 0.09);
+                wrapper.style.borderLeftColor = slotcolor;
                 wrapper.setAttribute('data-slot-key', slot.key);
                 wrapper.open = open;
                 wrapper.addEventListener('toggle', () => {
@@ -1219,10 +1521,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 });
 
                 wrapper.innerHTML = `
-                    <summary>
+                    <summary style="background-color: ${hexToRgba(slotcolor, 0.13)};">
                         <div class="kg-plan-summary-top">
                             <span class="kg-accordion-indicator" aria-hidden="true">▸</span>
-                            <span>${escapeHtml(unit.title)}</span>
+                            <span class="kg-plan-summary-title">Baustein: ${escapeHtml(unit.title)}</span>
                             <span class="sp-badge">${unit.duration} Min</span>
                             ${hasalternatives ? '<span class="sp-badge">Alternative vorhanden</span>' : ''}
                         </div>
@@ -1564,12 +1866,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.ensureUnitAlternativeSlots();
             this.normalizeActiveFlags();
             const overruns = this.recomputeUnitDurations();
+            this.isSavingPlanningState = true;
             return asCall('mod_seminarplaner_save_planning_state', {
                 cmid: this.cmid,
                 statejson: JSON.stringify(this.state),
                 expectedhash: this.versionhash || ''
             }).then((res) => {
                 this.versionhash = String(res.versionhash || '');
+                this.hasUnsavedChanges = false;
                 if (!silent) {
                     const timestr = new Date().toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'});
                     if (overruns.length) {
@@ -1579,10 +1883,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     }
                 }
             }).catch((error) => {
+                this.hasUnsavedChanges = true;
                 if (!silent) {
                     Notification.exception(error);
                     this.setStatus('Baustein konnte nicht gespeichert werden.', true);
                 }
+            }).finally(() => {
+                this.isSavingPlanningState = false;
             });
         }
     }

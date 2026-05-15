@@ -99,6 +99,27 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
     };
 
+    const EDIT_FIELD_SELECTORS = [
+        '#ml-e-titel',
+        '#ml-e-lernziele',
+        '#ml-e-seminarphase',
+        '#ml-e-tags',
+        '#ml-e-zeitbedarf',
+        '#ml-e-gruppengroesse',
+        '#ml-e-kognitive',
+        '#ml-e-kurzbeschreibung',
+        '#ml-e-ablauf',
+        '#ml-e-komplexitaet',
+        '#ml-e-autor',
+        '#ml-e-raum',
+        '#ml-e-sozialform',
+        '#ml-e-vorbereitung',
+        '#ml-e-risiken',
+        '#ml-e-debrief',
+        '#ml-e-materialtechnik',
+        '#ml-e-alternativen'
+    ];
+
     let methods = [];
     let currentEditId = '';
     let runtimeCmid = 0;
@@ -335,7 +356,22 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         if (editor) {
             return String(editor.getContent() || '').trim();
         }
+        const iframe = el.id ? document.getElementById(`${el.id}_ifr`) : null;
+        if (iframe && iframe.contentDocument && iframe.contentDocument.body) {
+            return String(iframe.contentDocument.body.innerHTML || '').trim();
+        }
         return String(el.value || '').trim();
+    };
+
+    const setEditorIframeValue = (el, value) => {
+        const iframe = el && el.id ? document.getElementById(`${el.id}_ifr`) : null;
+        if (!iframe || !iframe.contentDocument || !iframe.contentDocument.body) {
+            return false;
+        }
+        iframe.contentDocument.body.innerHTML = value;
+        iframe.contentDocument.dispatchEvent(new Event('input', {bubbles: true}));
+        iframe.contentDocument.body.dispatchEvent(new Event('input', {bubbles: true}));
+        return true;
     };
 
     const setFieldValue = (selector, value) => {
@@ -347,6 +383,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         el.value = normalized;
         const editor = (typeof window !== 'undefined' && window.tinyMCE && el.id) ? window.tinyMCE.get(el.id) : null;
         if (!editor || typeof editor.setContent !== 'function') {
+            setEditorIframeValue(el, normalized);
             return;
         }
         const applyEditorValue = () => {
@@ -355,6 +392,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             try {
                 editor.setContent(normalized);
+                setEditorIframeValue(el, normalized);
             } catch (error) {
                 window.setTimeout(() => {
                     if (editor.destroyed) {
@@ -362,6 +400,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     }
                     try {
                         editor.setContent(normalized);
+                        setEditorIframeValue(el, normalized);
                     } catch (retryerror) {
                         // Keep the textarea value; Tiny can pick it up on the next editor refresh.
                     }
@@ -373,6 +412,16 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return;
         }
         applyEditorValue();
+        window.setTimeout(() => setEditorIframeValue(el, normalized), 100);
+    };
+
+    const disableEditFieldAutocomplete = () => {
+        EDIT_FIELD_SELECTORS.forEach((selector) => {
+            const el = bySel(selector);
+            if (el && typeof el.setAttribute === 'function') {
+                el.setAttribute('autocomplete', 'off');
+            }
+        });
     };
 
     const attachmentName = (entry) => {
@@ -1309,6 +1358,18 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return;
         }
         openEditor(requested);
+        if (typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(() => openEditor(requested));
+        }
+        if (document.readyState !== 'complete') {
+            window.addEventListener('load', () => openEditor(requested), {once: true});
+        }
+        window.addEventListener('pageshow', () => openEditor(requested), {once: true});
+        window.setTimeout(() => {
+            if (String(currentEditId) === requested) {
+                openEditor(requested);
+            }
+        }, 250);
         const section = bySel('#ml-edit-section');
         if (section) {
             section.scrollIntoView({behavior: 'smooth', block: 'start'});
@@ -1318,6 +1379,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     return {
         init: function(cmid) {
             runtimeCmid = cmid;
+            disableEditFieldAutocomplete();
             bindFilters();
             bindFormMultiDropdowns();
             refreshEditAlternativeOptions('');
