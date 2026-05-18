@@ -4,9 +4,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const VIEW_MODE_DAY = 'day';
     const TIME_AXIS_WIDTH = 80;
     const ZOOM_LEVELS = [
-        {id: 'fine', label: '5 Min', slotMinutes: 5, slotPx: 30, labelEverySlots: 3, showMinor: true},
-        {id: 'medium', label: '15 Min', slotMinutes: 15, slotPx: 26, labelEverySlots: 1, showMinor: true},
-        {id: 'coarse', label: '30 Min', slotMinutes: 30, slotPx: 30, labelEverySlots: 2, showMinor: false}
+        {id: 'fine', label: '5 Min', slotMinutes: 5, slotPx: 30, labelEverySlots: 3, showMinor: true, minItemPx: 30, packShortItems: false},
+        {id: 'medium', label: '15 Min', slotMinutes: 15, slotPx: 30, labelEverySlots: 1, showMinor: true, minItemPx: 30, packShortItems: true},
+        {id: 'coarse', label: '30 Min', slotMinutes: 30, slotPx: 44, labelEverySlots: 1, showMinor: false, minItemPx: 32, packShortItems: true}
     ];
 
     const COGNITIVE_LEVELS = {
@@ -200,6 +200,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.saveInFlight = null;
             this.pendingSaveOptions = null;
             this.resizeState = null;
+            this.moveState = null;
+            this.suppressNextItemClick = false;
             this.expandedUnitSlotKey = null;
             this.roterFadenState = {ispublished: false, gridid: 0};
             this.isUpdatingPublishControl = false;
@@ -305,6 +307,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 config: this.state.config,
                 view: this.state.view,
                 plan: this.state.plan,
+                planningState: this.planningState,
+                units: Array.isArray(this.planningState.units) ? this.planningState.units : [],
+                slotorder: Array.isArray(this.planningState.slotorder) ? this.planningState.slotorder : [],
                 zoomIndex: this.zoomIndex,
                 sourceMode: this.state.sourceMode || 'methods'
             };
@@ -584,11 +589,139 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return 0;
         }
 
+        getPointerClientX(event) {
+            if (!event) {
+                return 0;
+            }
+            if (typeof event.clientX === 'number') {
+                return event.clientX;
+            }
+            if (event.touches && event.touches[0] && typeof event.touches[0].clientX === 'number') {
+                return event.touches[0].clientX;
+            }
+            if (event.changedTouches && event.changedTouches[0] && typeof event.changedTouches[0].clientX === 'number') {
+                return event.changedTouches[0].clientX;
+            }
+            return 0;
+        }
+
+        getMoveTargetFromPointer(clientX, clientY, fallbackDay, fallbackStartMin) {
+            const daycols = Array.from(document.querySelectorAll('.sp-daycol'));
+            let targetcol = null;
+            daycols.forEach((daycol) => {
+                if (targetcol) {
+                    return;
+                }
+                const rect = daycol.getBoundingClientRect();
+                if (clientX >= rect.left && clientX <= rect.right) {
+                    targetcol = daycol;
+                }
+            });
+            if (!targetcol) {
+                targetcol = document.querySelector(`.sp-grid[data-day="${fallbackDay}"]`)?.closest('.sp-daycol') || null;
+            }
+            const grid = targetcol ? targetcol.querySelector('.sp-grid') : null;
+            const day = grid ? grid.getAttribute('data-day') : fallbackDay;
+            if (!grid || !day) {
+                return {day: fallbackDay, startMin: fallbackStartMin};
+            }
+            return {
+                day,
+                startMin: this.clientYToStartMinute(clientY, day, this.minutesToIndex(fallbackStartMin))
+            };
+        }
+
+        clientYToStartMinute(clientY, day, fallbackIndex = 0) {
+            const start = parseTimeToMinutes(this.state.config.timeRange.start);
+            const end = parseTimeToMinutes(this.state.config.timeRange.end);
+            const level = ZOOM_LEVELS[this.zoomIndex];
+            const slotMinutes = Number(level.slotMinutes || 15);
+            const slotPx = Number(level.slotPx || 1);
+            const target = document.querySelector(`[data-overlay="${day}"]`) || document.querySelector(`.sp-grid[data-day="${day}"]`);
+            if (!target || typeof clientY !== 'number') {
+                return this.indexToMinutes(fallbackIndex);
+            }
+            const rect = target.getBoundingClientRect();
+            const rawIndex = Math.round((clientY - rect.top) / slotPx);
+            const maxIndex = Math.max(0, Math.floor((end - start) / slotMinutes) - 1);
+            const index = Math.max(0, Math.min(maxIndex, rawIndex));
+            return this.indexToMinutes(index);
+        }
+
+        startItemMove(event, item, day) {
+            if (!item || this.resizeState || this.moveState) {
+                return;
+            }
+            if (event.button !== undefined && event.button !== 0) {
+                return;
+            }
+            if (event.target.closest('.ml-card-menu, .sp-btn, select, button, input, textarea, a, .sp-resize-handle')) {
+                return;
+            }
+            const itemElement = event.currentTarget;
+            this.moveState = {
+                day,
+                uid: String(item.uid),
+                originX: Number(this.getPointerClientX(event) || 0),
+                originY: Number(this.getPointerClientY(event) || 0),
+                currentX: Number(this.getPointerClientX(event) || 0),
+                currentY: Number(this.getPointerClientY(event) || 0),
+                startMin: Number(item.startMin || 0),
+                moving: false,
+                itemElement
+            };
+            if (itemElement && typeof itemElement.setPointerCapture === 'function' && event.pointerId !== undefined) {
+                itemElement.setPointerCapture(event.pointerId);
+            }
+        }
+
+        updateItemMove(event) {
+            if (!this.moveState) {
+                return;
+            }
+            const currentX = Number(this.getPointerClientX(event) || 0);
+            const currentY = Number(this.getPointerClientY(event) || 0);
+            const dx = currentX - this.moveState.originX;
+            const dy = currentY - this.moveState.originY;
+            this.moveState.currentX = currentX;
+            this.moveState.currentY = currentY;
+            if (!this.moveState.moving && Math.sqrt((dx * dx) + (dy * dy)) < 6) {
+                return;
+            }
+            if (!this.moveState.moving) {
+                this.moveState.moving = true;
+                this.suppressNextItemClick = true;
+                if (this.moveState.itemElement) {
+                    this.moveState.itemElement.classList.add('sp-item--dragging');
+                }
+                this.closeContextMenus();
+            }
+            event.preventDefault();
+        }
+
+        finishItemMove() {
+            if (!this.moveState) {
+                return;
+            }
+            const state = this.moveState;
+            this.moveState = null;
+            if (state.itemElement) {
+                state.itemElement.classList.remove('sp-item--dragging');
+            }
+            if (!state.moving) {
+                return;
+            }
+            const target = this.getMoveTargetFromPointer(state.currentX, state.currentY, state.day, state.startMin);
+            this.handleMoveItem({type: 'move', day: state.day, uid: state.uid}, target.day, target.startMin);
+        }
+
         startItemResize(event, item, day, edge) {
             if (!item || (item.kind !== 'method' && item.kind !== 'unit' && item.kind !== 'break')) {
                 return;
             }
             if (item.flowid && Number(item.flowTotal || 1) > 1) {
+                event.preventDefault();
+                event.stopPropagation();
                 const flowid = String(item.flowid || '');
                 const entries = this.flowEntries(flowid);
                 const first = entries[0] || null;
@@ -599,8 +732,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     this.warn('Geteilte Elemente bitte am ersten Abschnitt oben oder am letzten Abschnitt unten anpassen.');
                     return;
                 }
-                event.preventDefault();
-                event.stopPropagation();
                 const itemElement = event.currentTarget && typeof event.currentTarget.closest === 'function'
                     ? event.currentTarget.closest('.sp-item')
                     : null;
@@ -622,38 +753,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     firstStartMin: Number(first.startMin || 0),
                     lastDay: last.day,
                     lastEndMin: Number(last.endMin || 0),
-                    itemElement,
-                    snapshot: this.clonePlanDays()
-                };
-                document.body.classList.add('sp-resizing');
-                return;
-            }
-            if (item.kind === 'method' || item.kind === 'unit') {
-                event.preventDefault();
-                event.stopPropagation();
-                const itemElement = event.currentTarget && typeof event.currentTarget.closest === 'function'
-                    ? event.currentTarget.closest('.sp-item')
-                    : null;
-                if (itemElement) {
-                    itemElement.dataset.wasDraggable = itemElement.draggable ? '1' : '0';
-                    itemElement.draggable = false;
-                }
-                const flowid = String(item.flowid || '').trim() || uid();
-                const entries = [Object.assign({day}, item)];
-                this.resizeState = {
-                    day,
-                    uid: String(item.uid),
-                    flowid,
-                    groupEntries: entries,
-                    edge: edge === 'start' ? 'start' : 'end',
-                    originY: Number(this.getPointerClientY(event) || 0),
-                    startMin: Number(item.startMin || 0),
-                    endMin: Number(item.endMin || 0),
-                    totalDuration: this.getEntryDuration(item),
-                    firstDay: day,
-                    firstStartMin: Number(item.startMin || 0),
-                    lastDay: day,
-                    lastEndMin: Number(item.endMin || 0),
                     itemElement,
                     snapshot: this.clonePlanDays()
                 };
@@ -709,15 +808,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     ? this.resizeState.groupEntries
                     : this.flowEntriesFromSnapshot(this.resizeState.snapshot, this.resizeState.flowid);
                 this.restorePlanDays(this.resizeState.snapshot);
-                if (originalEntries.length > 1 || originalEntries.some((entry) => String(entry.flowid || '') === String(this.resizeState.flowid))) {
-                    this.removeFlow(this.resizeState.flowid);
-                } else {
-                    originalEntries.forEach((entry) => {
-                        const entryDay = String(entry.day || '');
-                        this.state.plan.days[entryDay] = (this.state.plan.days[entryDay] || [])
-                            .filter((candidate) => String(candidate.uid) !== String(entry.uid));
-                    });
-                }
+                this.removeFlow(this.resizeState.flowid);
                 const group = {
                     entries: originalEntries
                 };
@@ -991,20 +1082,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         dropEventToStartMinute(event, day, fallbackIndex = 0) {
-            const start = parseTimeToMinutes(this.state.config.timeRange.start);
-            const end = parseTimeToMinutes(this.state.config.timeRange.end);
-            const level = ZOOM_LEVELS[this.zoomIndex];
-            const slotMinutes = Number(level.slotMinutes || 15);
-            const slotPx = Number(level.slotPx || 1);
-            const target = document.querySelector(`[data-overlay="${day}"]`) || document.querySelector(`.sp-grid[data-day="${day}"]`);
-            if (!target || typeof event.clientY !== 'number') {
-                return this.indexToMinutes(fallbackIndex);
-            }
-            const rect = target.getBoundingClientRect();
-            const rawIndex = Math.round((event.clientY - rect.top) / slotPx);
-            const maxIndex = Math.max(0, Math.floor((end - start) / slotMinutes) - 1);
-            const index = Math.max(0, Math.min(maxIndex, rawIndex));
-            return this.indexToMinutes(index);
+            return this.clientYToStartMinute(event.clientY, day, fallbackIndex);
         }
 
         withinBounds(s, e) {
@@ -1973,8 +2051,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         renderOverlays() {
             const start = parseTimeToMinutes(this.state.config.timeRange.start);
             const end = parseTimeToMinutes(this.state.config.timeRange.end);
-            const slotMinutes = ZOOM_LEVELS[this.zoomIndex].slotMinutes;
+            const level = ZOOM_LEVELS[this.zoomIndex];
+            const slotMinutes = level.slotMinutes;
+            const slotPx = Number(level.slotPx || 1);
+            const minItemPx = Number(level.minItemPx || slotPx);
+            const packShortItems = !!level.packShortItems;
+            const packGapPx = level.id === 'coarse' ? 4 : 2;
             const slotsPerDay = Math.max(1, Math.round((end - start) / slotMinutes));
+            const overlayMinHeight = slotsPerDay * slotPx;
 
             const todayName = getTodayDayName();
             this.getVisibleDays().forEach((day) => {
@@ -1983,11 +2067,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     return;
                 }
                 overlay.innerHTML = '';
+                overlay.style.minHeight = `${overlayMinHeight}px`;
                 const now = new Date();
                 const nowMinute = toMin(now.getHours(), now.getMinutes());
                 const isToday = day === todayName;
                 if (isToday && nowMinute >= start && nowMinute <= end) {
-                    const topPx = ((nowMinute - start) / slotMinutes) * ZOOM_LEVELS[this.zoomIndex].slotPx;
+                    const topPx = ((nowMinute - start) / slotMinutes) * slotPx;
                     const indicator = document.createElement('div');
                     indicator.className = 'sp-nowline';
                     indicator.style.top = `${topPx}px`;
@@ -1996,14 +2081,21 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 }
 
                 const items = (this.state.plan.days[day] || []).slice().sort((a, b) => a.startMin - b.startMin);
+                let packedBottomPx = 0;
                 items.forEach((it) => {
-                    let startIdx = Math.floor((it.startMin - start) / slotMinutes) + 1;
-                    let endIdx = Math.ceil((it.endMin - start) / slotMinutes) + 1;
-                    startIdx = Math.max(1, startIdx);
-                    endIdx = Math.min(slotsPerDay + 1, Math.max(startIdx + 1, endIdx));
+                    const durationMin = Math.max(5, Number(it.endMin || 0) - Number(it.startMin || 0));
+                    const naturalTopPx = Math.max(0, ((Number(it.startMin || 0) - start) / slotMinutes) * slotPx);
+                    const naturalHeightPx = Math.max(1, (durationMin / slotMinutes) * slotPx);
+                    const isShort = durationMin < slotMinutes;
+                    const heightPx = Math.max(naturalHeightPx, isShort ? minItemPx : Math.min(minItemPx, naturalHeightPx));
+                    let topPx = naturalTopPx;
+                    if (packShortItems) {
+                        topPx = Math.max(topPx, packedBottomPx);
+                        packedBottomPx = topPx + heightPx + packGapPx;
+                    }
 
                     const div = document.createElement('div');
-                    let className = 'sp-item';
+                    let className = `sp-item sp-item--zoom-${level.id}`;
                     if (it.kind === 'break') {
                         className += ' sp-item--break';
                     }
@@ -2013,16 +2105,28 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     if (it.kind === 'method' && it.parentunit) {
                         className += ' sp-entry--unit-method';
                     }
-                    if ((Number(it.endMin || 0) - Number(it.startMin || 0)) <= 10) {
+                    if (isShort || durationMin <= 10) {
+                        className += ' sp-item--short';
+                    }
+                    if (durationMin <= 10) {
                         className += ' sp-item--compact';
+                    }
+                    if (packShortItems && topPx !== naturalTopPx) {
+                        className += ' sp-item--packed';
                     }
                     if (it.cognitiveLevel) {
                         className += ` sp-level-${it.cognitiveLevel}`;
                     }
                     div.className = className;
-                    div.style.gridRow = `${startIdx} / ${endIdx}`;
-                    div.style.gridColumn = '1 / -1';
-                    div.draggable = true;
+                    div.style.position = 'absolute';
+                    div.style.top = `${topPx}px`;
+                    div.style.height = `${heightPx}px`;
+                    div.style.left = '0';
+                    div.style.right = '0';
+                    div.draggable = false;
+                    div.addEventListener('pointerdown', (event) => this.startItemMove(event, it, day));
+                    div.addEventListener('mousedown', (event) => this.startItemMove(event, it, day));
+                    div.addEventListener('touchstart', (event) => this.startItemMove(event, it, day), {passive: true});
 
                     div.addEventListener('dragstart', (e) => {
                         const fromResizeHandle = e.target && typeof e.target.closest === 'function' && e.target.closest('.sp-resize-handle');
@@ -2030,7 +2134,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             e.preventDefault();
                             return;
                         }
+                        div.classList.add('sp-item--dragging');
                         e.dataTransfer.setData('text/plain', JSON.stringify({type: 'move', day, uid: it.uid}));
+                    });
+                    div.addEventListener('dragend', () => {
+                        div.classList.remove('sp-item--dragging');
                     });
                     div.addEventListener('dragover', (event) => event.preventDefault());
                     div.addEventListener('drop', (event) => this.onDrop(event, {getAttribute: () => day}, this.minutesToIndex(it.startMin)));
@@ -2129,7 +2237,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             </div>
                         </details>
                     `;
-                    if (it.kind === 'method' || it.kind === 'unit' || it.kind === 'break') {
+                    if (it.kind === 'method' || it.kind === 'break') {
                         const topHandle = document.createElement('div');
                         topHandle.className = 'sp-resize-handle sp-resize-handle--top';
                         topHandle.setAttribute('data-resize', 'start');
@@ -2150,6 +2258,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         div.setAttribute('tabindex', '0');
                         div.setAttribute('aria-label', `${title || 'Seminareinheit'} öffnen`);
                         div.addEventListener('click', (event) => {
+                            if (this.suppressNextItemClick) {
+                                this.suppressNextItemClick = false;
+                                event.preventDefault();
+                                return;
+                            }
                             if (event.target.closest('.ml-card-menu, .sp-btn, select, button, input, textarea, a, .sp-resize-handle')) {
                                 return;
                             }
@@ -2172,6 +2285,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         div.setAttribute('tabindex', '0');
                         div.setAttribute('aria-label', 'Pause bearbeiten');
                         div.addEventListener('click', (event) => {
+                            if (this.suppressNextItemClick) {
+                                this.suppressNextItemClick = false;
+                                event.preventDefault();
+                                return;
+                            }
                             if (event.target.closest('.ml-card-menu, .sp-btn, select, button, input, textarea, a, .sp-resize-handle')) {
                                 return;
                             }
@@ -2406,7 +2524,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const total = allocation.segments.length;
             const created = allocation.segments.map((segment, index) => {
                 const base = {
-                    uid: Array.isArray(options.preferredUids) && options.preferredUids[index] ? String(options.preferredUids[index]) : uid(),
+                    uid: uid(),
                     flowid,
                     flowOrder: index + 1,
                     flowTotal: total,
@@ -2464,10 +2582,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
 
             const flowid = options.flowid || uid();
+            const preferredUids = Array.isArray(options.preferredUids) ? options.preferredUids : [];
             const total = cleanSegments.length;
             const created = cleanSegments.map((segment, index) => {
                 const base = {
-                    uid: uid(),
+                    uid: preferredUids[index] || uid(),
                     flowid,
                     flowOrder: index + 1,
                     flowTotal: total,
@@ -3272,13 +3391,28 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 this.handleContextMenuToggle(event);
                 this.handleItemAction(event);
             });
-            document.addEventListener('pointermove', (event) => this.updateItemResize(event), {passive: false});
-            document.addEventListener('pointerup', () => this.finishItemResize());
-            document.addEventListener('pointercancel', () => this.finishItemResize());
+            document.addEventListener('pointermove', (event) => {
+                this.updateItemResize(event);
+                this.updateItemMove(event);
+            }, {passive: false});
+            document.addEventListener('mousemove', (event) => this.updateItemMove(event), {passive: false});
+            document.addEventListener('touchmove', (event) => this.updateItemMove(event), {passive: false});
+            document.addEventListener('pointerup', () => {
+                this.finishItemResize();
+                this.finishItemMove();
+            });
+            document.addEventListener('mouseup', () => this.finishItemMove());
+            document.addEventListener('touchend', () => this.finishItemMove());
+            document.addEventListener('pointercancel', () => {
+                this.finishItemResize();
+                this.finishItemMove();
+            });
+            document.addEventListener('touchcancel', () => this.finishItemMove());
             document.addEventListener('keydown', (event) => {
                 if (event.key === 'Escape') {
                     this.closeContextMenus();
                     this.finishItemResize();
+                    this.finishItemMove();
                 }
             });
         }

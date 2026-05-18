@@ -12,6 +12,7 @@ $seminarplaner = $activity['seminarplaner'];
 $context = $activity['context'];
 
 seminarplaner_prepare_page('/mod/seminarplaner/roterfaden.php', $cm, $course, $seminarplaner, 'roterfaden');
+$PAGE->requires->js_call_amd('mod_seminarplaner/roterfaden', 'init', [(int)$cm->id]);
 
 echo $OUTPUT->header();
 

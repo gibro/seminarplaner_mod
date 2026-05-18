@@ -710,7 +710,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 planningUnitsById[id] = {
                     title: String(unit.title || '').trim(),
                     topics: String(unit.topics || ''),
-                    objectives: String(unit.objectives || '')
+                    objectives: String(unit.objectives || ''),
+                    methods: Array.isArray(unit.methods) ? unit.methods : []
                 };
             });
         }).catch(() => {
@@ -922,6 +923,104 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return map[level] || '';
     };
 
+    const normalizeMethodForPdf = (method) => {
+        const source = method || {};
+        const cognitive = Array.isArray(source.kognitive) ? source.kognitive.join(', ') : (source.kognitive || '');
+        const duration = Math.max(5, Number.parseInt(source.zeitbedarf || source.duration || '0', 10) || 0);
+        return {
+            id: source.id || '',
+            title: String(source.titel || source.title || '').trim(),
+            duration,
+            phase: Array.isArray(source.seminarphase) ? source.seminarphase.join(', ') : (source.seminarphase || source.phase || ''),
+            cognitive,
+            group: source.gruppengroesse || source.group || '',
+            tags: source.tags || '',
+            details: {
+                description: source.kurzbeschreibung || '',
+                reflection: source.debrief || '',
+                requirements: Array.isArray(source.raum) ? source.raum.join(', ') : (source.raum || ''),
+                socialform: Array.isArray(source.sozialform) ? source.sozialform.join(', ') : (source.sozialform || ''),
+                preparation: source.vorbereitung || '',
+                materials: source.materialtechnik || '',
+                flow: source.ablauf || '',
+                risks: source.risiken || '',
+                resources: Array.isArray(source.materialien) ? source.materialien.join(', ') : (source.materialien || ''),
+                objectives: source.lernziele || '',
+                contact: source.autor || ''
+            }
+        };
+    };
+
+    const getUnitMethodItemsForPdf = (unit, startMin = 0) => {
+        const refs = Array.isArray(unit && unit.methods) ? unit.methods : [];
+        let cursor = Number(startMin) || 0;
+        return refs.map((entry) => {
+            const methodid = String((entry && (entry.methodid || entry.id)) || '').trim();
+            if (!methodid) {
+                return null;
+            }
+            const method = methods.find((candidate) => String(candidate.id || '') === methodid);
+            if (!method) {
+                return null;
+            }
+            const normalized = normalizeMethodForPdf(method);
+            const duration = normalized.duration || 5;
+            const item = Object.assign({}, normalized, {
+                startMin: cursor,
+                endMin: cursor + duration
+            });
+            cursor += duration;
+            return item;
+        }).filter(Boolean);
+    };
+
+    const getUnitForPdf = (item) => {
+        if (!item || item.kind !== 'unit') {
+            return null;
+        }
+        const unitid = String(item.unitid || '').trim();
+        const unit = unitid && planningUnitsById[unitid] ? planningUnitsById[unitid] : {};
+        return {
+            title: unit.title || item.title || 'Baustein',
+            topics: unit.topics || '',
+            objectives: unit.objectives || '',
+            methods: getUnitMethodItemsForPdf(unit, item.startMin)
+        };
+    };
+
+    const joinUniquePdfValues = (values) => {
+        const seen = {};
+        return values
+            .map((value) => escapeTextForPdf(value || ''))
+            .filter(Boolean)
+            .filter((value) => {
+                const key = value.toLowerCase();
+                if (seen[key]) {
+                    return false;
+                }
+                seen[key] = true;
+                return true;
+            })
+            .join('\n');
+    };
+
+    const joinMethodPdfValues = (unit, label, picker) => {
+        if (!unit || !Array.isArray(unit.methods) || !unit.methods.length) {
+            return '';
+        }
+        return unit.methods
+            .map((method) => {
+                const value = escapeTextForPdf(picker(method) || '');
+                if (!value) {
+                    return '';
+                }
+                const title = escapeTextForPdf(method.title || '');
+                return title ? `${title}: ${value}` : value;
+            })
+            .filter(Boolean)
+            .join('\n');
+    };
+
     const getSelectedPdfColumns = () => {
         const all = bySel('#kg-pdf-columns-all');
         const host = bySel('#kg-pdf-columns-options');
@@ -986,6 +1085,55 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     const getPdfColumnValue = (item, key) => {
         const details = item && item.details ? item.details : {};
+        const unit = getUnitForPdf(item);
+        if (unit) {
+            switch (key) {
+                case 'uhrzeit':
+                    return `${formatTimeForPdf(item.startMin)} – ${formatTimeForPdf(item.endMin)}`;
+                case 'titel':
+                    return escapeTextForPdf(unit.title || item.title || '');
+                case 'seminarphase':
+                    return joinUniquePdfValues(unit.methods.map((method) => normalizePhaseText(method.phase || '')));
+                case 'kognitive':
+                    return joinUniquePdfValues(unit.methods.map((method) => getCognitiveLabel(method)));
+                case 'kurzbeschreibung': {
+                    const parts = [];
+                    const topics = escapeTextForPdf(unit.topics || '');
+                    if (topics) {
+                        parts.push(`Bausteininhalt: ${topics}`);
+                    }
+                    const methodDescriptions = joinMethodPdfValues(unit, 'Kurzbeschreibung', (method) => method.details.description);
+                    if (methodDescriptions) {
+                        parts.push(methodDescriptions);
+                    }
+                    return parts.join('\n');
+                }
+                case 'ablauf':
+                    return joinMethodPdfValues(unit, 'Ablauf', (method) => method.details.flow);
+                case 'debrief':
+                    return joinMethodPdfValues(unit, 'Debrief', (method) => method.details.reflection);
+                case 'lernziele': {
+                    const parts = [];
+                    const objectives = escapeTextForPdf(unit.objectives || '');
+                    if (objectives) {
+                        parts.push(`Bausteinziele: ${objectives}`);
+                    }
+                    const methodObjectives = joinMethodPdfValues(unit, 'Lernziele', (method) => method.details.objectives);
+                    if (methodObjectives) {
+                        parts.push(methodObjectives);
+                    }
+                    return parts.join('\n');
+                }
+                case 'risiken':
+                    return joinMethodPdfValues(unit, 'Risiken', (method) => method.details.risks);
+                case 'materialtechnik':
+                    return joinMethodPdfValues(unit, 'Material/Technik', (method) => method.details.materials);
+                case 'sonstiges':
+                    return '';
+                default:
+                    return '';
+            }
+        }
         switch (key) {
             case 'uhrzeit':
                 return `${formatTimeForPdf(item.startMin)} – ${formatTimeForPdf(item.endMin)}`;
@@ -1192,6 +1340,16 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const unitsInOrder = [];
         const seenUnitIds = new Set();
         const methods = [];
+        const addMethodToUnit = (unit, method) => {
+            if (!unit || !method) {
+                return;
+            }
+            const methodid = String(method.id || method.entryId || '').trim();
+            const alreadyAdded = methodid && unit.methods.some((entry) => String(entry.id || entry.entryId || '') === methodid);
+            if (!alreadyAdded) {
+                unit.methods.push(method);
+            }
+        };
         sorted.forEach((entry) => {
             if (!entry || entry.kind === 'break') {
                 return;
@@ -1209,7 +1367,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     title: planningUnit.title || String(entry.title || 'Baustein'),
                     topics: planningUnit.topics || '',
                     objectives: planningUnit.objectives || '',
-                    methods: []
+                    methods: getUnitMethodItemsForPdf(planningUnit, entry.startMin)
                 });
                 return;
             }
@@ -1231,11 +1389,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     title: fallback.title || 'Baustein',
                     topics: fallback.topics || '',
                     objectives: fallback.objectives || '',
-                    methods: []
+                    methods: getUnitMethodItemsForPdf(fallback, method.startMin)
                 };
                 unitsInOrder.push(target);
             }
-            target.methods.push(method);
+            addMethodToUnit(target, method);
         });
 
         const methodsWithoutUnit = methods.filter((method) => !String(method.parentunit || '').trim());
@@ -1438,7 +1596,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 id: baseid || uid(),
                 title: String(unit && unit.title ? unit.title : '').trim(),
                 topics: String(unit && unit.topics ? unit.topics : ''),
-                objectives: String(unit && unit.objectives ? unit.objectives : '')
+                objectives: String(unit && unit.objectives ? unit.objectives : ''),
+                methods: Array.isArray(unit && unit.methods) ? unit.methods : []
             };
         }).filter((unit) => !!unit.id);
     };

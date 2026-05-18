@@ -1306,9 +1306,8 @@
   cursor: help;
 }
 
-/* Baustein-Titel im Grid immer lesbar halten, unabhängig vom Zoom. */
 .sp-item.sp-entry--unit {
-  min-height: 58px;
+  min-height: 0;
 }
 
 .sp-item.sp-entry--unit .sp-item-content {
@@ -1388,6 +1387,77 @@
   flex-direction: column;
   gap: 2px;
   overflow: hidden;
+}
+
+.sp-zoom-fine .sp-item {
+  min-height: 30px;
+}
+
+.sp-zoom-fine .sp-item.sp-entry--unit {
+  min-height: 58px;
+}
+
+.sp-zoom-medium .sp-item {
+  margin: 2px 3px;
+  padding: 4px 7px;
+  gap: 1px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sp-zoom-medium .sp-item .sp-title {
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+.sp-zoom-medium .sp-item .sp-meta {
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.sp-zoom-medium .sp-item--short .sp-entry-unitlabel,
+.sp-zoom-medium .sp-item--short .sp-item-unit-methods {
+  display: none;
+}
+
+.sp-zoom-coarse .sp-item {
+  margin: 2px 3px;
+  padding: 2px 6px;
+  gap: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 5px;
+  box-shadow: none;
+}
+
+.sp-zoom-coarse .sp-item .sp-title {
+  font-size: 11px;
+  line-height: 1.1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sp-zoom-coarse .sp-item .sp-meta {
+  font-size: 9px;
+  line-height: 1.05;
+}
+
+.sp-zoom-coarse .sp-entry-unitlabel,
+.sp-zoom-coarse .sp-item-unit-methods {
+  display: none;
+}
+
+.sp-zoom-coarse .sp-item-context {
+  top: 1px;
+  right: 2px;
+}
+
+.sp-zoom-coarse .sp-item--short .sp-meta {
+  display: none;
+}
+
+.sp-item--packed {
+  outline: 1px solid rgba(14, 116, 144, .14);
 }
 
 .sp-item--unit-colored {
@@ -1576,6 +1646,75 @@
 
 .sp-zoom-coarse .sp-item-unit-methods__scroller {
   gap: 4px;
+}
+
+/* Zoom-specific grid item layouts. Keep this late in the cascade so the
+   coarse/medium compact views cannot be expanded by the default card rules. */
+.sp-wrapper.sp-zoom-fine .sp-item {
+  min-height: 30px;
+}
+
+.sp-wrapper.sp-zoom-fine .sp-item.sp-entry--unit {
+  min-height: 58px;
+}
+
+.sp-wrapper.sp-zoom-medium .sp-item {
+  margin: 2px 3px;
+  padding: 4px 7px;
+  gap: 1px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sp-wrapper.sp-zoom-medium .sp-item .sp-title {
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+.sp-wrapper.sp-zoom-medium .sp-item .sp-meta {
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.sp-wrapper.sp-zoom-medium .sp-item--short .sp-entry-unitlabel,
+.sp-wrapper.sp-zoom-medium .sp-item--short .sp-item-unit-methods {
+  display: none;
+}
+
+.sp-wrapper.sp-zoom-coarse .sp-item {
+  margin: 2px 3px;
+  padding: 2px 6px;
+  gap: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 5px;
+  box-shadow: none;
+}
+
+.sp-wrapper.sp-zoom-coarse .sp-item .sp-title {
+  font-size: 11px;
+  line-height: 1.1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sp-wrapper.sp-zoom-coarse .sp-item .sp-meta {
+  font-size: 9px;
+  line-height: 1.05;
+}
+
+.sp-wrapper.sp-zoom-coarse .sp-entry-unitlabel,
+.sp-wrapper.sp-zoom-coarse .sp-item-unit-methods {
+  display: none;
+}
+
+.sp-wrapper.sp-zoom-coarse .sp-item-context {
+  top: 1px;
+  right: 2px;
+}
+
+.sp-wrapper.sp-zoom-coarse .sp-item--short .sp-meta {
+  display: none;
 }
 
 .sp-resize-handle {

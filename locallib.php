@@ -97,7 +97,8 @@ function seminarplaner_prepare_page(string $script, stdClass $cm, stdClass $cour
     $PAGE->set_title(format_string($seminarplaner->name));
     $PAGE->set_heading(format_string($course->fullname));
     $PAGE->set_activity_record($seminarplaner);
-    $PAGE->requires->css('/mod/seminarplaner/styles.css');
+    $styleversion = is_readable(__DIR__ . '/styles.css') ? (string)filemtime(__DIR__ . '/styles.css') : '1';
+    $PAGE->requires->css(new moodle_url('/mod/seminarplaner/styles.css', ['v' => $styleversion]));
 
     if ($amdmodule !== null && $amdmodule !== '') {
         $PAGE->requires->js_call_amd('mod_seminarplaner/' . $amdmodule, 'init', [(int)$cm->id]);

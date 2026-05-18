@@ -410,6 +410,22 @@ class grid_service {
         if (!is_array($decoded)) {
             $decoded = [];
         }
+        $hasunits = isset($decoded['units']) && is_array($decoded['units']) && count($decoded['units']) > 0;
+        $hasplanningunits = isset($decoded['planningState']) && is_array($decoded['planningState'])
+            && isset($decoded['planningState']['units']) && is_array($decoded['planningState']['units'])
+            && count($decoded['planningState']['units']) > 0;
+        if (!$hasunits && !$hasplanningunits) {
+            $planningservice = new planning_state_service();
+            $planningstate = $planningservice->get_state($cmid);
+            $state = isset($planningstate['state']) && is_array($planningstate['state']) ? $planningstate['state'] : [];
+            if (isset($state['units']) && is_array($state['units'])) {
+                $decoded['planningState'] = $state;
+                $decoded['units'] = $state['units'];
+                if (isset($state['slotorder']) && is_array($state['slotorder'])) {
+                    $decoded['slotorder'] = $state['slotorder'];
+                }
+            }
+        }
 
         return [
             'ispublished' => (int)$record->ispublished === 1,

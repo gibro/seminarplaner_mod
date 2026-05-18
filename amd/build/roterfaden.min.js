@@ -125,7 +125,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         parsePlanningState(raw) {
-            const units = Array.isArray((raw || {}).units) ? raw.units : [];
+            const source = (raw || {}).planningState || raw || {};
+            const units = Array.isArray(source.units) ? source.units : [];
             return {
                 units: units.map((unit) => ({
                     id: String(unit.id || ''),
