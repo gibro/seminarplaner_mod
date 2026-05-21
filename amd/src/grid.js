@@ -3,6 +3,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const VIEW_MODE_WEEK = 'week';
     const VIEW_MODE_DAY = 'day';
     const TIME_AXIS_WIDTH = 80;
+    const DAY_COLUMN_MIN_WIDTH = 180;
     const ZOOM_LEVELS = [
         {id: 'fine', label: '5 Min', slotMinutes: 5, slotPx: 30, labelEverySlots: 3, showMinor: true, minItemPx: 30, packShortItems: false},
         {id: 'medium', label: '15 Min', slotMinutes: 15, slotPx: 30, labelEverySlots: 1, showMinor: true, minItemPx: 30, packShortItems: true},
@@ -66,6 +67,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     };
     const GRID_PRESETS = {
         'standard-week': {days: ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]},
+        'sunday-to-friday': {days: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]},
         'weekend-seminar': {days: ['Freitag', 'Samstag', 'Sonntag'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]},
         'half-week-mo-mi': {days: ['Montag', 'Dienstag', 'Mittwoch'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]},
         'half-week-mi-fr': {days: ['Mittwoch', 'Donnerstag', 'Freitag'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]},
@@ -658,6 +660,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (event.target.closest('.ml-card-menu, .sp-btn, select, button, input, textarea, a, .sp-resize-handle')) {
                 return;
             }
+            event.preventDefault();
+            const selection = window.getSelection ? window.getSelection() : null;
+            if (selection && typeof selection.removeAllRanges === 'function') {
+                selection.removeAllRanges();
+            }
             const itemElement = event.currentTarget;
             this.moveState = {
                 day,
@@ -670,6 +677,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 moving: false,
                 itemElement
             };
+            document.body.classList.add('sp-moving');
             if (itemElement && typeof itemElement.setPointerCapture === 'function' && event.pointerId !== undefined) {
                 itemElement.setPointerCapture(event.pointerId);
             }
@@ -708,6 +716,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (state.itemElement) {
                 state.itemElement.classList.remove('sp-item--dragging');
             }
+            document.body.classList.remove('sp-moving');
             if (!state.moving) {
                 return;
             }
@@ -962,6 +971,43 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 return 5;
             }
             return Math.max(5, Math.ceil(value / 5) * 5);
+        }
+
+        orderDaysFromStart(days, firstday) {
+            const selected = new Set((Array.isArray(days) ? days : []).filter((day) => DAYS_ALL.includes(day)));
+            const startindex = DAYS_ALL.indexOf(firstday);
+            const orderedweek = startindex >= 0 ? DAYS_ALL.slice(startindex).concat(DAYS_ALL.slice(0, startindex)) : DAYS_ALL;
+            return orderedweek.filter((day) => selected.has(day));
+        }
+
+        collectConfigDays(form) {
+            const selecteddays = Array.from(form.querySelectorAll('input[name="days"]:checked')).map((el) => el.value);
+            const firstday = getValue('#sp-config-first-day') || selecteddays[0] || 'Montag';
+            return this.orderDaysFromStart(selecteddays, firstday);
+        }
+
+        getSelectedConfigDays(form) {
+            return Array.from(form.querySelectorAll('input[name="days"]:checked'))
+                .map((el) => el.value)
+                .filter((day) => DAYS_ALL.includes(day));
+        }
+
+        syncFirstDayOptions(form, preferredday) {
+            const firstday = bySel('#sp-config-first-day');
+            if (!form || !firstday) {
+                return;
+            }
+            const selecteddays = this.getSelectedConfigDays(form);
+            const current = preferredday || firstday.value || selecteddays[0] || 'Montag';
+            firstday.innerHTML = selecteddays.map((day) => {
+                return `<option value="${escapeHtml(day)}">${escapeHtml(day)}</option>`;
+            }).join('');
+            firstday.disabled = !selecteddays.length;
+            if (selecteddays.includes(current)) {
+                firstday.value = current;
+            } else if (selecteddays.length) {
+                firstday.value = selecteddays[0];
+            }
         }
 
         ensurePlanDays() {
@@ -1977,10 +2023,16 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             });
 
             const count = visibleDays.length;
-            header.style.gridTemplateColumns = `${TIME_AXIS_WIDTH}px repeat(${count}, minmax(180px, 1fr))`;
-            row.style.gridTemplateColumns = `${TIME_AXIS_WIDTH}px repeat(${count}, minmax(180px, 1fr))`;
+            const gridminwidth = TIME_AXIS_WIDTH + (count * DAY_COLUMN_MIN_WIDTH);
+            const columns = `${TIME_AXIS_WIDTH}px repeat(${count}, minmax(${DAY_COLUMN_MIN_WIDTH}px, 1fr))`;
+            const scroll = bySel('#sp-grid-scroll');
+            if (scroll) {
+                scroll.style.setProperty('--sp-grid-min-width', `${gridminwidth}px`);
+            }
+            header.style.gridTemplateColumns = columns;
+            row.style.gridTemplateColumns = columns;
             if (allDayRow) {
-                allDayRow.style.gridTemplateColumns = `${TIME_AXIS_WIDTH}px repeat(${count}, minmax(180px, 1fr))`;
+                allDayRow.style.gridTemplateColumns = columns;
             }
             this.updateViewControls();
         }
@@ -2126,7 +2178,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     div.draggable = false;
                     div.addEventListener('pointerdown', (event) => this.startItemMove(event, it, day));
                     div.addEventListener('mousedown', (event) => this.startItemMove(event, it, day));
-                    div.addEventListener('touchstart', (event) => this.startItemMove(event, it, day), {passive: true});
+                    div.addEventListener('touchstart', (event) => this.startItemMove(event, it, day), {passive: false});
 
                     div.addEventListener('dragstart', (e) => {
                         const fromResizeHandle = e.target && typeof e.target.closest === 'function' && e.target.closest('.sp-resize-handle');
@@ -3397,6 +3449,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }, {passive: false});
             document.addEventListener('mousemove', (event) => this.updateItemMove(event), {passive: false});
             document.addEventListener('touchmove', (event) => this.updateItemMove(event), {passive: false});
+            document.addEventListener('selectstart', (event) => {
+                if (this.moveState || this.resizeState) {
+                    event.preventDefault();
+                }
+            });
             document.addEventListener('pointerup', () => {
                 this.finishItemResize();
                 this.finishItemMove();
@@ -3522,9 +3579,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 addbreak.addEventListener('click', () => this.addBreakItem());
             }
             if (form) {
+                form.querySelectorAll('input[name="days"]').forEach((cb) => {
+                    cb.addEventListener('change', () => this.syncFirstDayOptions(form));
+                });
                 form.addEventListener('submit', (event) => {
                     event.preventDefault();
-                    const days = Array.from(form.querySelectorAll('input[name="days"]:checked')).map((el) => el.value);
+                    const days = this.collectConfigDays(form);
                     if (!days.length) {
                         this.warn('Bitte mindestens einen Tag auswählen.');
                         return;
@@ -3615,6 +3675,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             form.querySelectorAll('input[name="days"]').forEach((cb) => {
                 cb.checked = this.state.config.days.includes(cb.value);
             });
+            this.syncFirstDayOptions(form, this.state.config.days[0] || 'Montag');
             form.querySelector('#sp-config-time-start').value = this.state.config.timeRange.start;
             form.querySelector('#sp-config-time-end').value = this.state.config.timeRange.end;
             this.loadBreaksIntoModal(this.state.config.breaks || []);

@@ -82,6 +82,7 @@ echo html_writer::end_div();
         <select name="preset" id="sp-config-preset" class="kg-input kg-grid-select">
           <option value="custom">Individuelle Konfiguration</option>
           <option value="standard-week">Standard-Woche (Mo-Fr, 8:30-17:30)</option>
+          <option value="sunday-to-friday">Seminarwoche (So-Fr, 8:30-17:30)</option>
           <option value="weekend-seminar">Wochenendseminar (Fr-So, 8:30-17:30)</option>
           <option value="half-week-mo-mi">Halbe Woche (Mo-Mi, 8:30-17:30)</option>
           <option value="half-week-mi-fr">Halbe Woche (Mi-Fr, 8:30-17:30)</option>
@@ -101,6 +102,16 @@ echo html_writer::end_div();
         }
         ?>
       </div>
+      <label class="sp-modal__field sp-first-day-field" for="sp-config-first-day">
+        <span class="sp-modal__label">Erster Seminartag</span>
+        <select name="firstDay" id="sp-config-first-day" class="kg-input kg-grid-select">
+          <?php
+          foreach ($days as $day) {
+              echo '<option value="' . s($day) . '">' . s($day) . '</option>';
+          }
+          ?>
+        </select>
+      </label>
     </div>
 
     <div class="sp-modal__section">
@@ -281,17 +292,19 @@ echo html_writer::end_div();
         </div>
       </div>
 
-      <div class="sp-row" id="sp-header">
-        <div></div>
-      </div>
+      <div class="sp-grid-scroll" id="sp-grid-scroll">
+        <div class="sp-row" id="sp-header">
+          <div></div>
+        </div>
 
-      <div class="sp-row sp-row--allday" id="sp-allday-row">
-        <div class="sp-allday-label" aria-hidden="true"></div>
-      </div>
+        <div class="sp-row sp-row--allday" id="sp-allday-row">
+          <div class="sp-allday-label" aria-hidden="true"></div>
+        </div>
 
-      <div class="sp-row" id="sp-grid-row">
-        <div class="sp-timecol">
-          <div id="sp-times"></div>
+        <div class="sp-row" id="sp-grid-row">
+          <div class="sp-timecol">
+            <div id="sp-times"></div>
+          </div>
         </div>
       </div>
 

@@ -35,14 +35,36 @@ final class mod_seminarplaner_grid_service_test extends advanced_testcase {
         $this->assertNotEmpty($state['versionhash']);
     }
 
-    public function test_save_state_conflict_detected(): void {
+    public function test_save_state_merges_stale_non_overlapping_changes(): void {
         $this->resetAfterTest(true);
 
         $service = new grid_service();
         $gridid = $service->create_grid(1003, 'Grid C', 4);
-        $firsthash = $service->save_user_state($gridid, 4, ['a' => 1]);
+        $firststate = [
+            'plan' => [
+                'days' => [
+                    'Montag' => [
+                        ['uid' => 'a', 'startMin' => 540, 'endMin' => 600],
+                    ],
+                ],
+            ],
+        ];
+        $firsthash = $service->save_user_state($gridid, 4, $firststate);
 
-        $this->expectException(coding_exception::class);
-        $service->save_user_state($gridid, 4, ['a' => 2], $firsthash . 'mismatch');
+        $secondstate = [
+            'plan' => [
+                'days' => [
+                    'Dienstag' => [
+                        ['uid' => 'b', 'startMin' => 600, 'endMin' => 660],
+                    ],
+                ],
+            ],
+        ];
+        $secondhash = $service->save_user_state($gridid, 4, $secondstate, $firsthash . 'mismatch');
+
+        $this->assertNotSame($firsthash, $secondhash);
+        $state = $service->get_user_state($gridid, 4);
+        $this->assertCount(1, $state['state']['plan']['days']['Montag']);
+        $this->assertCount(1, $state['state']['plan']['days']['Dienstag']);
     }
 }
