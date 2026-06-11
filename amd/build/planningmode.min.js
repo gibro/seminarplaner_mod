@@ -1253,9 +1253,28 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return this.filters[slotkey];
         }
 
+        usedMethodIds() {
+            const used = new Set();
+            (this.state.units || []).forEach((unit) => {
+                (Array.isArray(unit.methods) ? unit.methods : []).forEach((entry) => {
+                    const mid = entry && entry.methodid !== undefined && entry.methodid !== null
+                        ? String(entry.methodid).trim()
+                        : '';
+                    if (mid) {
+                        used.add(mid);
+                    }
+                });
+            });
+            return used;
+        }
+
         methodsForSlot(slotkey) {
             const filter = this.ensureFilter(slotkey);
+            const used = this.usedMethodIds();
             return this.methods.filter((method) => {
+                if (used.has(String(method.id))) {
+                    return false;
+                }
                 const hay = normalizeText([
                     stripHtml(method.titel || ''),
                     stripHtml(method.kurzbeschreibung || ''),

@@ -509,6 +509,64 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return out;
     };
 
+    const blobToBase64 = (blob) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const result = String(reader.result || '');
+            const comma = result.indexOf(',');
+            resolve(comma >= 0 ? result.slice(comma + 1) : result);
+        };
+        reader.onerror = () => reject(reader.error || new Error('Datei konnte nicht gelesen werden.'));
+        reader.readAsDataURL(blob);
+    });
+
+    // Stored attachment descriptors (from get_method_cards) only carry a fileurl, not the file
+    // content. For a portable export we fetch the file and embed it as contentbase64 so the
+    // attachments survive a re-import into another activity.
+    const embedFileContent = async (entry) => {
+        if (!entry || typeof entry !== 'object') {
+            return entry;
+        }
+        if (entry.contentbase64) {
+            return entry;
+        }
+        const url = entry.fileurl || '';
+        if (!url) {
+            return entry;
+        }
+        try {
+            const resp = await fetch(url, {credentials: 'same-origin'});
+            if (!resp.ok) {
+                return entry;
+            }
+            const blob = await resp.blob();
+            return {
+                name: String(entry.name || ''),
+                mimetype: String(entry.mimetype || blob.type || 'application/octet-stream'),
+                contentbase64: await blobToBase64(blob)
+            };
+        } catch (e) {
+            return entry;
+        }
+    };
+
+    const embedMethodFileContents = async (methodList) => {
+        const list = Array.isArray(methodList) ? methodList : [];
+        return Promise.all(list.map(async (method) => {
+            if (!method || typeof method !== 'object') {
+                return method;
+            }
+            const copy = Object.assign({}, method);
+            if (Array.isArray(method.materialien)) {
+                copy.materialien = await Promise.all(method.materialien.map(embedFileContent));
+            }
+            if (Array.isArray(method.h5p)) {
+                copy.h5p = await Promise.all(method.h5p.map(embedFileContent));
+            }
+            return copy;
+        }));
+    };
+
     const exportJsonFull = async (cmid) => {
         const selection = getComponentSelection('export');
         if (selectedComponentCount(selection) === 0) {
@@ -532,7 +590,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
         };
         if (selection.methods) {
-            payload.methods = Array.isArray(methods) ? methods : [];
+            payload.methods = await embedMethodFileContents(Array.isArray(methods) ? methods : []);
         }
         if (selection.units) {
             payload.bausteine = bausteine;

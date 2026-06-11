@@ -1773,7 +1773,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                                 ${alternativeselector}
                                 <div class="sp-unit-methods">
                                     <div class="sp-unit-methods__label">Pool der Seminareinheiten dieses Bausteins</div>
-                                    <div class="sp-unit-methods__list">${methodcards.length ? methodcards.map((methodcard) => `<button type="button" class="sp-unit-method-link" data-action="preview-unit-method" data-method-id="${escapeHtml(String(methodcard.id))}" draggable="false">${escapeHtml(methodcard.title)}</button>`).join('') : '<span class="sp-filter-status">Keine Seminareinheiten zugeordnet</span>'}</div>
+                                    <div class="sp-unit-methods__list">${methodcards.length ? methodcards.map((methodcard) => `<button type="button" class="sp-unit-method-link" data-action="preview-unit-method" data-method-id="${escapeHtml(String(methodcard.id))}" draggable="false"><span class="sp-unit-method-link__title">${escapeHtml(methodcard.title)}</span>${methodcard.duration ? `<span class="sp-unit-method-link__dur">${escapeHtml(String(methodcard.duration))}'</span>` : ''}</button>`).join('') : '<span class="sp-filter-status">Keine Seminareinheiten zugeordnet</span>'}</div>
                                 </div>
                             </div>
                         `;

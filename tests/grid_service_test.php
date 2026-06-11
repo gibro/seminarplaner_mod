@@ -67,4 +67,34 @@ final class mod_seminarplaner_grid_service_test extends advanced_testcase {
         $this->assertCount(1, $state['state']['plan']['days']['Montag']);
         $this->assertCount(1, $state['state']['plan']['days']['Dienstag']);
     }
+
+    public function test_delete_grid_removes_it_from_active_list(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $keepid = $service->create_grid(1004, 'Keep', 8);
+        $dropid = $service->create_grid(1004, 'Drop', 8);
+        $this->assertCount(2, $service->list_grids(1004));
+
+        $deleted = $service->delete_grid(1004, $dropid, 8);
+        $this->assertTrue($deleted);
+
+        $grids = $service->list_grids(1004);
+        $this->assertCount(1, $grids);
+        $this->assertArrayHasKey($keepid, $grids);
+        $this->assertArrayNotHasKey($dropid, $grids);
+    }
+
+    public function test_set_roterfaden_visibility_unpublishes(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $gridid = $service->create_grid(1005, 'Published', 9);
+        $service->publish_roterfaden(1005, $gridid, ['units' => [['uid' => 'a']]], 9);
+
+        $this->assertTrue($service->get_roterfaden_state(1005)['ispublished']);
+
+        $this->assertTrue($service->set_roterfaden_visibility(1005, false, 9));
+        $this->assertFalse($service->get_roterfaden_state(1005)['ispublished']);
+    }
 }

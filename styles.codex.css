@@ -761,8 +761,7 @@
 }
 
 .sp-wrapper::before,
-.sp-modal__dialog::before,
-.sp-card::before {
+.sp-modal__dialog::before {
   content: "";
   position: absolute;
   top: 0;
@@ -4701,4 +4700,298 @@ body.sp-resizing * {
   background: linear-gradient(180deg, rgba(255, 255, 255, .98), rgba(255, 247, 233, .95));
   border-color: rgba(227, 5, 27, .35);
   box-shadow: 0 4px 10px rgba(60, 60, 60, .14);
+}
+
+/* =========================================================
+   INFORMATION-FIRST DESIGN
+   Bausteine (.sp-unit-slot) & Seminareinheiten (.kg-library-card)
+   Quelle: hochgeladene Styledefinitionen (Teal / "Information-First LMS")
+   ========================================================= */
+.kg-library-card.sp-card,
+.sp-unit-slot.sp-card {
+  --if-primary: #005a71;
+  --if-primary-container: #0e7490;
+  --if-ink: #111c2d;
+  --if-secondary: #505f76;
+  --if-outline: #6f787d;
+  --if-outline-variant: #bec8cd;
+  --if-surface: #f9f9ff;
+  --if-surface-low: #f0f3ff;
+  --if-surface-high: #d8e3fb;
+  --if-radius: 8px;
+  --if-radius-sm: 4px;
+}
+
+/* ---- Seminareinheit / Methoden-Karte ---- */
+.kg-library-card.sp-card {
+  background: #fff;
+  border: 1px solid var(--if-outline-variant);
+  border-radius: var(--if-radius);
+  padding: 16px;
+  height: auto;
+  min-height: 0;
+  gap: 12px;
+  box-shadow: 0 1px 2px rgba(17, 28, 45, .04);
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+
+.kg-library-card.sp-card:hover {
+  box-shadow: 0 4px 14px rgba(17, 28, 45, .08);
+  border-color: var(--if-outline);
+}
+
+/* Karten in ihrer natürlichen Höhe lassen, statt sie auf die Zeilenhöhe der höchsten
+   Karte zu strecken (sonst entsteht bei tag-armen Karten großer Leerraum). */
+#ml-method-list {
+  align-items: start;
+}
+
+/* Farbcodierung nach kognitiver Dimension (Bloom): farbiger linker Akzent + sanfte Tönung.
+   1 Erinnern / 2 Verstehen = Blau · 3 Anwenden = Grün · 4 Analysieren / 5 Bewerten = Gelb · 6 Erschaffen = Rot. */
+.kg-library-card.sp-card.sp-level-1,
+.kg-library-card.sp-card.sp-level-2 {
+  border-left: 4px solid var(--ig-blue);
+  background: var(--ig-blue-soft);
+}
+
+.kg-library-card.sp-card.sp-level-3 {
+  border-left: 4px solid var(--ig-green);
+  background: var(--ig-green-soft);
+}
+
+.kg-library-card.sp-card.sp-level-4,
+.kg-library-card.sp-card.sp-level-5 {
+  border-left: 4px solid var(--ig-yellow);
+  background: var(--ig-yellow-soft);
+}
+
+.kg-library-card.sp-card.sp-level-6 {
+  border-left: 4px solid var(--ig-red);
+  background: var(--ig-red-soft);
+}
+
+.kg-library-card.sp-card .ml-card-head {
+  margin-bottom: 0;
+  min-height: 0;
+  padding: 0;
+  background: none;
+  border-radius: 0;
+}
+
+/* Mehr Abstand zwischen Drag-Griff ("Fadenkreuz", endet bei ~26px) und Titel. */
+.kg-library-card.sp-card .ml-card-title {
+  padding-left: 40px;
+}
+
+.kg-library-card.sp-card .ml-card-title strong {
+  color: var(--if-ink);
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.3;
+  -webkit-line-clamp: 2;
+}
+
+.kg-library-card.sp-card .sp-card-meta {
+  gap: 6px;
+}
+
+.kg-library-card.sp-card .sp-card-meta .sp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--if-secondary);
+  background: var(--if-surface-low);
+  border: 1px solid var(--if-outline-variant);
+  border-radius: var(--if-radius-sm);
+}
+
+.kg-library-card.sp-card .sp-card-meta .sp-badge--phase {
+  color: var(--if-primary);
+  background: rgba(14, 116, 144, .08);
+  border-color: rgba(14, 116, 144, .25);
+}
+
+.ml-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ml-card-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--if-secondary);
+  background: var(--if-surface-high);
+  border-radius: var(--if-radius-sm);
+}
+
+.kg-library-card.sp-card .sp-card-description {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--if-secondary);
+  margin-top: 0;
+  -webkit-line-clamp: 3;
+}
+
+.ml-card-footer {
+  margin-top: auto;
+  padding-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--if-outline-variant);
+}
+
+.ml-card-modified {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--if-outline);
+}
+
+.ml-card-details {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--if-primary);
+}
+
+.ml-card-details:hover {
+  text-decoration: underline;
+}
+
+.ml-card-details__chevron {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* ---- Baustein (Strukturblock) ---- */
+.sp-unit-slot.sp-card {
+  background: #fff;
+  border: 1px solid var(--if-outline-variant);
+  border-left: 4px solid var(--sp-unit-color, var(--if-primary));
+  border-radius: var(--if-radius);
+  box-shadow: 0 1px 2px rgba(17, 28, 45, .04);
+}
+
+.sp-unit-slot .sp-unit-slot__header {
+  background: var(--if-surface-low);
+  border-bottom: 1px solid var(--if-outline-variant);
+  padding: 12px 14px;
+}
+
+.sp-unit-slot .sp-unit-slot__title strong {
+  color: var(--if-primary);
+  font-weight: 700;
+}
+
+.sp-unit-slot .sp-unit-slot__meta .sp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--if-secondary);
+  background: #fff;
+  border: 1px solid var(--if-outline-variant);
+  border-radius: var(--if-radius-sm);
+}
+
+.sp-unit-slot .sp-unit-methods {
+  border-top: 0;
+  margin-top: 4px;
+  padding-top: 0;
+}
+
+.sp-unit-slot .sp-unit-methods__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--if-secondary);
+  margin-bottom: 8px;
+}
+
+.sp-unit-slot .sp-unit-methods__list {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 8px;
+  max-height: 190px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.sp-unit-slot .sp-unit-method-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--if-outline-variant);
+  border-left: 4px solid var(--if-primary-container);
+  border-radius: var(--if-radius);
+  background: var(--if-surface);
+  color: var(--if-ink);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  transition: background .15s ease, box-shadow .15s ease, transform .15s ease, border-color .15s ease;
+}
+
+.sp-unit-slot .sp-unit-method-link::before {
+  content: "▶";
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--if-primary);
+}
+
+.sp-unit-slot .sp-unit-method-link__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sp-unit-slot .sp-unit-method-link__dur {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--if-outline);
+}
+
+.sp-unit-slot .sp-unit-method-link:hover {
+  background: #fff;
+  border-color: var(--if-outline);
+  box-shadow: 0 2px 8px rgba(17, 28, 45, .08);
+  transform: translateX(2px);
+}
+
+/* Die neuen (höheren) Baustein-Karten brauchen mehr Platz als die alte 220px-Quellleiste.
+   Auf Desktop (>900px) die Leiste höher erlauben, damit die Karten nicht abgeschnitten werden;
+   sehr lange Pools scrollen intern (siehe .sp-unit-methods__list oben). */
+@media (min-width: 901px) {
+  .sp-tab-content {
+    max-height: 380px;
+  }
 }

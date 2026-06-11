@@ -59,14 +59,15 @@ class api extends external_api {
         return class_exists('\\local_seminarplaner\\local\\repository\\methodset_repository');
     }
 
-    private static function can_view_global_methodsets(\stdClass $course): bool {
+    private static function can_view_global_methodsets(context_module $modulecontext): bool {
         if (!self::global_plugin_available()) {
             return false;
         }
-        $syscontext = context_system::instance();
-        $catcontext = context_coursecat::instance((int)$course->category);
-        return has_capability('local/seminarplaner:viewglobalsets', $syscontext)
-            || has_capability('local/seminarplaner:viewglobalsets', $catcontext);
+        // Checking the capability at the module context covers every assignment level that
+        // inherits downward (system, course category, course, module). This way a
+        // teacher/Referent who holds viewglobalsets via a role assigned at course level is
+        // recognised, instead of only role assignments made at category or system level.
+        return has_capability('local/seminarplaner:viewglobalsets', $modulecontext);
     }
 
     private static function normalize_phase(string $phase): string {
@@ -554,28 +555,29 @@ class api extends external_api {
 
         $params = self::validate_parameters(self::list_global_methodsets_parameters(), ['cmid' => $cmid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
+        // Listing global method sets is read-only; the basic view capability is sufficient.
+        // Importing a set into the activity is the write action and still requires
+        // managemethods (see import_global_methodset).
+        require_capability('mod/seminarplaner:view', $resolved['context']);
 
         if (!self::global_plugin_available()) {
             return ['available' => false, 'message' => 'local_seminarplaner ist nicht installiert.', 'methodsets' => []];
         }
-        if (!self::can_view_global_methodsets($resolved['course'])) {
+        if (!self::can_view_global_methodsets($resolved['context'])) {
             return ['available' => true, 'message' => 'Keine Berechtigung für globale Konzepte.', 'methodsets' => []];
         }
 
         $repo = new \local_seminarplaner\local\repository\methodset_repository();
         $syscontext = context_system::instance();
         $catcontext = context_coursecat::instance((int)$resolved['course']->category);
+        // The view gate passed: surface published sets from the system scope and from the
+        // course's own category scope.
         $sets = [];
-        if (has_capability('local/seminarplaner:viewglobalsets', $syscontext)) {
-            foreach ($repo->list_methodsets((int)$syscontext->id, 'published') as $set) {
-                $sets[(int)$set->id] = $set;
-            }
+        foreach ($repo->list_methodsets((int)$syscontext->id, 'published') as $set) {
+            $sets[(int)$set->id] = $set;
         }
-        if (has_capability('local/seminarplaner:viewglobalsets', $catcontext)) {
-            foreach ($repo->list_methodsets((int)$catcontext->id, 'published') as $set) {
-                $sets[(int)$set->id] = $set;
-            }
+        foreach ($repo->list_methodsets((int)$catcontext->id, 'published') as $set) {
+            $sets[(int)$set->id] = $set;
         }
 
         $out = [];
@@ -628,7 +630,7 @@ class api extends external_api {
         if (!self::global_plugin_available()) {
             throw new invalid_parameter_exception('local_seminarplaner ist nicht installiert');
         }
-        if (!self::can_view_global_methodsets($resolved['course'])) {
+        if (!self::can_view_global_methodsets($resolved['context'])) {
             throw new invalid_parameter_exception('Keine Berechtigung für globale Konzepte');
         }
 

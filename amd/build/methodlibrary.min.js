@@ -5,6 +5,39 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const escapeHtml = (str) => String(str || '').replace(/[&<>"']/g, (ch) => (
         {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch] || ch
     ));
+    // Setzt den Änderungszeitstempel (ms) einer Seminareinheit auf "jetzt".
+    const touchMethod = (method) => {
+        if (method && typeof method === 'object') {
+            method.timemodified = Date.now();
+        }
+        return method;
+    };
+    // Formatiert den letzten Änderungsstand einer Seminareinheit relativ (z. B. "Gestern", "Vor 3 Tagen").
+    const formatRelativeModified = (ts) => {
+        const ms = Number(ts);
+        if (!ms || !isFinite(ms)) {
+            return 'unbekannt';
+        }
+        const then = new Date(ms);
+        const now = new Date();
+        if (now.getTime() - then.getTime() < 60 * 1000) {
+            return 'gerade eben';
+        }
+        const dayMs = 24 * 60 * 60 * 1000;
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const startOfThen = new Date(then.getFullYear(), then.getMonth(), then.getDate()).getTime();
+        const dayDiff = Math.round((startOfToday - startOfThen) / dayMs);
+        if (dayDiff <= 0) {
+            return 'Heute';
+        }
+        if (dayDiff === 1) {
+            return 'Gestern';
+        }
+        if (dayDiff < 7) {
+            return `Vor ${dayDiff} Tagen`;
+        }
+        return then.toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit', year: 'numeric'});
+    };
     const sanitizeCardHtml = (value) => {
         const root = document.createElement('div');
         root.innerHTML = String(value || '');
@@ -149,6 +182,22 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     const normalizeMultiToken = (value) => {
         return normalize(String(value || '').split(/[:\-–]/)[0]);
+    };
+    // Bloomsche kognitive Dimensionen -> Stufe 1-6 (für die Farbcodierung der Karten).
+    const COGNITIVE_LEVELS = {
+        erinnern: 1,
+        verstehen: 2,
+        anwenden: 3,
+        analysieren: 4,
+        bewerten: 5,
+        erschaffen: 6
+    };
+    // Höchste kognitive Stufe einer Seminareinheit (0, wenn keine zugeordnet).
+    const cognitiveLevelOf = (method) => {
+        const levels = splitMulti(method && method.kognitive)
+            .map((entry) => COGNITIVE_LEVELS[normalizeMultiToken(entry)] || 0)
+            .filter((level) => level > 0);
+        return levels.length ? Math.max.apply(null, levels) : 0;
     };
     const normalizePhase = (phase) => {
         const clean = String(phase || '').trim();
@@ -823,7 +872,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 m.id = `legacy-${index}-${uid()}`;
             }
             const card = document.createElement('div');
-            card.className = 'kg-library-card sp-card';
+            const cognitiveLevel = cognitiveLevelOf(m);
+            card.className = 'kg-library-card sp-card' + (cognitiveLevel ? ` sp-level-${cognitiveLevel}` : '');
             card.setAttribute('data-id', String(m.id));
             card.draggable = true;
             const showlock = shouldShowFreezeLock(m);
@@ -831,6 +881,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const freezeaction = showlock
                 ? `<button type="button" class="ml-card-menu-btn" data-act="freeze" title="Nur sichtbar bei aktivem Auto-Update für dieses Konzept.">${frozen ? '🔒 Fixierung lösen' : '🔓 Lokal fixieren'}</button>`
                 : '';
+            const phaseLabel = Array.isArray(m.seminarphase) ? m.seminarphase.filter(Boolean).join(', ') : String(m.seminarphase || '').trim();
+            const tagChips = splitMulti(m.tags)
+                .map((tag) => `<span class="ml-card-tag">${escapeHtml(tag)}</span>`)
+                .join('');
             card.innerHTML = `
               <div class="ml-card-head">
                 <span class="ml-card-drag-handle" title="Reihenfolge per Drag-and-drop ändern" aria-hidden="true">
@@ -845,6 +899,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     <summary class="ml-card-menu-toggle" aria-label="Aktionen">⋮</summary>
                     <div class="ml-card-menu-panel">
                       <button type="button" class="ml-card-menu-btn" data-act="edit">Bearbeiten</button>
+                      <button type="button" class="ml-card-menu-btn" data-act="overwrite-import">Aus Datei ersetzen…</button>
                       ${freezeaction}
                       <button type="button" class="ml-card-menu-btn ml-card-menu-btn-delete" data-act="delete">Löschen</button>
                     </div>
@@ -855,15 +910,21 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 <div class="sp-card-meta">
                   <span class="sp-badge">⏱️ ${escapeHtml(m.zeitbedarf || '-')}</span>
                   <span class="sp-badge">👥 ${escapeHtml(m.gruppengroesse || '-')}</span>
-                  <span class="sp-badge">🏷️ ${escapeHtml(m.tags || '-')}</span>
+                  ${phaseLabel ? `<span class="sp-badge sp-badge--phase">🚩 ${escapeHtml(phaseLabel)}</span>` : ''}
                 </div>
+                ${tagChips ? `<div class="ml-card-tags">${tagChips}</div>` : ''}
                 <div class="sp-card-description">${sanitizeCardHtml(m.kurzbeschreibung || '')}</div>
+              </div>
+              <div class="ml-card-footer">
+                <span class="ml-card-modified">Letzte Änderung: ${escapeHtml(formatRelativeModified(m.timemodified))}</span>
+                <button type="button" class="ml-card-details" data-act="details">Details <span class="ml-card-details__chevron" aria-hidden="true">›</span></button>
               </div>
             `;
 
             const editbtn = card.querySelector('[data-act="edit"]');
             const freezebtn = card.querySelector('[data-act="freeze"]');
             const deletebtn = card.querySelector('[data-act="delete"]');
+            const overwritebtn = card.querySelector('[data-act="overwrite-import"]');
             card.addEventListener('dragstart', (event) => {
                 if (event.target.closest('.ml-card-menu, button, input, select, textarea, a')) {
                     event.preventDefault();
@@ -942,6 +1003,17 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     openEditor(m.id);
                 });
             }
+            const detailsbtn = card.querySelector('[data-act="details"]');
+            if (detailsbtn) {
+                detailsbtn.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    if (editbtn) {
+                        editbtn.click();
+                    } else {
+                        openEditor(m.id);
+                    }
+                });
+            }
             if (freezebtn) {
                 freezebtn.addEventListener('click', () => {
                     closeMenu(freezebtn);
@@ -958,6 +1030,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         Notification.exception(e);
                         setStatus('Löschen fehlgeschlagen.', true);
                     });
+                });
+            }
+            if (overwritebtn) {
+                overwritebtn.addEventListener('click', () => {
+                    closeMenu(overwritebtn);
+                    overwriteMethodFromImport(m.id);
                 });
             }
             host.appendChild(card);
@@ -1158,6 +1236,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             setStatus('Titel ist Pflichtfeld.', true);
             return;
         }
+        touchMethod(method);
         methods.push(method);
         reconcileAlternativesForMethod(method.id, method.alternativen || []);
         normalizeMethodAlternatives();
@@ -1165,6 +1244,293 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         clearAddForm();
         renderList();
         setStatus('Seminareinheit hinzugefügt und gespeichert.', false);
+    };
+
+    const stripHtml = (value) => {
+        if (!value) {
+            return '';
+        }
+        const div = document.createElement('div');
+        div.innerHTML = String(value);
+        return (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
+    };
+
+    const parseCsvTable = (csvText) => {
+        const text = String(csvText || '').replace(/^\uFEFF/, '');
+        const firstLine = text.split(/\r?\n/, 1)[0] || '';
+        const delimiterCandidates = [',', ';', '\t'];
+        let delimiter = ',';
+        let bestCount = -1;
+        delimiterCandidates.forEach((cand) => {
+            const esc = cand === '\t' ? '\\t' : `\\${cand}`;
+            const count = (firstLine.match(new RegExp(esc, 'g')) || []).length;
+            if (count > bestCount) {
+                bestCount = count;
+                delimiter = cand;
+            }
+        });
+
+        const rows = [];
+        let row = [];
+        let cell = '';
+        let i = 0;
+        let inQuotes = false;
+
+        while (i < text.length) {
+            const ch = text[i];
+            if (inQuotes) {
+                if (ch === '"') {
+                    if (text[i + 1] === '"') {
+                        cell += '"';
+                        i += 2;
+                        continue;
+                    }
+                    inQuotes = false;
+                    i += 1;
+                    continue;
+                }
+                cell += ch;
+                i += 1;
+                continue;
+            }
+
+            if (ch === '"') {
+                inQuotes = true;
+                i += 1;
+                continue;
+            }
+
+            if (ch === delimiter) {
+                row.push(cell);
+                cell = '';
+                i += 1;
+                continue;
+            }
+
+            if (ch === '\n') {
+                row.push(cell);
+                rows.push(row);
+                row = [];
+                cell = '';
+                i += 1;
+                continue;
+            }
+
+            if (ch === '\r') {
+                i += 1;
+                continue;
+            }
+
+            cell += ch;
+            i += 1;
+        }
+
+        if (cell !== '' || row.length > 0) {
+            row.push(cell);
+            rows.push(row);
+        }
+
+        if (!rows.length) {
+            return [];
+        }
+
+        const headers = rows[0].map((h) => String(h || '').trim().replace(/^\uFEFF/, ''));
+        const out = [];
+        for (let r = 1; r < rows.length; r++) {
+            const values = rows[r];
+            if (!values || !values.length) {
+                continue;
+            }
+            const obj = {};
+            headers.forEach((h, idx) => {
+                obj[h] = values[idx] !== undefined ? String(values[idx]) : '';
+            });
+            if (Object.values(obj).join('').trim() !== '') {
+                out.push(obj);
+            }
+        }
+        return out;
+    };
+
+    const readFirst = (row, keys) => {
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') {
+                return String(row[key]);
+            }
+        }
+        return '';
+    };
+
+    const readRichTextField = (row, keys) => String(readFirst(row, keys) || '').trim();
+
+    const mapLegacyRowToMethod = (row) => {
+        const titel = stripHtml(readFirst(row, ['Titel', 'title', 'Name']));
+        if (!titel) {
+            return null;
+        }
+
+        return {
+            id: uid(),
+            titel,
+            seminarphase: normalizePhases(splitMulti(readFirst(row, ['Seminarphase', 'seminarphase']))),
+            zeitbedarf: stripHtml(readFirst(row, ['Zeitbedarf', 'zeitbedarf'])),
+            gruppengroesse: stripHtml(readFirst(row, ['Gruppengröße', 'Gruppengroesse', 'gruppengroesse'])),
+            kurzbeschreibung: readRichTextField(row, ['Kurzbeschreibung', 'kurzbeschreibung']),
+            autor: stripHtml(readFirst(row, ['Autor*in / Kontakt', 'Autor/in / Kontakt', 'autor_kontakt', 'autor'])),
+            lernziele: readRichTextField(row, ['Lernziele (Ich-kann ...)', 'lernziele']),
+            komplexitaet: stripHtml(readFirst(row, ['Komplexitätsgrad', 'Komplexitaetsgrad', 'komplexitaet'])),
+            vorbereitung: stripHtml(readFirst(row, ['Vorbereitung nötig', 'Vorbereitung noetig', 'vorbereitung'])),
+            raum: splitMulti(readFirst(row, ['Raumanforderungen', 'raumanforderungen'])),
+            sozialform: splitMulti(readFirst(row, ['Sozialform', 'sozialform'])),
+            risiken: readRichTextField(row, ['Risiken/Tipps', 'risiken_tipps', 'risiken']),
+            debrief: readRichTextField(row, ['Debrief/Reflexionsfragen', 'debrief']),
+            materialien: splitMulti(readFirst(row, ['Materialien', 'materialien'])),
+            materialtechnik: readRichTextField(row, ['Material/Technik', 'material_technik', 'materialtechnik']),
+            ablauf: readRichTextField(row, ['Ablauf', 'ablauf']),
+            tags: stripHtml(readFirst(row, ['Tags / Schlüsselworte', 'Tags / Schluesselworte', 'tags', 'Tags'])),
+            kognitive: splitMulti(readFirst(row, ['Kognitive Dimension', 'kognitive_dimension', 'kognitive']))
+        };
+    };
+
+    const extractImportedMethods = (parsed) => {
+        if (Array.isArray(parsed)) {
+            return parsed;
+        }
+        if (parsed && typeof parsed === 'object') {
+            if (Array.isArray(parsed.methods)) {
+                return parsed.methods;
+            }
+            if (Array.isArray(parsed.seminareinheiten)) {
+                return parsed.seminareinheiten;
+            }
+            if (parsed.titel || parsed.title) {
+                return [parsed];
+            }
+        }
+        return [];
+    };
+
+    const normalizeImportedMethod = (raw, keepid) => {
+        const normalized = Object.assign({}, raw, {id: keepid});
+        const rawalternatives = raw.alternativen;
+        normalized.alternativen = Array.isArray(rawalternatives)
+            ? rawalternatives
+            : (typeof rawalternatives === 'string'
+                ? rawalternatives.split(/##|[\r\n,;]+/u).map((s) => s.trim()).filter(Boolean)
+                : []);
+        delete normalized.materialiendraftitemid;
+        delete normalized.h5pdraftitemid;
+        return normalized;
+    };
+
+    const pickImportedMethod = (candidates, targetTitle) => new Promise((resolve) => {
+        if (candidates.length === 1) {
+            resolve(candidates[0]);
+            return;
+        }
+        const overlay = document.createElement('div');
+        overlay.className = 'ml-import-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);'
+            + 'display:flex;align-items:center;justify-content:center;z-index:1050;';
+        const panel = document.createElement('div');
+        panel.className = 'sp-card';
+        panel.style.cssText = 'background:#fff;max-width:520px;width:90%;padding:1.25rem;'
+            + 'border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,0.3);';
+        const options = candidates
+            .map((m, i) => `<option value="${i}">${escapeHtml(m.titel || m.title || '(ohne Titel)')}</option>`)
+            .join('');
+        panel.innerHTML = `
+            <h4 style="margin-top:0;">Seminareinheit ersetzen</h4>
+            <p>Welche importierte Seminareinheit soll „${escapeHtml(targetTitle || '')}" ersetzen?</p>
+            <select class="kg-input" data-ml-import-pick="1" style="width:100%;margin-bottom:1rem;">${options}</select>
+            <div class="kg-row" style="display:flex;gap:.5rem;justify-content:flex-end;">
+                <button type="button" class="kg-btn" data-ml-import-cancel="1">Abbrechen</button>
+                <button type="button" class="kg-btn kg-btn-primary" data-ml-import-confirm="1">Ersetzen</button>
+            </div>
+        `;
+        overlay.appendChild(panel);
+        document.body.appendChild(overlay);
+        const cleanup = (result) => {
+            overlay.remove();
+            resolve(result);
+        };
+        panel.querySelector('[data-ml-import-cancel]').addEventListener('click', () => cleanup(null));
+        overlay.addEventListener('click', (event) => {
+            if (event.target === overlay) {
+                cleanup(null);
+            }
+        });
+        panel.querySelector('[data-ml-import-confirm]').addEventListener('click', () => {
+            const sel = panel.querySelector('[data-ml-import-pick]');
+            const idx = Number.parseInt(sel.value, 10);
+            cleanup(candidates[idx] || null);
+        });
+    });
+
+    const overwriteMethodFromImport = (id) => {
+        const idx = methods.findIndex((m) => String(m.id) === String(id));
+        if (idx < 0) {
+            return;
+        }
+        const target = methods[idx];
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,.csv,application/json,text/csv';
+        input.style.display = 'none';
+        document.body.appendChild(input);
+        input.addEventListener('change', async () => {
+            const file = input.files && input.files[0];
+            input.remove();
+            if (!file) {
+                return;
+            }
+            let candidates = [];
+            try {
+                const text = await file.text();
+                const isCsv = /\.csv$/i.test(file.name || '');
+                const parsed = isCsv
+                    ? parseCsvTable(text).map(mapLegacyRowToMethod).filter(Boolean)
+                    : extractImportedMethods(JSON.parse(text));
+                candidates = parsed
+                    .filter((m) => m && typeof m === 'object' && String(m.titel || m.title || '').trim());
+            } catch (e) {
+                setStatus('Datei konnte nicht gelesen werden (erwartet wird eine JSON- oder CSV-Datei).', true);
+                return;
+            }
+            if (!candidates.length) {
+                setStatus('Keine Seminareinheit in der Datei gefunden.', true);
+                return;
+            }
+            const chosen = await pickImportedMethod(candidates, target.titel);
+            if (!chosen) {
+                return;
+            }
+            const sourcetitle = String(chosen.titel || chosen.title || '').trim();
+            const confirmed = window.confirm(
+                `Seminareinheit "${target.titel || ''}" mit den Daten aus "${sourcetitle}" überschreiben? `
+                + 'Die bisherigen Inhalte dieser Seminareinheit gehen verloren.'
+            );
+            if (!confirmed) {
+                return;
+            }
+            const previousMethods = methods.slice();
+            methods = methods.slice();
+            methods[idx] = normalizeImportedMethod(chosen, target.id);
+            touchMethod(methods[idx]);
+            normalizeMethodAlternatives();
+            renderList();
+            try {
+                await persist(runtimeCmid);
+                setStatus(`Seminareinheit "${methods[idx].titel || ''}" durch Import überschrieben und gespeichert.`, false);
+            } catch (error) {
+                methods = previousMethods;
+                renderList();
+                Notification.exception(error);
+                setStatus('Überschreiben fehlgeschlagen.', true);
+            }
+        });
+        input.click();
     };
 
     const deleteMethod = async (id) => {
@@ -1268,6 +1634,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             alternativen: getSelectMulti('#ml-e-alternativen')
         });
         methods[idx].alternativen = (methods[idx].alternativen || []).filter((id) => String(id) !== String(methods[idx].id));
+        touchMethod(methods[idx]);
         reconcileAlternativesForMethod(methods[idx].id, methods[idx].alternativen);
         normalizeMethodAlternatives();
 

@@ -38,4 +38,21 @@ final class mod_seminarplaner_soft_lock_service_test extends advanced_testcase {
         $this->assertFalse($second['acquired']);
         $this->assertSame(6, $second['holder']);
     }
+
+    public function test_break_lock_clears_lock_held_by_other_user(): void {
+        $this->resetAfterTest(true);
+
+        $service = new soft_lock_service();
+        $held = $service->acquire(2003, 8, 300);
+        $this->assertTrue($held['acquired']);
+        $this->assertTrue($service->status(2003)['locked']);
+
+        $service->break_lock(2003);
+        $this->assertFalse($service->status(2003)['locked']);
+
+        // After a break another user can take the lock.
+        $reacquired = $service->acquire(2003, 9, 300);
+        $this->assertTrue($reacquired['acquired']);
+        $this->assertSame(9, $service->status(2003)['holder']);
+    }
 }

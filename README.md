@@ -139,6 +139,30 @@ Damit Nutzende in `local/seminarplaner/reviewrequests.php` als Konzeptverantwort
    - Seite `local/seminarplaner/reviewrequests.php` neu laden
    - bei einem Methodenset unter „Konzeptverantwortliche“ sollte die Person nun auswählbar sein
 
+## Globale Methodensets für `Trainer/in` sichtbar machen
+
+Damit Trainer/innen (Referent/innen) in der Kursaktivität unter `Import / Export` die veröffentlichten globalen Methodensets sehen, sind **zwei** Capabilities nötig — und zwar in **unterschiedlichen Kontexten**:
+
+| Capability | Zweck | Wo zuweisen |
+| --- | --- | --- |
+| `mod/seminarplaner:view` | Aktivität (und globale Sets) ansehen | Kurs oder Aktivität (vererbt sich nach unten) |
+| `local/seminarplaner:viewglobalsets` | globale Methodensets auflisten | beliebige Ebene **ab Modul aufwärts** (System, Kategorie, Kurs oder Aktivität) |
+
+Beide Rechte sind in der Standardrolle `Trainer/in` bereits enthalten. In der Praxis genügt es daher, die Rolle `Trainer/in` so zuzuweisen, dass beide Rechte greifen:
+
+1. `Website-Administration -> Nutzer/innen -> Rechte ändern -> Rollen verwalten -> Trainer/in`
+   - sicherstellen, dass `mod/seminarplaner:view` und `local/seminarplaner:viewglobalsets` auf `Erlauben` stehen.
+2. Rolle der Person zuweisen — am einfachsten **auf Kursebene** (`Kurs -> Teilnehmer/innen -> Nutzer/in einschreiben` als `Trainer/in`).
+   - Da die Prüfung im Aktivitätskontext erfolgt, wirkt eine Kurszuweisung für **beide** Rechte (Abwärtsvererbung). Eine separate Zuweisung auf Kategorie- oder Systemebene ist nicht nötig.
+3. Prüfen:
+   - Aktivität `Seminarplaner` im Kurs öffnen -> Tab `Import / Export`
+   - im Block „Globale Konzepte“ sollte die Auswahlliste die veröffentlichten Sets anzeigen.
+
+Hinweise:
+
+- Reines **Auflisten/Ansehen** der globalen Sets benötigt **kein** `managemethods`. Das **Importieren** eines globalen Sets in die Aktivität (`Globales Konzept importieren`) ist dagegen ein Schreibvorgang und erfordert weiterhin `mod/seminarplaner:managemethods`.
+- Der Tab `Import / Export` erscheint nur für Rollen mit Verwaltungsrechten (`managemethods`/`managegrids`/`importfrommoddata`/`exporttomoddata`). Die Standardrolle `Trainer/in` besitzt diese, daher ist der Tab dort sichtbar.
+
 ## Wichtige Hinweise
 
 - Beide Plugins sind als **Paar** gedacht. Viele Flows (globale Sets, Review) setzen `local_seminarplaner` voraus.
