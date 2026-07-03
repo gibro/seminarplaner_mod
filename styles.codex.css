@@ -3128,7 +3128,8 @@ body.sp-resizing * {
 }
 
 .sp-filterbar .kg-input,
-.sp-filterbar .kg-tag-dropdown-toggle {
+.sp-filterbar .kg-tag-dropdown-toggle,
+.sp-filterbar .kg-btn {
   min-height: 36px;
   height: 36px;
   margin-top: 0 !important;
@@ -4153,10 +4154,6 @@ body.sp-resizing * {
   background: var(--ig-blue-soft);
 }
 
-.kg-didactic-output ul {
-  margin: 0;
-}
-
 @media (max-width: 1200px) {
   .kg-plan-grid {
     grid-template-columns: 1fr;
@@ -4768,6 +4765,63 @@ body.sp-resizing * {
 .kg-library-card.sp-card.sp-level-6 {
   border-left: 4px solid var(--ig-red);
   background: var(--ig-red-soft);
+}
+
+/* ---- Mehrfachauswahl / Stapel-Bearbeitung ---- */
+.ml-card-select {
+  display: none;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.kg-library-list--selecting .ml-card-select {
+  display: flex;
+}
+
+.ml-card-select-input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.kg-library-card--selected {
+  outline: 2px solid var(--ig-blue);
+  outline-offset: 2px;
+}
+
+.ml-bulk-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--ig-blue-soft);
+  border: 1px solid var(--ig-blue-mid);
+}
+
+.ml-bulk-toolbar-count {
+  font-weight: 600;
+  color: var(--ig-anthracite);
+  margin-right: auto;
+}
+
+.kg-bulk-mode-select {
+  min-width: 140px;
+}
+
+.kg-bulk-value {
+  flex: 1;
+  min-width: 0;
+}
+
+.kg-bulk-value--disabled {
+  opacity: .5;
+  pointer-events: none;
 }
 
 .kg-library-card.sp-card .ml-card-head {

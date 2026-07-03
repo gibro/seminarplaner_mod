@@ -123,8 +123,16 @@ foreach ([
 }
 echo '</div></div></div></label>';
 
+echo '<label class="sp-filter kg-hidden" id="ml-filter-origin-wrap"><span class="sp-filter__label">Herkunft</span>';
+echo '<select id="ml-filter-origin" class="kg-input">';
+echo '<option value="">Alle Seminareinheiten</option>';
+echo '<option value="local">Nur lokale Seminareinheiten</option>';
+echo '</select>';
+echo '</label>';
+
 echo html_writer::start_div('sp-filter sp-filter__actions');
 echo html_writer::tag('button', 'Filter zurücksetzen', ['type' => 'button', 'id' => 'ml-filter-reset', 'class' => 'kg-btn']);
+echo html_writer::tag('button', 'Mehrere auswählen', ['type' => 'button', 'id' => 'ml-bulk-select-toggle', 'class' => 'kg-btn']);
 echo html_writer::end_div();
 
 echo html_writer::end_div();
@@ -136,12 +144,128 @@ echo html_writer::tag('h4', '2. Seminareinheit auswählen');
 echo html_writer::tag('div', '', ['id' => 'ml-method-list', 'class' => 'kg-library-list']);
 echo html_writer::end_div();
 
+echo html_writer::start_div('ml-bulk-toolbar kg-hidden', ['id' => 'ml-bulk-toolbar']);
+echo html_writer::tag('span', '', ['id' => 'ml-bulk-toolbar-count', 'class' => 'ml-bulk-toolbar-count']);
+echo html_writer::tag('button', 'Alle auswählen', ['type' => 'button', 'id' => 'ml-bulk-selectall', 'class' => 'kg-btn']);
+echo html_writer::tag('button', 'Auswahl aufheben', ['type' => 'button', 'id' => 'ml-bulk-selectnone', 'class' => 'kg-btn']);
+echo html_writer::tag('button', 'Bearbeiten', ['type' => 'button', 'id' => 'ml-bulk-edit-open', 'class' => 'kg-btn kg-btn-primary']);
+echo html_writer::end_div();
+
+echo html_writer::start_div('kg-ie-block kg-library-step kg-hidden', ['id' => 'ml-bulk-section']);
+echo html_writer::tag('h4', '3. Mehrere Seminareinheiten stapelweise bearbeiten');
+echo html_writer::start_div('kg-form ig-container kg-container-full', ['id' => 'ml-bulk-form']);
+echo html_writer::start_div('kg-stack field-stack ig-inner');
+
+$bulkmultifields = [
+    'seminarphase' => ['Seminarphase', seminarplaner_phase_options(), 'Seminarphasen wählen', 'Seminarphasen'],
+    'raum' => ['Raumanforderungen', [
+        'Plenum' => 'Plenum',
+        'Stuhlkreis' => 'Stuhlkreis',
+        'Stehtische' => 'Stehtische',
+        'viel Freifläche' => 'viel Freifläche',
+        'Gruppentische' => 'Gruppentische',
+        'Gruppenräume' => 'Gruppenräume',
+        'akustisch ruhig' => 'akustisch ruhig',
+    ], 'Raumanforderungen wählen', 'Raumanforderungen'],
+    'sozialform' => ['Sozialform', [
+        'Vortrag' => 'Vortrag',
+        'Diskussion' => 'Diskussion',
+        'Einzelarbeit' => 'Einzelarbeit',
+        'Partnerarbeit' => 'Partnerarbeit',
+        'Kleingruppen' => 'Kleingruppen',
+        'Galeriegang' => 'Galeriegang',
+        'Fishbowl' => 'Fishbowl',
+    ], 'Sozialformen wählen', 'Sozialformen'],
+    'kognitive' => ['Kognitive Dimension', [
+        'Erinnern' => 'Erinnern: Wissen wiedergeben oder abrufen (z.B. benennen, definieren)',
+        'Verstehen' => 'Verstehen: Informationen interpretieren oder erklären (z.B. zusammenfassen, vergleichen)',
+        'Anwenden' => 'Anwenden: Wissen in neuen Situationen umsetzen (z.B. ausführen, verallgemeinern)',
+        'Analysieren' => 'Analysieren: Informationen in ihre Bestandteile zerlegen (z.B. unterscheiden, klassifizieren)',
+        'Bewerten' => 'Bewerten: Urteile fällen und Kriterien anwenden (z.B. überprüfen, kritisch bewerten)',
+        'Erschaffen' => 'Erschaffen: Neues Wissen oder neue Produkte entwickeln (z.B. planen, erzeugen, bauen)',
+    ], 'Dimensionen wählen', 'Dimensionen'],
+];
+foreach ($bulkmultifields as $fieldname => $fielddef) {
+    [$label, $options, $placeholder, $labelprefix] = $fielddef;
+    echo html_writer::start_div('field-card');
+    echo html_writer::tag('label', $label, ['class' => 'kg-label']);
+    echo html_writer::start_div('kg-two');
+    echo html_writer::start_tag('select', [
+        'id' => 'ml-bulk-mode-' . $fieldname,
+        'class' => 'kg-input kg-bulk-mode-select',
+        'data-bulk-value-target' => '#ml-bulk-' . $fieldname . '-value',
+    ]);
+    echo html_writer::tag('option', 'Nicht ändern', ['value' => 'none']);
+    echo html_writer::tag('option', 'Hinzufügen', ['value' => 'add']);
+    echo html_writer::tag('option', 'Entfernen', ['value' => 'remove']);
+    echo html_writer::tag('option', 'Ersetzen', ['value' => 'replace']);
+    echo html_writer::end_tag('select');
+    echo html_writer::start_div('kg-bulk-value kg-bulk-value--disabled', ['id' => 'ml-bulk-' . $fieldname . '-value']);
+    echo seminarplaner_render_multi_dropdown('ml-bulk-' . $fieldname, $options, $placeholder, $labelprefix);
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+}
+
+echo html_writer::start_div('field-card');
+echo html_writer::tag('label', 'Tags / Schlüsselworte', ['class' => 'kg-label']);
+echo html_writer::start_div('kg-two');
+echo html_writer::start_tag('select', ['id' => 'ml-bulk-mode-tags', 'class' => 'kg-input kg-bulk-mode-select', 'data-bulk-value-target' => '#ml-bulk-tags-value']);
+echo html_writer::tag('option', 'Nicht ändern', ['value' => 'none']);
+echo html_writer::tag('option', 'Hinzufügen', ['value' => 'add']);
+echo html_writer::tag('option', 'Entfernen', ['value' => 'remove']);
+echo html_writer::tag('option', 'Ersetzen', ['value' => 'replace']);
+echo html_writer::end_tag('select');
+echo html_writer::start_div('kg-bulk-value kg-bulk-value--disabled', ['id' => 'ml-bulk-tags-value']);
+echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'ml-bulk-tags', 'class' => 'kg-input', 'placeholder' => 'Tags, durch Komma getrennt', 'disabled' => 'disabled']);
+echo html_writer::end_div();
+echo html_writer::end_div();
+echo html_writer::end_div();
+
+$bulkselectfields = [
+    'zeitbedarf' => ['Zeitbedarf', ['5', '10', '20', '30', '45', '60', '90', '120', '150', '180', 'mehr als 180 Minuten']],
+    'gruppengroesse' => ['Gruppengröße', ['1', '2-3', '3–5', '6–12', '13–24', '25+', 'beliebig']],
+    'komplexitaet' => ['Komplexitätsgrad', ['sehr niedrig', 'niedrig', 'mittel', 'hoch']],
+    'vorbereitung' => ['Vorbereitung nötig', ['keine', '<10 Min', '10–30 Min', '>30 Min']],
+];
+foreach ($bulkselectfields as $fieldname => $fielddef) {
+    [$label, $options] = $fielddef;
+    echo html_writer::start_div('field-card');
+    echo html_writer::tag('label', $label, ['class' => 'kg-label']);
+    echo html_writer::start_div('kg-two');
+    echo html_writer::start_tag('select', [
+        'id' => 'ml-bulk-mode-' . $fieldname,
+        'class' => 'kg-input kg-bulk-mode-select',
+        'data-bulk-value-target' => '#ml-bulk-' . $fieldname . '-value',
+    ]);
+    echo html_writer::tag('option', 'Nicht ändern', ['value' => 'none']);
+    echo html_writer::tag('option', 'Ersetzen', ['value' => 'replace']);
+    echo html_writer::end_tag('select');
+    echo html_writer::start_div('kg-bulk-value kg-bulk-value--disabled', ['id' => 'ml-bulk-' . $fieldname . '-value']);
+    echo html_writer::start_tag('select', ['id' => 'ml-bulk-' . $fieldname, 'class' => 'kg-input', 'disabled' => 'disabled']);
+    foreach ($options as $v) {
+        echo html_writer::tag('option', s($v), ['value' => $v]);
+    }
+    echo html_writer::end_tag('select');
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+}
+
+echo html_writer::end_div();
+echo html_writer::start_div('kg-row');
+echo html_writer::tag('button', 'Änderungen anwenden', ['type' => 'button', 'id' => 'ml-bulk-save', 'class' => 'kg-btn kg-btn-primary']);
+echo html_writer::tag('button', 'Abbrechen', ['type' => 'button', 'id' => 'ml-bulk-cancel', 'class' => 'kg-btn']);
+echo html_writer::end_div();
+echo html_writer::end_div();
+echo html_writer::end_div();
+
 $editsectionclasses = 'kg-ie-block kg-library-step';
 if ($requestededitmethodid === '') {
     $editsectionclasses .= ' kg-hidden';
 }
 echo html_writer::start_div($editsectionclasses, ['id' => 'ml-edit-section']);
-echo html_writer::tag('h4', '3. Seminareinheit bearbeiten');
+echo html_writer::tag('h4', '4. Seminareinheit bearbeiten');
 echo html_writer::start_div('kg-form ig-container kg-container-full', ['id' => 'ml-edit-form']);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'id' => 'ml-edit-id']);
 echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'ml-section-quick', 'open' => 'open']);
@@ -275,7 +399,7 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_tag('details');
 
-echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'ml-section-materials', 'open' => 'open']);
+echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'ml-section-materials']);
 echo html_writer::tag('summary', '3) Materialien und Technik');
 echo html_writer::start_div('kg-stack field-stack ig-inner');
 echo html_writer::start_div('field-card');

@@ -241,6 +241,13 @@ echo html_writer::end_div();
         </div>
       </div>
     </label>
+    <label class="sp-filter kg-hidden" id="sp-filter-origin-wrap">
+      <span class="sp-filter__label">Herkunft</span>
+      <select id="sp-filter-origin" class="kg-input">
+        <option value="">Alle Seminareinheiten</option>
+        <option value="local">Nur lokale Seminareinheiten</option>
+      </select>
+    </label>
     <div class="sp-filter sp-filter__actions">
       <button class="kg-btn" id="sp-filter-reset" type="button">Filter zurücksetzen</button>
     </div>

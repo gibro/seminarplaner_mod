@@ -208,7 +208,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         bindTop() {
             bySel('#kg-pm-add-unit')?.addEventListener('click', () => this.addUnit());
             bySel('#kg-pm-save')?.addEventListener('click', () => this.savePlanningState(false));
-            bySel('#kg-pm-check')?.addEventListener('click', () => this.runDidacticCheck());
             bySel('#kg-pm-cancel-edit')?.addEventListener('click', () => this.resetUnitForm());
             this.bindAlternativeDropdown();
             this.bindUnitFormDraftAutosave();
@@ -607,8 +606,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 duration: String(bySel('#kg-pm-unit-duration')?.value || '90'),
                 objectives: sanitizeHtml(this.readRichText('#kg-pm-unit-objectives')),
                 topics: sanitizeHtml(this.readRichText('#kg-pm-unit-topics')),
-                alternatives: this.readAlternativeUnitSelection(),
-                updatedAt: Date.now()
+                alternatives: this.readAlternativeUnitSelection()
             };
         }
 
@@ -725,6 +723,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
         autosaveDraftNow() {
             const draft = this.readUnitFormDraft();
+            // An empty form (nothing added/edited) must never count as unsaved work,
+            // otherwise leaving the page wrongly prompts about losing progress.
+            if (!this.hasMeaningfulUnitFormDraft()) {
+                this.lastDraftSnapshot = JSON.stringify(draft);
+                this.hasUnsavedChanges = false;
+                this.storeUnitFormDraft(draft);
+                return Promise.resolve();
+            }
             const snapshot = JSON.stringify(draft);
             if (snapshot === this.lastDraftSnapshot) {
                 return Promise.resolve();
@@ -1738,64 +1744,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     }
                 }
             }
-        }
-
-        runDidacticCheck() {
-            const output = bySel('#kg-pm-didactic');
-            if (!output) {
-                return;
-            }
-            const warnings = [];
-            const sequence = [];
-            this.getSlots().forEach((slot) => {
-                slot.active.methods.forEach((entry) => {
-                    const method = this.getMethodById(entry.methodid);
-                    if (method) {
-                        sequence.push(method);
-                    }
-                });
-            });
-
-            const social = sequence.map((m) => splitMulti(m.sozialform)[0] || '');
-            for (let i = 2; i < social.length; i++) {
-                if (social[i] && social[i] === social[i - 1] && social[i] === social[i - 2]) {
-                    warnings.push('Abwechslung: Drei Seminareinheiten hintereinander mit gleicher Sozialform.');
-                    break;
-                }
-            }
-            const highload = sequence.map((m) => splitMulti(m.kognitive).map((v) => normalizeText(v.split(/[:\-–]/)[0]))
-                .some((v) => ['analysieren', 'bewerten', 'erschaffen'].includes(v)));
-            for (let i = 2; i < highload.length; i++) {
-                if (highload[i] && highload[i - 1] && highload[i - 2]) {
-                    warnings.push('Rhythmus: Mehrere kognitiv anspruchsvolle Seminareinheiten in Folge.');
-                    break;
-                }
-            }
-            const mentionstransfer = sequence.some((m) => normalizeText(m.lernziele).includes('transfer'));
-            const endstransfer = sequence.length > 0 && splitMulti(sequence[sequence.length - 1].seminarphase).map((v) => normalizeText(v)).includes('transfer');
-            if (mentionstransfer && !endstransfer) {
-                warnings.push('Zielabdeckung: Transferziel genannt, aber kein klarer Transferabschluss am Ende.');
-            }
-            const prepheavy = sequence.filter((m) => normalizeText(m.vorbereitung).includes('>30')).length;
-            if (prepheavy >= 3) {
-                warnings.push('Machbarkeit: Häufung aufwändiger Vorbereitungen.');
-            }
-
-            if (!warnings.length) {
-                output.innerHTML = '<p class="sp-filter-status">Keine auffälligen Risiken erkannt. Empfehlungen sind optional.</p>';
-            } else {
-                output.innerHTML = '<ul>' + warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join('') + '</ul>';
-            }
-            const recommendations = bySel('#kg-pm-didactic')?.closest('.kg-ie-block');
-            if (recommendations) {
-                recommendations.scrollIntoView({behavior: 'smooth', block: 'start'});
-                const focusTarget = bySel('#kg-pm-didactic');
-                if (focusTarget) {
-                    focusTarget.setAttribute('tabindex', '-1');
-                    focusTarget.focus({preventScroll: true});
-                }
-            }
-            this.setStatus('Didaktische Empfehlungen aktualisiert.', false);
         }
 
         renderAll() {

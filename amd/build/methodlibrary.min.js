@@ -157,7 +157,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     let currentEditId = '';
     let runtimeCmid = 0;
     let autosyncSetIds = new Set();
+    let methodsetNames = new Map();
     let draggedMethodId = '';
+    let selectionMode = false;
+    let selectedIds = new Set();
 
     const setStatus = (text, isError) => {
         const el = bySel('#ml-status');
@@ -750,8 +753,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return;
         }
         const previous = getSelectedFilterValues(key);
+        const origin = bySel('#ml-filter-origin') ? bySel('#ml-filter-origin').value : '';
+        const relevant = origin
+            ? methods.filter((m) => (origin === 'local' ? getSyncMethodsetId(m) === 0 : getSyncMethodsetId(m) === Number(origin)))
+            : methods;
         const tags = new Set();
-        methods.forEach((m) => {
+        relevant.forEach((m) => {
             splitMulti(m.tags).forEach((t) => tags.add(t));
         });
 
@@ -775,8 +782,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     .map((link) => Number(link.methodsetid) || 0)
                     .filter((id) => id > 0)
             );
+            methodsetNames = new Map(
+                links
+                    .filter((link) => !!link && (Number(link.methodsetid) || 0) > 0)
+                    .map((link) => [Number(link.methodsetid) || 0, String(link.methodsetname || '').trim()])
+            );
         }).catch(() => {
             autosyncSetIds = new Set();
+            methodsetNames = new Map();
         });
     };
 
@@ -790,6 +803,50 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const shouldShowFreezeLock = (method) => {
         const setid = getSyncMethodsetId(method);
         return setid > 0 && autosyncSetIds.has(setid);
+    };
+
+    // Blendet den Herkunftsfilter nur ein, wenn mindestens eine Seminareinheit aus einem globalen Konzept importiert wurde.
+    // Listet dabei jedes importierte globale Konzept einzeln mit seinem Namen im Dropdown auf.
+    const updateOriginFilterVisibility = () => {
+        const wrap = bySel('#ml-filter-origin-wrap');
+        const select = bySel('#ml-filter-origin');
+        if (!wrap) {
+            return;
+        }
+        const setids = new Set();
+        methods.forEach((m) => {
+            const setid = getSyncMethodsetId(m);
+            if (setid > 0) {
+                setids.add(setid);
+            }
+        });
+        wrap.classList.toggle('kg-hidden', setids.size === 0);
+        if (!select) {
+            return;
+        }
+        const previous = select.value;
+        const concepts = Array.from(setids)
+            .map((setid) => ({setid, name: methodsetNames.get(setid) || `Globales Konzept #${setid}`}))
+            .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+
+        select.innerHTML = '';
+        const allOption = document.createElement('option');
+        allOption.value = '';
+        allOption.textContent = 'Alle Seminareinheiten';
+        select.appendChild(allOption);
+        concepts.forEach(({setid, name}) => {
+            const option = document.createElement('option');
+            option.value = String(setid);
+            option.textContent = name;
+            select.appendChild(option);
+        });
+        const localOption = document.createElement('option');
+        localOption.value = 'local';
+        localOption.textContent = 'Nur lokale Seminareinheiten';
+        select.appendChild(localOption);
+
+        const validValues = new Set(['', 'local', ...concepts.map((c) => String(c.setid))]);
+        select.value = validValues.has(previous) ? previous : '';
     };
 
     const isFrozenState = (syncmeta, defaultfrozen) => {
@@ -809,6 +866,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const groups = getSelectedFilterValues('group');
         const durations = getSelectedFilterValues('duration');
         const cognitive = getSelectedFilterValues('cognitive').map((v) => normalize(v.split(/[:\-–]/)[0]));
+        const origin = bySel('#ml-filter-origin') ? bySel('#ml-filter-origin').value : '';
 
         const host = bySel('#ml-method-list');
         if (!host) {
@@ -842,11 +900,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const methodcog = splitMulti(method.kognitive).map((t) => normalize(t.split(/[:\-–]/)[0]));
 
             const match = (!query || hay.includes(query))
-                && (!tags.length || methodtags.some((t) => tags.includes(t)))
+                && (!tags.length || tags.every((t) => methodtags.includes(t)))
                 && (!phases.length || methodphase.some((p) => phases.includes(p)))
                 && (!groups.length || groups.includes(methodgroup))
                 && (!durations.length || durations.includes(methodduration))
-                && (!cognitive.length || methodcog.some((c) => cognitive.includes(c)));
+                && (!cognitive.length || methodcog.some((c) => cognitive.includes(c)))
+                && (!origin || (origin === 'local' ? getSyncMethodsetId(method) === 0 : getSyncMethodsetId(method) === Number(origin)));
 
             card.style.display = match ? '' : 'none';
             if (match) {
@@ -865,6 +924,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         if (!host) {
             return;
         }
+        const existingIds = new Set(methods.map((m) => String(m.id)));
+        Array.from(selectedIds).forEach((id) => {
+            if (!existingIds.has(id)) {
+                selectedIds.delete(id);
+            }
+        });
+        host.classList.toggle('kg-library-list--selecting', selectionMode);
         host.innerHTML = '';
 
         methods.forEach((m, index) => {
@@ -885,7 +951,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const tagChips = splitMulti(m.tags)
                 .map((tag) => `<span class="ml-card-tag">${escapeHtml(tag)}</span>`)
                 .join('');
+            if (selectedIds.has(String(m.id))) {
+                card.classList.add('kg-library-card--selected');
+            }
             card.innerHTML = `
+              <label class="ml-card-select">
+                <input type="checkbox" class="ml-card-select-input" ${selectedIds.has(String(m.id)) ? 'checked' : ''} aria-label="Seminareinheit auswählen">
+              </label>
               <div class="ml-card-head">
                 <span class="ml-card-drag-handle" title="Reihenfolge per Drag-and-drop ändern" aria-hidden="true">
                   <span class="ml-card-drag-handle__arrow ml-card-drag-handle__arrow--up">↑</span>
@@ -921,6 +993,19 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
               </div>
             `;
 
+            const selectinput = card.querySelector('.ml-card-select-input');
+            if (selectinput) {
+                selectinput.addEventListener('click', (event) => event.stopPropagation());
+                selectinput.addEventListener('change', () => {
+                    if (selectinput.checked) {
+                        selectedIds.add(String(m.id));
+                    } else {
+                        selectedIds.delete(String(m.id));
+                    }
+                    card.classList.toggle('kg-library-card--selected', selectinput.checked);
+                    updateBulkToolbar();
+                });
+            }
             const editbtn = card.querySelector('[data-act="edit"]');
             const freezebtn = card.querySelector('[data-act="freeze"]');
             const deletebtn = card.querySelector('[data-act="delete"]');
@@ -1041,11 +1126,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             host.appendChild(card);
         });
 
+        updateOriginFilterVisibility();
         populateTagOptions();
         applyFilters();
         if (currentEditId) {
             refreshEditAlternativeOptions(currentEditId);
         }
+        updateBulkToolbar();
     };
 
     const clearDropIndicators = () => {
@@ -1152,10 +1239,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         if (editsection) {
             editsection.classList.remove('kg-hidden');
         }
-        const materialssection = bySel('#ml-section-materials');
-        if (materialssection && typeof materialssection.setAttribute === 'function') {
-            materialssection.setAttribute('open', 'open');
-        }
 
         setFieldValue('#ml-edit-id', method.id);
         setFieldValue('#ml-e-titel', method.titel);
@@ -1228,6 +1311,214 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             cmid,
             methodsjson: JSON.stringify(serializeMethodsForSave())
         });
+    };
+
+    const BULK_MULTI_FIELDS = ['seminarphase', 'raum', 'sozialform', 'kognitive'];
+    const BULK_SELECT_FIELDS = ['zeitbedarf', 'gruppengroesse', 'komplexitaet', 'vorbereitung'];
+
+    const updateBulkToolbar = () => {
+        const toolbar = bySel('#ml-bulk-toolbar');
+        if (!toolbar) {
+            return;
+        }
+        const count = selectedIds.size;
+        toolbar.classList.toggle('kg-hidden', !selectionMode);
+        const countel = bySel('#ml-bulk-toolbar-count');
+        if (countel) {
+            countel.textContent = count
+                ? `${count} Seminareinheit${count === 1 ? '' : 'en'} ausgewählt`
+                : 'Keine Seminareinheit ausgewählt';
+        }
+        const editopenbtn = bySel('#ml-bulk-edit-open');
+        if (editopenbtn) {
+            editopenbtn.disabled = count === 0;
+        }
+    };
+
+    const resetBulkForm = () => {
+        BULK_MULTI_FIELDS.concat(BULK_SELECT_FIELDS).concat(['tags']).forEach((field) => {
+            const modeselect = bySel(`#ml-bulk-mode-${field}`);
+            if (modeselect) {
+                modeselect.value = 'none';
+                modeselect.dispatchEvent(new Event('change'));
+            }
+        });
+    };
+
+    const closeBulkPanel = () => {
+        bySel('#ml-bulk-section')?.classList.add('kg-hidden');
+        resetBulkForm();
+    };
+
+    const bindBulkSelectionUI = (cmid) => {
+        const selecttoggle = bySel('#ml-bulk-select-toggle');
+        if (selecttoggle) {
+            selecttoggle.addEventListener('click', () => {
+                selectionMode = !selectionMode;
+                selecttoggle.textContent = selectionMode ? 'Auswahl beenden' : 'Mehrere auswählen';
+                if (!selectionMode) {
+                    selectedIds.clear();
+                    closeBulkPanel();
+                }
+                renderList();
+            });
+        }
+        const selectallbtn = bySel('#ml-bulk-selectall');
+        if (selectallbtn) {
+            selectallbtn.addEventListener('click', () => {
+                document.querySelectorAll('#ml-method-list .kg-library-card').forEach((card) => {
+                    if (card.style.display === 'none') {
+                        return;
+                    }
+                    const id = card.getAttribute('data-id');
+                    if (id) {
+                        selectedIds.add(String(id));
+                    }
+                });
+                renderList();
+            });
+        }
+        const selectnonebtn = bySel('#ml-bulk-selectnone');
+        if (selectnonebtn) {
+            selectnonebtn.addEventListener('click', () => {
+                selectedIds.clear();
+                renderList();
+            });
+        }
+        const bulkeditopenbtn = bySel('#ml-bulk-edit-open');
+        if (bulkeditopenbtn) {
+            bulkeditopenbtn.addEventListener('click', () => {
+                if (!selectedIds.size) {
+                    setStatus('Bitte zuerst Seminareinheiten auswählen.', true);
+                    return;
+                }
+                resetBulkForm();
+                const section = bySel('#ml-bulk-section');
+                if (section) {
+                    section.classList.remove('kg-hidden');
+                    section.scrollIntoView({behavior: 'auto', block: 'start'});
+                }
+            });
+        }
+        document.querySelectorAll('.kg-bulk-mode-select').forEach((modeselect) => {
+            const targetselector = modeselect.getAttribute('data-bulk-value-target');
+            const target = targetselector ? bySel(targetselector) : null;
+            const applyDisabledState = () => {
+                const disabled = modeselect.value === 'none';
+                if (target) {
+                    target.classList.toggle('kg-bulk-value--disabled', disabled);
+                    target.querySelectorAll('input, select, button').forEach((input) => {
+                        input.disabled = disabled;
+                    });
+                }
+            };
+            modeselect.addEventListener('change', applyDisabledState);
+            applyDisabledState();
+        });
+        const bulksavebtn = bySel('#ml-bulk-save');
+        if (bulksavebtn) {
+            bulksavebtn.addEventListener('click', () => {
+                applyBulkEdit(cmid).catch((e) => {
+                    Notification.exception(e);
+                    setStatus('Stapel-Bearbeitung fehlgeschlagen.', true);
+                });
+            });
+        }
+        const bulkcancelbtn = bySel('#ml-bulk-cancel');
+        if (bulkcancelbtn) {
+            bulkcancelbtn.addEventListener('click', closeBulkPanel);
+        }
+    };
+
+    const applyBulkEdit = async (cmid) => {
+        if (!selectedIds.size) {
+            setStatus('Keine Seminareinheiten ausgewählt.', true);
+            return;
+        }
+
+        const ops = {};
+        BULK_MULTI_FIELDS.forEach((field) => {
+            const modeselect = bySel(`#ml-bulk-mode-${field}`);
+            const mode = modeselect ? modeselect.value : 'none';
+            if (mode !== 'none') {
+                ops[field] = {mode, kind: 'multi', values: getSelectMulti(`#ml-bulk-${field}`)};
+            }
+        });
+        BULK_SELECT_FIELDS.forEach((field) => {
+            const modeselect = bySel(`#ml-bulk-mode-${field}`);
+            const mode = modeselect ? modeselect.value : 'none';
+            if (mode === 'replace') {
+                const valueel = bySel(`#ml-bulk-${field}`);
+                ops[field] = {mode, kind: 'single', value: valueel ? valueel.value : ''};
+            }
+        });
+        const tagsmodeselect = bySel('#ml-bulk-mode-tags');
+        const tagsmode = tagsmodeselect ? tagsmodeselect.value : 'none';
+        if (tagsmode !== 'none') {
+            const tagsvalueel = bySel('#ml-bulk-tags');
+            ops.tags = {mode: tagsmode, kind: 'taglist', values: splitMulti(tagsvalueel ? tagsvalueel.value : '')};
+        }
+
+        if (!Object.keys(ops).length) {
+            setStatus('Bitte mindestens ein Feld zur Änderung auswählen.', true);
+            return;
+        }
+
+        const count = selectedIds.size;
+        const yes = window.confirm(`Änderungen auf ${count} Seminareinheit${count === 1 ? '' : 'en'} anwenden?`);
+        if (!yes) {
+            return;
+        }
+
+        const previousMethods = methods.slice();
+        methods = methods.map((m) => {
+            if (!selectedIds.has(String(m.id))) {
+                return m;
+            }
+            const updated = Object.assign({}, m);
+            Object.keys(ops).forEach((field) => {
+                const op = ops[field];
+                if (op.kind === 'multi') {
+                    const current = splitMulti(updated[field]);
+                    if (op.mode === 'replace') {
+                        updated[field] = op.values.slice();
+                    } else if (op.mode === 'add') {
+                        updated[field] = Array.from(new Set(current.concat(op.values)));
+                    } else if (op.mode === 'remove') {
+                        updated[field] = current.filter((v) => !op.values.includes(v));
+                    }
+                } else if (op.kind === 'single') {
+                    updated[field] = op.value;
+                } else if (op.kind === 'taglist') {
+                    const current = splitMulti(updated.tags);
+                    let next;
+                    if (op.mode === 'replace') {
+                        next = op.values.slice();
+                    } else if (op.mode === 'add') {
+                        next = Array.from(new Set(current.concat(op.values)));
+                    } else {
+                        next = current.filter((v) => !op.values.includes(v));
+                    }
+                    updated.tags = next.join(', ');
+                }
+            });
+            touchMethod(updated);
+            return updated;
+        });
+
+        renderList();
+        setStatus('Änderungen werden gespeichert ...', false);
+        try {
+            await persist(cmid);
+            setStatus(`Änderungen auf ${count} Seminareinheit${count === 1 ? '' : 'en'} gespeichert.`, false);
+            selectedIds.clear();
+            closeBulkPanel();
+            renderList();
+        } catch (error) {
+            methods = previousMethods;
+            renderList();
+            throw error;
+        }
     };
 
     const addMethod = async (cmid) => {
@@ -1693,9 +1984,16 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const bindFilters = () => {
         const search = bySel('#ml-filter-search');
         const reset = bySel('#ml-filter-reset');
+        const origin = bySel('#ml-filter-origin');
 
         if (search) {
             search.addEventListener('input', applyFilters);
+        }
+        if (origin) {
+            origin.addEventListener('change', () => {
+                populateTagOptions();
+                applyFilters();
+            });
         }
         Object.keys(FILTER_DROPDOWNS).forEach((key) => bindFilterDropdown(key));
 
@@ -1704,7 +2002,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 if (search) {
                     search.value = '';
                 }
+                if (origin) {
+                    origin.value = '';
+                }
                 Object.keys(FILTER_DROPDOWNS).forEach((key) => clearFilterSelections(key));
+                populateTagOptions();
                 applyFilters();
             });
         }
@@ -1749,6 +2051,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             disableEditFieldAutocomplete();
             bindFilters();
             bindFormMultiDropdowns();
+            bindBulkSelectionUI(cmid);
             refreshEditAlternativeOptions('');
 
             const addbtn = bySel('#kg-add-method');

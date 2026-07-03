@@ -90,14 +90,8 @@ echo html_writer::tag('p',
     ['class' => 'sp-filter-status']);
 echo html_writer::start_div('kg-row');
 echo html_writer::tag('button', 'Baustein speichern', ['type' => 'button', 'id' => 'kg-pm-save', 'class' => 'kg-btn kg-btn-primary']);
-echo html_writer::tag('button', 'Didaktik prüfen', ['type' => 'button', 'id' => 'kg-pm-check', 'class' => 'kg-btn']);
 echo html_writer::end_div();
 echo html_writer::tag('div', '', ['id' => 'kg-pm-accordion', 'class' => 'kg-plan-accordion']);
-echo html_writer::end_div();
-
-echo html_writer::start_div('kg-ie-block kg-library-step');
-echo html_writer::tag('h4', '3. Empfehlungen');
-echo html_writer::tag('div', '', ['id' => 'kg-pm-didactic', 'class' => 'kg-didactic-output']);
 echo html_writer::end_div();
 
 echo html_writer::end_div();

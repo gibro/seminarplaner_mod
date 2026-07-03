@@ -126,6 +126,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         };
         return aliases[clean.toLowerCase()] || clean;
     };
+    const getSyncMethodsetId = (entry) => {
+        if (!entry || !entry._kgsync || typeof entry._kgsync !== 'object') {
+            return 0;
+        }
+        return Number(entry._kgsync.setid || 0) || 0;
+    };
     const lucideIconUrl = (name) => {
         const root = (typeof M !== 'undefined' && M && M.cfg && M.cfg.wwwroot) ? String(M.cfg.wwwroot).replace(/\/$/, '') : '';
         return `${root}/mod/seminarplaner/pix/lucide/${String(name || '').trim()}.svg`;
@@ -190,6 +196,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.zoomIndex = 1;
             this.versionhash = '';
             this.methods = [];
+            this.methodsetNames = new Map();
             this.planningState = {units: [], slotorder: []};
             this.methodAlternativeSelection = {};
             this.filterIndex = [];
@@ -1556,7 +1563,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 cognitive: Array.isArray(method.kognitive) ? method.kognitive.join(', ') : (method.kognitive || ''),
                 cardHtml: `<p><strong>${escapeHtml(title)}</strong></p>`,
                 details,
-                cognitiveLevel: levels.length ? Math.max(...levels) : null
+                cognitiveLevel: levels.length ? Math.max(...levels) : null,
+                _kgsync: method._kgsync || null
             };
         }
 
@@ -1639,6 +1647,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const methodslots = this.getMethodAlternativeSlots();
             const cards = methodslots.map((slot) => slot.active).filter(Boolean);
             this.filterIndex = cards;
+            this.updateOriginFilterVisibility();
             this.populateTagsFilter();
 
             methodslots.forEach((slot) => {
@@ -1947,8 +1956,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 return;
             }
             const keep = this.getSelectedFilterValues('tags');
+            const origin = getValue('#sp-filter-origin');
+            const relevant = origin
+                ? this.filterIndex.filter((card) => (origin === 'local' ? getSyncMethodsetId(card) === 0 : getSyncMethodsetId(card) === Number(origin)))
+                : this.filterIndex;
             const tags = new Set();
-            this.filterIndex.forEach((card) => {
+            relevant.forEach((card) => {
                 String(card.tags || '').split(/[,;]+/).map((x) => x.trim()).filter(Boolean).forEach((x) => tags.add(x));
             });
             optionsHost.innerHTML = '';
@@ -1959,6 +1972,48 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 optionsHost.appendChild(row);
             });
             this.updateFilterDropdownLabel('tags');
+        }
+
+        updateOriginFilterVisibility() {
+            const wrap = bySel('#sp-filter-origin-wrap');
+            const select = bySel('#sp-filter-origin');
+            if (!wrap) {
+                return;
+            }
+            const setids = new Set();
+            this.methods.forEach((m) => {
+                const setid = getSyncMethodsetId(m);
+                if (setid > 0) {
+                    setids.add(setid);
+                }
+            });
+            wrap.classList.toggle('kg-hidden', setids.size === 0);
+            if (!select) {
+                return;
+            }
+            const previous = select.value;
+            const concepts = Array.from(setids)
+                .map((setid) => ({setid, name: this.methodsetNames.get(setid) || `Globales Konzept #${setid}`}))
+                .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+
+            select.innerHTML = '';
+            const allOption = document.createElement('option');
+            allOption.value = '';
+            allOption.textContent = 'Alle Seminareinheiten';
+            select.appendChild(allOption);
+            concepts.forEach(({setid, name}) => {
+                const option = document.createElement('option');
+                option.value = String(setid);
+                option.textContent = name;
+                select.appendChild(option);
+            });
+            const localOption = document.createElement('option');
+            localOption.value = 'local';
+            localOption.textContent = 'Nur lokale Seminareinheiten';
+            select.appendChild(localOption);
+
+            const validValues = new Set(['', 'local', ...concepts.map((c) => String(c.setid))]);
+            select.value = validValues.has(previous) ? previous : '';
         }
 
         buildTimeColumn() {
@@ -3477,8 +3532,15 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         bindFilters() {
             const input = bySel('#sp-filter-search');
             const reset = bySel('#sp-filter-reset');
+            const origin = bySel('#sp-filter-origin');
             if (input) {
                 input.addEventListener('input', () => this.applyFilters());
+            }
+            if (origin) {
+                origin.addEventListener('change', () => {
+                    this.populateTagsFilter();
+                    this.applyFilters();
+                });
             }
             Object.keys(FILTER_DROPDOWNS).forEach((key) => this.bindFilterDropdown(key));
             if (reset) {
@@ -3486,7 +3548,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     if (input) {
                         input.value = '';
                     }
+                    if (origin) {
+                        origin.value = '';
+                    }
                     Object.keys(FILTER_DROPDOWNS).forEach((key) => this.clearFilterSelections(key));
+                    this.populateTagsFilter();
                     this.applyFilters();
                 });
             }
@@ -3532,6 +3598,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const groups = this.getSelectedFilterValues('group').map((x) => x.toLowerCase());
             const durations = this.getSelectedFilterValues('duration').map((x) => x.toLowerCase());
             const cognitive = this.getSelectedFilterValues('cognitive').map((x) => this.normalizeCognitiveLabel(x));
+            const origin = getValue('#sp-filter-origin');
             const sidebarCards = Array.from(document.querySelectorAll('#sp-methods .sp-card'));
             let visible = 0;
             this.filterIndex.forEach((card) => {
@@ -3545,11 +3612,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 const cardduration = String(card.duration || '').toLowerCase();
                 const cardcognitive = this.normalizeCognitiveLabel((Array.isArray(card.cognitive) ? card.cognitive.join(', ') : (card.cognitive || '')));
                 const match = (!search || hay.includes(search))
-                    && (!tags.length || cardtags.some((t) => tags.includes(t)))
+                    && (!tags.length || tags.every((t) => cardtags.includes(t)))
                     && (!phases.length || cardphase.some((p) => phases.includes(p)))
                     && (!groups.length || groups.includes(String(card.group || '').toLowerCase()))
                     && (!durations.length || durations.includes(cardduration))
-                    && (!cognitive.length || cognitive.includes(cardcognitive));
+                    && (!cognitive.length || cognitive.includes(cardcognitive))
+                    && (!origin || (origin === 'local' ? getSyncMethodsetId(card) === 0 : getSyncMethodsetId(card) === Number(origin)));
                 el.style.display = match ? '' : 'none';
                 if (match) {
                     visible++;
@@ -3916,8 +3984,21 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             });
         }
 
+        loadMethodsetNames() {
+            return asCall('mod_seminarplaner_get_methodset_sync_status', {cmid: this.cmid}).then((res) => {
+                const links = Array.isArray(res && res.links) ? res.links : [];
+                this.methodsetNames = new Map(
+                    links
+                        .filter((link) => !!link && (Number(link.methodsetid) || 0) > 0)
+                        .map((link) => [Number(link.methodsetid) || 0, String(link.methodsetname || '').trim()])
+                );
+            }).catch(() => {
+                this.methodsetNames = new Map();
+            });
+        }
+
         loadSources() {
-            return Promise.all([this.loadMethodCards(), this.loadPlanningState()]).then(() => {
+            return Promise.all([this.loadMethodCards(), this.loadPlanningState(), this.loadMethodsetNames()]).then(() => {
                 this.renderMethods();
             });
         }
