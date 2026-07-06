@@ -265,6 +265,96 @@ class api extends external_api {
     }
 
     /**
+     * Copy material attachments of one submitted seminar unit into local_seminarplaner storage.
+     *
+     * Activity methods carry their files in the module context (mod_seminarplaner /
+     * method_materialien); set methods carried over unchanged into the new version only
+     * reference their previous global method row via _kgsync.sourcemethodid.
+     *
+     * @param array $method Seminar unit payload as stored in the version snapshot.
+     * @param int $globalmethodid Newly inserted local_kgen_method id.
+     * @param int $modulecontextid Activity module context id.
+     * @param int $actorid Submitting user id.
+     * @param bool $fromactivity True when the payload originates from the activity (not carried over).
+     * @return void
+     */
+    private static function copy_method_material_files_to_global(array $method, int $globalmethodid,
+        int $modulecontextid, int $actorid, bool $fromactivity): void {
+        global $CFG, $DB;
+
+        require_once($CFG->dirroot . '/local/seminarplaner/locallib.php');
+
+        $fs = get_file_storage();
+        $systemcontextid = \context_system::instance()->id;
+
+        $sourceitemid = 0;
+        foreach ((array)($method['materialien'] ?? []) as $entry) {
+            if (is_array($entry) && !empty($entry['stored'])
+                    && (string)($entry['filearea'] ?? '') === 'method_materialien') {
+                $sourceitemid = (int)($entry['itemid'] ?? 0);
+                break;
+            }
+        }
+
+        $sourcefiles = [];
+        if ($sourceitemid > 0) {
+            $sourcefiles = array_values($fs->get_area_files($modulecontextid, 'mod_seminarplaner',
+                'method_materialien', $sourceitemid, 'id ASC', false));
+        }
+
+        if (!$sourcefiles && !$fromactivity) {
+            $sourcemethodid = (int)($method['_kgsync']['sourcemethodid'] ?? 0);
+            if ($sourcemethodid > 0) {
+                $links = $DB->get_records('local_kgen_method_file',
+                    ['methodid' => $sourcemethodid, 'kind' => 'material'], 'id ASC');
+                foreach ($links as $link) {
+                    $areafiles = $fs->get_area_files($systemcontextid, 'local_seminarplaner',
+                        'method_material', (int)$link->fileitemid, 'id ASC', false);
+                    foreach ($areafiles as $areafile) {
+                        $sourcefiles[] = $areafile;
+                    }
+                }
+            }
+        }
+
+        if (!$sourcefiles) {
+            return;
+        }
+
+        $newitemid = local_seminarplaner_next_file_itemid('method_material');
+        $stored = 0;
+        foreach ($sourcefiles as $file) {
+            $filepath = (string)$file->get_filepath();
+            $filename = (string)$file->get_filename();
+            if ($filename === '' || $filename === '.') {
+                continue;
+            }
+            if ($fs->get_file($systemcontextid, 'local_seminarplaner', 'method_material',
+                    $newitemid, $filepath, $filename)) {
+                continue;
+            }
+            $fs->create_file_from_storedfile((object)[
+                'contextid' => $systemcontextid,
+                'component' => 'local_seminarplaner',
+                'filearea' => 'method_material',
+                'itemid' => $newitemid,
+                'filepath' => $filepath,
+                'filename' => $filename,
+                'userid' => $actorid,
+            ], $file);
+            $stored++;
+        }
+        if ($stored > 0) {
+            $DB->insert_record('local_kgen_method_file', (object)[
+                'methodid' => $globalmethodid,
+                'kind' => 'material',
+                'fileitemid' => $newitemid,
+                'timecreated' => time(),
+            ]);
+        }
+    }
+
+    /**
      * Map an activity seminar unit to local global-set record format.
      *
      * @param array $method Seminar unit payload.
@@ -1081,6 +1171,10 @@ class api extends external_api {
         if (!$selectedmethods) {
             throw new invalid_parameter_exception('Keine Seminareinheiten für Einreichung ausgewählt');
         }
+        $selectedtitles = [];
+        foreach ($selectedmethods as $method) {
+            $selectedtitles[self::normalize_method_title((string)($method['titel'] ?? ''))] = true;
+        }
 
         $existingbymethod = self::load_set_methods_by_title((int)$set->id);
         foreach ($selectedmethods as $method) {
@@ -1151,8 +1245,11 @@ class api extends external_api {
                 'createdby' => $actorid,
                 'modifiedby' => $actorid,
             ]);
-            $DB->insert_record('local_kgen_method', $record);
+            $newmethodid = (int)$DB->insert_record('local_kgen_method', $record);
             $savedcount++;
+            $fromactivity = !empty($selectedtitles[self::normalize_method_title((string)$mapped['title'])]);
+            self::copy_method_material_files_to_global($method, $newmethodid,
+                (int)$resolved['context']->id, $actorid, $fromactivity);
         }
 
         $comment = trim((string)$params['changelog']) !== '' ? trim((string)$params['changelog']) : 'Submitted from mod_seminarplaner';
@@ -1299,8 +1396,10 @@ class api extends external_api {
                 'createdby' => $actorid,
                 'modifiedby' => $actorid,
             ]);
-            $DB->insert_record('local_kgen_method', $record);
+            $newmethodid = (int)$DB->insert_record('local_kgen_method', $record);
             $savedcount++;
+            self::copy_method_material_files_to_global($method, $newmethodid,
+                (int)$resolved['context']->id, $actorid, true);
         }
 
         $comment = trim((string)$params['changelog']) !== '' ? trim((string)$params['changelog']) : 'Submitted from mod_seminarplaner';
