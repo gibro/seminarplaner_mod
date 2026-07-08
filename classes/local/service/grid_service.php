@@ -5,6 +5,7 @@ namespace mod_seminarplaner\local\service;
 
 use coding_exception;
 use mod_seminarplaner\local\repository\grid_repository;
+use mod_seminarplaner\local\sequence\sequence_state;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -113,6 +114,15 @@ class grid_service {
                 $existingstate = [];
             }
             $state = $this->merge_collaborative_state($existingstate, $state);
+        }
+
+        // Legacy grid clients do not know the sequence section (D20); keep
+        // the stored one instead of letting their full-state save drop it.
+        if ($existing && !isset($state[sequence_state::STATE_KEY])) {
+            $existingstate = json_decode((string)$existing->statejson, true);
+            if (is_array($existingstate) && isset($existingstate[sequence_state::STATE_KEY])) {
+                $state[sequence_state::STATE_KEY] = $existingstate[sequence_state::STATE_KEY];
+            }
         }
 
         $overlaps = $this->find_time_overlaps($state);

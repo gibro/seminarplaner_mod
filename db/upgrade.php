@@ -101,5 +101,36 @@ function xmldb_seminarplaner_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026030511, 'seminarplaner');
     }
 
+    if ($oldversion < 2026070800) {
+        // D20/D43: derive the sequence section once for every stored grid
+        // state during upgrade (not lazily on first open). The legacy
+        // "plan" section stays untouched as read-only overview data (D34).
+        $converter = new \mod_seminarplaner\local\sequence\grid_to_sequence_converter();
+        $rs = $DB->get_recordset('kgen_grid_user_state');
+        foreach ($rs as $record) {
+            $state = json_decode((string)$record->statejson, true);
+            if (!is_array($state) || !$state) {
+                continue;
+            }
+            if (\mod_seminarplaner\local\sequence\sequence_state::has_sequence($state)) {
+                continue;
+            }
+            $state[\mod_seminarplaner\local\sequence\sequence_state::STATE_KEY] = $converter->convert($state);
+            $json = json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($json === false) {
+                continue;
+            }
+            $record->statejson = $json;
+            // New hash forces stale clients into the merge path instead of
+            // silently overwriting the freshly added sequence section.
+            $record->versionhash = sha1($json . '|sequenz-upgrade');
+            $record->timemodified = time();
+            $DB->update_record('kgen_grid_user_state', $record);
+        }
+        $rs->close();
+
+        upgrade_mod_savepoint(true, 2026070800, 'seminarplaner');
+    }
+
     return true;
 }
