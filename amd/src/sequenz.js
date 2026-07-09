@@ -2398,14 +2398,21 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 ? this.renderSuggestions(freegap, null, `data-anker="${ankername}"`)
                 : '';
 
+            // In an off anchor (arrival/departure day) all editing controls
+            // are disabled so nobody plans into a section that does not
+            // take place; existing placements keep their controls so they
+            // can still be moved out.
+            const offattrs = anchoroff
+                ? ' disabled title="Dieser Abschnitt entfällt an diesem Tag."'
+                : '';
             const addbutton = `
                 <div class="sq-anchor__add">
-                  <button type="button" class="kg-btn" data-sq-action="add-unit" data-anker="${ankername}">＋ Einheit hinzufügen</button>
-                  <button type="button" class="kg-btn" data-sq-action="add-pause" data-anker="${ankername}">＋ Pause</button>
+                  <button type="button" class="kg-btn" data-sq-action="add-unit" data-anker="${ankername}"${offattrs}>＋ Einheit hinzufügen</button>
+                  <button type="button" class="kg-btn" data-sq-action="add-pause" data-anker="${ankername}"${offattrs}>＋ Pause</button>
                 </div>`;
 
             return `
-                <div class="sq-anchor" data-anker="${ankername}">
+                <div class="sq-anchor${anchoroff ? ' sq-anchor--off' : ''}" data-anker="${ankername}">
                   <div class="sq-anchor__head">
                     <div class="sq-anchor__title">${title} <span class="sq-anchor__time">${timespan}</span></div>
                     <div class="sq-budget">

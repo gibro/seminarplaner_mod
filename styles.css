@@ -6254,3 +6254,20 @@ body.sp-resizing * {
 .sq-picker__row {
     border-color: var(--ig-lightgray);
 }
+
+/* Entfallender Anker (An-/Abreisetag): gedämpft, Bedienung deaktiviert. */
+.sq-anchor--off .sq-anchor__body {
+    background: var(--ig-surface-muted);
+}
+
+.sq-anchor--off .sq-anchor__head {
+    color: var(--ig-gray);
+}
+
+.sq-anchor--off .sq-empty {
+    color: var(--ig-gray);
+}
+
+.sq-anchor--off .sq-anchor__add .kg-btn:disabled {
+    background: transparent !important;
+}
