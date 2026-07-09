@@ -78,6 +78,49 @@ class grid_to_sequence_converter {
     }
 
     /**
+     * Fill module master data from legacy planning units (one-time, D43).
+     *
+     * The initial conversion could only carry the module title; topics and
+     * the read-only Themenplan reference (D6) live in the planning state.
+     * This copies them into the sequence section so the sequence view owns
+     * the master data. Existing non-empty values are never overwritten.
+     *
+     * @param array $sequenz Sequence section.
+     * @param array $planningunits Planning state units list.
+     * @return array Updated sequence section.
+     */
+    public function enrich_bausteine(array $sequenz, array $planningunits): array {
+        $byid = [];
+        foreach ($planningunits as $unit) {
+            if (is_array($unit) && trim((string)($unit['id'] ?? '')) !== '') {
+                $byid[trim((string)$unit['id'])] = $unit;
+            }
+        }
+        if (!$byid || !is_array($sequenz['bausteine'] ?? null)) {
+            return $sequenz;
+        }
+
+        foreach ($sequenz['bausteine'] as $bid => $baustein) {
+            if (!is_array($baustein)) {
+                continue;
+            }
+            $unitid = trim((string)(($baustein['quelle'] ?? [])['unitid'] ?? ''));
+            if ($unitid === '' || !isset($byid[$unitid])) {
+                continue;
+            }
+            $unit = $byid[$unitid];
+            foreach (['titel' => 'title', 'unterthemen' => 'topics', 'themenplanreferenz' => 'objectives'] as $target => $source) {
+                if (trim((string)($baustein[$target] ?? '')) === '' && trim((string)($unit[$source] ?? '')) !== '') {
+                    $baustein[$target] = (string)$unit[$source];
+                }
+            }
+            $sequenz['bausteine'][$bid] = $baustein;
+        }
+
+        return $sequenz;
+    }
+
+    /**
      * Resolve the ordered day list from config, adding stray plan days.
      *
      * @param array $gridstate Decoded grid state.

@@ -132,5 +132,55 @@ function xmldb_seminarplaner_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070800, 'seminarplaner');
     }
 
+    if ($oldversion < 2026070908) {
+        // Fill module master data (Unterthemen, Themenplan-Referenz D6) from
+        // the planning state into the sequence section, so the sequence view
+        // owns the Baustein data and the transitional Bausteine tab can go.
+        $converter = new \mod_seminarplaner\local\sequence\grid_to_sequence_converter();
+        $sql = "SELECT s.*, g.cmid
+                  FROM {kgen_grid_user_state} s
+                  JOIN {kgen_grid} g ON g.id = s.gridid
+                 WHERE s.userid = 0";
+        $planningcache = [];
+        $rs = $DB->get_recordset_sql($sql);
+        foreach ($rs as $record) {
+            $state = json_decode((string)$record->statejson, true);
+            if (!is_array($state)
+                || !\mod_seminarplaner\local\sequence\sequence_state::has_sequence($state)) {
+                continue;
+            }
+            $cmid = (int)$record->cmid;
+            if (!array_key_exists($cmid, $planningcache)) {
+                $planningrow = $DB->get_record('kgen_planning_state', ['cmid' => $cmid]);
+                $planning = $planningrow ? json_decode((string)$planningrow->statejson, true) : null;
+                $planningcache[$cmid] = is_array($planning) && is_array($planning['units'] ?? null)
+                    ? $planning['units'] : [];
+            }
+            if (!$planningcache[$cmid]) {
+                continue;
+            }
+            $enriched = $converter->enrich_bausteine(
+                $state[\mod_seminarplaner\local\sequence\sequence_state::STATE_KEY],
+                $planningcache[$cmid]
+            );
+            if ($enriched === $state[\mod_seminarplaner\local\sequence\sequence_state::STATE_KEY]) {
+                continue;
+            }
+            $state[\mod_seminarplaner\local\sequence\sequence_state::STATE_KEY] = $enriched;
+            $json = json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($json === false) {
+                continue;
+            }
+            $record->statejson = $json;
+            $record->versionhash = sha1($json . '|baustein-enrich');
+            $record->timemodified = time();
+            unset($record->cmid);
+            $DB->update_record('kgen_grid_user_state', $record);
+        }
+        $rs->close();
+
+        upgrade_mod_savepoint(true, 2026070908, 'seminarplaner');
+    }
+
     return true;
 }

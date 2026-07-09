@@ -807,6 +807,10 @@ define(['core/ajax'], function(Ajax) {
                         this.addUnitFromCard(action.getAttribute('data-cardid') || '');
                     } else if (type === 'intro-done') {
                         this.finishIntro();
+                    } else if (type === 'baustein-save') {
+                        this.saveBausteinEditor();
+                    } else if (type === 'baustein-dissolve') {
+                        this.dissolveBaustein(action.getAttribute('data-bid') || '');
                     }
                 });
             }
@@ -962,6 +966,88 @@ define(['core/ajax'], function(Ajax) {
             });
         }
 
+        // ---- Module master data editor (owns the former Bausteine tab data) --
+
+        openBausteinEditor(bid) {
+            const baustein = this.baustein(bid);
+            if (!baustein) {
+                return;
+            }
+            this.editorBid = bid;
+            const root = this.modalRoot();
+            const referenz = htmlToLines(baustein.themenplanreferenz);
+            root.innerHTML = `
+                <div class="sq-modal">
+                  <div class="sq-modal__head">
+                    <h3>Baustein bearbeiten</h3>
+                    <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
+                  </div>
+                  <div class="sq-modal__body">
+                    <div class="sq-field">
+                      <label class="kg-label">Überschrift</label>
+                      <input type="text" class="kg-input" data-sq-field="titel" value="${escapeHtml(baustein.titel || '')}">
+                    </div>
+                    <div class="sq-field">
+                      <label class="kg-label">Unterthemen</label>
+                      <textarea class="kg-input" rows="5" data-sq-field="unterthemen">${escapeHtml(htmlToLines(baustein.unterthemen))}</textarea>
+                      <div class="sq-field__hint">Eine Zeile je Unterthema.</div>
+                    </div>
+                    ${referenz ? `
+                    <div class="sq-field">
+                      <label class="kg-label">Themenplan-Referenz (aus dem Import, nicht änderbar)</label>
+                      <div class="sq-readonly">${escapeHtml(referenz)}</div>
+                    </div>` : ''}
+                  </div>
+                  <div class="sq-modal__footer sq-modal__footer--split">
+                    <button type="button" class="kg-btn sq-danger" data-sq-action="baustein-dissolve" data-bid="${escapeHtml(bid)}">Überschrift auflösen</button>
+                    <span class="sq-modal__footer-gap"></span>
+                    <button type="button" class="kg-btn" data-sq-action="modal-close">Abbrechen</button>
+                    <button type="button" class="kg-btn kg-btn-primary" data-sq-action="baustein-save">Übernehmen</button>
+                  </div>
+                </div>`;
+            root.classList.add('open');
+        }
+
+        saveBausteinEditor() {
+            const root = bySel('#sq-modal');
+            const baustein = this.baustein(this.editorBid);
+            if (!root || !baustein) {
+                return;
+            }
+            const titel = root.querySelector('[data-sq-field="titel"]');
+            const unterthemen = root.querySelector('[data-sq-field="unterthemen"]');
+            if (titel && titel.value.trim()) {
+                baustein.titel = titel.value.trim();
+            }
+            if (unterthemen) {
+                baustein.unterthemen = unterthemen.value.trim();
+            }
+            this.closeModal();
+            this.setDirty(true);
+            this.render();
+            this.toast('Baustein aktualisiert.');
+        }
+
+        dissolveBaustein(bid) {
+            const baustein = this.baustein(bid);
+            if (!baustein) {
+                return;
+            }
+            if (!window.confirm('Die Überschrift auflösen? Die Einheiten bleiben an ihrem Platz im Plan.')) {
+                return;
+            }
+            Object.keys(this.sequenz.platzierungen).forEach((pid) => {
+                if (String(this.sequenz.platzierungen[pid].bausteinid || '') === String(bid)) {
+                    this.sequenz.platzierungen[pid].bausteinid = null;
+                }
+            });
+            delete this.sequenz.bausteine[bid];
+            this.closeModal();
+            this.setDirty(true);
+            this.render();
+            this.toast('Überschrift aufgelöst – die Einheiten stehen weiter im Plan.');
+        }
+
         // ---- Add unit from the library ---------------------------------------
 
         openPicker(ankername) {
@@ -1106,6 +1192,8 @@ define(['core/ajax'], function(Ajax) {
                 this.removePlacement(pid);
             } else if (type === 'add-pause') {
                 this.addPause(action.getAttribute('data-anker') || 'vormittag');
+            } else if (type === 'edit-baustein') {
+                this.openBausteinEditor(action.getAttribute('data-bid') || '');
             }
         }
 
@@ -1258,6 +1346,8 @@ define(['core/ajax'], function(Ajax) {
                         </div>
                         <div class="sq-baustein__tools">
                           ${this.renderVariantPills(group.bausteinid, baustein)}
+                          <button type="button" class="kg-btn sq-membership" data-sq-action="edit-baustein"
+                            data-bid="${escapeHtml(group.bausteinid)}">Bearbeiten</button>
                           ${unfilled ? this.renderMoveButtons(group.items[0].pid) : ''}
                         </div>
                       </div>
@@ -1270,13 +1360,14 @@ define(['core/ajax'], function(Ajax) {
             if (!unfilled) {
                 return `<div class="sq-baustein__units">${units}</div>`;
             }
-            // Reserved module: show master data from the planning state so the
-            // planned content is visible even before individual placement.
+            // Reserved module: master data now lives on the module itself;
+            // the planning state only remains as fallback for the unit list.
             const planningunit = this.planningUnitForBaustein(baustein);
-            if (!planningunit) {
+            const owntopics = htmlToLines(baustein && baustein.unterthemen);
+            const topics = owntopics || (planningunit ? htmlToLines(planningunit.topics) : '');
+            if (!planningunit && !topics) {
                 return '';
             }
-            const topics = htmlToLines(planningunit.topics);
             const methods = (Array.isArray(planningunit.methods) ? planningunit.methods : [])
                 .map((m) => this.methodCardForRef(m && m.methodid))
                 .filter((card) => card);

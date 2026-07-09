@@ -213,6 +213,34 @@ final class mod_seminarplaner_grid_to_sequence_converter_test extends basic_test
         $this->assertSame(['legacy:x2'], $auswahl['kandidaten']);
     }
 
+    public function test_enrich_bausteine_fills_only_empty_fields(): void {
+        $state = $this->gridstate([
+            'Montag' => [
+                ['uid' => 'u1', 'kind' => 'unit', 'title' => 'KI-Geschichte', 'unitid' => '17',
+                    'startMin' => 540, 'endMin' => 630],
+            ],
+        ]);
+        $converter = new grid_to_sequence_converter();
+        $sequenz = $converter->convert($state);
+        $sequenz['bausteine']['b17']['unterthemen'] = 'Schon gepflegt';
+
+        $units = [
+            ['id' => '17', 'title' => 'Anderer Titel', 'topics' => 'Aus dem Themenplan', 'objectives' => 'Die Lernenden können …'],
+            ['id' => '99', 'title' => 'Unbeteiligt'],
+        ];
+        $enriched = $converter->enrich_bausteine($sequenz, $units);
+
+        $baustein = $enriched['bausteine']['b17'];
+        // Non-empty fields stay, empty ones are filled.
+        $this->assertSame('KI-Geschichte', $baustein['titel']);
+        $this->assertSame('Schon gepflegt', $baustein['unterthemen']);
+        $this->assertSame('Die Lernenden können …', $baustein['themenplanreferenz']);
+        $this->assertSame([], sequence_state::validate($enriched));
+
+        // Without matching units nothing changes.
+        $this->assertSame($enriched, $converter->enrich_bausteine($enriched, [['id' => 'x']]));
+    }
+
     public function test_validate_reports_broken_references(): void {
         $sequenz = sequence_state::create_empty();
         $day = sequence_state::create_day(1, 'Montag');

@@ -5420,3 +5420,18 @@ body.sp-resizing * {
 }
 .kg-subnav__link:hover { color: #204864; border-color: #2c5f8a; text-decoration: none; }
 .kg-subnav__link--active { background: #2c5f8a; border-color: #2c5f8a; color: #fff; font-weight: 600; }
+
+/* === Baustein-Editor (Stammdaten in der Sequenz) === */
+.sq-readonly {
+    background: #f6f8fa;
+    border: 1px solid #d7dce2;
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: #5b6b79;
+    white-space: pre-line;
+}
+.sq-modal__footer--split { justify-content: flex-start; }
+.sq-modal__footer-gap { flex: 1; }
+.sq-danger { color: #a02f2f; border-color: #d9b3b3; }
+.sq-danger:hover { background: #fdf2f2; border-color: #a02f2f; }
