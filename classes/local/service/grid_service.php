@@ -367,6 +367,59 @@ class grid_service {
     }
 
     /**
+     * Whether one user has seen the one-time sequence intro for a plan (D35).
+     *
+     * The flag lives in the per-user row of kgen_grid_user_state (the live
+     * collaborative state uses userid 0, so real-user rows are free for
+     * per-user markers as foreseen by D35).
+     *
+     * @param int $gridid Grid id.
+     * @param int $userid Real user id.
+     * @return bool
+     */
+    public function get_intro_seen(int $gridid, int $userid): bool {
+        if ($gridid <= 0 || $userid <= 0) {
+            throw new coding_exception('Invalid input for get_intro_seen');
+        }
+        $record = $this->repository->get_user_state($gridid, $userid);
+        if (!$record) {
+            return false;
+        }
+        $decoded = json_decode((string)$record->statejson, true);
+        return is_array($decoded) && !empty($decoded['uebersetzunggesehen']);
+    }
+
+    /**
+     * Mark the one-time sequence intro as seen for one plan and user (D35).
+     *
+     * @param int $gridid Grid id.
+     * @param int $userid Real user id.
+     * @return bool
+     */
+    public function mark_intro_seen(int $gridid, int $userid): bool {
+        if ($gridid <= 0 || $userid <= 0) {
+            throw new coding_exception('Invalid input for mark_intro_seen');
+        }
+        $record = $this->repository->get_user_state($gridid, $userid);
+        $decoded = [];
+        $hash = 'sequenz-intro';
+        if ($record) {
+            $decoded = json_decode((string)$record->statejson, true);
+            if (!is_array($decoded)) {
+                $decoded = [];
+            }
+            $hash = (string)$record->versionhash;
+        }
+        $decoded['uebersetzunggesehen'] = time();
+        $json = json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            throw new coding_exception('Failed to encode intro marker JSON');
+        }
+        $this->repository->upsert_user_state($gridid, $userid, $json, $hash);
+        return true;
+    }
+
+    /**
      * Publish one grid state as Common Thread snapshot.
      *
      * @param int $cmid Course module id.

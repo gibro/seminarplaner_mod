@@ -1641,6 +1641,51 @@ class api extends external_api {
         ]);
     }
 
+    public static function get_sequenz_intro_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'gridid' => new external_value(PARAM_INT, 'Seminarplan id'),
+        ]);
+    }
+
+    public static function get_sequenz_intro(int $cmid, int $gridid): array {
+        $params = self::validate_parameters(self::get_sequenz_intro_parameters(), ['cmid' => $cmid, 'gridid' => $gridid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+
+        $service = new grid_service();
+        return ['seen' => $service->get_intro_seen((int)$params['gridid'], (int)$GLOBALS['USER']->id)];
+    }
+
+    public static function get_sequenz_intro_returns(): external_single_structure {
+        return new external_single_structure([
+            'seen' => new external_value(PARAM_BOOL, 'Whether the one-time sequence intro was already seen'),
+        ]);
+    }
+
+    public static function mark_sequenz_intro_seen_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'gridid' => new external_value(PARAM_INT, 'Seminarplan id'),
+        ]);
+    }
+
+    public static function mark_sequenz_intro_seen(int $cmid, int $gridid): array {
+        $params = self::validate_parameters(self::mark_sequenz_intro_seen_parameters(), ['cmid' => $cmid, 'gridid' => $gridid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('mark_sequenz_intro_seen', 30, 60);
+
+        $service = new grid_service();
+        return ['success' => $service->mark_intro_seen((int)$params['gridid'], (int)$GLOBALS['USER']->id)];
+    }
+
+    public static function mark_sequenz_intro_seen_returns(): external_single_structure {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'Marker result'),
+        ]);
+    }
+
     public static function save_user_state_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),

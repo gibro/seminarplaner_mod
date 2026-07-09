@@ -233,9 +233,101 @@ define(['core/ajax'], function(Ajax) {
                 this.setDirty(false);
                 this.indexLegacyEntries();
                 this.render();
+                this.maybeShowIntro();
             }).catch(() => {
                 this.setStatus('Der Seminarplan konnte nicht geladen werden.', true);
             });
+        }
+
+        // ---- One-time translation intro (D35) --------------------------------
+
+        maybeShowIntro() {
+            if (!this.sequenz || !this.dayCount()) {
+                return;
+            }
+            const day = this.sequenz.tage[0];
+            const legacyentries = this.legacyDayEntries(day.bezeichnung);
+            const hasplacements = ANCHORS.some((a) => day.anker[a].sequenz.length > 0);
+            if (!legacyentries.length || !hasplacements) {
+                return;
+            }
+            const gridid = this.gridid;
+            asCall('mod_seminarplaner_get_sequenz_intro', {cmid: this.cmid, gridid}).then((res) => {
+                if (!res.seen && this.gridid === gridid) {
+                    this.showIntro(day, legacyentries);
+                }
+            }).catch(() => null);
+        }
+
+        legacyDayEntries(dayname) {
+            const days = (this.state && this.state.plan && this.state.plan.days) || {};
+            const entries = (Array.isArray(days[dayname]) ? days[dayname] : [])
+                .filter((entry) => entry && (Number(entry.endMin) || 0) > (Number(entry.startMin) || 0));
+            entries.sort((a, b) => (Number(a.startMin) || 0) - (Number(b.startMin) || 0));
+            return entries;
+        }
+
+        showIntro(day, legacyentries) {
+            const root = this.modalRoot();
+            const leftrows = legacyentries.map((entry) => `
+                <div class="sq-intro__row">
+                  <span class="sq-intro__time">${minutesToLabel(Number(entry.startMin) || 0)}–${minutesToLabel(Number(entry.endMin) || 0)}</span>
+                  <span>${escapeHtml(String(entry.title || (entry.kind === 'break' ? 'Pause' : 'Einheit')))}</span>
+                </div>`).join('');
+
+            const frame = this.dayFrame(day.bezeichnung);
+            const rightrows = ANCHORS.map((ankername) => {
+                const isMorning = ankername === 'vormittag';
+                let clock = isMorning ? frame.start : Math.max(frame.midday.end, frame.start);
+                const rows = day.anker[ankername].sequenz.map((pid) => {
+                    const placement = this.placement(pid);
+                    if (!placement) {
+                        return '';
+                    }
+                    const duration = Math.max(0, Number(placement.dauer) || 0);
+                    const row = `
+                        <div class="sq-intro__row">
+                          <span class="sq-intro__time">${minutesToLabel(clock)}</span>
+                          <span>${escapeHtml(placement.titel || 'Einheit')}</span>
+                        </div>`;
+                    clock += duration;
+                    return row;
+                }).join('');
+                return `<div class="sq-intro__anchor">${isMorning ? 'Vormittag' : 'Nachmittag'}</div>${rows || '<div class="sq-intro__row sq-intro__row--empty">–</div>'}`;
+            }).join('<div class="sq-intro__divider">Mittagspause</div>');
+
+            root.innerHTML = `
+                <div class="sq-modal sq-modal--intro">
+                  <div class="sq-modal__head">
+                    <h3>Dein Plan in der neuen Sequenzansicht</h3>
+                  </div>
+                  <div class="sq-modal__body">
+                    <p class="sq-intro__lead">Dein Plan ist vollständig übernommen. Neu ist nur die Darstellung:
+                      Statt fester Uhrzeiten bestimmt jetzt die <strong>Reihenfolge</strong> den Ablauf –
+                      die Zeiten ergeben sich daraus von selbst. Hier dein erster Tag im Vergleich:</p>
+                    <div class="sq-intro__columns">
+                      <div class="sq-intro__col">
+                        <h4>So war es (Tag ${Number(day.tag) || 1})</h4>
+                        ${leftrows}
+                      </div>
+                      <div class="sq-intro__col sq-intro__col--new">
+                        <h4>So ist es jetzt</h4>
+                        ${rightrows}
+                      </div>
+                    </div>
+                    <p class="sq-intro__note">Alle weiteren Tage sind nach demselben Muster übersetzt.
+                      Es ist nichts verloren gegangen – du kannst direkt weiterplanen.</p>
+                  </div>
+                  <div class="sq-modal__footer">
+                    <button type="button" class="kg-btn kg-btn-primary" data-sq-action="intro-done">Alles klar, weiter zur Planung</button>
+                  </div>
+                </div>`;
+            root.classList.add('open');
+        }
+
+        finishIntro() {
+            this.closeModal();
+            asCall('mod_seminarplaner_mark_sequenz_intro_seen', {cmid: this.cmid, gridid: this.gridid}).catch(() => null);
         }
 
         save() {
@@ -635,6 +727,8 @@ define(['core/ajax'], function(Ajax) {
                         this.saveEditor();
                     } else if (type === 'picker-add') {
                         this.addUnitFromCard(action.getAttribute('data-cardid') || '');
+                    } else if (type === 'intro-done') {
+                        this.finishIntro();
                     }
                 });
             }

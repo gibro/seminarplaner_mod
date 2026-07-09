@@ -137,6 +137,20 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
     ],
+    'mod_seminarplaner_get_sequenz_intro' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'get_sequenz_intro',
+        'description' => 'Whether the one-time sequence intro was seen (D35).',
+        'type' => 'read',
+        'ajax' => true,
+    ],
+    'mod_seminarplaner_mark_sequenz_intro_seen' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'mark_sequenz_intro_seen',
+        'description' => 'Mark the one-time sequence intro as seen (D35).',
+        'type' => 'write',
+        'ajax' => true,
+    ],
     'mod_seminarplaner_save_user_state' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'save_user_state',
