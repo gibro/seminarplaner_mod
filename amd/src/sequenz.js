@@ -267,15 +267,45 @@ define(['core/ajax'], function(Ajax) {
             return entries;
         }
 
+        // "So war es": the old grid layout in miniature (D35) - a time
+        // raster with proportionally placed blocks, like the Seminarplan tab.
+        renderIntroGrid(legacyentries, frame) {
+            const daystart = frame.start;
+            const dayend = Math.max(frame.end, daystart + 60);
+            const scale = 1.1; // Pixels per minute.
+            const height = (dayend - daystart) * scale;
+
+            const hours = [];
+            for (let min = Math.ceil(daystart / 60) * 60; min <= dayend; min += 60) {
+                hours.push(`
+                    <div class="sq-intro__hour" style="top:${(min - daystart) * scale}px">
+                      <span>${minutesToLabel(min)}</span>
+                    </div>`);
+            }
+
+            const blocks = legacyentries.map((entry) => {
+                const start = Math.max(daystart, Number(entry.startMin) || 0);
+                const end = Math.min(dayend, Number(entry.endMin) || 0);
+                if (end <= start) {
+                    return '';
+                }
+                const isbreak = String(entry.kind || '') === 'break';
+                const title = String(entry.title || (isbreak ? 'Pause' : 'Einheit'));
+                return `
+                    <div class="sq-intro__block${isbreak ? ' sq-intro__block--break' : ''}"
+                      style="top:${(start - daystart) * scale}px; height:${Math.max(16, (end - start) * scale - 2)}px">
+                      <span class="sq-intro__blocktime">${minutesToLabel(start)}–${minutesToLabel(end)}</span>
+                      <span class="sq-intro__blocktitle">${escapeHtml(title)}</span>
+                    </div>`;
+            }).join('');
+
+            return `<div class="sq-intro__grid" style="height:${height}px">${hours.join('')}${blocks}</div>`;
+        }
+
         showIntro(day, legacyentries) {
             const root = this.modalRoot();
-            const leftrows = legacyentries.map((entry) => `
-                <div class="sq-intro__row">
-                  <span class="sq-intro__time">${minutesToLabel(Number(entry.startMin) || 0)}–${minutesToLabel(Number(entry.endMin) || 0)}</span>
-                  <span>${escapeHtml(String(entry.title || (entry.kind === 'break' ? 'Pause' : 'Einheit')))}</span>
-                </div>`).join('');
-
             const frame = this.dayFrame(day.bezeichnung);
+            const leftrows = this.renderIntroGrid(legacyentries, frame);
             const rightrows = ANCHORS.map((ankername) => {
                 const isMorning = ankername === 'vormittag';
                 let clock = isMorning ? frame.start : Math.max(frame.midday.end, frame.start);
