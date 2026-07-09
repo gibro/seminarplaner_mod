@@ -43,13 +43,15 @@ echo seminarplaner_render_tabs((int)$cm->id, 'grid');
 
 echo html_writer::start_div('kg-shell kg-grid-readonly');
 echo html_writer::tag('div', '', ['id' => 'kg-status', 'class' => 'kg-status']);
+echo html_writer::start_div('sq-pagehead');
+echo html_writer::tag('h3', get_string('ueberblickmenu', 'mod_seminarplaner'));
 echo html_writer::div(
     get_string('ueberblick_readonlynote', 'mod_seminarplaner') . ' '
     . html_writer::link(new moodle_url('/mod/seminarplaner/sequenz.php', ['id' => (int)$cm->id]),
         get_string('ueberblick_tosequenz', 'mod_seminarplaner')),
-    'sq-note'
+    'sq-pagehead__sub'
 );
-echo html_writer::tag('h3', get_string('ueberblickmenu', 'mod_seminarplaner'));
+echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'kg-grid-step-1']);
 echo html_writer::tag('h4', 'Seminarplan laden');

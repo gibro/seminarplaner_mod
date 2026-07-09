@@ -5831,3 +5831,426 @@ body.sp-resizing * {
 .kg-plan-row {
   border-top-color: var(--ig-lightgray);
 }
+
+/* =========================================================================
+   CD-Handoff Stufe 2: Komponenten-Feinschliff der Sequenzansicht
+   (Anker, SeqUnit-Zeilen, Bausteine, Lücken, Dramaturgie, Modal, Toast,
+   Toggle-Switch, Seitenkopf) nach docs/design_handoff_seminarplaner.
+   ========================================================================= */
+
+/* ---- Sequenz-Grautöne auf CD-Grau ---- */
+.sq-shell {
+    --sq-border: var(--ig-lightgray);
+    --sq-border-strong: var(--ig-midgray);
+    --sq-text: var(--ig-anthracite);
+    --sq-text-muted: var(--ig-gray);
+}
+
+/* ---- Seitenkopf: H-Zeile + 4px roter Regel-Strich ---- */
+.sq-pagehead {
+    margin: 2px 0 14px;
+}
+
+.sq-pagehead h3 {
+    margin: 0;
+    font-size: 22px;
+    color: var(--ig-anthracite);
+    line-height: 1.1;
+}
+
+.sq-pagehead__sub {
+    color: var(--ig-gray);
+    font-size: 13px;
+    margin-top: 4px;
+    max-width: 860px;
+}
+
+.sq-pagehead::after {
+    content: "";
+    display: block;
+    width: 64px;
+    height: 4px;
+    background: var(--ig-red);
+    margin-top: 10px;
+}
+
+/* ---- Werkzeugleiste ---- */
+.sq-toolbar {
+    padding: 11px 16px;
+}
+
+.sq-toolbar .kg-btn {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+#sq-prev-day,
+#sq-next-day {
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-color: var(--ig-midgray);
+    font-family: var(--font-body);
+}
+
+.sq-daylabel {
+    min-width: 180px;
+    font-size: 15px;
+}
+
+/* Dramaturgie-Toggle als Switch (38x20, Rot wenn an). */
+.sq-toggle input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 38px;
+    height: 20px;
+    border: none;
+    border-radius: 999px;
+    background: #C4C4C4;
+    position: relative;
+    cursor: pointer;
+    margin: 0;
+    transition: background .15s;
+    flex: 0 0 auto;
+}
+
+.sq-toggle input[type="checkbox"]:checked {
+    background: var(--ig-red);
+}
+
+.sq-toggle input[type="checkbox"]::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .3);
+    transition: left .15s;
+}
+
+.sq-toggle input[type="checkbox"]:checked::after {
+    left: 20px;
+}
+
+/* ---- Anker ---- */
+.sq-anchor__head {
+    background: #FAFAFA;
+    padding: 11px 16px;
+}
+
+.sq-anchor__title {
+    font-size: 15px;
+}
+
+.sq-anchor__time {
+    font-family: var(--font-body);
+    font-weight: 400;
+    font-size: 13px;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.sq-anchor__body {
+    gap: 10px;
+}
+
+.sq-budget__bar {
+    width: 130px;
+    height: 8px;
+    background: var(--ig-lightgray);
+}
+
+.sq-budget__fill--over {
+    background: var(--ig-yellow);
+}
+
+.sq-budget__label {
+    font-size: 12px;
+}
+
+.sq-budget__label--over {
+    color: #8a6d00;
+    font-weight: 700;
+}
+
+/* ---- SeqUnit-Zeile: Phasen-Streifen über volle Höhe ---- */
+.sq-unit {
+    padding: 0;
+    gap: 0;
+    align-items: stretch;
+}
+
+.sq-unit__phase {
+    width: 6px;
+    flex: 0 0 6px;
+    background: var(--ig-lightgray);
+}
+
+.sq-unit__main {
+    padding: 9px 6px 9px 10px;
+}
+
+.sq-unit__title {
+    font-size: 14px;
+}
+
+.sq-unit__actions {
+    padding: 8px 10px;
+    align-items: center;
+}
+
+/* ---- Badges: neutral + getönte Phasen-Badges ---- */
+.sq-badge {
+    background: #F2F2F2;
+    color: var(--ig-gray);
+    border: 1px solid var(--ig-lightgray);
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+.sq-badge--phase-orientierung { background: #E7F0F5; color: #215d7e; border-color: var(--sq-phase-orientierung); }
+.sq-badge--phase-erfahrung { background: #E7F1E3; color: #3f6e2f; border-color: var(--sq-phase-erfahrung); }
+.sq-badge--phase-analyse { background: #FBF1D0; color: #8a6d00; border-color: var(--sq-phase-analyse); }
+.sq-badge--phase-handlung { background: #F3E6E7; color: #882A30; border-color: var(--sq-phase-handlung); }
+.sq-badge--phase-transfer { background: #EEEEEE; color: #4a4a4a; border-color: var(--sq-phase-transfer); }
+
+/* Fortsetzung-Chip: voll Tiefrot. */
+.sq-badge--variant {
+    background: var(--ig-darkred);
+    color: #fff;
+    border-color: var(--ig-darkred);
+}
+
+/* ---- Baustein: Tiefrot-Familie ---- */
+.sq-baustein {
+    border: 1px solid #E4D3D5;
+    border-top: 3px solid var(--ig-darkred);
+    background: #FCFAFA;
+}
+
+.sq-baustein--empty {
+    border-style: dashed;
+    border-top: 3px solid var(--ig-darkred);
+    background: #fff;
+}
+
+.sq-baustein__head {
+    background: #F5EDEE;
+    border-bottom: 1px solid #E4D3D5;
+    padding: 9px 12px;
+}
+
+.sq-baustein--empty .sq-baustein__head {
+    color: var(--ig-darkred);
+}
+
+.sq-baustein__title {
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 13px;
+    color: var(--ig-darkred);
+}
+
+.sq-baustein__title .sq-badge {
+    background: #fff;
+    color: var(--ig-darkred);
+    border-color: #C9A9AD;
+}
+
+.sq-baustein__title .sq-badge--variant {
+    background: var(--ig-darkred);
+    color: #fff;
+    border-color: var(--ig-darkred);
+}
+
+.sq-baustein__units {
+    padding: 8px;
+    gap: 8px;
+}
+
+/* Varianten-Pillen: Tiefrot-Schema, versal. */
+.sq-pill {
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 11px;
+    padding: 4px 11px;
+    border: 1px solid #C9A9AD;
+    background: #fff;
+    color: var(--ig-darkred);
+}
+
+.sq-pill:hover {
+    border-color: var(--ig-darkred);
+    color: var(--ig-darkred);
+}
+
+.sq-pill.active {
+    background: var(--ig-darkred);
+    border-color: var(--ig-darkred);
+    color: #fff;
+}
+
+/* ---- Alternative-Chip + Popover ---- */
+.sq-swap__chip {
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 11px;
+    border: 1px solid var(--ig-midgray);
+    background: #fff;
+    color: var(--ig-red-hover);
+}
+
+.sq-swap__chip:hover {
+    border-color: var(--ig-midgray);
+    background: #fff;
+    color: var(--ig-red);
+}
+
+.sq-swap__panel {
+    border: 1px solid var(--ig-midgray);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+    min-width: 240px;
+}
+
+/* ---- Lücke mit Vorschlägen ---- */
+.sq-gap {
+    border-color: var(--ig-midgray);
+    padding: 12px;
+}
+
+.sq-gap__title {
+    font-size: 13px;
+    color: var(--ig-gray);
+}
+
+.sq-suggest {
+    gap: 10px;
+}
+
+.sq-suggest__card {
+    max-width: 240px;
+    background: #FBFBFB;
+    border: 1px solid var(--ig-lightgray);
+    border-top: 3px solid var(--ig-lightgray);
+    padding: 10px;
+}
+
+.sq-suggest__card--orientierung { border-top-color: var(--sq-phase-orientierung); }
+.sq-suggest__card--erfahrung { border-top-color: var(--sq-phase-erfahrung); }
+.sq-suggest__card--analyse { border-top-color: var(--sq-phase-analyse); }
+.sq-suggest__card--handlung { border-top-color: var(--sq-phase-handlung); }
+.sq-suggest__card--transfer { border-top-color: var(--sq-phase-transfer); }
+
+.sq-suggest__card .kg-btn {
+    width: 100%;
+    margin-bottom: 0;
+}
+
+/* ---- Überlauf-Banner ---- */
+.sq-overrun {
+    background: #FBF1D0;
+    border: 1px solid var(--ig-yellow);
+    color: #7a5e00;
+    padding: 10px 12px;
+    font-size: 13px;
+}
+
+/* ---- Mittagspausen-Trenner ---- */
+.sq-break-divider span {
+    border-color: var(--ig-midgray);
+    padding: 4px 14px;
+}
+
+/* ---- Dramaturgie-Blick-Panel ---- */
+.sq-drama--visible {
+    border: 1px solid var(--ig-lightgray);
+    border-top: 3px solid var(--ig-red);
+    padding: 14px 16px;
+    box-shadow: none;
+}
+
+.sq-drama h4 {
+    font-size: 15px;
+}
+
+.sq-drama__item {
+    padding: 8px 10px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    margin-bottom: 7px;
+}
+
+.sq-drama__item--ok {
+    background: #E7F1E3;
+    color: #3f6e2f;
+}
+
+.sq-drama__item--hint {
+    background: #FBF1D0;
+    color: #7a5e00;
+}
+
+/* ---- Toast: Anthrazit mit grünem Marker ---- */
+.sq-toast {
+    background: var(--ig-anthracite);
+    padding: 11px 20px;
+    font-size: 13px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .3);
+    z-index: 2100;
+}
+
+.sq-toast::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: var(--ig-green);
+    margin-right: 8px;
+}
+
+/* ---- Modal ---- */
+.sq-modal {
+    box-shadow: var(--shadow-lg);
+}
+
+.sq-modal__head {
+    padding: 15px 20px;
+    border-bottom-color: var(--ig-lightgray);
+}
+
+.sq-modal__head h3 {
+    font-size: 17px;
+}
+
+.sq-modal__body {
+    padding: 18px 20px;
+}
+
+.sq-modal__footer {
+    border-top-color: var(--ig-lightgray);
+}
+
+.sq-section {
+    border-color: var(--ig-lightgray);
+}
+
+.sq-section summary {
+    background: #FAFAFA;
+}
+
+.sq-picker__row {
+    border-color: var(--ig-lightgray);
+}

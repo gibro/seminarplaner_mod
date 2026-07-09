@@ -2095,13 +2095,16 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 ? `Hier ist noch Platz für ca. ${gapminutes} Min. – Vorschläge aus deiner Bibliothek:`
                 : `In diesem Abschnitt sind noch ca. ${gapminutes} Min. frei – Vorschläge aus deiner Bibliothek:`;
 
-            const cards = suggestions.map((entry) => `
-                <div class="sq-suggest__card">
+            const cards = suggestions.map((entry) => {
+                const pkey = phaseKey(entry.card.seminarphase);
+                return `
+                <div class="sq-suggest__card${pkey ? ' sq-suggest__card--' + pkey : ''}">
                   <div class="sq-unit__title">${escapeHtml(cardTitle(entry.card))}</div>
                   <div class="sq-suggest__why">${escapeHtml(entry.reason)}</div>
-                  <button type="button" class="kg-btn" data-sq-action="suggest-add"
+                  <button type="button" class="kg-btn kg-btn-primary" data-sq-action="suggest-add"
                     data-cardid="${escapeHtml(String(entry.card.id))}" ${targetattrs}>Übernehmen</button>
-                </div>`).join('');
+                </div>`;
+            }).join('');
 
             const empty = suggestions.length ? '' : `
                 <div class="sq-suggest__empty">In der Bibliothek passt gerade nichts in diese Lücke –
@@ -2318,8 +2321,11 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             const seenBausteine = this.bausteineSeenBeforeCurrentDay();
             const frame = this.dayFrame(this.dayIndex);
             const morning = this.renderAnchor(day, 'vormittag', frame, seenBausteine);
+            const middaytimes = frame.midday.end > frame.midday.start
+                ? ` · ${minutesToLabel(frame.midday.start)}–${minutesToLabel(frame.midday.end)}`
+                : '';
             const divider = `
-                <div class="sq-break-divider"><span>🕐 Mittagspause</span></div>`;
+                <div class="sq-break-divider"><span>🕐 Mittagspause${middaytimes}</span></div>`;
             const afternoon = this.renderAnchor(day, 'nachmittag', frame, seenBausteine);
             container.innerHTML = morning + divider + afternoon;
             this.renderDrama();
@@ -2404,7 +2410,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                     <div class="sq-anchor__title">${title} <span class="sq-anchor__time">${timespan}</span></div>
                     <div class="sq-budget">
                       <div class="sq-budget__bar"><div class="sq-budget__fill${over > 0 ? ' sq-budget__fill--over' : ''}" style="width:${fillpct}%"></div></div>
-                      <div class="sq-budget__label">${escapeHtml(budgetlabel)}</div>
+                      <div class="sq-budget__label${over > 0 ? ' sq-budget__label--over' : ''}">${escapeHtml(budgetlabel)}</div>
                     </div>
                   </div>
                   <div class="sq-anchor__body">${body}${overrun}${gapbox}${addbutton}</div>
@@ -2508,7 +2514,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                         <div class="sq-unit__title">${escapeHtml(cardTitle(card))}</div>
                         <div class="sq-unit__meta">
                           ${Number.isFinite(duration) && duration > 0 ? `<span class="sq-badge">${duration} Min.</span>` : ''}
-                          ${card.seminarphase ? `<span class="sq-badge">${escapeHtml(String(card.seminarphase))}</span>` : ''}
+                          ${card.seminarphase ? `<span class="sq-badge${pkey ? ' sq-badge--phase-' + pkey : ''}">${escapeHtml(String(card.seminarphase))}</span>` : ''}
                           <span class="sq-badge sq-badge--planned">geplant, noch nicht platziert</span>
                         </div>
                       </div>
@@ -2633,7 +2639,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                     <div class="sq-unit__title">${escapeHtml(data.titel || 'Seminareinheit')}</div>
                     <div class="sq-unit__meta">
                       <span class="sq-badge">${duration} Min.</span>
-                      ${phasetext ? `<span class="sq-badge">${escapeHtml(phasetext)}</span>` : ''}
+                      ${phasetext ? `<span class="sq-badge${phase ? ' sq-badge--phase-' + phase : ''}">${escapeHtml(phasetext)}</span>` : ''}
                       <span class="sq-unit__time">${timelabel}</span>
                     </div>
                   </div>

@@ -20,10 +20,13 @@ echo seminarplaner_render_tabs((int)$cm->id, 'sequenz');
 echo html_writer::start_div('kg-shell sq-shell');
 echo html_writer::tag('div', '', ['id' => 'sq-status', 'class' => 'kg-status', 'aria-live' => 'polite']);
 
-echo html_writer::div(
-    get_string('sequenz_previewnote', 'mod_seminarplaner'),
-    'sq-note', ['id' => 'sq-preview-note']
-);
+// CD-Handoff: Seitenkopf mit rotem Regel-Strich; der Erklärsatz ersetzt
+// die frühere gelbe Hinweisbox.
+echo html_writer::start_div('sq-pagehead');
+echo html_writer::tag('h3', 'Sequenzansicht');
+echo html_writer::div(get_string('sequenz_previewnote', 'mod_seminarplaner'),
+    'sq-pagehead__sub', ['id' => 'sq-preview-note']);
+echo html_writer::end_div();
 
 // Plan selection, creation and setup (D45: templates live here now).
 echo html_writer::start_div('sq-planbar');
