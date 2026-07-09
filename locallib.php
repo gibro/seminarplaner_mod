@@ -271,13 +271,12 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
     if ($canmanageseminarplaner) {
         // Tab order and naming per D16: Überblick · Sequenz · Seminareinheiten
         // (Anlegen/Bibliothek) · Roter Faden · Import/Export · Einreichen.
-        // "Bausteine" bleibt übergangsweise, bis die Sequenzansicht die
-        // Baustein-Stammdaten selbst abdeckt.
+        // Der frühere Bausteine-Tab ist entfallen; die Baustein-Stammdaten
+        // werden in der Sequenzansicht gepflegt.
         $tabs = [
             'grid' => ['label' => get_string('ueberblickmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/grid.php', 'icon' => 'calendar-range'],
             'sequenz' => ['label' => get_string('sequenzmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/sequenz.php', 'icon' => 'list-checks'],
             'methods' => ['label' => get_string('methodcards', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methods.php', 'icon' => 'layout-grid'],
-            'planningmode' => ['label' => 'Bausteine', 'path' => '/mod/seminarplaner/planningmode.php', 'icon' => 'blocks'],
             'importexport' => ['label' => get_string('importexport', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/importexport.php', 'icon' => 'arrow-left-right'],
             'review' => ['label' => get_string('einreichenmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/review.php', 'icon' => 'clipboard-check'],
         ];
@@ -286,13 +285,12 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
                 'grid' => $tabs['grid'],
                 'sequenz' => $tabs['sequenz'],
                 'methods' => $tabs['methods'],
-                'planningmode' => $tabs['planningmode'],
                 'roterfaden' => [
                     'label' => get_string('roterfadenmenu', 'mod_seminarplaner'),
                     'path' => '/mod/seminarplaner/roterfaden.php',
                     'icon' => 'route',
                 ],
-            ] + array_diff_key($tabs, ['grid' => true, 'sequenz' => true, 'methods' => true, 'planningmode' => true]);
+            ] + array_diff_key($tabs, ['grid' => true, 'sequenz' => true, 'methods' => true]);
         }
     } else if (has_capability('mod/seminarplaner:viewroterfaden', $context)) {
         $tabs = [

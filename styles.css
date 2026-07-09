@@ -5435,3 +5435,49 @@ body.sp-resizing * {
 .sq-modal__footer-gap { flex: 1; }
 .sq-danger { color: #a02f2f; border-color: #d9b3b3; }
 .sq-danger:hover { background: #fdf2f2; border-color: #a02f2f; }
+
+/* === D16-Abschluss: Ueberblick read-only (D34) === */
+.kg-grid-readonly .sp-sidebar { display: none; }
+.kg-grid-readonly #sp-filterbar { display: none; }
+.kg-grid-readonly #sp-addbreak,
+.kg-grid-readonly #sp-clear { display: none; }
+.kg-grid-readonly .sp-item,
+.kg-grid-readonly .sp-item * { pointer-events: none !important; }
+.kg-grid-readonly .sp-layout { grid-template-columns: 1fr; }
+
+/* === D37: Flussdiagramm Pruefprozess (Einreichen-Tab) === */
+.kg-flow {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 4px 0 18px;
+}
+.kg-flow__step {
+    flex: 1;
+    min-width: 170px;
+    background: #fff;
+    border: 1px solid #d7dce2;
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 12.5px;
+    box-shadow: 0 1px 2px rgba(20, 30, 40, .06);
+}
+.kg-flow__num {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #2c5f8a;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2px;
+}
+.kg-flow__text { color: #5b6b79; font-size: 12px; }
+.kg-flow__arrow { align-self: center; color: #8a97a3; font-size: 16px; }

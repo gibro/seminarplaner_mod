@@ -18,7 +18,28 @@ echo $OUTPUT->heading(format_string($seminarplaner->name));
 echo seminarplaner_render_tabs((int)$cm->id, 'review');
 
 echo html_writer::start_div('kg-shell');
-echo html_writer::tag('h3', 'Review');
+echo html_writer::tag('h3', get_string('einreichenmenu', 'mod_seminarplaner'));
+
+// D37: Flussdiagramm-Erklaerung des Pruefprozesses.
+$flowsteps = [
+    ['titel' => 'Einreichen', 'text' => 'Du gibst dein Konzept bei den Konzeptverantwortlichen ab.'],
+    ['titel' => 'Prüfung', 'text' => 'Sie schauen fachlich darüber – bei Fragen melden sie sich bei dir.'],
+    ['titel' => 'Freigabe', 'text' => 'Passt alles, geben sie dein Konzept frei.'],
+    ['titel' => 'Für alle da', 'text' => 'Dein Konzept erscheint in der globalen Bibliothek.'],
+];
+echo html_writer::start_div('kg-flow', ['aria-label' => 'So läuft der Prüfprozess']);
+foreach ($flowsteps as $index => $step) {
+    if ($index > 0) {
+        echo html_writer::tag('span', '→', ['class' => 'kg-flow__arrow', 'aria-hidden' => 'true']);
+    }
+    echo html_writer::div(
+        html_writer::tag('span', (string)($index + 1), ['class' => 'kg-flow__num'])
+        . html_writer::tag('strong', s($step['titel']))
+        . html_writer::tag('span', s($step['text']), ['class' => 'kg-flow__text']),
+        'kg-flow__step'
+    );
+}
+echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block');
 echo html_writer::tag('h4', '1. Geänderte oder neue Seminareinheit bereitstellen');
