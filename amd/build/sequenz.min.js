@@ -1841,7 +1841,14 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
 
         renderBausteinContent(group, units, unfilled, baustein) {
             if (!unfilled) {
-                return `<div class="sq-baustein__units">${units}</div>`;
+                // Partly filled module: suggestions continue for the residual
+                // reservation until it is used up.
+                const residual = group.items.filter((p) => this.isUnfilled(p.data));
+                const restminutes = residual.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
+                const restsuggestions = (residual.length && restminutes >= 10 && this.methodCardList.length)
+                    ? this.renderSuggestions(restminutes, baustein, `data-pid="${escapeHtml(residual[0].pid)}"`)
+                    : '';
+                return `<div class="sq-baustein__units">${units}${restsuggestions}</div>`;
             }
             // D14: the reserved duration is the classic suggestion gap - with
             // keywords and Bloom mapping from the module master data.
@@ -1970,8 +1977,22 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             }
 
             if (this.isUnfilled(data) && data.bausteinid) {
-                // Reserved module placeholder rows are rendered by the group card.
-                return '';
+                if (!inBaustein) {
+                    return '';
+                }
+                // Residual reservation inside a partly filled module.
+                return `
+                    <div class="sq-unit sq-unit--planned">
+                      <div class="sq-unit__phase"></div>
+                      <div class="sq-unit__main">
+                        <div class="sq-unit__title">Noch offen</div>
+                        <div class="sq-unit__meta">
+                          <span class="sq-badge">${duration} Min. reserviert</span>
+                          <span class="sq-unit__time">${timelabel}</span>
+                        </div>
+                      </div>
+                      <div class="sq-unit__actions">${this.renderMoveButtons(p.pid)}</div>
+                    </div>`;
             }
 
             const phase = this.placementPhase(data);
