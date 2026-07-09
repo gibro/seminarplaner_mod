@@ -1,17 +1,22 @@
 // This file is part of Moodle - http://moodle.org/
 
 /**
- * Sequence view (D3/D10/D11/D20) – read-only foundation.
+ * Sequence view (D3/D10/D11/D20) – ordered day view with editing.
  *
- * Renders the migrated sequence section of a plan: one day at a time,
- * morning/afternoon anchors with a time budget bar, the midday break as
- * a named divider, module (Baustein) groupings with automatic
- * continuation detection and phase colour coding.
+ * Renders the sequence section of a plan one day at a time: anchors
+ * with a time budget bar, the midday break as a named divider, module
+ * (Baustein) groupings with continuation detection and phase colours.
+ *
+ * Editing (workshop interactions, D42): reordering placements across
+ * anchor and day boundaries, the guided overflow action (C1), module
+ * variant pills (C2), unit alternative switching (C3), optional
+ * headings (C7) and saving with a visible confirmation (C5).
  *
  * @module mod_seminarplaner/sequenz
  */
 define(['core/ajax'], function(Ajax) {
     const DEFAULT_BOUNDARY_MIN = 750; // 12:30 fallback, same rule as the PHP converter.
+    const ANCHORS = ['vormittag', 'nachmittag'];
 
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
@@ -55,10 +60,17 @@ define(['core/ajax'], function(Ajax) {
     class SequenzView {
         constructor(cmid) {
             this.cmid = cmid;
+            this.gridid = 0;
             this.state = null;
             this.sequenz = null;
+            this.versionhash = '';
+            this.dirty = false;
             this.dayIndex = 0;
             this.legacyByUid = {};
+            this.planningUnits = {};
+            this.methodCards = {};
+            this.openSwapPid = '';
+            this.headingPid = '';
         }
 
         init() {
@@ -75,11 +87,36 @@ define(['core/ajax'], function(Ajax) {
                 select.addEventListener('change', () => {
                     const gridid = Number.parseInt(select.value, 10);
                     if (Number.isFinite(gridid) && gridid > 0) {
-                        this.loadState(gridid);
+                        this.confirmDiscard() && this.loadState(gridid);
                     }
                 });
             }
+            const save = bySel('#sq-save');
+            if (save) {
+                save.addEventListener('click', () => this.save());
+            }
+            const container = bySel('#sq-day');
+            if (container) {
+                container.addEventListener('click', (event) => this.handleDayClick(event));
+            }
+            document.addEventListener('click', (event) => {
+                if (!event.target.closest('.sq-swap') && this.openSwapPid) {
+                    this.openSwapPid = '';
+                    this.render();
+                }
+            });
+            window.addEventListener('beforeunload', (event) => {
+                if (this.dirty) {
+                    event.preventDefault();
+                    event.returnValue = '';
+                }
+            });
             this.loadGrids();
+            this.loadEnrichment();
+        }
+
+        confirmDiscard() {
+            return !this.dirty || window.confirm('Ungespeicherte Änderungen verwerfen?');
         }
 
         setStatus(text, isError = false) {
@@ -87,6 +124,25 @@ define(['core/ajax'], function(Ajax) {
             if (el) {
                 el.textContent = text;
                 el.style.color = isError ? '#b91c1c' : '#166534';
+            }
+        }
+
+        toast(text) {
+            const el = bySel('#sq-toast');
+            if (!el) {
+                return;
+            }
+            el.textContent = text;
+            el.classList.add('show');
+            window.clearTimeout(this.toastTimer);
+            this.toastTimer = window.setTimeout(() => el.classList.remove('show'), 2600);
+        }
+
+        setDirty(dirty) {
+            this.dirty = dirty;
+            const save = bySel('#sq-save');
+            if (save) {
+                save.disabled = !dirty;
             }
         }
 
@@ -109,6 +165,40 @@ define(['core/ajax'], function(Ajax) {
             });
         }
 
+        // Module master data (Unterthemen, contained units) still lives in the
+        // planning state; unit details live in the method cards. Both are
+        // resolved read-only for display until the sequence model carries them.
+        loadEnrichment() {
+            asCall('mod_seminarplaner_get_planning_state', {cmid: this.cmid}).then((res) => {
+                let decoded = {};
+                try {
+                    decoded = JSON.parse(String(res.statejson || '{}')) || {};
+                } catch (e) {
+                    decoded = {};
+                }
+                (Array.isArray(decoded.units) ? decoded.units : []).forEach((unit) => {
+                    if (unit && unit.id) {
+                        this.planningUnits[String(unit.id)] = unit;
+                    }
+                });
+                this.render();
+            }).catch(() => null);
+            asCall('mod_seminarplaner_get_method_cards', {cmid: this.cmid}).then((res) => {
+                let decoded = [];
+                try {
+                    decoded = res.methodsjson ? JSON.parse(res.methodsjson) : [];
+                } catch (e) {
+                    decoded = [];
+                }
+                (Array.isArray(decoded) ? decoded : []).forEach((card) => {
+                    if (card && card.id !== undefined) {
+                        this.methodCards[String(card.id)] = card;
+                    }
+                });
+                this.render();
+            }).catch(() => null);
+        }
+
         loadState(gridid) {
             asCall('mod_seminarplaner_get_user_state', {cmid: this.cmid, gridid}).then((res) => {
                 let state = {};
@@ -117,9 +207,14 @@ define(['core/ajax'], function(Ajax) {
                 } catch (e) {
                     state = {};
                 }
+                this.gridid = gridid;
                 this.state = state;
-                this.sequenz = (state && typeof state.sequenz === 'object') ? state.sequenz : null;
+                this.sequenz = (state && typeof state.sequenz === 'object' && state.sequenz) ? state.sequenz : null;
+                this.versionhash = String(res.versionhash || '');
                 this.dayIndex = 0;
+                this.openSwapPid = '';
+                this.headingPid = '';
+                this.setDirty(false);
                 this.indexLegacyEntries();
                 this.render();
             }).catch(() => {
@@ -127,8 +222,25 @@ define(['core/ajax'], function(Ajax) {
             });
         }
 
-        // Phase and details still live on the legacy grid entries; the
-        // placements reference them via quelle.uids (see datenmodell-sequenz.md).
+        save() {
+            if (!this.state || !this.gridid) {
+                return;
+            }
+            const payload = JSON.stringify(this.state);
+            asCall('mod_seminarplaner_save_user_state', {
+                cmid: this.cmid,
+                gridid: this.gridid,
+                statejson: payload,
+                expectedhash: this.versionhash,
+            }).then((res) => {
+                this.versionhash = String(res.versionhash || res.newhash || this.versionhash);
+                this.setDirty(false);
+                this.toast('Gespeichert – Reihenfolge und Zeiten sind aktualisiert.');
+            }).catch(() => {
+                this.setStatus('Speichern hat nicht geklappt – bitte noch einmal versuchen.', true);
+            });
+        }
+
         indexLegacyEntries() {
             this.legacyByUid = {};
             const days = (this.state && this.state.plan && this.state.plan.days) || {};
@@ -147,6 +259,8 @@ define(['core/ajax'], function(Ajax) {
                 return;
             }
             this.dayIndex = (this.dayIndex + delta + total) % total;
+            this.openSwapPid = '';
+            this.headingPid = '';
             this.render();
         }
 
@@ -200,17 +314,282 @@ define(['core/ajax'], function(Ajax) {
             return bid ? (all[bid] || null) : null;
         }
 
+        auswahl(placement) {
+            if (!placement || placement.typ !== 'einheit') {
+                return null;
+            }
+            return ((this.sequenz && this.sequenz.einheitenauswahlen) || {})[placement.einheitenauswahl] || null;
+        }
+
+        isUnfilled(placement) {
+            const auswahl = this.auswahl(placement);
+            return placement.typ === 'einheit'
+                && (!auswahl || !Array.isArray(auswahl.kandidaten) || !auswahl.kandidaten.length);
+        }
+
+        methodCardForRef(ref) {
+            return this.methodCards[String(ref || '')] || null;
+        }
+
+        candidateLabel(ref) {
+            const card = this.methodCardForRef(ref);
+            if (card && card.title) {
+                return String(card.title);
+            }
+            return String(ref || '').replace(/^legacy:/, 'Eintrag ');
+        }
+
+        planningUnitForBaustein(baustein) {
+            const unitid = baustein && baustein.quelle ? String(baustein.quelle.unitid || '') : '';
+            return unitid ? (this.planningUnits[unitid] || null) : null;
+        }
+
         placementPhase(placement) {
+            const auswahl = this.auswahl(placement);
+            if (auswahl && auswahl.aktiv !== null && auswahl.aktiv !== undefined) {
+                const card = this.methodCardForRef(auswahl.aktiv);
+                if (card && card.seminarphase) {
+                    return phaseKey(card.seminarphase);
+                }
+            }
+            const legacy = this.legacyEntryFor(placement);
+            return legacy && legacy.phase ? phaseKey(legacy.phase) : '';
+        }
+
+        legacyEntryFor(placement) {
             const uids = (placement && placement.quelle && Array.isArray(placement.quelle.uids))
                 ? placement.quelle.uids : [];
             for (const uid of uids) {
                 const entry = this.legacyByUid[String(uid)];
-                if (entry && entry.phase) {
-                    return phaseKey(entry.phase);
+                if (entry) {
+                    return entry;
                 }
             }
-            return '';
+            return null;
         }
+
+        // ---- Editing operations -------------------------------------------
+
+        anchorList() {
+            const list = [];
+            (this.sequenz.tage || []).forEach((day, dayIdx) => {
+                ANCHORS.forEach((ankername) => {
+                    list.push({dayIdx, ankername, seq: day.anker[ankername].sequenz});
+                });
+            });
+            return list;
+        }
+
+        locate(pid) {
+            const anchors = this.anchorList();
+            for (let i = 0; i < anchors.length; i++) {
+                const pos = anchors[i].seq.indexOf(pid);
+                if (pos >= 0) {
+                    return {anchorIdx: i, pos, anchors};
+                }
+            }
+            return null;
+        }
+
+        movePlacement(pid, delta) {
+            const found = this.locate(pid);
+            if (!found) {
+                return;
+            }
+            const {anchorIdx, pos, anchors} = found;
+            const seq = anchors[anchorIdx].seq;
+            const target = pos + delta;
+            if (target >= 0 && target < seq.length) {
+                seq.splice(pos, 1);
+                seq.splice(target, 0, pid);
+            } else {
+                const nextAnchorIdx = anchorIdx + delta;
+                if (nextAnchorIdx < 0 || nextAnchorIdx >= anchors.length) {
+                    return;
+                }
+                seq.splice(pos, 1);
+                const nextSeq = anchors[nextAnchorIdx].seq;
+                if (delta > 0) {
+                    nextSeq.unshift(pid);
+                } else {
+                    nextSeq.push(pid);
+                }
+                const targetDay = this.sequenz.tage[anchors[nextAnchorIdx].dayIdx];
+                this.setStatus(`Verschoben: jetzt am ${anchors[nextAnchorIdx].ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag'} von Tag ${targetDay.tag}.`);
+            }
+            this.setDirty(true);
+            this.render();
+        }
+
+        // C1: move trailing placements into the next anchor until the budget fits.
+        resolveOverflow(ankername) {
+            const day = this.sequenz.tage[this.dayIndex];
+            const frame = this.dayFrame(day.bezeichnung);
+            const anchors = this.anchorList();
+            const anchorIdx = this.dayIndex * 2 + (ankername === 'vormittag' ? 0 : 1);
+            const seq = anchors[anchorIdx].seq;
+            if (anchorIdx + 1 >= anchors.length) {
+                return;
+            }
+            const budget = this.anchorBudget(frame, ankername);
+            const moved = [];
+            while (seq.length && this.usedMinutes(seq) > budget) {
+                moved.unshift(seq.pop());
+            }
+            if (!moved.length) {
+                return;
+            }
+            const nextSeq = anchors[anchorIdx + 1].seq;
+            nextSeq.unshift(...moved);
+            const targetname = anchors[anchorIdx + 1].ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag';
+            const targetday = this.sequenz.tage[anchors[anchorIdx + 1].dayIdx];
+            this.setStatus(`${moved.length === 1 ? 'Eine Einheit' : moved.length + ' Einheiten'} verschoben – läuft jetzt am ${targetname} von Tag ${targetday.tag} weiter.`);
+            this.setDirty(true);
+            this.render();
+        }
+
+        anchorBudget(frame, ankername) {
+            const isMorning = ankername === 'vormittag';
+            const start = isMorning ? frame.start : Math.max(frame.midday.end, frame.start);
+            const end = isMorning ? Math.min(frame.midday.start, frame.end) : frame.end;
+            return Math.max(0, end - start);
+        }
+
+        usedMinutes(seq) {
+            return seq.reduce((sum, pid) => {
+                const placement = this.placement(pid);
+                return sum + (placement ? Math.max(0, Number(placement.dauer) || 0) : 0);
+            }, 0);
+        }
+
+        // C3: switch the active candidate of a unit selection.
+        chooseCandidate(pid, ref) {
+            const placement = this.placement(pid);
+            const auswahl = this.auswahl(placement);
+            if (!auswahl || !auswahl.kandidaten.map(String).includes(String(ref))) {
+                return;
+            }
+            auswahl.aktiv = ref;
+            const card = this.methodCardForRef(ref);
+            if (card) {
+                if (card.title) {
+                    placement.titel = String(card.title);
+                }
+                const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
+                if (Number.isFinite(duration) && duration > 0) {
+                    placement.dauer = duration;
+                }
+            }
+            this.openSwapPid = '';
+            this.setDirty(true);
+            this.render();
+            this.toast('Alternative übernommen – Zeiten sind angepasst.');
+        }
+
+        // C2: activate a module variant and swap the contiguous run.
+        chooseVariant(bid, vid) {
+            const baustein = this.baustein(bid);
+            const variante = baustein && baustein.varianten ? baustein.varianten[vid] : null;
+            if (!baustein || !variante || baustein.aktivevariante === vid) {
+                return;
+            }
+            const replacement = Array.isArray(variante.platzierungen) ? variante.platzierungen.slice() : [];
+            const anchors = this.anchorList();
+            for (const anchor of anchors) {
+                const run = this.findRun(anchor.seq, bid);
+                if (run) {
+                    anchor.seq.splice(run.start, run.length, ...replacement);
+                    baustein.aktivevariante = vid;
+                    this.setDirty(true);
+                    this.render();
+                    this.toast(`Variante „${variante.titel || vid}" ist jetzt aktiv.`);
+                    return;
+                }
+            }
+        }
+
+        findRun(seq, bid) {
+            let start = -1;
+            for (let i = 0; i < seq.length; i++) {
+                const placement = this.placement(seq[i]);
+                const matches = placement && placement.bausteinid === bid;
+                if (matches && start < 0) {
+                    start = i;
+                }
+                if (!matches && start >= 0) {
+                    return {start, length: i - start};
+                }
+            }
+            return start >= 0 ? {start, length: seq.length - start} : null;
+        }
+
+        // C7: give an unnamed placement a heading (creates a module, D10).
+        createHeading(pid, titel) {
+            const clean = String(titel || '').trim();
+            const placement = this.placement(pid);
+            if (!clean || !placement || placement.typ !== 'einheit') {
+                return;
+            }
+            let counter = 1;
+            while (this.sequenz.bausteine['bn' + counter]) {
+                counter++;
+            }
+            const bid = 'bn' + counter;
+            this.sequenz.bausteine[bid] = {
+                titel: clean,
+                unterthemen: '',
+                themenplanreferenz: '',
+                archiv: null,
+                varianten: {},
+                aktivevariante: null,
+                quelle: {unitid: '', slotkey: ''},
+            };
+            placement.bausteinid = bid;
+            this.headingPid = '';
+            this.setDirty(true);
+            this.render();
+            this.toast(`Überschrift „${clean}" angelegt.`);
+        }
+
+        // ---- Event delegation ---------------------------------------------
+
+        handleDayClick(event) {
+            const action = event.target.closest('[data-sq-action]');
+            if (!action) {
+                return;
+            }
+            const type = action.getAttribute('data-sq-action');
+            const pid = action.getAttribute('data-pid') || '';
+            if (type === 'move-up') {
+                this.movePlacement(pid, -1);
+            } else if (type === 'move-down') {
+                this.movePlacement(pid, 1);
+            } else if (type === 'overflow') {
+                this.resolveOverflow(action.getAttribute('data-anker') || 'vormittag');
+            } else if (type === 'swap-toggle') {
+                this.openSwapPid = this.openSwapPid === pid ? '' : pid;
+                this.render();
+            } else if (type === 'swap-choose') {
+                this.chooseCandidate(pid, action.getAttribute('data-ref') || '');
+            } else if (type === 'variant') {
+                this.chooseVariant(action.getAttribute('data-bid') || '', action.getAttribute('data-vid') || '');
+            } else if (type === 'heading-open') {
+                this.headingPid = pid;
+                this.render();
+                const input = bySel('#sq-heading-input');
+                if (input) {
+                    input.focus();
+                }
+            } else if (type === 'heading-cancel') {
+                this.headingPid = '';
+                this.render();
+            } else if (type === 'heading-save') {
+                const input = bySel('#sq-heading-input');
+                this.createHeading(pid, input ? input.value : '');
+            }
+        }
+
+        // ---- Rendering ----------------------------------------------------
 
         render() {
             const container = bySel('#sq-day');
@@ -223,7 +602,9 @@ define(['core/ajax'], function(Ajax) {
                 if (label) {
                     label.textContent = '—';
                 }
-                this.setStatus('Für diesen Seminarplan gibt es noch keine Sequenzdaten.');
+                if (this.state) {
+                    this.setStatus('Für diesen Seminarplan gibt es noch keine Sequenzdaten.');
+                }
                 return;
             }
 
@@ -231,7 +612,6 @@ define(['core/ajax'], function(Ajax) {
             if (label) {
                 label.textContent = `Tag ${Number(day.tag) || this.dayIndex + 1} · ${day.bezeichnung || ''}`;
             }
-            this.setStatus('');
 
             const seenBausteine = this.bausteineSeenBeforeCurrentDay();
             const frame = this.dayFrame(day.bezeichnung);
@@ -242,12 +622,11 @@ define(['core/ajax'], function(Ajax) {
             container.innerHTML = morning + divider + afternoon;
         }
 
-        // Module ids already shown on earlier days (continuation across days, D20).
         bausteineSeenBeforeCurrentDay() {
             const seen = {};
             for (let i = 0; i < this.dayIndex; i++) {
                 const day = this.sequenz.tage[i];
-                ['vormittag', 'nachmittag'].forEach((ankername) => {
+                ANCHORS.forEach((ankername) => {
                     const seq = (((day.anker || {})[ankername] || {}).sequenz) || [];
                     seq.forEach((pid) => {
                         const placement = this.placement(pid);
@@ -274,8 +653,9 @@ define(['core/ajax'], function(Ajax) {
 
             const title = isMorning ? 'Vormittag' : 'Nachmittag';
             const timespan = `${minutesToLabel(anchorStart)}–${minutesToLabel(anchorEnd)}`;
+            const overtarget = isMorning ? 'der Mittagspause' : 'dem Tagesende';
             const budgetlabel = over > 0
-                ? `+${over} Min. über ${isMorning ? 'der Mittagspause' : 'dem Tagesende'}`
+                ? `+${over} Min. über ${overtarget}`
                 : `${used} von ${budget} Min. belegt`;
 
             let body = this.renderSequence(placements, anchorStart, seenBausteine);
@@ -283,9 +663,15 @@ define(['core/ajax'], function(Ajax) {
                 body = '<div class="sq-empty">Noch keine Einheiten in diesem Abschnitt.</div>';
             }
 
+            const hasNext = this.dayIndex * 2 + (isMorning ? 0 : 1) + 1 < this.dayCount() * 2;
+            const movetarget = isMorning ? 'auf den Nachmittag' : 'auf den nächsten Vormittag';
             const overrun = over > 0
-                ? `<div class="sq-overrun"><strong>+${over} Min. über ${isMorning ? 'der Mittagspause' : 'dem Tagesende'}.</strong>
-                     Kürzen oder in den nächsten Abschnitt verschieben.</div>`
+                ? `<div class="sq-overrun">
+                     <span><strong>+${over} Min. über ${overtarget}.</strong>
+                       Die letzte Einheit könnte ${movetarget} verschoben werden.</span>
+                     ${hasNext ? `<button type="button" class="kg-btn kg-btn-primary" data-sq-action="overflow" data-anker="${ankername}">
+                       ${isMorning ? 'Auf den Nachmittag verschieben' : 'Auf den nächsten Tag verschieben'}</button>` : ''}
+                   </div>`
                 : '';
 
             return `
@@ -302,7 +688,6 @@ define(['core/ajax'], function(Ajax) {
         }
 
         renderSequence(placements, anchorStart, seenBausteine) {
-            // Group directly consecutive placements of the same module.
             const groups = [];
             placements.forEach((p) => {
                 const bid = p.data.typ === 'einheit' ? (p.data.bausteinid || null) : null;
@@ -315,7 +700,7 @@ define(['core/ajax'], function(Ajax) {
             });
 
             let clock = anchorStart;
-            const html = groups.map((group) => {
+            return groups.map((group) => {
                 const start = clock;
                 const duration = group.items.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
                 clock += duration;
@@ -324,7 +709,7 @@ define(['core/ajax'], function(Ajax) {
                     return group.items.map((p, index) => {
                         const itemstart = start + group.items.slice(0, index)
                             .reduce((sum, prev) => sum + Math.max(0, Number(prev.data.dauer) || 0), 0);
-                        return this.renderPlacement(p, itemstart);
+                        return this.renderPlacement(p, itemstart, false) + this.renderHeadingAffordance(p);
                     }).join('');
                 }
 
@@ -345,23 +730,119 @@ define(['core/ajax'], function(Ajax) {
                           ${continuation ? '<span class="sq-badge sq-badge--variant">Fortsetzung</span>' : ''}
                           <span class="sq-badge">${unfilled ? `${duration} Min. reserviert` : `${duration} Min.`}</span>
                         </div>
+                        <div class="sq-baustein__tools">
+                          ${this.renderVariantPills(group.bausteinid, baustein)}
+                          ${unfilled ? this.renderMoveButtons(group.items[0].pid) : ''}
+                        </div>
                       </div>
-                      ${unfilled ? '' : `<div class="sq-baustein__units">${units}</div>`}
+                      ${this.renderBausteinContent(group, units, unfilled, baustein)}
                     </div>`;
             }).join('');
-
-            return html;
         }
 
-        isUnfilled(placement) {
-            if (placement.typ !== 'einheit') {
-                return false;
+        renderBausteinContent(group, units, unfilled, baustein) {
+            if (!unfilled) {
+                return `<div class="sq-baustein__units">${units}</div>`;
             }
-            const auswahl = ((this.sequenz && this.sequenz.einheitenauswahlen) || {})[placement.einheitenauswahl];
-            return !auswahl || !Array.isArray(auswahl.kandidaten) || !auswahl.kandidaten.length;
+            // Reserved module: show master data from the planning state so the
+            // planned content is visible even before individual placement.
+            const planningunit = this.planningUnitForBaustein(baustein);
+            if (!planningunit) {
+                return '';
+            }
+            const topics = String(planningunit.topics || '').trim();
+            const methods = (Array.isArray(planningunit.methods) ? planningunit.methods : [])
+                .map((m) => this.methodCardForRef(m && m.methodid))
+                .filter((card) => card);
+            if (!topics && !methods.length) {
+                return '';
+            }
+            const methodrows = methods.map((card) => {
+                const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
+                const pkey = phaseKey(card.seminarphase);
+                return `
+                    <div class="sq-unit sq-unit--planned">
+                      <div class="sq-unit__phase${pkey ? ' sq-phase-bg--' + pkey : ''}"></div>
+                      <div class="sq-unit__main">
+                        <div class="sq-unit__title">${escapeHtml(card.title || '')}</div>
+                        <div class="sq-unit__meta">
+                          ${Number.isFinite(duration) && duration > 0 ? `<span class="sq-badge">${duration} Min.</span>` : ''}
+                          ${card.seminarphase ? `<span class="sq-badge">${escapeHtml(String(card.seminarphase))}</span>` : ''}
+                          <span class="sq-badge sq-badge--planned">geplant, noch nicht platziert</span>
+                        </div>
+                      </div>
+                    </div>`;
+            }).join('');
+            return `
+                <div class="sq-baustein__units">
+                  ${topics ? `<div class="sq-baustein__topics">${escapeHtml(topics)}</div>` : ''}
+                  ${methodrows}
+                </div>`;
         }
 
-        renderPlacement(p, startMin, inBaustein = false) {
+        renderVariantPills(bid, baustein) {
+            const varianten = baustein && baustein.varianten ? baustein.varianten : {};
+            const keys = Object.keys(varianten);
+            if (!keys.length) {
+                return '';
+            }
+            const pills = keys.map((vid) => {
+                const active = baustein.aktivevariante === vid;
+                return `<button type="button" class="sq-pill${active ? ' active' : ''}"
+                    data-sq-action="variant" data-bid="${escapeHtml(bid)}" data-vid="${escapeHtml(vid)}">
+                    ${escapeHtml(varianten[vid].titel || vid)}</button>`;
+            }).join('');
+            return `<div class="sq-pills" role="group" aria-label="Baustein-Variante wählen">${pills}</div>`;
+        }
+
+        renderMoveButtons(pid) {
+            return `
+                <span class="sq-move">
+                  <button type="button" class="kg-btn sq-move__btn" data-sq-action="move-up" data-pid="${escapeHtml(pid)}"
+                    title="Nach vorne schieben" aria-label="Nach vorne schieben">↑</button>
+                  <button type="button" class="kg-btn sq-move__btn" data-sq-action="move-down" data-pid="${escapeHtml(pid)}"
+                    title="Nach hinten schieben" aria-label="Nach hinten schieben">↓</button>
+                </span>`;
+        }
+
+        renderSwap(p) {
+            const auswahl = this.auswahl(p.data);
+            if (!auswahl || !Array.isArray(auswahl.kandidaten) || auswahl.kandidaten.length < 2) {
+                return '';
+            }
+            const open = this.openSwapPid === p.pid;
+            const options = auswahl.kandidaten.map((ref) => {
+                const active = String(auswahl.aktiv) === String(ref);
+                return `<div class="sq-swap__option${active ? ' active' : ''}"
+                    data-sq-action="swap-choose" data-pid="${escapeHtml(p.pid)}" data-ref="${escapeHtml(String(ref))}">
+                    <span class="sq-swap__dot"></span>${escapeHtml(this.candidateLabel(ref))}</div>`;
+            }).join('');
+            return `
+                <span class="sq-swap">
+                  <button type="button" class="sq-swap__chip" data-sq-action="swap-toggle" data-pid="${escapeHtml(p.pid)}">⇄ Alternative</button>
+                  <div class="sq-swap__panel${open ? ' open' : ''}">${options}</div>
+                </span>`;
+        }
+
+        renderHeadingAffordance(p) {
+            if (p.data.typ !== 'einheit' || p.data.bausteinid) {
+                return '';
+            }
+            if (this.headingPid === p.pid) {
+                return `
+                    <div class="sq-heading-inline">
+                      <input type="text" id="sq-heading-input" class="kg-input" placeholder="z. B. Ankommen und Einstieg">
+                      <button type="button" class="kg-btn kg-btn-primary" data-sq-action="heading-save" data-pid="${escapeHtml(p.pid)}">Baustein anlegen</button>
+                      <button type="button" class="kg-btn" data-sq-action="heading-cancel">Abbrechen</button>
+                    </div>`;
+            }
+            return `
+                <div class="sq-heading-affordance">
+                  <button type="button" class="sq-heading-link" data-sq-action="heading-open" data-pid="${escapeHtml(p.pid)}">＋ Überschrift geben</button>
+                </div>`;
+        }
+
+        renderPlacement(p, startMin, inBaustein) {
             const data = p.data;
             const duration = Math.max(0, Number(data.dauer) || 0);
             const timelabel = `${minutesToLabel(startMin)}–${minutesToLabel(startMin + duration)}`;
@@ -372,7 +853,14 @@ define(['core/ajax'], function(Ajax) {
                       <span class="sq-pause__label">${escapeHtml(data.titel || 'Pause')}</span>
                       <span class="sq-badge">${duration} Min.</span>
                       <span class="sq-unit__time">${timelabel}</span>
+                      <span class="sq-pause__spacer"></span>
+                      ${this.renderMoveButtons(p.pid)}
                     </div>`;
+            }
+
+            if (this.isUnfilled(data) && data.bausteinid) {
+                // Reserved module placeholder rows are rendered by the group card.
+                return '';
             }
 
             const phase = this.placementPhase(data);
@@ -390,19 +878,11 @@ define(['core/ajax'], function(Ajax) {
                       <span class="sq-unit__time">${timelabel}</span>
                     </div>
                   </div>
+                  <div class="sq-unit__actions">
+                    ${this.renderSwap(p)}
+                    ${this.renderMoveButtons(p.pid)}
+                  </div>
                 </div>`;
-        }
-
-        legacyEntryFor(placement) {
-            const uids = (placement && placement.quelle && Array.isArray(placement.quelle.uids))
-                ? placement.quelle.uids : [];
-            for (const uid of uids) {
-                const entry = this.legacyByUid[String(uid)];
-                if (entry) {
-                    return entry;
-                }
-            }
-            return null;
         }
     }
 

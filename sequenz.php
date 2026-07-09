@@ -47,6 +47,11 @@ echo html_writer::tag('button', '›', [
     'aria-label' => get_string('sequenz_nextday', 'mod_seminarplaner'),
 ]);
 echo html_writer::end_div();
+echo html_writer::start_div('sq-toolbar__actions');
+echo html_writer::tag('button', get_string('savestate', 'mod_seminarplaner'), [
+    'type' => 'button', 'id' => 'sq-save', 'class' => 'kg-btn kg-btn-primary', 'disabled' => 'disabled',
+]);
+echo html_writer::end_div();
 echo html_writer::end_div();
 
 // Anchors are rendered by the AMD module.
@@ -68,5 +73,7 @@ foreach ($phases as $key => $label) {
 echo html_writer::end_div();
 
 echo html_writer::end_div();
+
+echo html_writer::tag('div', '', ['id' => 'sq-toast', 'class' => 'sq-toast', 'role' => 'status', 'aria-live' => 'polite']);
 
 echo $OUTPUT->footer();

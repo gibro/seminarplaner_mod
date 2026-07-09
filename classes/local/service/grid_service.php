@@ -170,6 +170,12 @@ class grid_service {
             }
         }
 
+        // The sequence editor is the only writer of its section (D34);
+        // an incoming sequence section therefore wins over the stored one.
+        if (array_key_exists(sequence_state::STATE_KEY, $incoming)) {
+            $merged[sequence_state::STATE_KEY] = $incoming[sequence_state::STATE_KEY];
+        }
+
         $currentdays = [];
         if (isset($current['plan']) && is_array($current['plan']) && isset($current['plan']['days']) && is_array($current['plan']['days'])) {
             $currentdays = $current['plan']['days'];
