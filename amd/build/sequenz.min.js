@@ -17,6 +17,99 @@
 define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
     const DEFAULT_BOUNDARY_MIN = 750; // 12:30 fallback, same rule as the PHP converter.
     const ANCHORS = ['vormittag', 'nachmittag'];
+    const DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+
+    // D45: plan creation and setup live in the sequence view; the six
+    // templates carry fixed morning/afternoon spans as editable pre-fill.
+    const DEFAULT_ANKERZEITEN = {
+        vormittag: {start: '08:30', end: '12:30'},
+        nachmittag: {start: '13:15', end: '17:30'},
+        ersterTagNurNachmittag: false,
+        letzterTagNurVormittag: false
+    };
+    const GRID_PRESETS = {
+        'standard-week': {days: ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
+        'sunday-to-friday': {days: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
+        'weekend-seminar': {days: ['Freitag', 'Samstag', 'Sonntag'], granularity: 15, ankerzeiten: Object.assign({}, DEFAULT_ANKERZEITEN, {ersterTagNurNachmittag: true, letzterTagNurVormittag: true})},
+        'half-week-mo-mi': {days: ['Montag', 'Dienstag', 'Mittwoch'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
+        'half-week-mi-fr': {days: ['Mittwoch', 'Donnerstag', 'Freitag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
+        'compact-day': {days: ['Montag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN}
+    };
+    const DEFAULT_COLUMNS = {
+        uhrzeit: true,
+        title: true,
+        description: false,
+        flow: true,
+        objectives: true,
+        risks: false,
+        materials: true,
+        sonstiges: false
+    };
+    const cloneAnkerzeiten = (az) => ({
+        vormittag: Object.assign({}, az.vormittag),
+        nachmittag: Object.assign({}, az.nachmittag),
+        ersterTagNurNachmittag: !!az.ersterTagNurNachmittag,
+        letzterTagNurVormittag: !!az.letzterTagNurVormittag
+    });
+    const validAnkerzeiten = (az) => !!(az && az.vormittag && az.nachmittag
+        && parseTimeToMinutes(az.vormittag.start) !== null && parseTimeToMinutes(az.vormittag.end) !== null
+        && parseTimeToMinutes(az.nachmittag.start) !== null && parseTimeToMinutes(az.nachmittag.end) !== null);
+
+    // Same D45 migration rule as in grid.js: legacy configs derive their
+    // anchor times from timeRange + longest break, fallback cut 12:30.
+    const deriveAnkerzeiten = (config) => {
+        const cfg = config || {};
+        if (validAnkerzeiten(cfg.ankerzeiten)) {
+            return cloneAnkerzeiten(cfg.ankerzeiten);
+        }
+        const range = cfg.timeRange || {};
+        const start = parseTimeToMinutes(range.start) === null ? '08:30' : range.start;
+        const end = parseTimeToMinutes(range.end) === null ? '17:30' : range.end;
+        let best = null;
+        (Array.isArray(cfg.breaks) ? cfg.breaks : []).forEach((brk) => {
+            if (!brk || parseTimeToMinutes(brk.start) === null) {
+                return;
+            }
+            const duration = Math.max(0, Number(brk.duration) || 0);
+            if (!duration) {
+                return;
+            }
+            if (!best || duration > best.duration
+                || (duration === best.duration
+                    && Math.abs(parseTimeToMinutes(brk.start) - DEFAULT_BOUNDARY_MIN) < Math.abs(parseTimeToMinutes(best.start) - DEFAULT_BOUNDARY_MIN))) {
+                best = {start: brk.start, duration};
+            }
+        });
+        const vmEnd = best ? best.start : '12:30';
+        const nmStart = best ? minutesToLabel(parseTimeToMinutes(best.start) + best.duration) : '12:30';
+        return {
+            vormittag: {start, end: vmEnd},
+            nachmittag: {start: nmStart, end},
+            ersterTagNurNachmittag: false,
+            letzterTagNurVormittag: false
+        };
+    };
+
+    // Legacy fields stay as derived values so the read-only overview and
+    // old clients keep rendering (D34).
+    const legacyFieldsFromAnkerzeiten = (az) => {
+        const vmEnd = parseTimeToMinutes(az.vormittag.end);
+        const nmStart = parseTimeToMinutes(az.nachmittag.start);
+        const gap = (vmEnd !== null && nmStart !== null) ? nmStart - vmEnd : 0;
+        return {
+            timeRange: {start: az.vormittag.start, end: az.nachmittag.end},
+            breaks: gap > 0 ? [{days: ['all'], start: az.vormittag.end, duration: gap}] : []
+        };
+    };
+
+    const orderDaysFromStart = (days, firstday) => {
+        const selected = new Set((Array.isArray(days) ? days : []).filter((day) => DAYS_ALL.includes(day)));
+        const startindex = DAYS_ALL.indexOf(firstday);
+        const orderedweek = startindex >= 0 ? DAYS_ALL.slice(startindex).concat(DAYS_ALL.slice(0, startindex)) : DAYS_ALL;
+        return orderedweek.filter((day) => selected.has(day));
+    };
+
+    const legacyUid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
@@ -114,6 +207,10 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             this.openSwapPid = '';
             this.headingPid = '';
             this.idCounter = 0;
+            this.planningStateRaw = {};
+            this.setupMode = 'create';
+            this.roterFadenState = {ispublished: false, gridid: 0};
+            this.isUpdatingPublishControl = false;
         }
 
         init() {
@@ -155,8 +252,462 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 }
             });
             this.initDramaToggle();
+            this.initSetupPanel();
+            this.initPublishControl();
             this.loadGrids();
             this.loadEnrichment();
+        }
+
+        // ---- Plan creation and setup (D45, moved here from the overview) ----
+
+        initSetupPanel() {
+            this.setupMode = 'create';
+            const newbtn = bySel('#sq-new-plan');
+            const editbtn = bySel('#sq-edit-setup');
+            const cancel = bySel('#sq-setup-cancel');
+            const form = bySel('#sq-setup-form');
+            const preset = bySel('#sp-config-preset');
+            if (newbtn) {
+                newbtn.addEventListener('click', () => this.openSetup('create'));
+            }
+            if (editbtn) {
+                editbtn.addEventListener('click', () => this.openSetup('edit'));
+            }
+            if (cancel) {
+                cancel.addEventListener('click', () => this.closeSetup());
+            }
+            if (preset) {
+                preset.addEventListener('change', () => this.applyPresetToForm(preset.value));
+            }
+            if (form) {
+                form.querySelectorAll('input[name="days"]').forEach((cb) => {
+                    cb.addEventListener('change', () => this.syncFirstDayOptions());
+                });
+                form.addEventListener('submit', (event) => {
+                    event.preventDefault();
+                    this.submitSetup();
+                });
+            }
+        }
+
+        openSetup(mode) {
+            const panel = bySel('#sq-setup-panel');
+            if (!panel) {
+                return;
+            }
+            if (mode === 'edit' && (!this.state || !this.gridid)) {
+                this.setStatus('Bitte zuerst einen Seminarplan laden.', true);
+                return;
+            }
+            this.setupMode = mode;
+            const title = bySel('#sq-setup-title');
+            const namesection = bySel('#sq-setup-name-section');
+            const nameinput = bySel('#sq-setup-name');
+            if (mode === 'create') {
+                if (title) {
+                    title.textContent = 'Neuen Seminarplan anlegen';
+                }
+                if (nameinput) {
+                    nameinput.value = '';
+                }
+                this.fillSetupForm({preset: 'standard-week', days: GRID_PRESETS['standard-week'].days,
+                    ankerzeiten: DEFAULT_ANKERZEITEN});
+            } else {
+                if (title) {
+                    title.textContent = 'Einrichtung dieses Seminarplans';
+                }
+                const config = this.state.config || {};
+                this.fillSetupForm({
+                    preset: config.preset || 'custom',
+                    days: Array.isArray(config.days) ? config.days : [],
+                    ankerzeiten: deriveAnkerzeiten(config),
+                });
+            }
+            if (namesection) {
+                namesection.classList.toggle('kg-hidden', mode !== 'create');
+            }
+            panel.classList.remove('kg-hidden');
+            panel.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+            if (mode === 'create' && nameinput) {
+                nameinput.focus();
+            }
+        }
+
+        closeSetup() {
+            const panel = bySel('#sq-setup-panel');
+            if (panel) {
+                panel.classList.add('kg-hidden');
+            }
+        }
+
+        fillSetupForm(values) {
+            const form = bySel('#sq-setup-form');
+            if (!form) {
+                return;
+            }
+            const preset = bySel('#sp-config-preset');
+            if (preset) {
+                preset.value = values.preset || 'custom';
+            }
+            form.querySelectorAll('input[name="days"]').forEach((cb) => {
+                cb.checked = values.days.includes(cb.value);
+            });
+            this.syncFirstDayOptions(values.days[0] || 'Montag');
+            const az = values.ankerzeiten;
+            form.querySelector('#sp-config-vm-start').value = az.vormittag.start;
+            form.querySelector('#sp-config-vm-end').value = az.vormittag.end;
+            form.querySelector('#sp-config-nm-start').value = az.nachmittag.start;
+            form.querySelector('#sp-config-nm-end').value = az.nachmittag.end;
+            form.querySelector('#sp-config-first-arrival').checked = !!az.ersterTagNurNachmittag;
+            form.querySelector('#sp-config-last-departure').checked = !!az.letzterTagNurVormittag;
+        }
+
+        applyPresetToForm(key) {
+            const preset = GRID_PRESETS[key];
+            if (!preset) {
+                return;
+            }
+            this.fillSetupForm({preset: key, days: preset.days, ankerzeiten: preset.ankerzeiten});
+        }
+
+        syncFirstDayOptions(preferredday) {
+            const form = bySel('#sq-setup-form');
+            const firstday = bySel('#sp-config-first-day');
+            if (!form || !firstday) {
+                return;
+            }
+            const selecteddays = Array.from(form.querySelectorAll('input[name="days"]:checked'))
+                .map((el) => el.value).filter((day) => DAYS_ALL.includes(day));
+            const current = preferredday || firstday.value || selecteddays[0] || 'Montag';
+            firstday.innerHTML = selecteddays.map((day) =>
+                `<option value="${escapeHtml(day)}">${escapeHtml(day)}</option>`).join('');
+            firstday.disabled = !selecteddays.length;
+            if (selecteddays.includes(current)) {
+                firstday.value = current;
+            } else if (selecteddays.length) {
+                firstday.value = selecteddays[0];
+            }
+        }
+
+        collectSetupConfig() {
+            const form = bySel('#sq-setup-form');
+            const selecteddays = Array.from(form.querySelectorAll('input[name="days"]:checked')).map((el) => el.value);
+            const firstdayel = bySel('#sp-config-first-day');
+            const days = orderDaysFromStart(selecteddays, (firstdayel && firstdayel.value) || selecteddays[0] || 'Montag');
+            if (!days.length) {
+                this.setStatus('Bitte mindestens einen Tag auswählen.', true);
+                return null;
+            }
+            const ankerzeiten = {
+                vormittag: {
+                    start: form.querySelector('#sp-config-vm-start').value || '08:30',
+                    end: form.querySelector('#sp-config-vm-end').value || '12:30'
+                },
+                nachmittag: {
+                    start: form.querySelector('#sp-config-nm-start').value || '13:15',
+                    end: form.querySelector('#sp-config-nm-end').value || '17:30'
+                },
+                ersterTagNurNachmittag: !!form.querySelector('#sp-config-first-arrival').checked,
+                letzterTagNurVormittag: !!form.querySelector('#sp-config-last-departure').checked
+            };
+            const vmstart = parseTimeToMinutes(ankerzeiten.vormittag.start) || 0;
+            const vmend = parseTimeToMinutes(ankerzeiten.vormittag.end) || 0;
+            const nmstart = parseTimeToMinutes(ankerzeiten.nachmittag.start) || 0;
+            const nmend = parseTimeToMinutes(ankerzeiten.nachmittag.end) || 0;
+            if (vmend <= vmstart || nmend <= nmstart) {
+                this.setStatus('Endzeit muss jeweils nach der Startzeit liegen.', true);
+                return null;
+            }
+            if (nmstart < vmend) {
+                this.setStatus('Der Nachmittag darf nicht vor dem Ende des Vormittags beginnen.', true);
+                return null;
+            }
+            const presetel = bySel('#sp-config-preset');
+            const previous = (this.setupMode === 'edit' && this.state && this.state.config) ? this.state.config : {};
+            const legacyfields = legacyFieldsFromAnkerzeiten(ankerzeiten);
+            return {
+                preset: (presetel && presetel.value) || 'custom',
+                days,
+                ankerzeiten,
+                timeRange: legacyfields.timeRange,
+                granularity: previous.granularity || 15,
+                breaks: legacyfields.breaks,
+                tableColumns: Object.assign({}, DEFAULT_COLUMNS, previous.tableColumns || {})
+            };
+        }
+
+        submitSetup() {
+            const config = this.collectSetupConfig();
+            if (!config) {
+                return;
+            }
+            if (this.setupMode === 'create') {
+                const nameinput = bySel('#sq-setup-name');
+                const name = nameinput ? nameinput.value.trim() : '';
+                if (!name) {
+                    this.setStatus('Bitte einen Namen für den Seminarplan eingeben.', true);
+                    return;
+                }
+                this.createPlan(name, config);
+                return;
+            }
+            this.applySetupToCurrentPlan(config);
+        }
+
+        createPlan(name, config) {
+            const plandays = {};
+            const middaybreak = (config.breaks || [])[0] || null;
+            config.days.forEach((day) => {
+                plandays[day] = [];
+                if (middaybreak) {
+                    const startmin = parseTimeToMinutes(middaybreak.start);
+                    plandays[day].push({
+                        uid: legacyUid(),
+                        title: 'Pause',
+                        startMin: startmin,
+                        endMin: startmin + middaybreak.duration,
+                        kind: 'break',
+                        details: {},
+                    });
+                }
+            });
+            const state = {
+                meta: {title: '', date: '', number: '', contact: ''},
+                config,
+                view: {mode: 'week', day: config.days[0]},
+                plan: {days: plandays},
+                sourceMode: 'methods',
+                sequenz: this.buildSequenzScaffold(config.days),
+            };
+            asCall('mod_seminarplaner_create_grid', {cmid: this.cmid, name, description: ''}).then((created) => {
+                const gridid = Number(created.gridid || 0);
+                return asCall('mod_seminarplaner_save_user_state', {
+                    cmid: this.cmid,
+                    gridid,
+                    statejson: JSON.stringify(state),
+                    expectedhash: '',
+                }).then(() => gridid);
+            }).then((gridid) => {
+                this.closeSetup();
+                this.setStatus(`Seminarplan „${name}" angelegt.`);
+                return this.loadGrids(gridid);
+            }).catch(() => {
+                this.setStatus('Seminarplan anlegen hat nicht geklappt – bitte noch einmal versuchen.', true);
+            });
+        }
+
+        // Setup changes on an existing plan: config is replaced, the day
+        // list of the sequence follows (new days appear, removed days are
+        // dropped only while empty - filled days stay with a hint).
+        applySetupToCurrentPlan(config) {
+            if (!this.state) {
+                return;
+            }
+            this.state.config = config;
+            if (!this.state.plan || typeof this.state.plan !== 'object') {
+                this.state.plan = {days: {}};
+            }
+            if (!this.state.plan.days || typeof this.state.plan.days !== 'object') {
+                this.state.plan.days = {};
+            }
+            config.days.forEach((day) => {
+                if (!Array.isArray(this.state.plan.days[day])) {
+                    this.state.plan.days[day] = [];
+                }
+            });
+            const kept = this.syncSequenzDays(config.days);
+            this.closeSetup();
+            this.dayIndex = 0;
+            this.setDirty(true);
+            this.render();
+            this.save().catch(() => null);
+            if (kept.length) {
+                this.toast(`Einrichtung übernommen. ${kept.join(' ')}`);
+            } else {
+                this.toast('Einrichtung übernommen – Tage und Zeiten sind angepasst.');
+            }
+        }
+
+        buildSequenzScaffold(days) {
+            return {
+                version: 1,
+                tage: days.map((name, index) => ({
+                    tag: index + 1,
+                    bezeichnung: String(name),
+                    anker: {
+                        vormittag: {sequenz: []},
+                        nachmittag: {sequenz: []},
+                    },
+                })),
+                platzierungen: {},
+                einheitenauswahlen: {},
+                bausteine: {},
+            };
+        }
+
+        // Rebuild sequenz.tage along the configured day list. Existing days
+        // are matched by name and keep their placements; days no longer
+        // configured survive (at the end) as long as they hold content.
+        syncSequenzDays(days) {
+            if (!this.sequenz) {
+                this.sequenz = this.buildSequenzScaffold(days);
+                this.state.sequenz = this.sequenz;
+                return [];
+            }
+            const remaining = (this.sequenz.tage || []).slice();
+            const newtage = days.map((name) => {
+                const index = remaining.findIndex((day) => day && String(day.bezeichnung) === String(name));
+                if (index >= 0) {
+                    return remaining.splice(index, 1)[0];
+                }
+                return {
+                    tag: 0,
+                    bezeichnung: String(name),
+                    anker: {vormittag: {sequenz: []}, nachmittag: {sequenz: []}},
+                };
+            });
+            const hints = [];
+            remaining.forEach((day) => {
+                const filled = ANCHORS.some((anker) => {
+                    const seq = (((day.anker || {})[anker] || {}).sequenz) || [];
+                    return seq.length > 0;
+                });
+                if (filled) {
+                    newtage.push(day);
+                    hints.push(`„${day.bezeichnung}" enthält noch Einheiten und bleibt deshalb erhalten.`);
+                } else {
+                    ANCHORS.forEach((anker) => {
+                        const seq = (((day.anker || {})[anker] || {}).sequenz) || [];
+                        seq.forEach((pid) => this.deletePlacementRecord(pid));
+                    });
+                }
+            });
+            newtage.forEach((day, index) => {
+                day.tag = index + 1;
+            });
+            this.sequenz.tage = newtage;
+            return hints;
+        }
+
+        deletePlacementRecord(pid) {
+            const placement = this.sequenz.platzierungen[pid];
+            if (!placement) {
+                return;
+            }
+            const auswahlid = placement.typ === 'einheit' ? String(placement.einheitenauswahl || '') : '';
+            delete this.sequenz.platzierungen[pid];
+            if (auswahlid && !Object.keys(this.sequenz.platzierungen).some((other) => {
+                return String(this.sequenz.platzierungen[other].einheitenauswahl || '') === auswahlid;
+            })) {
+                delete this.sequenz.einheitenauswahlen[auswahlid];
+            }
+        }
+
+        // ---- Common Thread publishing (also available here, next to the
+        // overview page - both roads lead to the Roter Faden) --------------
+
+        initPublishControl() {
+            this.roterFadenState = {ispublished: false, gridid: 0};
+            this.isUpdatingPublishControl = false;
+            const checkbox = bySel('#sq-publish-roterfaden');
+            if (!checkbox) {
+                return;
+            }
+            checkbox.addEventListener('change', () => {
+                if (this.isUpdatingPublishControl) {
+                    return;
+                }
+                const shouldpublish = !!checkbox.checked;
+                const rollback = () => {
+                    this.isUpdatingPublishControl = true;
+                    checkbox.checked = !shouldpublish;
+                    this.isUpdatingPublishControl = false;
+                    this.syncPublishControl();
+                };
+                if (shouldpublish) {
+                    const saved = this.dirty ? this.save() : Promise.resolve(true);
+                    saved.then(() => this.publishCurrentPlan()).catch(() => rollback());
+                    return;
+                }
+                asCall('mod_seminarplaner_unpublish_roterfaden', {cmid: this.cmid}).then((res) => {
+                    if (!res || !res.success) {
+                        throw new Error('Unpublish failed');
+                    }
+                    this.roterFadenState = Object.assign({}, this.roterFadenState, {ispublished: false});
+                    this.syncPublishControl();
+                    this.toast('Roter Faden ist nicht mehr sichtbar.');
+                }).catch(() => rollback());
+            });
+            this.loadRoterFadenState();
+        }
+
+        loadRoterFadenState() {
+            return asCall('mod_seminarplaner_get_roterfaden_state', {cmid: this.cmid}).then((res) => {
+                this.roterFadenState = {
+                    ispublished: !!(res && res.ispublished),
+                    gridid: Number((res && res.gridid) || 0) || 0,
+                };
+                this.syncPublishControl();
+            }).catch(() => {
+                this.roterFadenState = {ispublished: false, gridid: 0};
+                this.syncPublishControl();
+            });
+        }
+
+        syncPublishControl() {
+            const checkbox = bySel('#sq-publish-roterfaden');
+            const status = bySel('#sq-publish-roterfaden-status');
+            if (!checkbox) {
+                return;
+            }
+            const currentpublished = this.roterFadenState.ispublished
+                && Number(this.roterFadenState.gridid) === Number(this.gridid);
+            this.isUpdatingPublishControl = true;
+            checkbox.checked = !!currentpublished;
+            checkbox.disabled = !this.gridid;
+            this.isUpdatingPublishControl = false;
+            if (!status) {
+                return;
+            }
+            if (!this.gridid) {
+                status.textContent = '';
+            } else if (currentpublished) {
+                status.textContent = 'Dieser Seminarplan ist als Roter Faden veröffentlicht.';
+            } else if (this.roterFadenState.ispublished && this.roterFadenState.gridid > 0) {
+                status.textContent = `Aktuell ist Seminarplan #${this.roterFadenState.gridid} veröffentlicht.`;
+            } else {
+                status.textContent = 'Aktuell ist kein Roter Faden veröffentlicht.';
+            }
+        }
+
+        publishCurrentPlan() {
+            if (!this.state || !this.gridid) {
+                return Promise.resolve(false);
+            }
+            const planningstate = this.planningStateRaw || {};
+            const payload = {
+                config: this.state.config || {},
+                view: this.state.view || {mode: 'week', day: ''},
+                plan: this.state.plan || {days: {}},
+                planningState: planningstate,
+                units: Array.isArray(planningstate.units) ? planningstate.units : [],
+                slotorder: Array.isArray(planningstate.slotorder) ? planningstate.slotorder : [],
+                zoomIndex: this.state.zoomIndex || 0,
+                sourceMode: this.state.sourceMode || 'methods',
+            };
+            return asCall('mod_seminarplaner_publish_roterfaden', {
+                cmid: this.cmid,
+                gridid: this.gridid,
+                statejson: JSON.stringify(payload),
+            }).then((res) => {
+                if (!res || !res.success) {
+                    throw new Error('Publish failed');
+                }
+                this.roterFadenState = {ispublished: true, gridid: Number(this.gridid)};
+                this.syncPublishControl();
+                this.toast('Roter Faden veröffentlicht.');
+                return true;
+            });
         }
 
         // D27: the toggle is a per-user setting across all plans.
@@ -211,8 +762,8 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             }
         }
 
-        loadGrids() {
-            asCall('mod_seminarplaner_list_grids', {cmid: this.cmid}).then((res) => {
+        loadGrids(preferredid) {
+            return asCall('mod_seminarplaner_list_grids', {cmid: this.cmid}).then((res) => {
                 const grids = (res.grids || []).filter((grid) => !Number(grid.isarchived));
                 const select = bySel('#sq-grid-select');
                 if (!select) {
@@ -221,10 +772,16 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 select.innerHTML = grids.map((grid) =>
                     `<option value="${Number(grid.id)}">${escapeHtml(grid.name)}</option>`).join('');
                 if (!grids.length) {
-                    this.setStatus('Noch kein Seminarplan vorhanden – lege zuerst im Überblick einen an.');
+                    this.setStatus('Noch kein Seminarplan vorhanden – lege mit „＋ Neuer Seminarplan" los.');
+                    this.syncPublishControl();
+                    this.openSetup('create');
                     return;
                 }
-                this.loadState(Number(grids[0].id));
+                const target = preferredid && grids.some((grid) => Number(grid.id) === Number(preferredid))
+                    ? Number(preferredid)
+                    : Number(grids[0].id);
+                select.value = String(target);
+                this.loadState(target);
             }).catch(() => {
                 this.setStatus('Seminarpläne konnten nicht geladen werden.', true);
             });
@@ -241,6 +798,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 } catch (e) {
                     decoded = {};
                 }
+                this.planningStateRaw = decoded;
                 (Array.isArray(decoded.units) ? decoded.units : []).forEach((unit) => {
                     if (unit && unit.id) {
                         this.planningUnits[String(unit.id)] = unit;
@@ -283,6 +841,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 this.headingPid = '';
                 this.setDirty(false);
                 this.indexLegacyEntries();
+                this.syncPublishControl();
                 this.render();
                 this.maybeShowIntro();
             }).catch(() => {
@@ -316,20 +875,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             if (haslegacy) {
                 return;
             }
-            this.sequenz = {
-                version: 1,
-                tage: days.map((name, index) => ({
-                    tag: index + 1,
-                    bezeichnung: String(name),
-                    anker: {
-                        vormittag: {sequenz: []},
-                        nachmittag: {sequenz: []},
-                    },
-                })),
-                platzierungen: {},
-                einheitenauswahlen: {},
-                bausteine: {},
-            };
+            this.sequenz = this.buildSequenzScaffold(days);
             this.state.sequenz = this.sequenz;
         }
 
@@ -456,10 +1002,10 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
 
         save() {
             if (!this.state || !this.gridid) {
-                return;
+                return Promise.resolve(false);
             }
             const payload = JSON.stringify(this.state);
-            asCall('mod_seminarplaner_save_user_state', {
+            return asCall('mod_seminarplaner_save_user_state', {
                 cmid: this.cmid,
                 gridid: this.gridid,
                 statejson: payload,
@@ -468,8 +1014,10 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 this.versionhash = String(res.versionhash || res.newhash || this.versionhash);
                 this.setDirty(false);
                 this.toast('Gespeichert – Reihenfolge und Zeiten sind aktualisiert.');
-            }).catch(() => {
+                return true;
+            }).catch((error) => {
                 this.setStatus('Speichern hat nicht geklappt – bitte noch einmal versuchen.', true);
+                throw error;
             });
         }
 

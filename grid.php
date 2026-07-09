@@ -52,20 +52,7 @@ echo html_writer::div(
 echo html_writer::tag('h3', get_string('ueberblickmenu', 'mod_seminarplaner'));
 
 echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'kg-grid-step-1']);
-echo html_writer::tag('h4', '1. Seminarplan erstellen oder laden');
-echo html_writer::start_div('kg-two');
-echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h5', 'Seminarplan erstellen');
-echo html_writer::tag('label', 'Name', ['for' => 'kg-grid-name', 'class' => 'kg-label']);
-echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'kg-grid-name', 'class' => 'kg-input', 'placeholder' => 'Neuer Seminarplan']);
-echo html_writer::start_div('kg-row kg-row--action');
-echo html_writer::tag('button', 'Seminarplan erstellen', ['type' => 'button', 'id' => 'kg-create-grid', 'class' => 'kg-btn kg-btn-primary']);
-echo html_writer::end_div();
-echo html_writer::tag('p', 'Namen eingeben, Einstellungen festlegen und mit "Übernehmen" erstellen.', ['class' => 'sp-filter-status']);
-echo html_writer::end_div();
-
-echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h5', 'Seminarplan laden');
+echo html_writer::tag('h4', 'Seminarplan laden');
 echo html_writer::tag('label', 'Vorhandene Seminarpläne', ['for' => 'kg-grid-select', 'class' => 'kg-label']);
 echo html_writer::start_tag('select', ['id' => 'kg-grid-select', 'class' => 'kg-input kg-grid-select']);
 foreach ($grids as $grid) {
@@ -75,82 +62,9 @@ echo html_writer::end_tag('select');
 echo html_writer::start_div('kg-row kg-row--action');
 echo html_writer::tag('button', 'Seminarplan laden', ['type' => 'button', 'id' => 'kg-load-grid', 'class' => 'kg-btn kg-btn-primary']);
 echo html_writer::end_div();
-echo html_writer::tag('p', 'Seminarplan auswählen und "Seminarplan laden" klicken', ['class' => 'sp-filter-status']);
-echo html_writer::end_div();
-echo html_writer::end_div();
-
-?>
-<div class="sp-config-inline kg-hidden" id="sp-config-inline">
-  <form class="sp-modal__body" id="sp-config-form">
-    <div class="sp-modal__section">
-      <div class="sp-modal__field">
-        <h3>Vorlage wählen</h3>
-        <select name="preset" id="sp-config-preset" class="kg-input kg-grid-select">
-          <option value="custom">Individuelle Konfiguration</option>
-          <option value="standard-week">Standard-Woche (Mo-Fr)</option>
-          <option value="sunday-to-friday">Seminarwoche (So-Fr)</option>
-          <option value="weekend-seminar">Wochenendseminar (Fr-So, Fr Anreise / So Abreise)</option>
-          <option value="half-week-mo-mi">Halbe Woche (Mo-Mi)</option>
-          <option value="half-week-mi-fr">Halbe Woche (Mi-Fr)</option>
-          <option value="compact-day">Kompakttag</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="sp-modal__section">
-      <h3>Wochentage</h3>
-      <div class="sp-days-grid">
-        <?php
-        $days = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
-        foreach ($days as $day) {
-            $idattr = 'sp-day-' . strtolower(substr($day, 0, 2));
-            echo '<label class="sp-day-checkbox"><input type="checkbox" name="days" value="' . s($day) . '" id="' . s($idattr) . '"><span>' . s($day) . '</span></label>';
-        }
-        ?>
-      </div>
-      <label class="sp-modal__field sp-first-day-field" for="sp-config-first-day">
-        <span class="sp-modal__label">Erster Seminartag</span>
-        <select name="firstDay" id="sp-config-first-day" class="kg-input kg-grid-select">
-          <?php
-          foreach ($days as $day) {
-              echo '<option value="' . s($day) . '">' . s($day) . '</option>';
-          }
-          ?>
-        </select>
-      </label>
-    </div>
-
-    <div class="sp-modal__section">
-      <h3>Seminarzeiten</h3>
-      <div class="sp-time-range sp-anchor-times">
-        <span class="sp-anchor-label">Vormittag</span>
-        <label class="sp-modal__field"><span class="sp-modal__label">von</span><input type="time" name="vormittagStart" id="sp-config-vm-start" class="kg-input" value="08:30"></label>
-        <label class="sp-modal__field"><span class="sp-modal__label">bis</span><input type="time" name="vormittagEnd" id="sp-config-vm-end" class="kg-input" value="12:30"></label>
-      </div>
-      <div class="sp-time-range sp-anchor-times">
-        <span class="sp-anchor-label">Nachmittag</span>
-        <label class="sp-modal__field"><span class="sp-modal__label">von</span><input type="time" name="nachmittagStart" id="sp-config-nm-start" class="kg-input" value="13:15"></label>
-        <label class="sp-modal__field"><span class="sp-modal__label">bis</span><input type="time" name="nachmittagEnd" id="sp-config-nm-end" class="kg-input" value="17:30"></label>
-      </div>
-      <label class="kg-label kg-inline-checkbox">
-        <input type="checkbox" name="firstDayAfternoonOnly" id="sp-config-first-arrival">
-        <span>Erster Tag beginnt erst am Nachmittag (Anreise)</span>
-      </label>
-      <label class="kg-label kg-inline-checkbox">
-        <input type="checkbox" name="lastDayMorningOnly" id="sp-config-last-departure">
-        <span>Letzter Tag endet mit dem Vormittag (Abreise)</span>
-      </label>
-      <p class="sp-filter-status">Die Zeiten sind eine Vorbelegung aus der Vorlage und lassen sich frei anpassen.
-        Zwischen Vormittag und Nachmittag liegt die Mittagspause. Kurze Zwischenpausen musst du nicht
-        vorausplanen – die Sequenzansicht erinnert daran, wenn lange ohne Pause gearbeitet wird.</p>
-    </div>
-
-    <div class="sp-modal__actions">
-      <button type="submit" class="kg-btn kg-btn-primary">Übernehmen</button>
-    </div>
-  </form>
-</div>
-<?php
+echo html_writer::tag('p',
+    'Neue Seminarpläne legst du im Tab „Sequenz" an – dort sitzt auch die Einrichtung (Tage und Seminarzeiten).',
+    ['class' => 'sp-filter-status']);
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block kg-library-step kg-hidden', ['id' => 'kg-grid-step-2']);

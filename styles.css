@@ -5097,6 +5097,48 @@ body.sp-resizing * {
 }
 .sq-planbar__label { margin: 0; }
 .sq-planbar__select { max-width: 320px; }
+.sq-planbar {
+    flex-wrap: wrap;
+}
+
+/* D45: plan creation/setup panel in the sequence view. */
+.sq-setup {
+    margin: 0 0 12px;
+    padding: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-background);
+    max-width: 760px;
+}
+
+.sq-setup .sp-modal__section {
+    margin: 0 0 12px;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.sq-setup .sp-modal__section h3 {
+    margin: 0 0 8px;
+    font-size: 1rem;
+}
+
+.sq-setup .sp-modal__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.sq-publishbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.sq-publishbar .kg-inline-checkbox {
+    margin: 0;
+}
 .sq-toolbar {
     display: flex;
     align-items: center;
