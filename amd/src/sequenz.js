@@ -304,9 +304,13 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 return;
             }
             const plandays = (this.state.plan && this.state.plan.days) || {};
+            // Breaks do not count as legacy content: the setup writes the
+            // derived midday break into the plan for the overview, and in
+            // the sequence it is the anchor divider anyway.
             const haslegacy = Object.keys(plandays).some((day) => {
                 return (Array.isArray(plandays[day]) ? plandays[day] : []).some((entry) => {
-                    return entry && (Number(entry.endMin) || 0) > (Number(entry.startMin) || 0);
+                    return entry && String(entry.kind || '') !== 'break'
+                        && (Number(entry.endMin) || 0) > (Number(entry.startMin) || 0);
                 });
             });
             if (haslegacy) {
