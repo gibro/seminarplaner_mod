@@ -54,6 +54,7 @@ echo $OUTPUT->header();
 
 echo $OUTPUT->heading(format_string($seminarplaner->name));
 echo seminarplaner_render_tabs((int)$cm->id, 'methodlibrary');
+echo seminarplaner_render_method_subnav((int)$cm->id, 'methodlibrary');
 
 echo html_writer::start_div('kg-shell');
 echo html_writer::tag('h3', 'Bibliothek verwalten');

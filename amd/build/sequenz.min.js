@@ -689,6 +689,54 @@ define(['core/ajax'], function(Ajax) {
             this.toast(`Überschrift „${clean}" angelegt.`);
         }
 
+        // ---- Removing and breaks --------------------------------------------
+
+        removePlacement(pid) {
+            const placement = this.placement(pid);
+            const found = this.locate(pid);
+            if (!placement || !found) {
+                return;
+            }
+            const question = placement.typ === 'pause'
+                ? 'Diese Pause aus dem Plan entfernen?'
+                : 'Diese Einheit aus dem Plan entfernen? Der Bibliothekseintrag bleibt erhalten.';
+            if (!window.confirm(question)) {
+                return;
+            }
+            found.anchors[found.anchorIdx].seq.splice(found.pos, 1);
+            const auswahlid = placement.einheitenauswahl;
+            delete this.sequenz.platzierungen[pid];
+            if (auswahlid && !this.auswahlInUse(auswahlid)) {
+                delete this.sequenz.einheitenauswahlen[auswahlid];
+            }
+            this.setDirty(true);
+            this.render();
+            this.toast('Entfernt – die Zeiten sind nachgerückt.');
+        }
+
+        auswahlInUse(auswahlid) {
+            return Object.keys(this.sequenz.platzierungen).some((pid) => {
+                return String(this.sequenz.platzierungen[pid].einheitenauswahl || '') === String(auswahlid);
+            });
+        }
+
+        addPause(ankername) {
+            const day = this.sequenz.tage[this.dayIndex];
+            if (!day) {
+                return;
+            }
+            const pid = this.uniqueId('px', this.sequenz.platzierungen);
+            this.sequenz.platzierungen[pid] = {
+                typ: 'pause',
+                titel: 'Pause',
+                dauer: 15,
+            };
+            day.anker[ankername || 'vormittag'].sequenz.push(pid);
+            this.setDirty(true);
+            this.render();
+            this.toast('Pause eingefügt (15 Min.) – über „Bearbeiten" anpassbar.');
+        }
+
         // ---- Module membership (arrows keep position, this sets belonging) --
 
         adjacentBausteinId(pid) {
@@ -832,16 +880,17 @@ define(['core/ajax'], function(Ajax) {
                       <div class="sq-field__hint">Datei-Anhänge verwaltest du weiterhin im Tab „Seminareinheiten".</div>
                     </div></details>`;
             } else {
+                const ispause = placement.typ === 'pause';
                 body = `
                     ${text('Titel', 'titel', placement.titel || '')}
                     ${text('Dauer (Minuten)', 'zeitbedarf', String(placement.dauer || ''))}
-                    <div class="sq-field__hint">Diese Einheit hat noch keinen Bibliothekseintrag – nur Titel und Dauer sind änderbar.</div>`;
+                    ${ispause ? '' : '<div class="sq-field__hint">Diese Einheit hat noch keinen Bibliothekseintrag – nur Titel und Dauer sind änderbar.</div>'}`;
             }
 
             root.innerHTML = `
                 <div class="sq-modal">
                   <div class="sq-modal__head">
-                    <h3>Seminareinheit bearbeiten</h3>
+                    <h3>${placement.typ === 'pause' ? 'Pause bearbeiten' : 'Seminareinheit bearbeiten'}</h3>
                     <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
                   </div>
                   <div class="sq-modal__body">${body}</div>
@@ -1053,6 +1102,10 @@ define(['core/ajax'], function(Ajax) {
                 this.joinBaustein(pid);
             } else if (type === 'leave-baustein') {
                 this.leaveBaustein(pid);
+            } else if (type === 'remove') {
+                this.removePlacement(pid);
+            } else if (type === 'add-pause') {
+                this.addPause(action.getAttribute('data-anker') || 'vormittag');
             }
         }
 
@@ -1144,6 +1197,7 @@ define(['core/ajax'], function(Ajax) {
             const addbutton = `
                 <div class="sq-anchor__add">
                   <button type="button" class="kg-btn" data-sq-action="add-unit" data-anker="${ankername}">＋ Einheit hinzufügen</button>
+                  <button type="button" class="kg-btn" data-sq-action="add-pause" data-anker="${ankername}">＋ Pause</button>
                 </div>`;
 
             return `
@@ -1274,6 +1328,8 @@ define(['core/ajax'], function(Ajax) {
                     title="Nach vorne schieben" aria-label="Nach vorne schieben">↑</button>
                   <button type="button" class="kg-btn sq-move__btn" data-sq-action="move-down" data-pid="${escapeHtml(pid)}"
                     title="Nach hinten schieben" aria-label="Nach hinten schieben">↓</button>
+                  <button type="button" class="kg-btn sq-move__btn sq-move__btn--remove" data-sq-action="remove" data-pid="${escapeHtml(pid)}"
+                    title="Aus dem Plan entfernen" aria-label="Aus dem Plan entfernen">✕</button>
                 </span>`;
         }
 
@@ -1326,6 +1382,7 @@ define(['core/ajax'], function(Ajax) {
                       <span class="sq-badge">${duration} Min.</span>
                       <span class="sq-unit__time">${timelabel}</span>
                       <span class="sq-pause__spacer"></span>
+                      <button type="button" class="kg-btn sq-membership" data-sq-action="edit" data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
                       ${this.renderMoveButtons(p.pid)}
                     </div>`;
             }

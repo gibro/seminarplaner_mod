@@ -263,23 +263,36 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
         ]);
     };
 
+    // Sub-areas share one tab (D16/D39): the merged tab stays highlighted.
+    $tabaliases = ['methodlibrary' => 'methods'];
+    $active = $tabaliases[$active] ?? $active;
+
     $tabs = [];
     if ($canmanageseminarplaner) {
+        // Tab order and naming per D16: Überblick · Sequenz · Seminareinheiten
+        // (Anlegen/Bibliothek) · Roter Faden · Import/Export · Einreichen.
+        // "Bausteine" bleibt übergangsweise, bis die Sequenzansicht die
+        // Baustein-Stammdaten selbst abdeckt.
         $tabs = [
-            'grid' => ['label' => get_string('gridplanning', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/grid.php', 'icon' => 'calendar-range'],
+            'grid' => ['label' => get_string('ueberblickmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/grid.php', 'icon' => 'calendar-range'],
             'sequenz' => ['label' => get_string('sequenzmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/sequenz.php', 'icon' => 'list-checks'],
             'methods' => ['label' => get_string('methodcards', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methods.php', 'icon' => 'layout-grid'],
-            'methodlibrary' => ['label' => get_string('methodlibrary', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methodlibrary.php', 'icon' => 'library'],
             'planningmode' => ['label' => 'Bausteine', 'path' => '/mod/seminarplaner/planningmode.php', 'icon' => 'blocks'],
             'importexport' => ['label' => get_string('importexport', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/importexport.php', 'icon' => 'arrow-left-right'],
-            'review' => ['label' => get_string('reviewmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/review.php', 'icon' => 'clipboard-check'],
+            'review' => ['label' => get_string('einreichenmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/review.php', 'icon' => 'clipboard-check'],
         ];
         if (has_capability('mod/seminarplaner:viewroterfaden', $context)) {
-            $tabs = ['grid' => $tabs['grid'], 'sequenz' => $tabs['sequenz'], 'roterfaden' => [
-                'label' => get_string('roterfadenmenu', 'mod_seminarplaner'),
-                'path' => '/mod/seminarplaner/roterfaden.php',
-                'icon' => 'route',
-            ]] + array_diff_key($tabs, ['grid' => true, 'sequenz' => true]);
+            $tabs = [
+                'grid' => $tabs['grid'],
+                'sequenz' => $tabs['sequenz'],
+                'methods' => $tabs['methods'],
+                'planningmode' => $tabs['planningmode'],
+                'roterfaden' => [
+                    'label' => get_string('roterfadenmenu', 'mod_seminarplaner'),
+                    'path' => '/mod/seminarplaner/roterfaden.php',
+                    'icon' => 'route',
+                ],
+            ] + array_diff_key($tabs, ['grid' => true, 'sequenz' => true, 'methods' => true, 'planningmode' => true]);
         }
     } else if (has_capability('mod/seminarplaner:viewroterfaden', $context)) {
         $tabs = [
@@ -296,6 +309,29 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
             ['class' => 'kg-tab-content']
         );
         $out .= html_writer::link(new moodle_url($tab['path'], ['id' => $cmid]), $content, ['class' => $classes]);
+    }
+    $out .= html_writer::end_div();
+
+    return $out;
+}
+
+/**
+ * Render the sub-navigation of the merged Seminareinheiten tab (D16/D39).
+ *
+ * @param int $cmid Course module id.
+ * @param string $active Active sub-area: 'methods' or 'methodlibrary'.
+ * @return string
+ */
+function seminarplaner_render_method_subnav(int $cmid, string $active): string {
+    $areas = [
+        'methods' => ['label' => get_string('method_subnav_create', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methods.php'],
+        'methodlibrary' => ['label' => get_string('method_subnav_library', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methodlibrary.php'],
+    ];
+
+    $out = html_writer::start_div('kg-subnav');
+    foreach ($areas as $key => $area) {
+        $classes = 'kg-subnav__link' . ($key === $active ? ' kg-subnav__link--active' : '');
+        $out .= html_writer::link(new moodle_url($area['path'], ['id' => $cmid]), s((string)$area['label']), ['class' => $classes]);
     }
     $out .= html_writer::end_div();
 

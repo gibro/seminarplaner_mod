@@ -60,6 +60,7 @@ echo $OUTPUT->header();
 
 echo $OUTPUT->heading(format_string($seminarplaner->name));
 echo seminarplaner_render_tabs((int)$cm->id, 'methods');
+echo seminarplaner_render_method_subnav((int)$cm->id, 'methods');
 
 echo html_writer::start_div('kg-shell');
 echo html_writer::start_div('ig-container kg-container-full', ['id' => 'kg-add-method-section']);

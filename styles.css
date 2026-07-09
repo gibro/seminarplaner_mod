@@ -5401,3 +5401,22 @@ body.sp-resizing * {
 .sq-intro__block--break { background: #f4f4f4; border-style: dashed; border-color: #c3cad1; color: #5b6b79; }
 .sq-intro__blocktime { color: #5b6b79; font-size: 10px; font-variant-numeric: tabular-nums; }
 .sq-intro__blocktitle { font-weight: 600; line-height: 1.25; }
+
+/* === Sequenzansicht: Entfernen + Pause (Block 2d) === */
+.sq-move__btn--remove { color: #a02f2f; }
+.sq-move__btn--remove:hover { border-color: #a02f2f; background: #fdf2f2; }
+.sq-anchor__add { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* === Unterbereiche des Seminareinheiten-Tabs (D16/D39) === */
+.kg-subnav { display: flex; gap: 6px; margin: -6px 0 14px; }
+.kg-subnav__link {
+    font-size: 12.5px;
+    color: #5b6b79;
+    text-decoration: none;
+    border: 1px solid #d7dce2;
+    border-radius: 20px;
+    padding: 4px 14px;
+    background: #fff;
+}
+.kg-subnav__link:hover { color: #204864; border-color: #2c5f8a; text-decoration: none; }
+.kg-subnav__link--active { background: #2c5f8a; border-color: #2c5f8a; color: #fff; font-weight: 600; }
