@@ -38,6 +38,7 @@ $string['method_subnav_create'] = 'Create';
 $string['method_subnav_library'] = 'Library';
 $string['ueberblick_readonlynote'] = 'The overview shows all days side by side - for viewing and printing. Planning and changes happen in the "Sequence" tab.';
 $string['ueberblick_tosequenz'] = 'Go to sequence view';
+$string['sequenz_dramatoggle'] = 'Dramaturgy view';
 $string['sequenz_previewnote'] = 'The new sequence view: your plan as an ordered flow per day. You can reorder units, pick alternatives and add headings here. Creating new units and editing content still happens in the other tabs.';
 $string['sequenz_planlabel'] = 'Seminar plan';
 $string['sequenz_prevday'] = 'Previous day';

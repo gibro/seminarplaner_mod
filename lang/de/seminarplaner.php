@@ -38,6 +38,7 @@ $string['method_subnav_create'] = 'Anlegen';
 $string['method_subnav_library'] = 'Bibliothek';
 $string['ueberblick_readonlynote'] = 'Der Überblick zeigt alle Tage nebeneinander – zum Anschauen und Ausdrucken. Geplant und geändert wird im Tab „Sequenz".';
 $string['ueberblick_tosequenz'] = 'Zur Sequenzansicht';
+$string['sequenz_dramatoggle'] = 'Dramaturgie-Blick';
 $string['sequenz_previewnote'] = 'Die neue Sequenzansicht: Dein Plan als geordnete Abfolge je Tag. Du kannst hier die Reihenfolge ändern, Alternativen wählen und Überschriften vergeben. Neue Einheiten anlegen und Inhalte bearbeiten geht weiterhin über die anderen Tabs.';
 $string['sequenz_planlabel'] = 'Seminarplan';
 $string['sequenz_prevday'] = 'Vorheriger Tag';

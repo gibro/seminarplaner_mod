@@ -48,6 +48,10 @@ echo html_writer::tag('button', '›', [
 ]);
 echo html_writer::end_div();
 echo html_writer::start_div('sq-toolbar__actions');
+echo html_writer::start_tag('label', ['class' => 'sq-toggle', 'for' => 'sq-drama-toggle']);
+echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'sq-drama-toggle']);
+echo html_writer::tag('span', get_string('sequenz_dramatoggle', 'mod_seminarplaner'));
+echo html_writer::end_tag('label');
 echo html_writer::tag('button', get_string('savestate', 'mod_seminarplaner'), [
     'type' => 'button', 'id' => 'sq-save', 'class' => 'kg-btn kg-btn-primary', 'disabled' => 'disabled',
 ]);
@@ -56,6 +60,7 @@ echo html_writer::end_div();
 
 // Anchors are rendered by the AMD module.
 echo html_writer::tag('div', '', ['id' => 'sq-day']);
+echo html_writer::tag('div', '', ['id' => 'sq-drama', 'class' => 'sq-drama']);
 
 // Phase legend.
 $phases = [

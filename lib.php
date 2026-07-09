@@ -288,3 +288,20 @@ function seminarplaner_get_file_info(
         $resolvedfilename
     );
 }
+
+/**
+ * Declare user preferences writable via the core AJAX preference API.
+ *
+ * @return array
+ */
+function mod_seminarplaner_user_preferences(): array {
+    return [
+        // D27: Dramaturgie-Blick per user across all plans.
+        'mod_seminarplaner_dramaturgie' => [
+            'type' => PARAM_BOOL,
+            'null' => NULL_NOT_ALLOWED,
+            'default' => true,
+            'permissioncallback' => [core_user::class, 'is_current_user'],
+        ],
+    ];
+}

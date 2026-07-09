@@ -5481,3 +5481,30 @@ body.sp-resizing * {
 }
 .kg-flow__text { color: #5b6b79; font-size: 12px; }
 .kg-flow__arrow { align-self: center; color: #8a97a3; font-size: 16px; }
+
+/* === Block 3: Dramaturgie-Blick (D15/D22/D23/D27) === */
+.sq-toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: #5b6b79; margin: 0; cursor: pointer; }
+.sq-drama { display: none; }
+.sq-drama--visible {
+    display: block;
+    background: #fff;
+    border: 1px solid #d7dce2;
+    border-radius: 6px;
+    padding: 12px 14px;
+    box-shadow: 0 1px 2px rgba(20, 30, 40, .06);
+    margin-top: 14px;
+}
+.sq-drama h4 { font-size: 13px; margin: 0 0 8px; }
+.sq-drama__item { display: flex; gap: 8px; font-size: 12.5px; align-items: flex-start; padding: 6px 8px; border-radius: 4px; margin-bottom: 4px; }
+.sq-drama__item--ok { background: #e8f5ee; color: #215a3b; }
+.sq-drama__item--hint { background: #fbf1e2; color: #6b4a05; }
+.sq-drama__icon { flex: 0 0 auto; }
+
+/* === Block 3: Vorschlaege in der Luecke (D14/D41) === */
+.sq-gap { border: 1px dashed #b9c1cb; border-radius: 6px; background: #fff; padding: 10px 12px; }
+.sq-gap__title { font-size: 12.8px; color: #5b6b79; margin-bottom: 8px; }
+.sq-suggest { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.sq-suggest__card { border: 1px solid #d7dce2; border-radius: 4px; background: #fbfcfd; padding: 8px 10px; max-width: 230px; display: flex; flex-direction: column; gap: 4px; }
+.sq-suggest__why { font-size: 11px; color: #5b6b79; }
+.sq-suggest__card .kg-btn { margin-top: auto; }
+.sq-suggest__empty { font-size: 12px; color: #5b6b79; margin-bottom: 8px; }

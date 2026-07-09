@@ -14,7 +14,7 @@
  *
  * @module mod_seminarplaner/sequenz
  */
-define(['core/ajax'], function(Ajax) {
+define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
     const DEFAULT_BOUNDARY_MIN = 750; // 12:30 fallback, same rule as the PHP converter.
     const ANCHORS = ['vormittag', 'nachmittag'];
 
@@ -68,6 +68,34 @@ define(['core/ajax'], function(Ajax) {
         }
         const found = PHASE_KEYS.find((candidate) => candidate.match.some((m) => clean.includes(m)));
         return found ? found.key : '';
+    };
+
+    const PHASE_LABELS = {
+        orientierung: 'Orientierung',
+        erfahrung: 'Erfahrungserhebung',
+        analyse: 'Analyse',
+        handlung: 'Handlungsteil',
+        transfer: 'Transfer',
+    };
+
+    // D41: Bloom verb stems mapped to the seminar phase (Erfahrungserhebung
+    // deliberately excluded - it is only found via keyword matching).
+    const BLOOM_PHASES = [
+        {phase: 'orientierung', stems: ['benenn', 'defini', 'nenn', 'aufzähl', 'wiedergeb']},
+        {phase: 'analyse', stems: ['erklär', 'zusammenfass', 'vergleich', 'unterscheid', 'klassifizier', 'zerleg', 'analysier', 'einordn']},
+        {phase: 'handlung', stems: ['anwend', 'ausführ', 'umsetz', 'durchführ', 'erprob', 'anleit']},
+        {phase: 'transfer', stems: ['bewert', 'beurteil', 'einschätz', 'entwickel', 'gestalt', 'konzipier', 'reflektier', 'übertrag']},
+    ];
+
+    const STOPWORDS = ['eine', 'einer', 'eines', 'einem', 'einen', 'der', 'die', 'das', 'den', 'dem', 'des',
+        'und', 'oder', 'für', 'nach', 'über', 'unter', 'beim', 'zum', 'zur', 'mit', 'ohne', 'sich', 'sind',
+        'werden', 'wird', 'können', 'lernenden', 'teilnehmenden', 'sowie', 'auch', 'nicht', 'ist', 'als'];
+
+    const tokenize = (text) => {
+        return String(text || '').toLowerCase()
+            .replace(/<[^>]+>/g, ' ')
+            .split(/[^a-zäöüß]+/)
+            .filter((word) => word.length > 3 && !STOPWORDS.includes(word));
     };
 
     class SequenzView {
@@ -126,8 +154,30 @@ define(['core/ajax'], function(Ajax) {
                     event.returnValue = '';
                 }
             });
+            this.initDramaToggle();
             this.loadGrids();
             this.loadEnrichment();
+        }
+
+        // D27: the toggle is a per-user setting across all plans.
+        initDramaToggle() {
+            this.dramaEnabled = true;
+            const toggle = bySel('#sq-drama-toggle');
+            if (!toggle) {
+                return;
+            }
+            toggle.checked = true;
+            UserRepository.getUserPreference('mod_seminarplaner_dramaturgie').then((value) => {
+                this.dramaEnabled = !(value === '0' || value === 0 || value === false);
+                toggle.checked = this.dramaEnabled;
+                this.renderDrama();
+            }).catch(() => null);
+            toggle.addEventListener('change', () => {
+                this.dramaEnabled = toggle.checked;
+                this.renderDrama();
+                UserRepository.setUserPreference('mod_seminarplaner_dramaturgie', this.dramaEnabled ? '1' : '0')
+                    .catch(() => null);
+            });
         }
 
         confirmDiscard() {
@@ -811,6 +861,8 @@ define(['core/ajax'], function(Ajax) {
                         this.saveBausteinEditor();
                     } else if (type === 'baustein-dissolve') {
                         this.dissolveBaustein(action.getAttribute('data-bid') || '');
+                    } else if (type === 'quick-save') {
+                        this.saveQuickCreate();
                     }
                 });
             }
@@ -1145,6 +1197,420 @@ define(['core/ajax'], function(Ajax) {
             this.toast(`„${cardTitle(card)}" hinzugefügt.`);
         }
 
+        // ---- Dramaturgie-Blick (D15/D22/D23): hints only, silent gaps -------
+
+        placementRawPhase(placement) {
+            const card = this.activeCardForPlacement(placement);
+            if (card && card.seminarphase) {
+                return this.fieldValue(card, 'seminarphase');
+            }
+            const legacy = this.legacyEntryFor(placement);
+            return legacy && legacy.phase ? String(legacy.phase) : '';
+        }
+
+        placementSozialform(placement) {
+            const card = this.activeCardForPlacement(placement);
+            return card ? this.fieldValue(card, 'sozialform') : '';
+        }
+
+        dayPlacements(day) {
+            const list = [];
+            ANCHORS.forEach((ankername) => {
+                day.anker[ankername].sequenz.forEach((pid) => {
+                    const placement = this.placement(pid);
+                    if (placement) {
+                        list.push({pid, ankername, data: placement});
+                    }
+                });
+            });
+            return list;
+        }
+
+        dramaFindings() {
+            const findings = [];
+            const day = this.sequenz.tage[this.dayIndex];
+            if (!day) {
+                return findings;
+            }
+            const daylabel = `Tag ${Number(day.tag) || this.dayIndex + 1}`;
+            const dayitems = this.dayPlacements(day);
+            const units = dayitems.filter((item) => item.data.typ === 'einheit' && !this.isUnfilled(item.data));
+
+            // Regel 1 (Seminar): Phasenabdeckung - only speaks if phases exist.
+            const allphases = {};
+            let anyphase = false;
+            this.sequenz.tage.forEach((tag) => {
+                this.dayPlacements(tag).forEach((item) => {
+                    const key = phaseKey(this.placementRawPhase(item.data));
+                    if (key) {
+                        allphases[key] = true;
+                        anyphase = true;
+                    }
+                });
+            });
+            if (anyphase) {
+                const missing = Object.keys(PHASE_LABELS).filter((key) => !allphases[key]);
+                if (!missing.length) {
+                    findings.push({ok: true, text: 'Alle fünf Phasen sind im Seminar vertreten.'});
+                } else {
+                    findings.push({ok: false, text: `Im Seminar ist noch Raum für: ${missing.map((k) => PHASE_LABELS[k]).join(', ')}.`});
+                }
+            }
+
+            // Regel 6 (Tag): Einstieg am Morgen.
+            const first = units[0];
+            if (first) {
+                const key = phaseKey(this.placementRawPhase(first.data));
+                const title = String(first.data.titel || '').toLowerCase();
+                const opener = ['orientierung', 'erfahrung'].includes(key)
+                    || /ankomm|begrüß|einstieg|warm|kennenlern|orientier/.test(title);
+                if (key || opener) {
+                    findings.push(opener
+                        ? {ok: true, text: `${daylabel} beginnt mit etwas Orientierendem oder Ankommendem.`}
+                        : {ok: false, text: `${daylabel} könnte mit etwas Orientierendem oder Ankommendem starten.`});
+                }
+            }
+
+            // Regel 2 (Tag): Aktivierung nach der Mittagspause.
+            const afternoonfirst = units.find((item) => item.ankername === 'nachmittag');
+            if (afternoonfirst) {
+                const sozialform = this.placementSozialform(afternoonfirst.data).toLowerCase();
+                if (sozialform) {
+                    const inputlike = /vortrag|input|präsentation/.test(sozialform);
+                    findings.push(inputlike
+                        ? {ok: false, text: 'Nach der Mittagspause könnte etwas Aktivierendes guttun – die erste Einheit ist gerade eher Input.'}
+                        : {ok: true, text: 'Nach der Mittagspause geht es aktivierend weiter.'});
+                }
+            }
+
+            // Regel 4 (Tag): Tagesabschluss.
+            const last = units[units.length - 1];
+            if (last && units.length > 1) {
+                const key = phaseKey(this.placementRawPhase(last.data));
+                const title = String(last.data.titel || '').toLowerCase();
+                const closing = key === 'transfer'
+                    || /blitzlicht|feedback|abschluss|ausblick|auswertung|reflexion/.test(title);
+                if (key || closing) {
+                    findings.push(closing
+                        ? {ok: true, text: `${daylabel} endet mit einer abschließenden Einheit.`}
+                        : {ok: false, text: `${daylabel} könnte mit etwas Abschließendem enden (Blitzlicht, Feedback, Ausblick).`});
+                }
+            }
+
+            // Regel 5 (Tag): Sozialform-Monotonie (> 120 Min. am Stück, D22).
+            let runform = '';
+            let runminutes = 0;
+            let monotonie = '';
+            dayitems.forEach((item) => {
+                if (item.data.typ === 'pause') {
+                    runform = '';
+                    runminutes = 0;
+                    return;
+                }
+                const sozialform = this.placementSozialform(item.data).toLowerCase();
+                if (!sozialform) {
+                    runform = '';
+                    runminutes = 0;
+                    return;
+                }
+                if (sozialform === runform) {
+                    runminutes += Math.max(0, Number(item.data.dauer) || 0);
+                } else {
+                    runform = sozialform;
+                    runminutes = Math.max(0, Number(item.data.dauer) || 0);
+                }
+                if (runminutes > 120 && !monotonie) {
+                    monotonie = this.placementSozialform(item.data);
+                }
+            });
+            if (monotonie) {
+                findings.push({ok: false, text: `Mehr als zwei Stunden am Stück in derselben Sozialform (${monotonie}) – ein Wechsel könnte beleben.`});
+            }
+
+            // Regel 7 (Tag): Pausenhinweis - länger als 1,5 Std. ohne Pause (D23).
+            ANCHORS.forEach((ankername) => {
+                let streak = 0;
+                let hinted = false;
+                day.anker[ankername].sequenz.forEach((pid) => {
+                    const placement = this.placement(pid);
+                    if (!placement || hinted) {
+                        return;
+                    }
+                    if (placement.typ === 'pause') {
+                        streak = 0;
+                        return;
+                    }
+                    streak += Math.max(0, Number(placement.dauer) || 0);
+                    if (streak > 90) {
+                        findings.push({ok: false, text: `Am ${ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag'} läuft es länger als 1,5 Stunden ohne Pause – eine kurze Pause könnte guttun.`});
+                        hinted = true;
+                    }
+                });
+            });
+
+            // Regel 3 (Seminar): Transfer am Ende.
+            let lastunit = null;
+            this.sequenz.tage.forEach((tag) => {
+                this.dayPlacements(tag).forEach((item) => {
+                    if (item.data.typ === 'einheit' && !this.isUnfilled(item.data)) {
+                        lastunit = item;
+                    }
+                });
+            });
+            if (lastunit) {
+                const key = phaseKey(this.placementRawPhase(lastunit.data));
+                if (key) {
+                    findings.push(key === 'transfer'
+                        ? {ok: true, text: 'Das Seminar endet mit einer Transfer-Einheit.'}
+                        : {ok: false, text: 'Zum Seminarende könnte eine Transfer-Einheit den Bogen in die Praxis schlagen.'});
+                }
+            }
+
+            return findings;
+        }
+
+        renderDrama() {
+            const panel = bySel('#sq-drama');
+            if (!panel) {
+                return;
+            }
+            if (!this.dramaEnabled || !this.sequenz || !this.dayCount()) {
+                panel.innerHTML = '';
+                panel.classList.remove('sq-drama--visible');
+                return;
+            }
+            const findings = this.dramaFindings();
+            if (!findings.length) {
+                panel.innerHTML = '';
+                panel.classList.remove('sq-drama--visible');
+                return;
+            }
+            panel.classList.add('sq-drama--visible');
+            panel.innerHTML = `
+                <h4>Dramaturgie-Blick</h4>
+                ${findings.map((finding) => `
+                    <div class="sq-drama__item sq-drama__item--${finding.ok ? 'ok' : 'hint'}">
+                      <span class="sq-drama__icon">${finding.ok ? '✓' : '💡'}</span>
+                      <span>${escapeHtml(finding.text)}</span>
+                    </div>`).join('')}`;
+        }
+
+        // ---- Vorschlagsmechanik (D14/D41) ------------------------------------
+
+        contextKeywords(baustein) {
+            if (!baustein) {
+                return [];
+            }
+            return [...new Set([
+                ...tokenize(baustein.titel),
+                ...tokenize(baustein.unterthemen),
+                ...tokenize(baustein.themenplanreferenz),
+            ])];
+        }
+
+        bloomPhasesFor(text) {
+            const clean = String(text || '').toLowerCase();
+            const phases = [];
+            BLOOM_PHASES.forEach((entry) => {
+                if (entry.stems.some((stem) => clean.includes(stem))) {
+                    phases.push(entry.phase);
+                }
+            });
+            return phases;
+        }
+
+        cardDuration(card) {
+            const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
+            return Number.isFinite(duration) && duration > 0 ? duration : null;
+        }
+
+        // Hard filter: duration fits. Soft ranking: keywords + Bloom phase.
+        suggestFor(gapminutes, keywords, bloomphases, excluderefs) {
+            const scored = [];
+            this.methodCardList.forEach((card) => {
+                const duration = this.cardDuration(card);
+                if (duration === null || duration > gapminutes) {
+                    return;
+                }
+                if (excluderefs.includes(String(card.id))) {
+                    return;
+                }
+                const haystack = (cardTitle(card) + ' ' + this.fieldValue(card, 'kurzbeschreibung') + ' '
+                    + this.fieldValue(card, 'tags')).toLowerCase();
+                const hits = keywords.filter((word) => haystack.includes(word));
+                const cardphase = phaseKey(this.fieldValue(card, 'seminarphase'));
+                const phasematch = cardphase && bloomphases.includes(cardphase);
+                const reasons = [`${duration} Min.`];
+                if (this.fieldValue(card, 'seminarphase')) {
+                    reasons.push(this.fieldValue(card, 'seminarphase'));
+                }
+                if (hits.length) {
+                    reasons.push(`Stichwort „${hits[0]}"`);
+                }
+                if (phasematch) {
+                    reasons.push('passt zur erwarteten Phase');
+                }
+                scored.push({
+                    card,
+                    duration,
+                    score: hits.length * 2 + (phasematch ? 3 : 0),
+                    reason: reasons.join(' · '),
+                });
+            });
+            scored.sort((a, b) => {
+                if (a.score !== b.score) {
+                    return b.score - a.score;
+                }
+                if (a.duration !== b.duration) {
+                    return b.duration - a.duration;
+                }
+                return cardTitle(a.card).localeCompare(cardTitle(b.card));
+            });
+            return scored.slice(0, 4);
+        }
+
+        renderSuggestions(gapminutes, baustein, targetattrs) {
+            const keywords = this.contextKeywords(baustein);
+            const bloomphases = baustein ? this.bloomPhasesFor(baustein.themenplanreferenz) : [];
+            const suggestions = this.suggestFor(gapminutes, keywords, bloomphases, []);
+            const title = baustein
+                ? `Hier ist noch Platz für ca. ${gapminutes} Min. – Vorschläge aus deiner Bibliothek:`
+                : `In diesem Abschnitt sind noch ca. ${gapminutes} Min. frei – Vorschläge aus deiner Bibliothek:`;
+
+            const cards = suggestions.map((entry) => `
+                <div class="sq-suggest__card">
+                  <div class="sq-unit__title">${escapeHtml(cardTitle(entry.card))}</div>
+                  <div class="sq-suggest__why">${escapeHtml(entry.reason)}</div>
+                  <button type="button" class="kg-btn" data-sq-action="suggest-add"
+                    data-cardid="${escapeHtml(String(entry.card.id))}" ${targetattrs}>Übernehmen</button>
+                </div>`).join('');
+
+            const empty = suggestions.length ? '' : `
+                <div class="sq-suggest__empty">In der Bibliothek passt gerade nichts in diese Lücke –
+                  leg direkt eine neue Einheit an.</div>`;
+
+            return `
+                <div class="sq-gap">
+                  <div class="sq-gap__title">${escapeHtml(title)}</div>
+                  <div class="sq-suggest">${cards}</div>
+                  ${empty}
+                  <button type="button" class="kg-btn" data-sq-action="quick-create" ${targetattrs}>＋ Neue Einheit anlegen</button>
+                </div>`;
+        }
+
+        // Insert a unit into a reserved module: the reservation shrinks.
+        addCardToBaustein(cardid, placeholderpid) {
+            const placeholder = this.placement(placeholderpid);
+            const card = this.methodCardForRef(cardid);
+            const found = this.locate(placeholderpid);
+            if (!placeholder || !card || !found) {
+                return;
+            }
+            const duration = this.cardDuration(card) || 15;
+            const eaid = this.uniqueId('eax', this.sequenz.einheitenauswahlen);
+            const alternativen = (Array.isArray(card.alternativen) ? card.alternativen : [])
+                .map(String).filter((ref) => this.methodCards[ref]);
+            this.sequenz.einheitenauswahlen[eaid] = {kandidaten: [String(card.id), ...alternativen], aktiv: String(card.id)};
+            const pid = this.uniqueId('px', this.sequenz.platzierungen);
+            this.sequenz.platzierungen[pid] = {
+                typ: 'einheit',
+                bausteinid: placeholder.bausteinid || null,
+                einheitenauswahl: eaid,
+                titel: cardTitle(card),
+                dauer: duration,
+            };
+            const seq = found.anchors[found.anchorIdx].seq;
+            seq.splice(found.pos, 0, pid);
+            const rest = Math.max(0, (Number(placeholder.dauer) || 0) - duration);
+            if (rest > 0) {
+                placeholder.dauer = rest;
+            } else {
+                const newpos = seq.indexOf(placeholderpid);
+                if (newpos >= 0) {
+                    seq.splice(newpos, 1);
+                }
+                const auswahlid = placeholder.einheitenauswahl;
+                delete this.sequenz.platzierungen[placeholderpid];
+                if (auswahlid && !this.auswahlInUse(auswahlid)) {
+                    delete this.sequenz.einheitenauswahlen[auswahlid];
+                }
+            }
+            this.setDirty(true);
+            this.render();
+            this.toast(`„${cardTitle(card)}" übernommen.`);
+        }
+
+        openQuickCreate(targetattrs) {
+            this.quickTarget = targetattrs;
+            const root = this.modalRoot();
+            root.innerHTML = `
+                <div class="sq-modal">
+                  <div class="sq-modal__head">
+                    <h3>Neue Einheit anlegen</h3>
+                    <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
+                  </div>
+                  <div class="sq-modal__body">
+                    <div class="sq-field">
+                      <label class="kg-label">Titel</label>
+                      <input type="text" class="kg-input" id="sq-quick-titel">
+                    </div>
+                    <div class="sq-field">
+                      <label class="kg-label">Dauer (Minuten)</label>
+                      <input type="text" class="kg-input" id="sq-quick-dauer" value="30">
+                    </div>
+                    <div class="sq-field__hint">Alles Weitere (Ablauf, Phase, Material …) kannst du später über „Bearbeiten" ergänzen.</div>
+                  </div>
+                  <div class="sq-modal__footer">
+                    <button type="button" class="kg-btn" data-sq-action="modal-close">Abbrechen</button>
+                    <button type="button" class="kg-btn kg-btn-primary" data-sq-action="quick-save">Anlegen und einplanen</button>
+                  </div>
+                </div>`;
+            root.classList.add('open');
+            const input = bySel('#sq-quick-titel');
+            if (input) {
+                input.focus();
+            }
+        }
+
+        saveQuickCreate() {
+            const titel = (bySel('#sq-quick-titel') || {value: ''}).value.trim();
+            const dauer = Number.parseInt((bySel('#sq-quick-dauer') || {value: ''}).value.replace(/\D+/g, ''), 10);
+            if (!titel) {
+                return;
+            }
+            const card = {
+                id: `${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+                titel,
+                seminarphase: [],
+                zeitbedarf: String(Number.isFinite(dauer) && dauer > 0 ? dauer : 30),
+                gruppengroesse: [],
+                kurzbeschreibung: '',
+                sozialform: [],
+                tags: [],
+                alternativen: [],
+            };
+            this.methodCardList.push(card);
+            this.methodCards[String(card.id)] = card;
+            asCall('mod_seminarplaner_save_method_cards', {
+                cmid: this.cmid,
+                methodsjson: JSON.stringify(this.methodCardList),
+            }).then(() => {
+                this.closeModal();
+                this.applySuggestTarget(String(card.id), this.quickTarget || {});
+            }).catch(() => {
+                this.setStatus('Die neue Einheit konnte nicht angelegt werden.', true);
+            });
+        }
+
+        applySuggestTarget(cardid, target) {
+            if (target.pid) {
+                this.addCardToBaustein(cardid, target.pid);
+            } else {
+                this.pickerAnker = target.anker || 'vormittag';
+                this.addUnitFromCard(cardid);
+            }
+        }
+
         // ---- Event delegation ---------------------------------------------
 
         handleDayClick(event) {
@@ -1194,6 +1660,16 @@ define(['core/ajax'], function(Ajax) {
                 this.addPause(action.getAttribute('data-anker') || 'vormittag');
             } else if (type === 'edit-baustein') {
                 this.openBausteinEditor(action.getAttribute('data-bid') || '');
+            } else if (type === 'suggest-add') {
+                this.applySuggestTarget(action.getAttribute('data-cardid') || '', {
+                    pid: action.getAttribute('data-pid') || '',
+                    anker: action.getAttribute('data-anker') || '',
+                });
+            } else if (type === 'quick-create') {
+                this.openQuickCreate({
+                    pid: action.getAttribute('data-pid') || '',
+                    anker: action.getAttribute('data-anker') || '',
+                });
             }
         }
 
@@ -1228,6 +1704,7 @@ define(['core/ajax'], function(Ajax) {
                 <div class="sq-break-divider"><span>🕐 Mittagspause</span></div>`;
             const afternoon = this.renderAnchor(day, 'nachmittag', frame, seenBausteine);
             container.innerHTML = morning + divider + afternoon;
+            this.renderDrama();
         }
 
         bausteineSeenBeforeCurrentDay() {
@@ -1282,6 +1759,12 @@ define(['core/ajax'], function(Ajax) {
                    </div>`
                 : '';
 
+            // D14: a free gap in the anchor offers explained suggestions.
+            const freegap = budget - used;
+            const gapbox = (over <= 0 && freegap >= 15 && placements.length && this.methodCardList.length)
+                ? this.renderSuggestions(freegap, null, `data-anker="${ankername}"`)
+                : '';
+
             const addbutton = `
                 <div class="sq-anchor__add">
                   <button type="button" class="kg-btn" data-sq-action="add-unit" data-anker="${ankername}">＋ Einheit hinzufügen</button>
@@ -1297,7 +1780,7 @@ define(['core/ajax'], function(Ajax) {
                       <div class="sq-budget__label">${escapeHtml(budgetlabel)}</div>
                     </div>
                   </div>
-                  <div class="sq-anchor__body">${body}${overrun}${addbutton}</div>
+                  <div class="sq-anchor__body">${body}${overrun}${gapbox}${addbutton}</div>
                 </div>`;
         }
 
@@ -1360,13 +1843,20 @@ define(['core/ajax'], function(Ajax) {
             if (!unfilled) {
                 return `<div class="sq-baustein__units">${units}</div>`;
             }
+            // D14: the reserved duration is the classic suggestion gap - with
+            // keywords and Bloom mapping from the module master data.
+            const placeholderpid = group.items[0].pid;
+            const gapminutes = group.items.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
+            const suggestions = (gapminutes >= 10 && this.methodCardList.length)
+                ? this.renderSuggestions(gapminutes, baustein, `data-pid="${escapeHtml(placeholderpid)}"`)
+                : '';
             // Reserved module: master data now lives on the module itself;
             // the planning state only remains as fallback for the unit list.
             const planningunit = this.planningUnitForBaustein(baustein);
             const owntopics = htmlToLines(baustein && baustein.unterthemen);
             const topics = owntopics || (planningunit ? htmlToLines(planningunit.topics) : '');
             if (!planningunit && !topics) {
-                return '';
+                return suggestions ? `<div class="sq-baustein__units">${suggestions}</div>` : '';
             }
             const methods = (Array.isArray(planningunit.methods) ? planningunit.methods : [])
                 .map((m) => this.methodCardForRef(m && m.methodid))
@@ -1394,6 +1884,7 @@ define(['core/ajax'], function(Ajax) {
                 <div class="sq-baustein__units">
                   ${topics ? `<div class="sq-baustein__topics">${escapeHtml(topics)}</div>` : ''}
                   ${methodrows}
+                  ${suggestions}
                 </div>`;
         }
 
