@@ -40,6 +40,19 @@ define(['core/ajax'], function(Ajax) {
         return `${String(Math.floor(clean / 60)).padStart(2, '0')}:${String(clean % 60).padStart(2, '0')}`;
     };
 
+    const cardTitle = (card) => String((card && (card.titel || card.title)) || '');
+
+    // Themenplan topics arrive as HTML fragments; reduce them to plain lines.
+    const htmlToLines = (html) => {
+        const doc = document.createElement('div');
+        doc.innerHTML = String(html || '')
+            .replace(/<li[^>]*>/gi, '\n• ')
+            .replace(/<br[^>]*>/gi, '\n')
+            .replace(/<\/p>/gi, '\n');
+        return doc.textContent.replace(/ /g, ' ').split('\n')
+            .map((line) => line.trim()).filter(Boolean).join('\n');
+    };
+
     const PHASE_KEYS = [
         {key: 'orientierung', match: ['orientierung', 'warm-up', 'einstieg']},
         {key: 'erfahrung', match: ['erfahrung', 'erwartungsabfrage', 'vorwissen']},
@@ -333,8 +346,8 @@ define(['core/ajax'], function(Ajax) {
 
         candidateLabel(ref) {
             const card = this.methodCardForRef(ref);
-            if (card && card.title) {
-                return String(card.title);
+            if (card && cardTitle(card)) {
+                return cardTitle(card);
             }
             return String(ref || '').replace(/^legacy:/, 'Eintrag ');
         }
@@ -472,8 +485,8 @@ define(['core/ajax'], function(Ajax) {
             auswahl.aktiv = ref;
             const card = this.methodCardForRef(ref);
             if (card) {
-                if (card.title) {
-                    placement.titel = String(card.title);
+                if (cardTitle(card)) {
+                    placement.titel = cardTitle(card);
                 }
                 const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
                 if (Number.isFinite(duration) && duration > 0) {
@@ -750,7 +763,7 @@ define(['core/ajax'], function(Ajax) {
             if (!planningunit) {
                 return '';
             }
-            const topics = String(planningunit.topics || '').trim();
+            const topics = htmlToLines(planningunit.topics);
             const methods = (Array.isArray(planningunit.methods) ? planningunit.methods : [])
                 .map((m) => this.methodCardForRef(m && m.methodid))
                 .filter((card) => card);
@@ -764,7 +777,7 @@ define(['core/ajax'], function(Ajax) {
                     <div class="sq-unit sq-unit--planned">
                       <div class="sq-unit__phase${pkey ? ' sq-phase-bg--' + pkey : ''}"></div>
                       <div class="sq-unit__main">
-                        <div class="sq-unit__title">${escapeHtml(card.title || '')}</div>
+                        <div class="sq-unit__title">${escapeHtml(cardTitle(card))}</div>
                         <div class="sq-unit__meta">
                           ${Number.isFinite(duration) && duration > 0 ? `<span class="sq-badge">${duration} Min.</span>` : ''}
                           ${card.seminarphase ? `<span class="sq-badge">${escapeHtml(String(card.seminarphase))}</span>` : ''}
