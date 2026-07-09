@@ -2716,6 +2716,17 @@ body.sp-resizing * {
   margin-top: var(--spacing-sm);
 }
 
+/* D45: fixed morning/afternoon spans in the setup form. */
+.sp-anchor-times {
+  grid-template-columns: 110px 1fr 1fr;
+  align-items: end;
+}
+
+.sp-anchor-times .sp-anchor-label {
+  font-weight: 600;
+  padding-bottom: 10px;
+}
+
 /* Individual days CSS removed - functionality no longer needed */
 
 .sp-granularity-options {

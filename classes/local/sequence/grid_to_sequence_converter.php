@@ -165,9 +165,10 @@ class grid_to_sequence_converter {
     /**
      * Determine the midday break window for a day.
      *
-     * Picks the configured break applying to the day whose start lies
-     * closest to the 12:30 fallback; without any usable break config the
-     * fallback window is a zero-length boundary at 12:30.
+     * D45 migration rule: the longest configured break applying to the day
+     * counts as the midday break (ties resolved by proximity to 12:30);
+     * without any usable break config the fallback window is a zero-length
+     * boundary at 12:30.
      *
      * @param array $gridstate Decoded grid state.
      * @param string $dayname Day name.
@@ -189,14 +190,19 @@ class grid_to_sequence_converter {
                 continue;
             }
             $duration = max(0, (int)($break['duration'] ?? 0));
-            $candidate = ['start' => $start, 'end' => $start + $duration];
+            $candidate = ['start' => $start, 'end' => $start + $duration, 'duration' => $duration];
             if ($best === null
-                || abs($start - self::DEFAULT_BOUNDARY_MIN) < abs($best['start'] - self::DEFAULT_BOUNDARY_MIN)) {
+                || $duration > $best['duration']
+                || ($duration === $best['duration']
+                    && abs($start - self::DEFAULT_BOUNDARY_MIN) < abs($best['start'] - self::DEFAULT_BOUNDARY_MIN))) {
                 $best = $candidate;
             }
         }
 
-        return $best ?? ['start' => self::DEFAULT_BOUNDARY_MIN, 'end' => self::DEFAULT_BOUNDARY_MIN];
+        if ($best === null) {
+            return ['start' => self::DEFAULT_BOUNDARY_MIN, 'end' => self::DEFAULT_BOUNDARY_MIN];
+        }
+        return ['start' => $best['start'], 'end' => $best['end']];
     }
 
     /**

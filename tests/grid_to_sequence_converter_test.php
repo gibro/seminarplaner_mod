@@ -100,6 +100,42 @@ final class mod_seminarplaner_grid_to_sequence_converter_test extends basic_test
         $this->assertSame(15, $placements[$vormittag[1]]['dauer']);
     }
 
+    public function test_longest_break_wins_as_midday_cut(): void {
+        // D45 migration rule: the longest configured break is the midday
+        // break - even when a shorter one starts closer to 12:30.
+        $state = $this->gridstate([
+            'Montag' => [
+                ['uid' => 'm1', 'kind' => 'method', 'title' => 'Vor der Kaffeepause', 'entryId' => 'e1',
+                    'startMin' => 700, 'endMin' => 735],
+                ['uid' => 'm2', 'kind' => 'method', 'title' => 'Zwischen den Pausen', 'entryId' => 'e2',
+                    'startMin' => 765, 'endMin' => 780],
+                ['uid' => 'm3', 'kind' => 'method', 'title' => 'Nach der Mittagspause', 'entryId' => 'e3',
+                    'startMin' => 840, 'endMin' => 900],
+            ],
+        ], [
+            'days' => ['Montag'],
+            'timeRange' => ['start' => '08:30', 'end' => '17:30'],
+            'granularity' => 15,
+            'breaks' => [
+                // 30 min at 12:15 - closest to 12:30, but only the coffee break.
+                ['days' => ['all'], 'start' => '12:15', 'duration' => 30],
+                // 60 min at 13:00 - the longest break is the midday cut.
+                ['days' => ['all'], 'start' => '13:00', 'duration' => 60],
+            ],
+        ]);
+
+        $sequenz = (new grid_to_sequence_converter())->convert($state);
+
+        $this->assertSame([], sequence_state::validate($sequenz));
+        $vormittag = $sequenz['tage'][0]['anker']['vormittag']['sequenz'];
+        $nachmittag = $sequenz['tage'][0]['anker']['nachmittag']['sequenz'];
+        $this->assertCount(2, $vormittag);
+        $this->assertCount(1, $nachmittag);
+        $this->assertSame('Vor der Kaffeepause', $sequenz['platzierungen'][$vormittag[0]]['titel']);
+        $this->assertSame('Zwischen den Pausen', $sequenz['platzierungen'][$vormittag[1]]['titel']);
+        $this->assertSame('Nach der Mittagspause', $sequenz['platzierungen'][$nachmittag[0]]['titel']);
+    }
+
     public function test_adjacent_flow_segments_merge_within_anchor(): void {
         $state = $this->gridstate([
             'Montag' => [

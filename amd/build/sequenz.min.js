@@ -276,6 +276,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 this.gridid = gridid;
                 this.state = state;
                 this.sequenz = (state && typeof state.sequenz === 'object' && state.sequenz) ? state.sequenz : null;
+                this.ensureSequenzScaffold();
                 this.versionhash = String(res.versionhash || '');
                 this.dayIndex = 0;
                 this.openSwapPid = '';
@@ -287,6 +288,45 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             }).catch(() => {
                 this.setStatus('Der Seminarplan konnte nicht geladen werden.', true);
             });
+        }
+
+        // D45: a plan freshly created via the setup templates has anchor
+        // times but no sequence section yet - scaffold empty days from the
+        // config so planning can start right away. Plans with legacy grid
+        // entries are left to the server-side conversion (D43) instead.
+        ensureSequenzScaffold() {
+            if (this.sequenz || !this.state || typeof this.state !== 'object') {
+                return;
+            }
+            const config = this.state.config || {};
+            const days = Array.isArray(config.days) ? config.days.filter((d) => String(d || '') !== '') : [];
+            if (!days.length) {
+                return;
+            }
+            const plandays = (this.state.plan && this.state.plan.days) || {};
+            const haslegacy = Object.keys(plandays).some((day) => {
+                return (Array.isArray(plandays[day]) ? plandays[day] : []).some((entry) => {
+                    return entry && (Number(entry.endMin) || 0) > (Number(entry.startMin) || 0);
+                });
+            });
+            if (haslegacy) {
+                return;
+            }
+            this.sequenz = {
+                version: 1,
+                tage: days.map((name, index) => ({
+                    tag: index + 1,
+                    bezeichnung: String(name),
+                    anker: {
+                        vormittag: {sequenz: []},
+                        nachmittag: {sequenz: []},
+                    },
+                })),
+                platzierungen: {},
+                einheitenauswahlen: {},
+                bausteine: {},
+            };
+            this.state.sequenz = this.sequenz;
         }
 
         // ---- One-time translation intro (D35) --------------------------------
@@ -354,7 +394,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
 
         showIntro(day, legacyentries) {
             const root = this.modalRoot();
-            const frame = this.dayFrame(day.bezeichnung);
+            const frame = this.dayFrame(0);
             const leftrows = this.renderIntroGrid(legacyentries, frame);
             const rightrows = ANCHORS.map((ankername) => {
                 const isMorning = ankername === 'vormittag';
@@ -456,6 +496,8 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             return this.sequenz && Array.isArray(this.sequenz.tage) ? this.sequenz.tage.length : 0;
         }
 
+        // D45 migration rule for legacy configs: the longest configured
+        // break counts as the midday break; without one, fallback 12:30.
         middayWindow(dayname) {
             const config = (this.state && this.state.config) || {};
             let best = null;
@@ -471,20 +513,45 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 if (start === null) {
                     return;
                 }
-                const candidate = {start, end: start + Math.max(0, Number(brk.duration) || 0)};
-                if (!best || Math.abs(start - DEFAULT_BOUNDARY_MIN) < Math.abs(best.start - DEFAULT_BOUNDARY_MIN)) {
+                const duration = Math.max(0, Number(brk.duration) || 0);
+                const candidate = {start, end: start + duration, duration};
+                if (!best || duration > best.duration
+                    || (duration === best.duration
+                        && Math.abs(start - DEFAULT_BOUNDARY_MIN) < Math.abs(best.start - DEFAULT_BOUNDARY_MIN))) {
                     best = candidate;
                 }
             });
             return best || {start: DEFAULT_BOUNDARY_MIN, end: DEFAULT_BOUNDARY_MIN};
         }
 
-        dayFrame(dayname) {
+        // D45: anchor times come from the setup templates (config.ankerzeiten);
+        // legacy plans without them derive the frame from timeRange + breaks.
+        // First/last day may drop one anchor (arrival/departure day).
+        dayFrame(dayIdx) {
             const config = (this.state && this.state.config) || {};
+            const tage = (this.sequenz && this.sequenz.tage) || [];
+            const day = tage[dayIdx] || {};
+            const az = config.ankerzeiten;
+            const valid = az && az.vormittag && az.nachmittag
+                && parseTimeToMinutes(az.vormittag.start) !== null && parseTimeToMinutes(az.vormittag.end) !== null
+                && parseTimeToMinutes(az.nachmittag.start) !== null && parseTimeToMinutes(az.nachmittag.end) !== null;
+            if (valid) {
+                const vmStart = parseTimeToMinutes(az.vormittag.start);
+                const vmEnd = parseTimeToMinutes(az.vormittag.end);
+                const nmStart = parseTimeToMinutes(az.nachmittag.start);
+                const nmEnd = parseTimeToMinutes(az.nachmittag.end);
+                if (dayIdx === 0 && az.ersterTagNurNachmittag) {
+                    return {start: nmStart, end: nmEnd, midday: {start: nmStart, end: nmStart}};
+                }
+                if (dayIdx === tage.length - 1 && az.letzterTagNurVormittag) {
+                    return {start: vmStart, end: vmEnd, midday: {start: vmEnd, end: vmEnd}};
+                }
+                return {start: vmStart, end: nmEnd, midday: {start: vmEnd, end: nmStart}};
+            }
             const range = config.timeRange || {};
             const start = parseTimeToMinutes(range.start);
             const end = parseTimeToMinutes(range.end);
-            const midday = this.middayWindow(dayname);
+            const midday = this.middayWindow(day.bezeichnung);
             return {
                 start: start === null ? 510 : start,
                 end: end === null ? 1050 : end,
@@ -611,8 +678,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
 
         // C1: move trailing placements into the next anchor until the budget fits.
         resolveOverflow(ankername) {
-            const day = this.sequenz.tage[this.dayIndex];
-            const frame = this.dayFrame(day.bezeichnung);
+            const frame = this.dayFrame(this.dayIndex);
             const anchors = this.anchorList();
             const anchorIdx = this.dayIndex * 2 + (ankername === 'vormittag' ? 0 : 1);
             const seq = anchors[anchorIdx].seq;
@@ -1698,7 +1764,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             }
 
             const seenBausteine = this.bausteineSeenBeforeCurrentDay();
-            const frame = this.dayFrame(day.bezeichnung);
+            const frame = this.dayFrame(this.dayIndex);
             const morning = this.renderAnchor(day, 'vormittag', frame, seenBausteine);
             const divider = `
                 <div class="sq-break-divider"><span>🕐 Mittagspause</span></div>`;
@@ -1737,15 +1803,24 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             const fillpct = budget > 0 ? Math.min(100, Math.round((used / budget) * 100)) : (used > 0 ? 100 : 0);
 
             const title = isMorning ? 'Vormittag' : 'Nachmittag';
-            const timespan = `${minutesToLabel(anchorStart)}–${minutesToLabel(anchorEnd)}`;
+            // D45: on arrival/departure days one anchor has no time span.
+            const anchoroff = budget === 0 && anchorStart >= anchorEnd;
+            const timespan = anchoroff
+                ? `entfällt (${isMorning ? 'Anreisetag' : 'Abreisetag'})`
+                : `${minutesToLabel(anchorStart)}–${minutesToLabel(anchorEnd)}`;
             const overtarget = isMorning ? 'der Mittagspause' : 'dem Tagesende';
-            const budgetlabel = over > 0
+            let budgetlabel = over > 0
                 ? `+${over} Min. über ${overtarget}`
                 : `${used} von ${budget} Min. belegt`;
+            if (anchoroff) {
+                budgetlabel = used > 0 ? `${used} Min. in einem entfallenden Abschnitt` : '';
+            }
 
             let body = this.renderSequence(placements, anchorStart, seenBausteine);
             if (!placements.length) {
-                body = '<div class="sq-empty">Noch keine Einheiten in diesem Abschnitt.</div>';
+                body = anchoroff
+                    ? '<div class="sq-empty">Dieser Abschnitt entfällt an diesem Tag.</div>'
+                    : '<div class="sq-empty">Noch keine Einheiten in diesem Abschnitt.</div>';
             }
 
             const hasNext = this.dayIndex * 2 + (isMorning ? 0 : 1) + 1 < this.dayCount() * 2;

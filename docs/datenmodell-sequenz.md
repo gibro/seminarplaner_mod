@@ -87,10 +87,11 @@ beim ersten Öffnen).
 
 1. **Tage:** Reihenfolge aus `config.days`; verwaiste Tage aus `plan.days`
    werden hinten angefügt (Wochentags-, dann Alphabet-Reihenfolge).
-2. **Anker-Grenze:** Start der konfigurierten Mittagspause
-   (`config.breaks`, Eintrag mit Start am nächsten an 12:30). Fallback ohne
-   Konfiguration: 12:30 (Roter-Faden-Konvention 08:00–12:30 / 12:30–18:00).
-   `startMin < Grenze` → Vormittag, sonst Nachmittag.
+2. **Anker-Grenze (D45):** Start der **längsten** konfigurierten Pause des
+   Grids (`config.breaks`; bei gleicher Länge gewinnt die näher an 12:30).
+   Fallback ohne Konfiguration: 12:30 (Roter-Faden-Konvention
+   08:00–12:30 / 12:30–18:00). `startMin < Grenze` → Vormittag, sonst
+   Nachmittag.
 3. **Sortierung:** je Tag/Anker nach `startMin`, dann `endMin`, dann `uid`
    (stabil, verlustfrei im Sinne von D20/D3).
 4. **Mittagspausen-Einträge** (`kind: "break"` mit Überlappung des
@@ -108,6 +109,33 @@ beim ersten Öffnen).
 7. **`kind: "method"`** → Platzierung mit Einheiten-Auswahl (eine
    Kandidatin, aktiv); `parentunit` → `bausteinid` (Baustein-Stub wird bei
    Bedarf angelegt).
+
+## Anker-Zeiten der Einrichtung (D45, `config.ankerzeiten`)
+
+Die Grid-Einrichtungs-Vorlagen liefern seit D45 feste Vormittag-/
+Nachmittag-Zeitspannen statt eines freien Zeitbereichs plus Pausenliste.
+Sie liegen als reine **Vorbelegung** (frei editierbar) in der Config:
+
+```json
+"ankerzeiten": {
+  "vormittag":  {"start": "08:30", "end": "12:30"},
+  "nachmittag": {"start": "13:15", "end": "17:30"},
+  "ersterTagNurNachmittag": false,
+  "letzterTagNurVormittag": false
+}
+```
+
+- Die beiden Flags bilden das Wochenendseminar ab (Fr nur Nachmittag =
+  Anreise, So nur Vormittag = Abreise); der betroffene Anker entfällt in
+  der Sequenzansicht (Budget 0, Kennzeichnung „entfällt").
+- Die alten Felder `config.timeRange` und `config.breaks` werden beim
+  Speichern der Einrichtung **abgeleitet** (timeRange = Vormittag-Start bis
+  Nachmittag-Ende; eine „all"-Pause im Mittagsfenster), damit die
+  Überblicks-Ansicht (D34) und Alt-Clients unverändert rendern.
+- **Bestandspläne ohne `ankerzeiten`:** Ableitung zur Laufzeit nach der
+  D45-Migrationsregel – längste konfigurierte Pause = Mittagsschnitt,
+  Fallback 12:30. Es findet kein Daten-Upgrade statt; erst ein erneutes
+  „Übernehmen" der Einrichtung schreibt `ankerzeiten` in die Config.
 
 ## Bewusst offen (spätere Schritte)
 

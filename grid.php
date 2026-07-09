@@ -87,12 +87,12 @@ echo html_writer::end_div();
         <h3>Vorlage wählen</h3>
         <select name="preset" id="sp-config-preset" class="kg-input kg-grid-select">
           <option value="custom">Individuelle Konfiguration</option>
-          <option value="standard-week">Standard-Woche (Mo-Fr, 8:30-17:30)</option>
-          <option value="sunday-to-friday">Seminarwoche (So-Fr, 8:30-17:30)</option>
-          <option value="weekend-seminar">Wochenendseminar (Fr-So, 8:30-17:30)</option>
-          <option value="half-week-mo-mi">Halbe Woche (Mo-Mi, 8:30-17:30)</option>
-          <option value="half-week-mi-fr">Halbe Woche (Mi-Fr, 8:30-17:30)</option>
-          <option value="compact-day">Kompakttag (8:30-17:30)</option>
+          <option value="standard-week">Standard-Woche (Mo-Fr)</option>
+          <option value="sunday-to-friday">Seminarwoche (So-Fr)</option>
+          <option value="weekend-seminar">Wochenendseminar (Fr-So, Fr Anreise / So Abreise)</option>
+          <option value="half-week-mo-mi">Halbe Woche (Mo-Mi)</option>
+          <option value="half-week-mi-fr">Halbe Woche (Mi-Fr)</option>
+          <option value="compact-day">Kompakttag</option>
         </select>
       </div>
     </div>
@@ -121,19 +121,28 @@ echo html_writer::end_div();
     </div>
 
     <div class="sp-modal__section">
-      <h3>Zeitbereich</h3>
-      <div class="sp-time-range">
-        <label class="sp-modal__field"><span class="sp-modal__label">Start</span><input type="time" name="timeStart" id="sp-config-time-start" class="kg-input" value="08:30"></label>
-        <label class="sp-modal__field"><span class="sp-modal__label">Ende</span><input type="time" name="timeEnd" id="sp-config-time-end" class="kg-input" value="17:30"></label>
+      <h3>Seminarzeiten</h3>
+      <div class="sp-time-range sp-anchor-times">
+        <span class="sp-anchor-label">Vormittag</span>
+        <label class="sp-modal__field"><span class="sp-modal__label">von</span><input type="time" name="vormittagStart" id="sp-config-vm-start" class="kg-input" value="08:30"></label>
+        <label class="sp-modal__field"><span class="sp-modal__label">bis</span><input type="time" name="vormittagEnd" id="sp-config-vm-end" class="kg-input" value="12:30"></label>
       </div>
-    </div>
-
-    <div class="sp-modal__section">
-      <div class="sp-breaks-header">
-        <h3>Pausenzeiten</h3>
-        <button type="button" class="kg-btn" id="sp-add-break">+ Pause hinzufügen</button>
+      <div class="sp-time-range sp-anchor-times">
+        <span class="sp-anchor-label">Nachmittag</span>
+        <label class="sp-modal__field"><span class="sp-modal__label">von</span><input type="time" name="nachmittagStart" id="sp-config-nm-start" class="kg-input" value="13:15"></label>
+        <label class="sp-modal__field"><span class="sp-modal__label">bis</span><input type="time" name="nachmittagEnd" id="sp-config-nm-end" class="kg-input" value="17:30"></label>
       </div>
-      <div class="sp-breaks-list" id="sp-breaks-list"></div>
+      <label class="kg-label kg-inline-checkbox">
+        <input type="checkbox" name="firstDayAfternoonOnly" id="sp-config-first-arrival">
+        <span>Erster Tag beginnt erst am Nachmittag (Anreise)</span>
+      </label>
+      <label class="kg-label kg-inline-checkbox">
+        <input type="checkbox" name="lastDayMorningOnly" id="sp-config-last-departure">
+        <span>Letzter Tag endet mit dem Vormittag (Abreise)</span>
+      </label>
+      <p class="sp-filter-status">Die Zeiten sind eine Vorbelegung aus der Vorlage und lassen sich frei anpassen.
+        Zwischen Vormittag und Nachmittag liegt die Mittagspause. Kurze Zwischenpausen musst du nicht
+        vorausplanen – die Sequenzansicht erinnert daran, wenn lange ohne Pause gearbeitet wird.</p>
     </div>
 
     <div class="sp-modal__actions">

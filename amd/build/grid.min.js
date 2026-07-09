@@ -65,14 +65,28 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             labelSome: 'Dimensionen'
         }
     };
-    const GRID_PRESETS = {
-        'standard-week': {days: ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]},
-        'sunday-to-friday': {days: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]},
-        'weekend-seminar': {days: ['Freitag', 'Samstag', 'Sonntag'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]},
-        'half-week-mo-mi': {days: ['Montag', 'Dienstag', 'Mittwoch'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]},
-        'half-week-mi-fr': {days: ['Mittwoch', 'Donnerstag', 'Freitag'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]},
-        'compact-day': {days: ['Montag'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]}
+    // D45: every template carries fixed morning/afternoon spans (editable
+    // pre-fill); the legacy timeRange/breaks fields are derived from them.
+    const DEFAULT_ANKERZEITEN = {
+        vormittag: {start: '08:30', end: '12:30'},
+        nachmittag: {start: '13:15', end: '17:30'},
+        ersterTagNurNachmittag: false,
+        letzterTagNurVormittag: false
     };
+    const GRID_PRESETS = {
+        'standard-week': {days: ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
+        'sunday-to-friday': {days: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
+        'weekend-seminar': {days: ['Freitag', 'Samstag', 'Sonntag'], granularity: 15, ankerzeiten: Object.assign({}, DEFAULT_ANKERZEITEN, {ersterTagNurNachmittag: true, letzterTagNurVormittag: true})},
+        'half-week-mo-mi': {days: ['Montag', 'Dienstag', 'Mittwoch'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
+        'half-week-mi-fr': {days: ['Mittwoch', 'Donnerstag', 'Freitag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
+        'compact-day': {days: ['Montag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN}
+    };
+    const cloneAnkerzeiten = (az) => ({
+        vormittag: Object.assign({}, az.vormittag),
+        nachmittag: Object.assign({}, az.nachmittag),
+        ersterTagNurNachmittag: !!az.ersterTagNurNachmittag,
+        letzterTagNurVormittag: !!az.letzterTagNurVormittag
+    });
     const DEFAULT_COLUMNS = {
         uhrzeit: true,
         title: true,
@@ -106,6 +120,57 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return null;
         }
         return toMin(hh, mm);
+    };
+
+    // D45: read the anchor times of a config; legacy configs (only
+    // timeRange + free break list) are translated on the fly - the longest
+    // configured break counts as the midday cut, fallback 12:30.
+    const deriveAnkerzeiten = (config) => {
+        const cfg = config || {};
+        const az = cfg.ankerzeiten;
+        if (az && az.vormittag && az.nachmittag
+                && parseTimeToMinutes(az.vormittag.start) !== null && parseTimeToMinutes(az.vormittag.end) !== null
+                && parseTimeToMinutes(az.nachmittag.start) !== null && parseTimeToMinutes(az.nachmittag.end) !== null) {
+            return cloneAnkerzeiten(az);
+        }
+        const range = cfg.timeRange || {};
+        const start = parseTimeToMinutes(range.start) === null ? '08:30' : range.start;
+        const end = parseTimeToMinutes(range.end) === null ? '17:30' : range.end;
+        let best = null;
+        (Array.isArray(cfg.breaks) ? cfg.breaks : []).forEach((brk) => {
+            if (!brk || parseTimeToMinutes(brk.start) === null) {
+                return;
+            }
+            const duration = Math.max(0, Number(brk.duration) || 0);
+            if (!duration) {
+                return;
+            }
+            if (!best || duration > best.duration
+                || (duration === best.duration
+                    && Math.abs(parseTimeToMinutes(brk.start) - 750) < Math.abs(parseTimeToMinutes(best.start) - 750))) {
+                best = {start: brk.start, duration};
+            }
+        });
+        const vmEnd = best ? best.start : '12:30';
+        const nmStart = best ? label(parseTimeToMinutes(best.start) + best.duration) : '12:30';
+        return {
+            vormittag: {start, end: vmEnd},
+            nachmittag: {start: nmStart, end},
+            ersterTagNurNachmittag: false,
+            letzterTagNurVormittag: false
+        };
+    };
+
+    // D45: keep the legacy fields as derived values so the read-only
+    // overview (time axis, midday break) keeps rendering unchanged.
+    const legacyFieldsFromAnkerzeiten = (az) => {
+        const vmEnd = parseTimeToMinutes(az.vormittag.end);
+        const nmStart = parseTimeToMinutes(az.nachmittag.start);
+        const gap = (vmEnd !== null && nmStart !== null) ? nmStart - vmEnd : 0;
+        return {
+            timeRange: {start: az.vormittag.start, end: az.nachmittag.end},
+            breaks: gap > 0 ? [{days: ['all'], start: az.vormittag.end, duration: gap}] : []
+        };
     };
 
     const escapeHtml = (str) => String(str || '').replace(/[&<>"']/g, (ch) => {
@@ -221,9 +286,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 config: {
                     preset: 'standard-week',
                     days: ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'],
+                    ankerzeiten: cloneAnkerzeiten(DEFAULT_ANKERZEITEN),
                     timeRange: {start: '08:30', end: '17:30'},
                     granularity: 15,
-                    breaks: [{days: ['all'], start: '12:00', duration: 60}],
+                    breaks: [{days: ['all'], start: '12:30', duration: 45}],
                     tableColumns: Object.assign({}, DEFAULT_COLUMNS)
                 },
                 view: {mode: VIEW_MODE_WEEK, day: 'Montag'},
@@ -3633,7 +3699,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const panel = bySel('#sp-config-inline');
             const form = bySel('#sp-config-form');
             const preset = bySel('#sp-config-preset');
-            const addbreak = bySel('#sp-add-break');
             const closepanelbtn = bySel('#sp-config-collapse');
 
             if (closepanelbtn) {
@@ -3642,9 +3707,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
             if (preset) {
                 preset.addEventListener('change', () => this.applyPreset(preset.value));
-            }
-            if (addbreak) {
-                addbreak.addEventListener('click', () => this.addBreakItem());
             }
             if (form) {
                 form.querySelectorAll('input[name="days"]').forEach((cb) => {
@@ -3657,18 +3719,40 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         this.warn('Bitte mindestens einen Tag auswählen.');
                         return;
                     }
-                    const start = form.querySelector('#sp-config-time-start').value || '08:30';
-                    const end = form.querySelector('#sp-config-time-end').value || '17:30';
-                    if ((parseTimeToMinutes(end) || 0) <= (parseTimeToMinutes(start) || 0)) {
-                        this.warn('Endzeit muss nach Startzeit liegen.');
+                    // D45: the setup collects morning/afternoon spans instead
+                    // of one free time range plus a break list.
+                    const ankerzeiten = {
+                        vormittag: {
+                            start: form.querySelector('#sp-config-vm-start').value || '08:30',
+                            end: form.querySelector('#sp-config-vm-end').value || '12:30'
+                        },
+                        nachmittag: {
+                            start: form.querySelector('#sp-config-nm-start').value || '13:15',
+                            end: form.querySelector('#sp-config-nm-end').value || '17:30'
+                        },
+                        ersterTagNurNachmittag: !!form.querySelector('#sp-config-first-arrival').checked,
+                        letzterTagNurVormittag: !!form.querySelector('#sp-config-last-departure').checked
+                    };
+                    const vmstart = parseTimeToMinutes(ankerzeiten.vormittag.start) || 0;
+                    const vmend = parseTimeToMinutes(ankerzeiten.vormittag.end) || 0;
+                    const nmstart = parseTimeToMinutes(ankerzeiten.nachmittag.start) || 0;
+                    const nmend = parseTimeToMinutes(ankerzeiten.nachmittag.end) || 0;
+                    if (vmend <= vmstart || nmend <= nmstart) {
+                        this.warn('Endzeit muss jeweils nach der Startzeit liegen.');
                         return;
                     }
+                    if (nmstart < vmend) {
+                        this.warn('Der Nachmittag darf nicht vor dem Ende des Vormittags beginnen.');
+                        return;
+                    }
+                    const legacyfields = legacyFieldsFromAnkerzeiten(ankerzeiten);
                     const pendingconfig = {
                         preset: getValue('#sp-config-preset') || 'custom',
                         days,
-                        timeRange: {start, end},
+                        ankerzeiten,
+                        timeRange: legacyfields.timeRange,
                         granularity: this.state.config.granularity || 15,
-                        breaks: this.collectBreaks(),
+                        breaks: legacyfields.breaks,
                         tableColumns: Object.assign({}, DEFAULT_COLUMNS, this.state.config.tableColumns || {})
                     };
                     const pendingname = getValue('#kg-grid-name').trim();
@@ -3744,9 +3828,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 cb.checked = this.state.config.days.includes(cb.value);
             });
             this.syncFirstDayOptions(form, this.state.config.days[0] || 'Montag');
-            form.querySelector('#sp-config-time-start').value = this.state.config.timeRange.start;
-            form.querySelector('#sp-config-time-end').value = this.state.config.timeRange.end;
-            this.loadBreaksIntoModal(this.state.config.breaks || []);
+            const ankerzeiten = deriveAnkerzeiten(this.state.config);
+            form.querySelector('#sp-config-vm-start').value = ankerzeiten.vormittag.start;
+            form.querySelector('#sp-config-vm-end').value = ankerzeiten.vormittag.end;
+            form.querySelector('#sp-config-nm-start').value = ankerzeiten.nachmittag.start;
+            form.querySelector('#sp-config-nm-end').value = ankerzeiten.nachmittag.end;
+            form.querySelector('#sp-config-first-arrival').checked = ankerzeiten.ersterTagNurNachmittag;
+            form.querySelector('#sp-config-last-departure').checked = ankerzeiten.letzterTagNurVormittag;
         }
 
         applyPreset(key) {
@@ -3754,59 +3842,16 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (!preset) {
                 return;
             }
+            const legacyfields = legacyFieldsFromAnkerzeiten(preset.ankerzeiten);
             this.state.config = Object.assign({}, this.state.config, {
                 preset: key,
                 days: preset.days.slice(),
-                timeRange: Object.assign({}, preset.timeRange),
+                ankerzeiten: cloneAnkerzeiten(preset.ankerzeiten),
+                timeRange: legacyfields.timeRange,
                 granularity: preset.granularity,
-                breaks: (preset.breaks || []).map((br) => Object.assign({}, br))
+                breaks: legacyfields.breaks
             });
             this.applyConfigToModal();
-        }
-
-        addBreakItem(breakConfig) {
-            const list = bySel('#sp-breaks-list');
-            if (!list) {
-                return;
-            }
-            const config = breakConfig || {days: ['all'], start: '12:00', duration: 60};
-            const row = document.createElement('div');
-            row.className = 'sp-break-item';
-            row.innerHTML = `
-                <select class="kg-input kg-grid-select sp-break-days-select">
-                    <option value="all" ${config.days.includes('all') ? 'selected' : ''}>Alle Tage</option>
-                    ${DAYS_ALL.map((d) => `<option value="${escapeHtml(d)}" ${(config.days || []).includes(d) ? 'selected' : ''}>${escapeHtml(d)}</option>`).join('')}
-                </select>
-                <input type="time" class="kg-input sp-break-start" value="${escapeHtml(config.start)}">
-                <input type="number" class="kg-input sp-break-duration" value="${escapeHtml(String(config.duration))}" min="5" step="5">
-                <button type="button" class="kg-btn sp-break-remove">X</button>
-            `;
-            list.appendChild(row);
-            row.querySelector('.sp-break-remove').addEventListener('click', () => {
-                row.remove();
-            });
-        }
-
-        loadBreaksIntoModal(breaks) {
-            const list = bySel('#sp-breaks-list');
-            if (!list) {
-                return;
-            }
-            list.innerHTML = '';
-            (breaks || []).forEach((br) => this.addBreakItem(br));
-        }
-
-        collectBreaks() {
-            const list = bySel('#sp-breaks-list');
-            if (!list) {
-                return [];
-            }
-            return Array.from(list.querySelectorAll('.sp-break-item')).map((row) => {
-                const day = row.querySelector('.sp-break-days-select').value || 'all';
-                const start = row.querySelector('.sp-break-start').value || '12:00';
-                const duration = Number.parseInt(row.querySelector('.sp-break-duration').value || '60', 10) || 60;
-                return {days: [day], start, duration};
-            });
         }
 
         collectTableColumns() {
@@ -4009,9 +4054,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 config: {
                     preset: 'standard-week',
                     days: ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'],
+                    ankerzeiten: cloneAnkerzeiten(DEFAULT_ANKERZEITEN),
                     timeRange: {start: '08:30', end: '17:30'},
                     granularity: 15,
-                    breaks: [{days: ['all'], start: '12:00', duration: 60}],
+                    breaks: [{days: ['all'], start: '12:30', duration: 45}],
                     tableColumns: Object.assign({}, DEFAULT_COLUMNS)
                 },
                 view: {mode: VIEW_MODE_WEEK, day: 'Montag'},
@@ -4063,6 +4109,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return {
                 meta: Object.assign({}, defaults.meta, raw.meta || {}),
                 config: Object.assign({}, defaults.config, raw.config || {}, {
+                    // D45 migration rule: legacy configs derive their anchor
+                    // times from timeRange + longest break, not the defaults.
+                    ankerzeiten: raw.config ? deriveAnkerzeiten(raw.config) : cloneAnkerzeiten(DEFAULT_ANKERZEITEN),
                     tableColumns: Object.assign({}, DEFAULT_COLUMNS, (raw.config || {}).tableColumns || {})
                 }),
                 view: Object.assign({}, defaults.view, raw.view || {}),
