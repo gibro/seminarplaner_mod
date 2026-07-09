@@ -211,6 +211,10 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             this.setupMode = 'create';
             this.roterFadenState = {ispublished: false, gridid: 0};
             this.isUpdatingPublishControl = false;
+            this.autosaveTimer = null;
+            // Remembered open/closed state of the collapsible suggestion
+            // boxes, keyed per day and target, across re-renders.
+            this.openSuggest = {};
         }
 
         init() {
@@ -238,6 +242,20 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             const container = bySel('#sq-day');
             if (container) {
                 container.addEventListener('click', (event) => this.handleDayClick(event));
+                // Remember which suggestion boxes are open (toggle does not
+                // bubble, so listen in the capture phase).
+                container.addEventListener('toggle', (event) => {
+                    const details = event.target;
+                    if (!details || !details.hasAttribute || !details.hasAttribute('data-suggest-key')) {
+                        return;
+                    }
+                    const key = details.getAttribute('data-suggest-key');
+                    if (details.open) {
+                        this.openSuggest[key] = true;
+                    } else {
+                        delete this.openSuggest[key];
+                    }
+                }, true);
             }
             document.addEventListener('click', (event) => {
                 if (!event.target.closest('.sq-swap') && this.openSwapPid) {
@@ -760,6 +778,16 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             if (save) {
                 save.disabled = !dirty;
             }
+            // Background auto-save: changes persist ~2s after the last
+            // edit; the Speichern button stays as a manual anchor.
+            window.clearTimeout(this.autosaveTimer);
+            if (dirty) {
+                this.autosaveTimer = window.setTimeout(() => {
+                    if (this.dirty) {
+                        this.save().catch(() => null);
+                    }
+                }, 2000);
+            }
         }
 
         loadGrids(preferredid) {
@@ -1008,6 +1036,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             if (!this.state || !this.gridid) {
                 return Promise.resolve(false);
             }
+            window.clearTimeout(this.autosaveTimer);
             const payload = JSON.stringify(this.state);
             return asCall('mod_seminarplaner_save_user_state', {
                 cmid: this.cmid,
@@ -2095,9 +2124,6 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             const keywords = this.contextKeywords(baustein);
             const bloomphases = baustein ? this.bloomPhasesFor(baustein.themenplanreferenz) : [];
             const suggestions = this.suggestFor(gapminutes, keywords, bloomphases, []);
-            const title = baustein
-                ? `Hier ist noch Platz für ca. ${gapminutes} Min. – Vorschläge aus deiner Bibliothek:`
-                : `In diesem Abschnitt sind noch ca. ${gapminutes} Min. frei – Vorschläge aus deiner Bibliothek:`;
 
             const cards = suggestions.map((entry) => {
                 const pkey = phaseKey(entry.card.seminarphase);
@@ -2114,13 +2140,24 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 <div class="sq-suggest__empty">In der Bibliothek passt gerade nichts in diese Lücke –
                   leg direkt eine neue Einheit an.</div>`;
 
+            // Collapsed by default but visibly inviting; open state is
+            // remembered per day and target across re-renders.
+            const key = `${this.dayIndex}|${targetattrs}`;
+            const open = !!this.openSuggest[key];
+            const counter = suggestions.length ? ` (${suggestions.length})` : '';
             return `
-                <div class="sq-gap">
-                  <div class="sq-gap__title">${escapeHtml(title)}</div>
-                  <div class="sq-suggest">${cards}</div>
-                  ${empty}
-                  <button type="button" class="kg-btn" data-sq-action="quick-create" ${targetattrs}>＋ Neue Einheit anlegen</button>
-                </div>`;
+                <details class="sq-gap" data-suggest-key="${escapeHtml(key)}"${open ? ' open' : ''}>
+                  <summary class="sq-gap__summary">
+                    <span class="sq-gap__chevron" aria-hidden="true">▸</span>
+                    <span class="sq-gap__label">💡 Vorschläge aus deiner Bibliothek${counter}</span>
+                    <span class="sq-gap__free">– hier ist noch Platz für ca. ${gapminutes} Min.</span>
+                  </summary>
+                  <div class="sq-gap__body">
+                    <div class="sq-suggest">${cards}</div>
+                    ${empty}
+                    <button type="button" class="kg-btn" data-sq-action="quick-create" ${targetattrs}>＋ Neue Einheit anlegen</button>
+                  </div>
+                </details>`;
         }
 
         // Insert a unit into a reserved module: the reservation shrinks.

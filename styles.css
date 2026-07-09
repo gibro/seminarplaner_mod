@@ -6271,3 +6271,55 @@ body.sp-resizing * {
 .sq-anchor--off .sq-anchor__add .kg-btn:disabled {
     background: transparent !important;
 }
+
+/* Vorschläge aus der Bibliothek: eingeklappt, aber einladend (details). */
+.sq-gap {
+    padding: 8px 12px;
+}
+
+.sq-gap__summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.sq-gap__summary::-webkit-details-marker {
+    display: none;
+}
+
+.sq-gap__chevron {
+    display: inline-block;
+    color: var(--ig-red);
+    transition: transform .15s;
+    flex: 0 0 auto;
+}
+
+details[open] > .sq-gap__summary .sq-gap__chevron {
+    transform: rotate(90deg);
+}
+
+.sq-gap__label {
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 12px;
+    color: var(--ig-red-hover);
+}
+
+.sq-gap__summary:hover .sq-gap__label {
+    color: var(--ig-red);
+}
+
+.sq-gap__free {
+    font-size: 12px;
+    color: var(--ig-gray);
+}
+
+.sq-gap__body {
+    margin-top: 10px;
+}
