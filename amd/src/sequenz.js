@@ -82,8 +82,10 @@ define(['core/ajax'], function(Ajax) {
             this.legacyByUid = {};
             this.planningUnits = {};
             this.methodCards = {};
+            this.methodCardList = [];
             this.openSwapPid = '';
             this.headingPid = '';
+            this.idCounter = 0;
         }
 
         init() {
@@ -203,7 +205,8 @@ define(['core/ajax'], function(Ajax) {
                 } catch (e) {
                     decoded = [];
                 }
-                (Array.isArray(decoded) ? decoded : []).forEach((card) => {
+                this.methodCardList = Array.isArray(decoded) ? decoded : [];
+                this.methodCardList.forEach((card) => {
                     if (card && card.id !== undefined) {
                         this.methodCards[String(card.id)] = card;
                     }
@@ -564,6 +567,325 @@ define(['core/ajax'], function(Ajax) {
             this.toast(`Überschrift „${clean}" angelegt.`);
         }
 
+        // ---- Module membership (arrows keep position, this sets belonging) --
+
+        adjacentBausteinId(pid) {
+            const found = this.locate(pid);
+            if (!found) {
+                return null;
+            }
+            const seq = found.anchors[found.anchorIdx].seq;
+            for (const neighborPos of [found.pos - 1, found.pos + 1]) {
+                if (neighborPos < 0 || neighborPos >= seq.length) {
+                    continue;
+                }
+                const neighbor = this.placement(seq[neighborPos]);
+                if (neighbor && neighbor.typ === 'einheit' && neighbor.bausteinid) {
+                    return neighbor.bausteinid;
+                }
+            }
+            return null;
+        }
+
+        joinBaustein(pid) {
+            const placement = this.placement(pid);
+            const bid = this.adjacentBausteinId(pid);
+            if (!placement || !bid) {
+                return;
+            }
+            placement.bausteinid = bid;
+            this.setDirty(true);
+            this.render();
+            this.toast(`In „${(this.baustein(bid) || {}).titel || 'Baustein'}" aufgenommen.`);
+        }
+
+        leaveBaustein(pid) {
+            const placement = this.placement(pid);
+            if (!placement || !placement.bausteinid) {
+                return;
+            }
+            placement.bausteinid = null;
+            this.setDirty(true);
+            this.render();
+            this.toast('Aus dem Baustein gelöst.');
+        }
+
+        // ---- Unit editor modal (D17/D21) ------------------------------------
+
+        modalRoot() {
+            let root = bySel('#sq-modal');
+            if (!root) {
+                root = document.createElement('div');
+                root.id = 'sq-modal';
+                root.className = 'sq-modal-overlay';
+                document.body.appendChild(root);
+                root.addEventListener('click', (event) => {
+                    if (event.target === root) {
+                        this.closeModal();
+                        return;
+                    }
+                    const action = event.target.closest('[data-sq-action]');
+                    if (!action) {
+                        return;
+                    }
+                    const type = action.getAttribute('data-sq-action');
+                    if (type === 'modal-close') {
+                        this.closeModal();
+                    } else if (type === 'editor-save') {
+                        this.saveEditor();
+                    } else if (type === 'picker-add') {
+                        this.addUnitFromCard(action.getAttribute('data-cardid') || '');
+                    }
+                });
+            }
+            return root;
+        }
+
+        closeModal() {
+            const root = bySel('#sq-modal');
+            if (root) {
+                root.classList.remove('open');
+                root.innerHTML = '';
+            }
+        }
+
+        activeCardForPlacement(placement) {
+            const auswahl = this.auswahl(placement);
+            if (!auswahl || auswahl.aktiv === null || auswahl.aktiv === undefined) {
+                return null;
+            }
+            return this.methodCardForRef(auswahl.aktiv);
+        }
+
+        fieldValue(card, key) {
+            const value = card[key];
+            if (Array.isArray(value)) {
+                return value.map(String).join(', ');
+            }
+            return value === null || value === undefined ? '' : String(value);
+        }
+
+        openEditor(pid) {
+            const placement = this.placement(pid);
+            const card = placement ? this.activeCardForPlacement(placement) : null;
+            if (!placement) {
+                return;
+            }
+            this.editorPid = pid;
+            const root = this.modalRoot();
+            const text = (label, key, value, hint = '') => `
+                <div class="sq-field">
+                  <label class="kg-label">${label}</label>
+                  <input type="text" class="kg-input" data-sq-field="${key}" value="${escapeHtml(value)}">
+                  ${hint ? `<div class="sq-field__hint">${hint}</div>` : ''}
+                </div>`;
+            const area = (label, key, value, rows = 3) => `
+                <div class="sq-field">
+                  <label class="kg-label">${label}</label>
+                  <textarea class="kg-input" rows="${rows}" data-sq-field="${key}">${escapeHtml(value)}</textarea>
+                </div>`;
+
+            let body;
+            if (card) {
+                body = `
+                    ${text('Titel', 'titel', this.fieldValue(card, 'titel'))}
+                    ${area('Lernziele (Ich kann …)', 'lernziele', this.fieldValue(card, 'lernziele'))}
+                    ${area('Kurzbeschreibung', 'kurzbeschreibung', this.fieldValue(card, 'kurzbeschreibung'))}
+                    ${text('Zeitbedarf (Minuten)', 'zeitbedarf', this.fieldValue(card, 'zeitbedarf'))}
+                    ${text('Seminarphase', 'seminarphase', this.fieldValue(card, 'seminarphase'), 'Mehrere Phasen mit Komma trennen')}
+                    ${text('Sozialform', 'sozialform', this.fieldValue(card, 'sozialform'))}
+                    <details class="sq-section"><summary>Ablauf und Rahmen</summary><div class="sq-section__inner">
+                      ${area('Ablauf', 'ablauf', this.fieldValue(card, 'ablauf'), 5)}
+                      ${text('Raumanforderungen', 'raum', this.fieldValue(card, 'raum'))}
+                      ${text('Gruppengröße', 'gruppengroesse', this.fieldValue(card, 'gruppengroesse'))}
+                      ${area('Risiken/Tipps', 'risiken', this.fieldValue(card, 'risiken'))}
+                      ${area('Debrief/Reflexionsfragen', 'debrief', this.fieldValue(card, 'debrief'))}
+                      ${text('Tags/Schlüsselworte', 'tags', this.fieldValue(card, 'tags'), 'Hilft beim Wiederfinden und bei Vorschlägen')}
+                      ${text('Autor*in / Kontakt', 'autor', this.fieldValue(card, 'autor'))}
+                    </div></details>
+                    <details class="sq-section"><summary>Materialien und Technik</summary><div class="sq-section__inner">
+                      ${area('Material/Technik', 'materialtechnik', this.fieldValue(card, 'materialtechnik'))}
+                      <div class="sq-field__hint">Datei-Anhänge verwaltest du weiterhin im Tab „Seminareinheiten".</div>
+                    </div></details>`;
+            } else {
+                body = `
+                    ${text('Titel', 'titel', placement.titel || '')}
+                    ${text('Dauer (Minuten)', 'zeitbedarf', String(placement.dauer || ''))}
+                    <div class="sq-field__hint">Diese Einheit hat noch keinen Bibliothekseintrag – nur Titel und Dauer sind änderbar.</div>`;
+            }
+
+            root.innerHTML = `
+                <div class="sq-modal">
+                  <div class="sq-modal__head">
+                    <h3>Seminareinheit bearbeiten</h3>
+                    <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
+                  </div>
+                  <div class="sq-modal__body">${body}</div>
+                  <div class="sq-modal__footer">
+                    <button type="button" class="kg-btn" data-sq-action="modal-close">Abbrechen</button>
+                    <button type="button" class="kg-btn kg-btn-primary" data-sq-action="editor-save">Übernehmen</button>
+                  </div>
+                </div>`;
+            root.classList.add('open');
+        }
+
+        saveEditor() {
+            const root = bySel('#sq-modal');
+            const placement = this.placement(this.editorPid);
+            if (!root || !placement) {
+                return;
+            }
+            const values = {};
+            root.querySelectorAll('[data-sq-field]').forEach((field) => {
+                values[field.getAttribute('data-sq-field')] = field.value;
+            });
+            const card = this.activeCardForPlacement(placement);
+            const duration = Number.parseInt(String(values.zeitbedarf || '').replace(/\D+/g, ''), 10);
+
+            if (!card) {
+                if (values.titel && values.titel.trim()) {
+                    placement.titel = values.titel.trim();
+                }
+                if (Number.isFinite(duration) && duration > 0) {
+                    placement.dauer = duration;
+                }
+                this.closeModal();
+                this.setDirty(true);
+                this.render();
+                this.toast('Einheit angepasst – Zeiten sind aktualisiert.');
+                return;
+            }
+
+            Object.keys(values).forEach((key) => {
+                const incoming = values[key];
+                if (Array.isArray(card[key])) {
+                    card[key] = String(incoming).split(',').map((part) => part.trim()).filter(Boolean);
+                } else {
+                    card[key] = incoming;
+                }
+            });
+
+            asCall('mod_seminarplaner_save_method_cards', {
+                cmid: this.cmid,
+                methodsjson: JSON.stringify(this.methodCardList),
+            }).then(() => {
+                // Live values flow back into every placement using this unit (D20).
+                Object.keys(this.sequenz.platzierungen).forEach((pid) => {
+                    const other = this.sequenz.platzierungen[pid];
+                    const activecard = this.activeCardForPlacement(other);
+                    if (activecard && String(activecard.id) === String(card.id)) {
+                        other.titel = cardTitle(card) || other.titel;
+                        if (Number.isFinite(duration) && duration > 0) {
+                            other.dauer = duration;
+                        }
+                    }
+                });
+                this.closeModal();
+                this.setDirty(true);
+                this.render();
+                this.toast('Gespeichert – Dauer geändert? Dann sind die Zeiten schon angepasst.');
+            }).catch(() => {
+                this.setStatus('Die Einheit konnte nicht gespeichert werden.', true);
+            });
+        }
+
+        // ---- Add unit from the library ---------------------------------------
+
+        openPicker(ankername) {
+            this.pickerAnker = ankername;
+            const root = this.modalRoot();
+            root.innerHTML = `
+                <div class="sq-modal">
+                  <div class="sq-modal__head">
+                    <h3>Einheit hinzufügen</h3>
+                    <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
+                  </div>
+                  <div class="sq-modal__body">
+                    <div class="sq-field">
+                      <input type="text" class="kg-input" id="sq-picker-search" placeholder="Suchen …">
+                    </div>
+                    <div id="sq-picker-list" class="sq-picker"></div>
+                  </div>
+                </div>`;
+            root.classList.add('open');
+            const search = bySel('#sq-picker-search');
+            if (search) {
+                search.addEventListener('input', () => this.renderPickerList(search.value));
+                search.focus();
+            }
+            this.renderPickerList('');
+        }
+
+        renderPickerList(filter) {
+            const list = bySel('#sq-picker-list');
+            if (!list) {
+                return;
+            }
+            const needle = String(filter || '').trim().toLowerCase();
+            const cards = this.methodCardList.filter((card) => {
+                return !needle || cardTitle(card).toLowerCase().includes(needle);
+            }).slice(0, 40);
+            if (!cards.length) {
+                list.innerHTML = '<div class="sq-empty">Keine passende Einheit gefunden.</div>';
+                return;
+            }
+            list.innerHTML = cards.map((card) => {
+                const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
+                const phase = this.fieldValue(card, 'seminarphase');
+                return `
+                    <div class="sq-picker__row">
+                      <div class="sq-unit__main">
+                        <div class="sq-unit__title">${escapeHtml(cardTitle(card))}</div>
+                        <div class="sq-unit__meta">
+                          ${Number.isFinite(duration) && duration > 0 ? `<span class="sq-badge">${duration} Min.</span>` : ''}
+                          ${phase ? `<span class="sq-badge">${escapeHtml(phase)}</span>` : ''}
+                        </div>
+                      </div>
+                      <button type="button" class="kg-btn kg-btn-primary" data-sq-action="picker-add"
+                        data-cardid="${escapeHtml(String(card.id))}">Übernehmen</button>
+                    </div>`;
+            }).join('');
+        }
+
+        uniqueId(prefix, collection) {
+            let counter = this.idCounter + 1;
+            while (collection[prefix + counter]) {
+                counter++;
+            }
+            this.idCounter = counter;
+            return prefix + counter;
+        }
+
+        addUnitFromCard(cardid) {
+            const card = this.methodCardForRef(cardid);
+            const day = this.sequenz.tage[this.dayIndex];
+            if (!card || !day) {
+                return;
+            }
+            const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
+            const eaid = this.uniqueId('eax', this.sequenz.einheitenauswahlen);
+            // D21: alternatives stored on the unit become preselected candidates.
+            const alternativen = (Array.isArray(card.alternativen) ? card.alternativen : [])
+                .map(String).filter((ref) => this.methodCards[ref]);
+            this.sequenz.einheitenauswahlen[eaid] = {
+                kandidaten: [String(card.id), ...alternativen],
+                aktiv: String(card.id),
+            };
+            const pid = this.uniqueId('px', this.sequenz.platzierungen);
+            this.sequenz.platzierungen[pid] = {
+                typ: 'einheit',
+                bausteinid: null,
+                einheitenauswahl: eaid,
+                titel: cardTitle(card),
+                dauer: Number.isFinite(duration) && duration > 0 ? duration : 15,
+            };
+            day.anker[this.pickerAnker || 'vormittag'].sequenz.push(pid);
+            this.closeModal();
+            this.setDirty(true);
+            this.render();
+            this.toast(`„${cardTitle(card)}" hinzugefügt.`);
+        }
+
         // ---- Event delegation ---------------------------------------------
 
         handleDayClick(event) {
@@ -599,6 +921,14 @@ define(['core/ajax'], function(Ajax) {
             } else if (type === 'heading-save') {
                 const input = bySel('#sq-heading-input');
                 this.createHeading(pid, input ? input.value : '');
+            } else if (type === 'edit') {
+                this.openEditor(pid);
+            } else if (type === 'add-unit') {
+                this.openPicker(action.getAttribute('data-anker') || 'vormittag');
+            } else if (type === 'join-baustein') {
+                this.joinBaustein(pid);
+            } else if (type === 'leave-baustein') {
+                this.leaveBaustein(pid);
             }
         }
 
@@ -687,6 +1017,11 @@ define(['core/ajax'], function(Ajax) {
                    </div>`
                 : '';
 
+            const addbutton = `
+                <div class="sq-anchor__add">
+                  <button type="button" class="kg-btn" data-sq-action="add-unit" data-anker="${ankername}">＋ Einheit hinzufügen</button>
+                </div>`;
+
             return `
                 <div class="sq-anchor" data-anker="${ankername}">
                   <div class="sq-anchor__head">
@@ -696,7 +1031,7 @@ define(['core/ajax'], function(Ajax) {
                       <div class="sq-budget__label">${escapeHtml(budgetlabel)}</div>
                     </div>
                   </div>
-                  <div class="sq-anchor__body">${body}${overrun}</div>
+                  <div class="sq-anchor__body">${body}${overrun}${addbutton}</div>
                 </div>`;
         }
 
@@ -893,9 +1228,28 @@ define(['core/ajax'], function(Ajax) {
                   </div>
                   <div class="sq-unit__actions">
                     ${this.renderSwap(p)}
+                    ${this.renderMembership(p, inBaustein)}
+                    <button type="button" class="kg-btn" data-sq-action="edit" data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
                     ${this.renderMoveButtons(p.pid)}
                   </div>
                 </div>`;
+        }
+
+        renderMembership(p, inBaustein) {
+            if (p.data.typ !== 'einheit') {
+                return '';
+            }
+            if (inBaustein) {
+                return `<button type="button" class="kg-btn sq-membership" data-sq-action="leave-baustein"
+                    data-pid="${escapeHtml(p.pid)}" title="Aus dem Baustein lösen">Lösen</button>`;
+            }
+            const bid = this.adjacentBausteinId(p.pid);
+            if (!bid) {
+                return '';
+            }
+            const titel = (this.baustein(bid) || {}).titel || 'Baustein';
+            return `<button type="button" class="kg-btn sq-membership" data-sq-action="join-baustein"
+                data-pid="${escapeHtml(p.pid)}" title="In „${escapeHtml(titel)}" aufnehmen">→ In „${escapeHtml(titel)}"</button>`;
         }
     }
 
