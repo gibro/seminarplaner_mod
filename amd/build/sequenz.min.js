@@ -888,7 +888,11 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             const day = this.sequenz.tage[0];
             const legacyentries = this.legacyDayEntries(day.bezeichnung);
             const hasplacements = ANCHORS.some((a) => day.anker[a].sequenz.length > 0);
-            if (!legacyentries.length || !hasplacements) {
+            // Breaks alone are no legacy content: plans created in the
+            // sequence view carry the derived midday break in plan.days,
+            // but there is nothing to translate for them (D35).
+            const haslegacycontent = legacyentries.some((entry) => String(entry.kind || '') !== 'break');
+            if (!haslegacycontent || !hasplacements) {
                 return;
             }
             const gridid = this.gridid;
