@@ -267,6 +267,7 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
     if ($canmanageseminarplaner) {
         $tabs = [
             'grid' => ['label' => get_string('gridplanning', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/grid.php', 'icon' => 'calendar-range'],
+            'sequenz' => ['label' => get_string('sequenzmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/sequenz.php', 'icon' => 'list-checks'],
             'methods' => ['label' => get_string('methodcards', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methods.php', 'icon' => 'layout-grid'],
             'methodlibrary' => ['label' => get_string('methodlibrary', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methodlibrary.php', 'icon' => 'library'],
             'planningmode' => ['label' => 'Bausteine', 'path' => '/mod/seminarplaner/planningmode.php', 'icon' => 'blocks'],
@@ -274,11 +275,11 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
             'review' => ['label' => get_string('reviewmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/review.php', 'icon' => 'clipboard-check'],
         ];
         if (has_capability('mod/seminarplaner:viewroterfaden', $context)) {
-            $tabs = ['grid' => $tabs['grid'], 'roterfaden' => [
+            $tabs = ['grid' => $tabs['grid'], 'sequenz' => $tabs['sequenz'], 'roterfaden' => [
                 'label' => get_string('roterfadenmenu', 'mod_seminarplaner'),
                 'path' => '/mod/seminarplaner/roterfaden.php',
                 'icon' => 'route',
-            ]] + array_diff_key($tabs, ['grid' => true]);
+            ]] + array_diff_key($tabs, ['grid' => true, 'sequenz' => true]);
         }
     } else if (has_capability('mod/seminarplaner:viewroterfaden', $context)) {
         $tabs = [
