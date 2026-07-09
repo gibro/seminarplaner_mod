@@ -153,8 +153,11 @@ echo html_writer::start_tag('label', ['class' => 'sq-toggle', 'for' => 'sq-drama
 echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'sq-drama-toggle']);
 echo html_writer::tag('span', get_string('sequenz_dramatoggle', 'mod_seminarplaner'));
 echo html_writer::end_tag('label');
-echo html_writer::tag('button', get_string('savestate', 'mod_seminarplaner'), [
-    'type' => 'button', 'id' => 'sq-save', 'class' => 'kg-btn kg-btn-primary', 'disabled' => 'disabled',
+// Saving happens automatically in the background; this passive indicator
+// replaces the former Speichern button (it only confused once nothing
+// had to be saved manually anymore).
+echo html_writer::tag('span', '', [
+    'id' => 'sq-save-state', 'class' => 'sq-savestate', 'aria-live' => 'polite',
 ]);
 echo html_writer::end_div();
 echo html_writer::end_div();

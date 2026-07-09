@@ -235,10 +235,6 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                     }
                 });
             }
-            const save = bySel('#sq-save');
-            if (save) {
-                save.addEventListener('click', () => this.save());
-            }
             const container = bySel('#sq-day');
             if (container) {
                 container.addEventListener('click', (event) => this.handleDayClick(event));
@@ -772,16 +768,22 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             this.toastTimer = window.setTimeout(() => el.classList.remove('show'), 2600);
         }
 
+        // Passive save indicator - replaces the former Speichern button.
+        setSaveState(text, tone = '') {
+            const el = bySel('#sq-save-state');
+            if (!el) {
+                return;
+            }
+            el.textContent = text;
+            el.className = 'sq-savestate' + (tone ? ' sq-savestate--' + tone : '');
+        }
+
         setDirty(dirty) {
             this.dirty = dirty;
-            const save = bySel('#sq-save');
-            if (save) {
-                save.disabled = !dirty;
-            }
-            // Background auto-save: changes persist ~2s after the last
-            // edit; the Speichern button stays as a manual anchor.
+            // Background auto-save: changes persist ~2s after the last edit.
             window.clearTimeout(this.autosaveTimer);
             if (dirty) {
+                this.setSaveState('Änderungen werden gleich gesichert …');
                 this.autosaveTimer = window.setTimeout(() => {
                     if (this.dirty) {
                         this.save().catch(() => null);
@@ -868,6 +870,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 this.openSwapPid = '';
                 this.headingPid = '';
                 this.setDirty(false);
+                this.setSaveState('');
                 this.indexLegacyEntries();
                 this.syncPublishControl();
                 this.render();
@@ -1037,6 +1040,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 return Promise.resolve(false);
             }
             window.clearTimeout(this.autosaveTimer);
+            this.setSaveState('Speichert …');
             const payload = JSON.stringify(this.state);
             return asCall('mod_seminarplaner_save_user_state', {
                 cmid: this.cmid,
@@ -1046,10 +1050,20 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             }).then((res) => {
                 this.versionhash = String(res.versionhash || res.newhash || this.versionhash);
                 this.setDirty(false);
-                this.toast('Gespeichert – Reihenfolge und Zeiten sind aktualisiert.');
+                const now = new Date();
+                const pad = (n) => String(n).padStart(2, '0');
+                this.setSaveState(`✓ Gespeichert ${pad(now.getHours())}:${pad(now.getMinutes())} Uhr`, 'ok');
                 return true;
             }).catch((error) => {
-                this.setStatus('Speichern hat nicht geklappt – bitte noch einmal versuchen.', true);
+                // Keep the changes and retry automatically; the indicator
+                // says what is happening instead of asking for a click.
+                this.setSaveState('Speichern hat nicht geklappt – neuer Versuch gleich …', 'error');
+                window.clearTimeout(this.autosaveTimer);
+                this.autosaveTimer = window.setTimeout(() => {
+                    if (this.dirty) {
+                        this.save().catch(() => null);
+                    }
+                }, 8000);
                 throw error;
             });
         }
