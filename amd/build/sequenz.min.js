@@ -35,6 +35,16 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
         'half-week-mi-fr': {days: ['Mittwoch', 'Donnerstag', 'Freitag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
         'compact-day': {days: ['Montag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN}
     };
+    // Anzeige-Namen der Vorlagen (identisch zum Setup-Select in sequenz.php).
+    const PRESET_LABELS = {
+        'custom': 'Individuelle Konfiguration',
+        'standard-week': 'Standard-Woche (Mo–Fr)',
+        'sunday-to-friday': 'Seminarwoche (So–Fr)',
+        'weekend-seminar': 'Wochenendseminar (Fr–So)',
+        'half-week-mo-mi': 'Halbe Woche (Mo–Mi)',
+        'half-week-mi-fr': 'Halbe Woche (Mi–Fr)',
+        'compact-day': 'Kompakttag',
+    };
     const DEFAULT_COLUMNS = {
         uhrzeit: true,
         title: true,
@@ -2587,12 +2597,37 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
 
         // ---- Rendering ----------------------------------------------------
 
+        // Werkzeugleisten-Fußzeile: welche Vorlage der geladene Plan nutzt,
+        // plus D45-Hinweise zu An-/Abreisetag.
+        renderPlanInfo() {
+            const el = bySel('#sq-plan-info');
+            if (!el) {
+                return;
+            }
+            if (!this.state || !this.state.config || !this.dayCount()) {
+                el.textContent = '';
+                return;
+            }
+            const config = this.state.config;
+            const az = deriveAnkerzeiten(config);
+            const presetlabel = PRESET_LABELS[config.preset] || PRESET_LABELS.custom;
+            const parts = [`Vorlage: ${presetlabel}`];
+            if (az.ersterTagNurNachmittag) {
+                parts.push('erster Seminartag beginnt am Nachmittag');
+            }
+            if (az.letzterTagNurVormittag) {
+                parts.push('letzter Seminartag endet nach dem Vormittag');
+            }
+            el.textContent = parts.join(' · ');
+        }
+
         render() {
             const container = bySel('#sq-day');
             const label = bySel('#sq-day-label');
             if (!container) {
                 return;
             }
+            this.renderPlanInfo();
             if (!this.sequenz || !this.dayCount()) {
                 container.innerHTML = '';
                 if (label) {

@@ -166,6 +166,9 @@ echo html_writer::tag('span', '', [
     'id' => 'sq-save-state', 'class' => 'sq-savestate', 'aria-live' => 'polite',
 ]);
 echo html_writer::end_div();
+// Volle Zeile unter den Werkzeugen: genutzte Vorlage + An-/Abreise-Hinweise
+// (füllt sequenz.js aus der Plan-Konfiguration).
+echo html_writer::tag('div', '', ['id' => 'sq-plan-info', 'class' => 'sq-toolbar__info']);
 echo html_writer::end_div();
 
 // Anchors are rendered by the AMD module.
