@@ -1,6 +1,6 @@
 # Seminarplaner-Umbau – Konzept- und Entscheidungsdokument
 
-Stand: 7. Juli 2026 · Grundlage: Code-Review `mod_seminarplaner` 0.6.6-beta / `local_seminarplaner` 0.2.2-beta, Analyse eines Original-Themenplans (TP_2026_ki.docx), Vergleich mit SessionLab, Analyse von zwei realen Beispiel-Methodensets (183 Methoden) und vier realen Beispiel-Seminarkonzepten.
+Stand: 9. Juli 2026 · Grundlage: Code-Review `mod_seminarplaner` 0.6.6-beta / `local_seminarplaner` 0.2.2-beta, Analyse eines Original-Themenplans (TP_2026_ki.docx), Vergleich mit SessionLab, Analyse von zwei realen Beispiel-Methodensets (183 Methoden) und vier realen Beispiel-Seminarkonzepten.
 
 Zweck: Dieses Dokument hält den Stand der konzeptionellen Überlegungen zum Umbau des Moodle-Plugins Seminarplaner fest. Es dient als Projektwissen für die Weiterarbeit in einem Claude-Projekt und trennt bewusst zwischen **getroffenen Richtungsentscheidungen**, **offenen Fragen** und **Backlog**. Es soll fortgeschrieben werden, wenn neue Entscheidungen fallen.
 
@@ -39,6 +39,10 @@ Zweck: Dieses Dokument hält den Stand der konzeptionellen Überlegungen zum Umb
 - 7. Juli 2026 (af): Neuer Abschnitt 8 „Entwicklungs- und Rollout-Strategie" ergänzt (Feature-Branch, Staging mit echter Datenkopie, schrittweise Umsetzung entlang der Entscheidungsreihenfolge, Schema-Änderungen über `upgrade.php`, koordinierter Umstieg statt gestaffelter Freischaltung). D43 ergänzt (Präzisierung zu D35/D36): Die Grid→Sequenz-Umrechnung läuft als Upgrade-Schritt beim Plugin-Update, nicht live beim ersten Öffnen durch die Referentin – die Übersetzungs-Anzeige selbst bleibt unverändert, zeigt aber nur noch bereits umgerechnete Daten. Abschnitte 8–9 zu 9–10 verschoben. Zusätzliches Skill `git-branch-guard-seminarplaner` erstellt: verhindert versehentliches Auslösen der bestehenden Deploy-/Release-Skills (Ziel github/main, gitlab „51") während der Umbau-Arbeit auf dem Feature-Branch – in Abschnitt 8 referenziert.
 - 7. Juli 2026 (ag): D44 ergänzt: Klärung der Arbeitsteilung zwischen diesem Claude.ai-Projekt (bleibt Ort für neue Konzeptentscheidungen) und Claude Code (Implementierung, mit einer Repo-Kopie des Konzeptdokuments unter `docs/`). Push-Regeln im Skill `git-branch-guard-seminarplaner` präzisiert: Commits/Pushes auf den Feature-Branch nach GitHub sind normaler Alltag, keine Rückfrage nötig; gesperrt bleiben ausschließlich ein Merge auf GitHub `main` und jeder Push nach GitLab (unabhängig vom dortigen Ziel), bis explizit eine stabile, produktionsreife Version erklärt wird. Neues Briefing-Dokument `claude-code-briefing-seminarplaner.md` erstellt (Kurzreferenz D20/D19/D43 u. a. für den Einstieg in Claude-Code-Sessions).
 - 9. Juli 2026 (ah): D45 ergänzt: Übertragung der bestehenden Grid-Einrichtungs-Vorlagen (Wochentage/erster Tag/Zeitbereich/Pausenliste) auf die Anker-Logik der Sequenzansicht. Die sechs Vorlagen bekommen feste Vormittag-/Nachmittag-Zeiten (mit optionaler Abweichung am ersten/letzten Tag, z. B. Wochenendseminar Fr nur Nachmittag/So nur Vormittag – konkrete Uhrzeiten noch offen), bleiben aber reine Vorbelegung und frei editierbar. Die alten Setup-Felder „Zeitbereich" und „Pausenzeiten" entfallen zugunsten der Vorlagen-Zeiten; kurze Zwischenpausen laufen künftig über den bestehenden Pausenhinweis (D23). Migrationsregel für Bestandspläne ergänzt (Anschluss an D43): längste konfigurierte Pause bestimmt den Vormittag/Nachmittag-Schnitt, sonst Fallback 12:30. Abschnitt 8 (Rollout-Strategie) angepasst: D45 wird bewusst zu Block 3 gezogen, obwohl inhaltlich näher an Block 1/2, damit Claude Code sie in der laufenden Implementierung mitnimmt. D-Range in Abschnitt 9 auf D1–D45 aktualisiert.
+- 9. Juli 2026 (ai): D46 ergänzt: Seminarplan-Auswahl ist ein dauerhaft sichtbarer Umschalter im Planen-Tab (Dropdown oberhalb der Sequenz), kein einmaliges Einstiegs-Gate – durch Screenshot aus der laufenden Entwicklung (Testplaner 5.1.4) bestätigt, bereits so umgesetzt. Löst die Frage, ob der Sequenzer einen an anderer Stelle angelegten Plan voraussetzt. Randnotiz aus demselben Screenshot: ein weiterhin sichtbarer „Bausteine"-Tab ist Entwicklungs-Überbleibsel, keine Revision von D16 (Tab entfällt bleibt gültig) – als Aufräum-Punkt in Abschnitt 7 vermerkt.
+- 9. Juli 2026 (aj): D47 ergänzt (Korrektur zu D3): Drag & Drop wurde in der laufenden Entwicklung nicht beibehalten – Reihenfolge-Änderung in der Sequenzansicht erfolgt ausschließlich über ↑/↓-Buttons, bewusste Entscheidung für Barrierefreiheit (ein robuster Weg statt zweier paralleler). Grundidee von D3 (Reihenfolge bestimmt Zeiten, keine Zeitkonflikte) bleibt unverändert. A11y-Backlog-Punkt „Drag & Drop braucht Tastaturalternative" damit hinfällig.
+- 9. Juli 2026 (ak): D47 korrigiert – Missverständnis aus dem vorigen Eintrag richtiggestellt: **Beide** Bedienwege sollen nebeneinander funktionieren, nicht nur Buttons statt Drag. ↑/↓-Buttons erfüllen die Tastaturalternative, Drag & Drop bleibt zusätzlich für Maus-/Touch-Nutzerinnen erhalten. Aktueller Stand (nur Buttons funktionieren, Drag & Drop ist derzeit nicht funktionsfähig) als offene Umsetzungslücke im Backlog vermerkt, nicht als Zielzustand. D3-Fußnote und A11y-Backlog-Punkt entsprechend angepasst.
+- 9. Juli 2026 (al): D48 ergänzt (Revision von D13): Themenplan-Import läuft nicht mehr über einen PHP-Parser im Plugin, sondern wieder über die externe Seminarschmiede – Gründe: Pflegeaufwand des Plugin-Parsers, die Schmiede kann inzwischen mehr und wird ohnehin für KI-generierte Seminarkonzepte benötigt. Der Medienbruch aus D5 kehrt bewusst zurück (nicht technisch gelöst), als bewusste Abwägung, nicht als Wiederholung des alten Bequemlichkeitsarguments. D13 und D19 als revidiert bzw. hinfällig markiert (D19 bleibt als fachliche Referenz stehen, da bereits in der Schmiede umgesetzt). Abschnitt 4/5 und Backlog-Punkt „Themenplan-Parser" entsprechend angepasst. D-Range in Abschnitt 9 auf D1–D48 aktualisiert.
 
 ---
 
@@ -76,7 +80,7 @@ Top-down (es gibt einen Themenplan): Bausteine stehen fest, werden zuerst angele
 
 ### D3 – Sequenzmodell statt Grid als Bearbeitungsfläche (SessionLab-Prinzip)
 
-Die Planung eines Tages erfolgt künftig als **vertikale Sequenz** von Einheiten mit Dauer; Uhrzeiten werden vom Tagesstart aus **berechnet**, nicht manuell platziert. Reihenfolge ändern per Drag → alle Zeiten rücken automatisch nach. Konsequenzen:
+Die Planung eines Tages erfolgt künftig als **vertikale Sequenz** von Einheiten mit Dauer; Uhrzeiten werden vom Tagesstart aus **berechnet**, nicht manuell platziert. Reihenfolge ändern per Drag → alle Zeiten rücken automatisch nach. *Ergänzt durch D47: Zusätzlich zum Drag stehen ↑/↓-Buttons als gleichwertiger, barrierefreier zweiter Bedienweg zur Verfügung – beide Wege sollen nebeneinander funktionieren.* Konsequenzen:
 
 - Zeitkonflikte sind konstruktiv unmöglich → die Fehlermeldung „Speichern abgelehnt, Plan wird neu geladen" entfällt ersatzlos.
 - **Anker** statt freier Platzierung: Tagesstart/-ende und Pausen (existieren bereits in der Grid-Konfiguration) sind Fixpunkte. Überläufe werden als **Zeitbudget** angezeigt („Vormittag: 195 von 240 Min. belegt" / „+20 Min. über der Mittagspause – kürzen oder verschieben"), nie als Abweisung.
@@ -166,7 +170,9 @@ Eine Sequenz kann auch **vollständig ohne Baustein** geplant werden: eine schli
 
 **Bewusste Begrenzung:** Die Platzierung beschränkt sich auf Tag + Anker + Zeilenreihenfolge. Der Import plant **nicht** innerhalb eines Ankers, prüft **keine** Kapazität und verteilt **keine** Zeiten – zum Importzeitpunkt haben Bausteine nur die reservierte Platzhalter-Dauer (D1); ob es ins Zeitbudget passt, entscheidet sich erst beim Füllen durch die Referentin. Alles, was über reines Ablesen der Themenplan-Struktur hinausgeht, wird nicht automatisiert.
 
-### D13 – Themenplan-Import direkt im Plugin statt über die Seminarschmiede *(Revision von D5)*
+### D13 – Themenplan-Import direkt im Plugin statt über die Seminarschmiede *(Revision von D5, ihrerseits revidiert durch D48)*
+
+> **Hinweis: Diese Entscheidung wurde am 9. Juli 2026 durch D48 revidiert.** Der Themenplan-Import läuft nicht mehr über einen PHP-Parser im Plugin, sondern wieder über die externe Seminarschmiede. Ursprüngliche Fassung zur Nachvollziehbarkeit:
 
 Der Themenplan-Import wird **direkt in `mod_seminarplaner`** eingebaut: „Themenplan (.docx) hochladen" als Funktion im Import/Export-Tab (oder als eigener Einstieg im Zielfluss aus D4). Die externe Seminarschmiede wird für diesen Zweck **nicht** gebraucht.
 
@@ -174,7 +180,9 @@ Der Themenplan-Import wird **direkt in `mod_seminarplaner`** eingebaut: „Theme
 
 **Akzeptierter Preis:** Der Parser muss im Plugin gepflegt und getestet werden (Unit-Tests mit echten Themenplänen als Fixtures). Bei künftigen Format-Änderungen des Themenplans ist ein Plugin-Update nötig statt eines Schmiede-Updates.
 
-**Ablauf nach D12 + D13 zusammen:** Referentin lädt Themenplan-.docx direkt im Plugin hoch → deterministischer Parser erzeugt Bausteine (Titel, Unterthemen, Kompetenzerwartungs-Referenz nach D6) → Bausteine werden automatisch auf Tag und Anker platziert (D12) → Referentin füllt in der Sequenzansicht. Kein externes Tool, kein Dateien-Hin-und-Her. *(Die Parsing-Regeln im Detail: D19.)*
+**Ablauf nach D12 + D13 zusammen:** Referentin lädt Themenplan-.docx direkt im Plugin hoch → deterministischer Parser erzeugt Bausteine (Titel, Unterthemen, Kompetenzerwartungs-Referenz nach D6) → Bausteine werden automatisch auf Tag und Anker platziert (D12) → Referentin füllt in der Sequenzansicht. Kein externes Tool, kein Dateien-Hin-und-Her. *(Die Parsing-Regeln im Detail: D19, seinerseits durch D48 als eigenständige PHP-Spezifikation hinfällig.)*
+
+**Weiterhin gültig aus D13 trotz D48:** Der Zielfluss D12 (automatische Platzierung auf Tag + Anker) bleibt unverändert – nur woher die Bausteine kommen, ändert sich wieder.
 
 ### D14 – Vorschlagsmechanik: zweistufig, deterministisch, nie leer
 
@@ -266,7 +274,9 @@ Dazu je Tab ein Erklärsatz als Microcopy (D7).
 
 *Präzisiert durch D28: „Methode" kommt als eigener, präziser Begriff für einen inhaltsfreien Sonderfall zurück – das ist keine Rücknahme dieser Entscheidung, siehe dort.*
 
-### D19 – Themenplan-Parser: Spezifikation *(Abschluss von Schritt 5)*
+### D19 – Themenplan-Parser: Spezifikation *(Abschluss von Schritt 5; hinfällig durch D48)*
+
+> **Hinweis: Diese Spezifikation ist seit dem 9. Juli 2026 (D48) hinfällig.** Der Parser wird nicht mehr im Plugin gepflegt, sondern lebt (bereits umgesetzt) in der externen Seminarschmiede. Als fachliche Referenz und zur Nachvollziehbarkeit stehen gelassen – **die Regeln unten beschreiben nicht mehr den Ist-Weg.**
 
 Die Parsing-Regeln für den Themenplan-Import (D13), festgelegt vor jeder Code-Zeile. Alle Regeln sind deterministisch (Prinzip aus D5); Referenz-Fixture ist TP_2026_ki.docx.
 
@@ -666,6 +676,44 @@ Betrifft die Feldliste aus D21 (Abschnitt „Ablauf und Rahmen", Punkt 4) sowie 
 
 **Einordnung in die Rollout-Strategie:** Obwohl D45 inhaltlich näher am Datenmodell (D20/D43) liegt, wird die Umsetzung bewusst in **Block 3** (Vorschlagsmechanik/Dramaturgie-Check, siehe Abschnitt 8) mit erledigt, da die Sequenzansicht-Grundlagen (Block 2) bereits abgeschlossen sind und Claude Code die Anker-Zeiten für die laufende Implementierung braucht, statt auf einen späteren, thematisch passenderen Block zu warten.
 
+### D46 – Seminarplan-Auswahl ist ein dauerhaft sichtbarer Umschalter im Planen-Tab, kein einmaliges Gate
+
+**Anlass:** Klärung, ob die Sequenzansicht einen vorab an anderer Stelle angelegten Seminarplan voraussetzt. Nach D16 liegt die Sequenzansicht im selben Tab wie die frühere Seminarplan-Erstellung („Planen", vormals „Seminarplan"/`grid.php`) – offen war, ob die Plan-Auswahl ein einmaliges Einstiegs-Gate ist (verschwindet nach der Wahl) oder ein dauerhaft sichtbarer Umschalter bleibt.
+
+**Entscheidung:** Ein dauerhaft sichtbares Auswahlfeld „Seminarplan" (Dropdown) steht direkt oberhalb der Sequenz – keine Notwendigkeit, den Tab zu verlassen oder eine erneute Einstiegsmaske zu durchlaufen, um zwischen Seminarplänen zu wechseln. Bereits so in der laufenden Entwicklung umgesetzt (durch Screenshot aus Testplaner 5.1.4 bestätigt).
+
+**Konsequenz:** Löst die ursprüngliche Sorge vollständig auf – der Sequenzer setzt keinen an anderer Stelle vorbereiteten Plan voraus, sondern trägt die Plan-Zuweisung direkt sichtbar in sich.
+
+**Randnotiz (kein Konzeptthema, siehe Backlog):** Der Screenshot zeigt zusätzlich einen weiterhin sichtbaren „Bausteine"-Tab – das ist ein Entwicklungs-Überbleibsel und keine Revision von D16 (Bausteine-Tab entfällt bleibt gültig). Als Aufräum-Punkt im Backlog vermerkt.
+
+### D47 – Reihenfolge-Änderung über beide Wege: ↑/↓-Buttons UND Drag & Drop (Präzisierung zu D3)
+
+**Anlass:** Rückfrage, ob Drag & Drop als Bedienkonzept beibehalten wurde. Erste Rückmeldung aus der laufenden Entwicklung („Drag & Drop funktioniert nicht mehr") wurde zunächst als bewusste Entscheidung gegen Drag & Drop verstanden – das war ein Missverständnis. Richtig ist: **Beide Bedienwege sollen nebeneinander funktionieren.**
+
+**Entscheidung:** Die Reihenfolge in der Sequenzansicht lässt sich sowohl über **↑/↓-Buttons** an jeder Einheit/jedem Baustein als auch per **Drag & Drop** (Maus/Touch, wie in D3 angelegt) ändern. Die Buttons sind die barrierefreie, tastaturbedienbare Variante (deckt den ursprünglichen A11y-Backlog-Punkt „Drag & Drop braucht Tastaturalternative" ab), Drag & Drop bleibt zusätzlich für Maus-/Touch-Nutzerinnen erhalten, die diesen Weg gewohnt sind oder bevorzugen. Kein Entweder-oder.
+
+**Korrektur zu D3:** D3s Formulierung „Reihenfolge ändern per Drag" bleibt inhaltlich gültig, wird aber um die gleichwertige Button-Bedienung ergänzt – beide Wege führen zum selben Ergebnis (Reihenfolge bestimmt Zeiten, Zeitkonflikte weiterhin konstruktiv unmöglich).
+
+**Aktueller Umsetzungsstand (kein Konzeptthema, siehe Backlog):** In der laufenden Entwicklung (Testplaner 5.1.4) funktionieren aktuell nur die Buttons, Drag & Drop ist derzeit nicht funktionsfähig. Das ist eine offene Umsetzungslücke, kein Zielzustand – als Backlog-Punkt vermerkt.
+
+**Konsequenz:** Der A11y-Backlog-Punkt zur Tastaturalternative ist durch die Buttons erfüllt; zusätzlich offen bleibt, Drag & Drop wieder herzustellen, damit beide Wege wie vorgesehen nebeneinander funktionieren.
+
+### D48 – Themenplan-Import zurück in die Seminarschmiede *(Revision von D13; D19 damit hinfällig)*
+
+**Entscheidung:** Der Themenplan-Import läuft nicht mehr über einen im Plugin gepflegten PHP-Parser (D13), sondern wieder über die externe Seminarschmiede – die die vollständige Konvertierung Themenplan → Seminarplaner-Format bereits übernimmt.
+
+**Begründung:**
+
+1. **Pflegeaufwand.** Ein Parser im Plugin bedeutet: jede künftige Format-Änderung des Themenplans zieht ein Plugin-Update nach sich (genau der „akzeptierte Preis" aus D13). Das entfällt, wenn die Schmiede die Konvertierung trägt.
+2. **Die Seminarschmiede kann inzwischen mehr** als zum Zeitpunkt von D5/D13 – sie ist kein reines Einzweck-Tool für den Themenplan-Import mehr.
+3. **Die Schmiede wird ohnehin gebraucht:** für KI-generierte Seminarkonzepte, ein neuer Anwendungsfall außerhalb des Themenplan-Imports. Damit lohnt sich die zentrale Pflege dort strukturell, unabhängig vom Parser.
+
+**Bewusst in Kauf genommener Preis – der Medienbruch aus D5 kehrt zurück.** Das war 2026 in D13 das entscheidende Gegenargument (drei manuelle Schritte über ein externes Tool, genau die Reibung, die eine Zielgruppe mit geringer IT-Kompetenz am härtesten trifft) und ist **nicht** technisch gelöst (keine direkte Anbindung/API). Diesmal überwiegen Pflegeaufwand und Doppelnutzung der Schmiede diesen Nachteil – eine bewusste Abwägung, keine Wiederholung des alten Arguments „Bequemlichkeit". Für die Zielgruppe bleibt der Umweg über ein externes Tool eine reale Hürde; falls sich das im Praxisbetrieb als zu große Reibung erweist, ist das ein Kandidat für eine erneute Revision (Backlog-Hinweis in Abschnitt 7).
+
+**Konsequenz für D19:** Die Parser-Spezifikation (Tabellen-Erkennung, Wochentags-Mapping, (V)/(N)-Anker-Fallbacks, organisatorische Blöcke über leere Kompetenzerwartungen-Zelle, Best-Effort mit Import-Bericht) wird **nicht mehr als PHP-Spezifikation benötigt** – sie ist in der Seminarschmiede bereits umgesetzt. D19 bleibt im Dokument als fachliche Referenz stehen (falls die Schmiede-Logik je dokumentiert/geprüft werden muss), ist aber kein Arbeitsauftrag für die Plugin-Implementierung mehr.
+
+**Konsequenz für Abschnitt 5 (Import-Zielformat):** Der Import läuft weiterhin über das bestehende `seminarplaner-component-export`-JSON-Format – die Schmiede liefert dieses Format, der Import/Export-Tab im Plugin nimmt es entgegen wie jeden anderen Import auch. Kein neuer Weg, sondern der alte Weg aus D5, nur mit dem seither unveränderten Zielformat.
+
 ## 4. Themenplan-Format und Mapping (verifiziert am Original TP_2026_ki.docx)
 
 Standardisiertes Word-Dokument, eine Tabelle. Kopf: Seminartitel, Seminartyp, Bildungsziel, Inhaltliche Schwerpunkte. Danach Seminarplan-Zeilen: Tag | Inhalt | Kompetenzerwartungen.
@@ -680,9 +728,11 @@ Standardisiertes Word-Dokument, eine Tabelle. Kopf: Seminartitel, Seminartyp, Bi
 
 Besonderheit: rein **organisatorische Blöcke** existieren (z. B. Sonntag „(N) Anreise und Begrüßung") → brauchen einen eigenen Typ ohne Methodenzwang. Erkennungsmerkmal beim Import: leere Kompetenzerwartungen-Zelle (D19, Regel 5).
 
-Ergänzung durch D12/D13: Tag-Spalte und (V)/(N)-Präfix werden beim Import nicht nur als Text mitgeführt, sondern in eine tatsächliche Platzierung (Tag + Anker) übersetzt. **Die vollständigen Parsing-Regeln inkl. Fehlerstrategie und Randfällen: D19.**
+Ergänzung durch D12/D13: Tag-Spalte und (V)/(N)-Präfix werden beim Import nicht nur als Text mitgeführt, sondern in eine tatsächliche Platzierung (Tag + Anker) übersetzt. **Die vollständigen Parsing-Regeln inkl. Fehlerstrategie und Randfällen: D19** *(fachliche Referenz, seit D48 keine PHP-Spezifikation mehr – die Umsetzung liegt in der Seminarschmiede).*
 
 ## 5. Import-Zielformat (aus dem Plugin-Code, `importexport.js`)
+
+*Gilt unverändert auch nach D48: Die Seminarschmiede liefert dieses Format, der Import läuft über den bestehenden Import/Export-Tab.*
 
 ```json
 {
@@ -725,17 +775,18 @@ Aufgelöste Fragen:
 ## 7. Backlog (nicht vergessen, unabhängig vom Umbau)
 
 - **Kein Undo** im Planer – im Sequenzmodell neu bewerten, mindestens „letzte Aktion rückgängig".
-- **A11y**: Statuszeile `#kg-status` ohne `aria-live` (Screenreader bekommen Meldungen nicht mit); Drag & Drop braucht Tastaturalternative.
+- **A11y**: Statuszeile `#kg-status` ohne `aria-live` (Screenreader bekommen Meldungen nicht mit); Tastaturalternative zu Drag & Drop ist mit den ↑/↓-Buttons erfüllt (**D47**). Offen: Drag & Drop selbst ist im aktuellen Entwicklungsstand nicht funktionsfähig und muss wiederhergestellt werden, damit beide Bedienwege wie in D47 vorgesehen nebeneinander funktionieren.
 - **Formularlast Seminareinheit**: ~18 Felder, jetzt 16 nach D40; entschärft durch **D17** (Modal mit offener Schnellfassung, restliche Abschnitte zugeklappt); zusätzlicher Wunsch aus dem Workshop-Nachgang zu B5: Formular insgesamt noch angenehmer bedienbar machen – Idee, noch nicht konkretisiert, bei Umsetzung mitdenken.
 - **Editor-UX der Seminareinheiten-Felder (D17-Feinschliff, Merker):** ✓ aufgelöst durch **D21** (Feldreihenfolge nach Denk- und Arbeitslogik, Lernziele in der Schnellfassung, „Alternative Seminareinheiten" als Vorbelegung). ✓ **Felder-Inventur** final entschieden durch **D40** (Kognitive Dimension und Komplexitätsgrad entfallen, Rest bleibt) – Konsequenz für die Vorschlagsmechanik in **D41** (Bloom-Verb-Mapping zielt jetzt auf Seminarphase).
 - **Grid-Einstieg**: zuletzt geöffneter Plan sollte direkt laden (entfällt ggf. mit Sequenz-UI, sonst umsetzen).
 - **Begriffs-Inkonsistenz** in Strings: entschieden durch **D18** – „Seminareinheit" bleibt führender Begriff für das allgemeine, inhaltstragende Objekt. Präzisiert durch **D28**: „Methode" ist kein Rückfall in die alte Verwirrung, sondern der eigene Name für den inhaltsfreien Sonderfall (Kennenlernen, Reflexion, Feedback …), der in der neuen Methoden-Bibliothek (**D29**) lebt. Benennung der Methodensammlung ohne Ablauf final entschieden durch **D38**: „Methoden-Sammlung"; „Seminarkonzept" (komplette Pläne mit Ablauf, D28) ist als Begriff bereits stimmig und unstrittig.
-- **Themenplan-Parser im Plugin** (D13): Spezifikation liegt vor (**D19**). Verbleibt für die Umsetzung: PHP-Parser gemäß D19, Unit-Tests mit echten Themenplänen als Fixtures (TP_2026_ki.docx als erstes Fixture, dazu bewusst „unsaubere" Altpläne für die Best-Effort-Pfade), Gestaltung des Import-Berichts als UI-Element.
+- **Themenplan-Parser** (D13/D19, hinfällig durch **D48**): Läuft wieder über die externe Seminarschmiede, kein PHP-Parser im Plugin mehr. Verbleibt zu klären: konkreter Übergabe-/Aufruf-Weg zur Schmiede aus dem Import/Export-Tab (D48 legt nur fest, dass das bestehende Zielformat aus Abschnitt 5 geliefert wird, nicht die genaue Bedienführung). Beobachtungspunkt: Falls der wiederkehrende Medienbruch (D48) in der Praxis zu große Reibung erzeugt, ist eine erneute Revision zu prüfen.
 - **Export platzierter Pläne**: Import/Export-Format ggf. um Tag/Anker-Platzierung erweitern (siehe **D20** und Hinweis in Abschnitt 5).
 - **Facetten-Taxonomie der Methoden-Bibliothek (D29):** Vorschlag (Zeitpunkt/Anlass, Format, Aufwand) beruht bislang auf zwei Beispiel-Methodensets (183 Methoden); weitere reale Bestände vom Auftraggeber ausstehen, um die Taxonomie zu verfestigen oder zu korrigieren.
 - **Zeitbedarf als Feldtyp (D31, offen):** Aktuell teils Auswahlfeld mit Überlaufkategorie („mehr als 180 Minuten"), vom Auftraggeber als ungenau eingeschätzt. Ob ein freier Zahlenwert die bessere Lösung ist, wird im Rahmen der Gesamt-Überarbeitung des Seminareinheiten-Formulars (D21) besprochen, sobald das ansteht – noch keine Entscheidung.
 - **UX-Konzept „Bibliothek ohne Vor-Import" (D33, offen):** Grundsatzentscheidung liegt vor (globale Methoden-Sammlungen immer durchsuchbar, direkte Übernahme einzelner Methoden als Kopie ohne vorherigen Sammlungs-Import). Noch offen: konkrete Einbindung in den Planbau-Workflow (Andock-Panel, Suchen-und-Ablegen, separates Bibliotheksfenster o. Ä.) – eigener Konzeptions-Schritt.
 - **Vierter, jederzeit erreichbarer Einstieg zum Einheiten-Editor (Idee, Ergänzung zu D17/D39):** „Seminareinheit hinzufügen" als Button, der unabhängig vom aktuellen Tab/View erreichbar ist – nicht nur aus dem „Anlegen"-Bereich des Seminareinheiten-Tabs (D39). Noch offen: schwebender Button oder feste Position, auf jeder Seite oder nur in der Sequenzansicht – Design-Detailarbeit, keine Richtungsentscheidung.
+- **Aufräum-Punkt „Bausteine"-Tab entfernen (D16, D46):** Im aktuellen Entwicklungsstand (Testplaner 5.1.4) ist der eigenständige Bausteine-Tab noch sichtbar – laut D16 soll er entfallen, da Bausteine nur noch als optionale Überschrift in der Sequenz existieren (D10). Kein Konzeptthema, reine Umsetzungs-Nacharbeit.
 
 ## 8. Entwicklungs- und Rollout-Strategie
 
@@ -753,7 +804,7 @@ Aufgelöste Fragen:
 
 ## 9. Vorschlag für die Projekt-Anweisungen (Claude-Projekt)
 
-> Wir entwickeln das Moodle-Plugin „Seminarplaner" (mod_seminarplaner + local_seminarplaner) für die IG-Metall-Bildungsarbeit konzeptionell weiter. Zielgruppe sind hauptamtliche und ehrenamtliche Referentinnen: erfahrene Pädagoginnen ohne akademische Ausbildung und mit geringer IT-Kompetenz – alle Vorschläge müssen didaktische statt IT-Metaphern nutzen. Grundlage aller Arbeit ist das Dokument „seminarplaner-umbau-konzept.md" im Projektwissen; getroffene Entscheidungen (D1–D45) gelten, bis sie ausdrücklich revidiert werden. Aktuelle Phase: Konzeption und Richtungsklärung – keinen Code generieren, außer es wird ausdrücklich verlangt. Bei neuen Entscheidungen das Konzeptdokument fortschreiben. Antworten auf Deutsch.
+> Wir entwickeln das Moodle-Plugin „Seminarplaner" (mod_seminarplaner + local_seminarplaner) für die IG-Metall-Bildungsarbeit konzeptionell weiter. Zielgruppe sind hauptamtliche und ehrenamtliche Referentinnen: erfahrene Pädagoginnen ohne akademische Ausbildung und mit geringer IT-Kompetenz – alle Vorschläge müssen didaktische statt IT-Metaphern nutzen. Grundlage aller Arbeit ist das Dokument „seminarplaner-umbau-konzept.md" im Projektwissen; getroffene Entscheidungen (D1–D48) gelten, bis sie ausdrücklich revidiert werden. Aktuelle Phase: Konzeption und Richtungsklärung – keinen Code generieren, außer es wird ausdrücklich verlangt. Bei neuen Entscheidungen das Konzeptdokument fortschreiben. Antworten auf Deutsch.
 
 Empfohlenes Projektwissen: dieses Dokument, die Plugin-Code-Referenz, ein Beispiel-Themenplan (TP_2026_ki.docx), das Wireframe der Sequenzansicht, die Workshop-Fragensammlung (workshop-fragen.md).
 
