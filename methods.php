@@ -5,6 +5,7 @@
 // landen in der Bibliothek; Anlegen ist dort ein Button, der den Editor öffnet.
 
 require_once(__DIR__ . '/bootstrap.php');
+require_once(__DIR__ . '/locallib.php');
 
 $id = required_param('id', PARAM_INT);
 seminarplaner_require_activity_context($id, 'mod/seminarplaner:view');
