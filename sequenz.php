@@ -123,16 +123,6 @@ $days = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', '
 </div>
 <?php
 
-// D16/D37: the finished sequence can be published as the Common Thread
-// from here too, not only from the overview page.
-echo html_writer::start_div('sq-publishbar');
-echo html_writer::start_tag('label', ['class' => 'kg-label kg-inline-checkbox']);
-echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'sq-publish-roterfaden']);
-echo html_writer::tag('span', get_string('roterfaden_publishlabel', 'mod_seminarplaner'));
-echo html_writer::end_tag('label');
-echo html_writer::tag('span', '', ['id' => 'sq-publish-roterfaden-status', 'class' => 'sp-filter-status']);
-echo html_writer::end_div();
-
 // Toolbar with day navigation.
 echo html_writer::start_div('sq-toolbar');
 echo html_writer::start_div('sq-toolbar__nav');
@@ -149,6 +139,15 @@ echo html_writer::tag('button', '›', [
 ]);
 echo html_writer::end_div();
 echo html_writer::start_div('sq-toolbar__actions');
+// D16/D37: the finished sequence can be published as the Common Thread
+// directly from the toolbar (moved out of its own card on user request).
+echo html_writer::start_tag('span', ['class' => 'sq-publish', 'id' => 'sq-publish-wrap']);
+echo html_writer::start_tag('label', ['class' => 'kg-label kg-inline-checkbox']);
+echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'sq-publish-roterfaden']);
+echo html_writer::tag('span', get_string('roterfaden_publishlabel', 'mod_seminarplaner'));
+echo html_writer::end_tag('label');
+echo html_writer::tag('span', '', ['id' => 'sq-publish-roterfaden-status', 'class' => 'sp-filter-status']);
+echo html_writer::end_tag('span');
 echo html_writer::start_tag('label', ['class' => 'sq-toggle', 'for' => 'sq-drama-toggle']);
 echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'sq-drama-toggle']);
 echo html_writer::tag('span', get_string('sequenz_dramatoggle', 'mod_seminarplaner'));
