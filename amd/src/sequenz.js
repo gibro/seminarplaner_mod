@@ -219,6 +219,17 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             // currently marked as drop target.
             this.drag = null;
             this.dropMarkerEl = null;
+            // D49: requested plan/day from the overview click navigation
+            // (?grid=<id>&tag=<n>), applied once on first load.
+            const urlparams = new URLSearchParams(window.location.search);
+            this.requestedTag = (() => {
+                const tag = Number.parseInt(String(urlparams.get('tag') || ''), 10);
+                return Number.isFinite(tag) && tag > 0 ? tag : 0;
+            })();
+            this.requestedGrid = (() => {
+                const grid = Number.parseInt(String(urlparams.get('grid') || ''), 10);
+                return Number.isFinite(grid) && grid > 0 ? grid : 0;
+            })();
         }
 
         init() {
@@ -273,7 +284,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             this.initDramaToggle();
             this.initSetupPanel();
             this.initPublishControl();
-            this.loadGrids();
+            this.loadGrids(this.requestedGrid || undefined);
             this.loadEnrichment();
         }
 
@@ -873,6 +884,12 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 this.ensureSequenzScaffold();
                 this.versionhash = String(res.versionhash || '');
                 this.dayIndex = 0;
+                // D49: Klick-Navigation aus dem Ueberblick - ?tag=N oeffnet
+                // direkt den passenden Tag (einmalig, nur fuers erste Laden).
+                if (this.requestedTag > 0 && this.requestedTag <= this.dayCount()) {
+                    this.dayIndex = this.requestedTag - 1;
+                }
+                this.requestedTag = 0;
                 this.openSwapPid = '';
                 this.headingPid = '';
                 this.setDirty(false);

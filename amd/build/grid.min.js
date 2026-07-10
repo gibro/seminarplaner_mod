@@ -296,6 +296,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 plan: {days: {}},
                 sourceMode: 'methods'
             };
+            // D49/D20: sequenz-Abschnitt des geladenen Plans - wenn vorhanden,
+            // rendert der Ueberblick daraus (read-only Projektion) statt aus
+            // dem alten plan.days.
+            this.sequenzSection = null;
 
             if (!this.wrapper) {
                 return;
@@ -2192,16 +2196,111 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             });
         }
 
+        // ---- D49/D20: Ueberblick liest aus der Sequenz -------------------
+        // Die Sequenz ist seit D20 die massgebliche Datenstruktur; sobald ein
+        // Plan einen sequenz-Abschnitt hat, projiziert der Ueberblick daraus
+        // seine Wochenansicht. plan.days bleibt unangetastet (wird nie aus der
+        // Projektion zurueckgeschrieben) - es dient nur noch als Farb-Lookup
+        // fuer migrierte Eintraege und als Fallback fuer Plaene ohne Sequenz.
+        overviewPlanDays() {
+            const seq = this.sequenzSection;
+            if (!seq || !Array.isArray(seq.tage) || !seq.tage.length) {
+                return this.state.plan.days || {};
+            }
+            const placements = (seq.platzierungen && typeof seq.platzierungen === 'object') ? seq.platzierungen : {};
+            const bausteine = (seq.bausteine && typeof seq.bausteine === 'object') ? seq.bausteine : {};
+
+            // Farb-/Typ-Lookup: migrierte Platzierungen zeigen auf ihre alten
+            // Grid-Eintraege (quelle.uids).
+            const legacyByUid = {};
+            Object.keys(this.state.plan.days || {}).forEach((day) => {
+                (this.state.plan.days[day] || []).forEach((entry) => {
+                    if (entry && entry.uid) {
+                        legacyByUid[String(entry.uid)] = entry;
+                    }
+                });
+            });
+
+            const config = this.state.config || {};
+            const az = config.ankerzeiten || deriveAnkerzeiten(config);
+            const vmStart = parseTimeToMinutes(az && az.vormittag ? az.vormittag.start : '') ?? 510;
+            const nmStart = parseTimeToMinutes(az && az.nachmittag ? az.nachmittag.start : '') ?? 795;
+
+            const days = {};
+            seq.tage.forEach((tag, idx) => {
+                const dayname = (tag && tag.bezeichnung && (config.days || []).includes(tag.bezeichnung))
+                    ? tag.bezeichnung
+                    : (config.days || [])[idx];
+                if (!dayname) {
+                    return;
+                }
+                const isFirst = idx === 0;
+                const isLast = idx === seq.tage.length - 1;
+                const anchorStarts = {
+                    vormittag: (isFirst && az && az.ersterTagNurNachmittag) ? nmStart : vmStart,
+                    nachmittag: (isLast && az && az.letzterTagNurVormittag) ? vmStart : nmStart,
+                };
+                const items = [];
+                ['vormittag', 'nachmittag'].forEach((ankername) => {
+                    let clock = anchorStarts[ankername];
+                    const pids = (((tag.anker || {})[ankername] || {}).sequenz) || [];
+                    pids.forEach((pid) => {
+                        const p = placements[pid];
+                        if (!p) {
+                            return;
+                        }
+                        const duration = Math.max(0, Number(p.dauer) || 0);
+                        const baustein = p.bausteinid ? bausteine[p.bausteinid] : null;
+                        let title = String(p.titel || '').trim();
+                        if (!title && baustein && baustein.titel) {
+                            title = `${baustein.titel} (reserviert)`;
+                        }
+                        const item = {
+                            uid: `sq-${pid}`,
+                            kind: p.typ === 'pause' ? 'break' : 'method',
+                            title: title || (p.typ === 'pause' ? 'Pause' : 'Seminareinheit'),
+                            startMin: clock,
+                            endMin: clock + duration,
+                            details: {},
+                            sqTag: idx + 1,
+                        };
+                        const uids = (p.quelle && Array.isArray(p.quelle.uids)) ? p.quelle.uids : [];
+                        for (const legacyuid of uids) {
+                            const legacy = legacyByUid[String(legacyuid)];
+                            if (legacy) {
+                                if (legacy.cognitiveLevel) {
+                                    item.cognitiveLevel = legacy.cognitiveLevel;
+                                }
+                                break;
+                            }
+                        }
+                        items.push(item);
+                        clock += duration;
+                    });
+                });
+                days[dayname] = items;
+            });
+            // Tage der Einrichtung ohne Sequenz-Pendant bleiben leer statt
+            // Altdaten zu zeigen (sonst waeren die Ansichten wieder asynchron).
+            (config.days || []).forEach((day) => {
+                if (!days[day]) {
+                    days[day] = [];
+                }
+            });
+            return days;
+        }
+
         renderAllDayRow() {
             if (!bySel('#sp-allday-row')) {
                 return;
             }
+            const planDays = this.overviewPlanDays();
             this.getVisibleDays().forEach((day) => {
                 const target = bySel(`[data-allday="${day}"]`);
                 if (!target) {
                     return;
                 }
-                const items = this.state.plan.days[day] || [];
+                const items = planDays[day] || [];
                 if (!items.length) {
                     target.innerHTML = '<span class="sp-allday-empty">Keine Einträge</span>';
                     return;
@@ -2234,6 +2333,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const overlayMinHeight = slotsPerDay * slotPx;
 
             const todayName = getTodayDayName();
+            const planDays = this.overviewPlanDays();
             this.getVisibleDays().forEach((day) => {
                 const overlay = document.querySelector(`[data-overlay="${day}"]`);
                 if (!overlay) {
@@ -2253,7 +2353,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     overlay.appendChild(indicator);
                 }
 
-                const items = (this.state.plan.days[day] || []).slice().sort((a, b) => a.startMin - b.startMin);
+                const items = (planDays[day] || []).slice().sort((a, b) => a.startMin - b.startMin);
                 let packedBottomPx = 0;
                 items.forEach((it) => {
                     const durationMin = Math.max(5, Number(it.endMin || 0) - Number(it.startMin || 0));
@@ -2297,6 +2397,17 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     div.style.left = '0';
                     div.style.right = '0';
                     div.draggable = false;
+                    // D49: Eintraege aus der Sequenz-Projektion sind reine
+                    // Navigation - Klick oeffnet den passenden Tag in der
+                    // Sequenzansicht, keine Move-/Drag-Interaktion.
+                    if (it.sqTag) {
+                        div.classList.add('sp-item--sqnav');
+                        div.title = 'In der Sequenzansicht bearbeiten';
+                        div.addEventListener('click', () => {
+                            const gridparam = Number(this.state.gridid) > 0 ? `&grid=${Number(this.state.gridid)}` : '';
+                            window.location.href = `${M.cfg.wwwroot}/mod/seminarplaner/sequenz.php?id=${this.cmid}${gridparam}&tag=${it.sqTag}`;
+                        });
+                    } else {
                     div.addEventListener('pointerdown', (event) => this.startItemMove(event, it, day));
                     div.addEventListener('mousedown', (event) => this.startItemMove(event, it, day));
                     div.addEventListener('touchstart', (event) => this.startItemMove(event, it, day), {passive: false});
@@ -2315,6 +2426,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     });
                     div.addEventListener('dragover', (event) => event.preventDefault());
                     div.addEventListener('drop', (event) => this.onDrop(event, {getAttribute: () => day}, this.minutesToIndex(it.startMin)));
+                    }
 
                     let title = it.title || '';
                     if (it.flowTotal > 1 && it.flowOrder > 1) {
@@ -2395,6 +2507,16 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     let defaultActions = '';
                     defaultActions += `<button type="button" class="ml-card-menu-btn ml-card-menu-btn-delete" data-act="delete" data-uid="${escapeHtml(it.uid)}">Löschen</button>`;
 
+                    // D49: Projektions-Eintraege haben kein Kontextmenue -
+                    // bearbeitet wird ausschliesslich in der Sequenzansicht.
+                    const contextmenu = it.sqTag ? '' : `
+                        <details class="ml-card-menu sp-item-context">
+                            <summary class="ml-card-menu-toggle" data-action="toggle-context-menu" aria-label="Kontextmenü">⋮</summary>
+                            <div class="ml-card-menu-panel" role="menu" aria-label="Eintrag Aktionen">
+                                ${menuActions}
+                                ${defaultActions}
+                            </div>
+                        </details>`;
                     div.innerHTML = `
                         <div class="sp-item-content">
                             ${unitLabelHtml}
@@ -2402,15 +2524,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             ${isDayView ? '' : `<div class="sp-meta">${escapeHtml(timeLabel)}</div>`}
                             ${unitmethodshtml}
                         </div>
-                        <details class="ml-card-menu sp-item-context">
-                            <summary class="ml-card-menu-toggle" data-action="toggle-context-menu" aria-label="Kontextmenü">⋮</summary>
-                            <div class="ml-card-menu-panel" role="menu" aria-label="Eintrag Aktionen">
-                                ${menuActions}
-                                ${defaultActions}
-                            </div>
-                        </details>
+                        ${contextmenu}
                     `;
-                    if (it.kind === 'method' || it.kind === 'break') {
+                    if (!it.sqTag && (it.kind === 'method' || it.kind === 'break')) {
                         const topHandle = document.createElement('div');
                         topHandle.className = 'sp-resize-handle sp-resize-handle--top';
                         topHandle.setAttribute('data-resize', 'start');
@@ -2425,7 +2541,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         bottomHandle.addEventListener('pointerdown', (event) => this.startItemResize(event, it, day, 'end'));
                         div.appendChild(bottomHandle);
                     }
-                    if (it.kind === 'method') {
+                    if (!it.sqTag && it.kind === 'method') {
                         div.classList.add('sp-item--method-clickable');
                         div.setAttribute('role', 'button');
                         div.setAttribute('tabindex', '0');
@@ -2631,8 +2747,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         updateSums() {
+            const planDays = this.overviewPlanDays();
             this.getVisibleDays().forEach((day) => {
-                const sum = (this.state.plan.days[day] || []).reduce((acc, item) => acc + (item.endMin - item.startMin), 0);
+                const sum = (planDays[day] || []).reduce((acc, item) => acc + (item.endMin - item.startMin), 0);
                 const el = document.querySelector(`[data-sum="${day}"]`);
                 if (el) {
                     el.textContent = `${Math.floor(sum / 60)} Std ${sum % 60} Min`;
@@ -4127,6 +4244,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (!gridid) {
                 this.clearRememberedLoadedGridId();
                 this.state = Object.assign({}, this.state, this.normalizeLoadedState({}));
+                this.sequenzSection = null;
                 this.ensurePlanDays();
                 this.syncSourceTabs();
                 this.renderMethods();
@@ -4145,6 +4263,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 }
                 const normalized = this.normalizeLoadedState(parsed);
                 this.state = Object.assign({}, this.state, normalized, {gridid});
+                // D49: Ueberblick ist immer der Wochen-Gesamtblick - gespeicherte
+                // Tagesansichten aus Altdaten werden nicht wiederhergestellt.
+                this.state.view.mode = VIEW_MODE_WEEK;
+                this.sequenzSection = (parsed && parsed.sequenz && typeof parsed.sequenz === 'object'
+                    && !Array.isArray(parsed.sequenz)) ? parsed.sequenz : null;
                 this.versionhash = res.versionhash || '';
                 this.rememberLoadedGridId(gridid);
                 this.ensurePlanDays();

@@ -6473,3 +6473,28 @@ details[open] > .sq-gap__summary .sq-gap__chevron {
     color: var(--ig-gray);
     font-size: 12.5px;
 }
+
+/* ==========================================================================
+   D49: Überblick = reiner Wochenblick mit Klick-Navigation zur Sequenz
+   ========================================================================== */
+
+/* Der Wochen-/Tages-Umschalter entfällt ersatzlos. */
+.kg-grid-readonly .sp-view-switch,
+.kg-grid-readonly .sp-day-switch {
+    display: none;
+}
+
+/* Einträge aus der Sequenz-Projektion sind klickbare Navigation. */
+.kg-grid-readonly .sp-item--sqnav,
+.kg-grid-readonly .sp-item--sqnav * {
+    pointer-events: auto !important;
+}
+
+.sp-item--sqnav {
+    cursor: pointer;
+}
+
+.kg-grid-readonly .sp-item--sqnav:hover {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+}
