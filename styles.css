@@ -7031,3 +7031,17 @@ a.kg-btn-primary:focus {
 #sq-new-unit.kg-btn {
     white-space: nowrap;
 }
+
+/* Tag-Navigation auf dieselbe Höhe wie die übrigen Toolbar-Elemente
+   (Stufe 2 hatte 34x34; der Neue-Einheit-Button kommt mit 2px-Border
+   auf 38px - beides jetzt einheitlich 38px). */
+#sq-prev-day,
+#sq-next-day {
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
+}
+
+#sq-new-unit.kg-btn {
+    min-height: 38px;
+}
