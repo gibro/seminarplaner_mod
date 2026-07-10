@@ -7,7 +7,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         kurzbeschreibung: '#kg-f-kurzbeschreibung',
         autor: '#kg-f-autor',
         lernziele: '#kg-f-lernziele',
-        komplexitaet: '#kg-f-komplexitaet',
         vorbereitung: '#kg-f-vorbereitung',
         raum: '#kg-f-raum',
         sozialform: '#kg-f-sozialform',
@@ -17,7 +16,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         materialtechnik: '#kg-f-materialtechnik',
         ablauf: '#kg-f-ablauf',
         tags: '#kg-f-tags',
-        kognitive: '#kg-f-kognitive',
         alternativen: '#kg-f-alternativen'
     };
 
@@ -477,7 +475,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         setFieldValue(FIELDS.kurzbeschreibung, method.kurzbeschreibung || '');
         setFieldValue(FIELDS.autor, method.autor || '');
         setFieldValue(FIELDS.lernziele, method.lernziele || '');
-        setFieldValue(FIELDS.komplexitaet, method.komplexitaet || '');
         setFieldValue(FIELDS.vorbereitung, method.vorbereitung || '');
         setFieldValue(FIELDS.risiken, method.risiken || '');
         setFieldValue(FIELDS.debrief, method.debrief || '');
@@ -487,7 +484,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         setMultiFieldValues(FIELDS.seminarphase, method.seminarphase || []);
         setMultiFieldValues(FIELDS.raum, method.raum || []);
         setMultiFieldValues(FIELDS.sozialform, method.sozialform || []);
-        setMultiFieldValues(FIELDS.kognitive, method.kognitive || []);
         setFormMultiDropdownValues(FIELDS.alternativen, method.alternativen || []);
         const materialdraft = bySel(FIELDS.materialien);
         if (materialdraft) {
@@ -521,7 +517,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             kurzbeschreibung: readFieldValue(FIELDS.kurzbeschreibung),
             autor: (bySel(FIELDS.autor)?.value || '').trim(),
             lernziele: readFieldValue(FIELDS.lernziele),
-            komplexitaet: (bySel(FIELDS.komplexitaet)?.value || '').trim(),
             vorbereitung: (bySel(FIELDS.vorbereitung)?.value || '').trim(),
             raum: readMulti(FIELDS.raum),
             sozialform: readMulti(FIELDS.sozialform),
@@ -532,7 +527,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             materialtechnik: readFieldValue(FIELDS.materialtechnik),
             ablauf: readFieldValue(FIELDS.ablauf),
             tags: (bySel(FIELDS.tags)?.value || '').trim(),
-            kognitive: readMulti(FIELDS.kognitive),
             alternativen: readMulti(FIELDS.alternativen)
         };
     };

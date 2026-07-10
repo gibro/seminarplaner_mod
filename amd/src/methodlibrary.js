@@ -70,7 +70,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         kurzbeschreibung: '#kg-f-kurzbeschreibung',
         autor: '#kg-f-autor',
         lernziele: '#kg-f-lernziele',
-        komplexitaet: '#kg-f-komplexitaet',
         vorbereitung: '#kg-f-vorbereitung',
         raum: '#kg-f-raum',
         sozialform: '#kg-f-sozialform',
@@ -80,7 +79,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         materialtechnik: '#kg-f-materialtechnik',
         ablauf: '#kg-f-ablauf',
         tags: '#kg-f-tags',
-        kognitive: '#kg-f-kognitive',
         alternativen: '#kg-f-alternativen'
     };
 
@@ -121,15 +119,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             labelAll: 'Alle Zeiten',
             labelSome: 'Zeiten'
         },
-        cognitive: {
-            root: '#ml-filter-cognitive-dropdown',
-            toggle: '#ml-filter-cognitive-toggle',
-            panel: '#ml-filter-cognitive-panel',
-            all: '#ml-filter-cognitive-all',
-            options: '#ml-filter-cognitive-options',
-            labelAll: 'Alle Dimensionen',
-            labelSome: 'Dimensionen'
-        }
     };
 
     const EDIT_FIELD_SELECTORS = [
@@ -139,10 +128,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         '#ml-e-tags',
         '#ml-e-zeitbedarf',
         '#ml-e-gruppengroesse',
-        '#ml-e-kognitive',
         '#ml-e-kurzbeschreibung',
         '#ml-e-ablauf',
-        '#ml-e-komplexitaet',
         '#ml-e-autor',
         '#ml-e-raum',
         '#ml-e-sozialform',
@@ -631,7 +618,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             kurzbeschreibung: (bySel(FIELDS.kurzbeschreibung)?.value || '').trim(),
             autor: (bySel(FIELDS.autor)?.value || '').trim(),
             lernziele: (bySel(FIELDS.lernziele)?.value || '').trim(),
-            komplexitaet: (bySel(FIELDS.komplexitaet)?.value || '').trim(),
             vorbereitung: (bySel(FIELDS.vorbereitung)?.value || '').trim(),
             raum: readMulti(FIELDS.raum),
             sozialform: readMulti(FIELDS.sozialform),
@@ -642,7 +628,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             materialtechnik: (bySel(FIELDS.materialtechnik)?.value || '').trim(),
             ablauf: (bySel(FIELDS.ablauf)?.value || '').trim(),
             tags: (bySel(FIELDS.tags)?.value || '').trim(),
-            kognitive: readMulti(FIELDS.kognitive),
             alternativen: readMulti(FIELDS.alternativen)
         };
     };
@@ -865,7 +850,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const phases = getSelectedFilterValues('phase');
         const groups = getSelectedFilterValues('group');
         const durations = getSelectedFilterValues('duration');
-        const cognitive = getSelectedFilterValues('cognitive').map((v) => normalize(v.split(/[:\-–]/)[0]));
         const origin = bySel('#ml-filter-origin') ? bySel('#ml-filter-origin').value : '';
 
         const host = bySel('#ml-method-list');
@@ -897,14 +881,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const methodphase = splitMulti(method.seminarphase).map((t) => t.toLowerCase());
             const methodgroup = normalize(method.gruppengroesse);
             const methodduration = normalize(method.zeitbedarf);
-            const methodcog = splitMulti(method.kognitive).map((t) => normalize(t.split(/[:\-–]/)[0]));
 
             const match = (!query || hay.includes(query))
                 && (!tags.length || tags.every((t) => methodtags.includes(t)))
                 && (!phases.length || methodphase.some((p) => phases.includes(p)))
                 && (!groups.length || groups.includes(methodgroup))
                 && (!durations.length || durations.includes(methodduration))
-                && (!cognitive.length || methodcog.some((c) => cognitive.includes(c)))
                 && (!origin || (origin === 'local' ? getSyncMethodsetId(method) === 0 : getSyncMethodsetId(method) === Number(origin)));
 
             card.style.display = match ? '' : 'none';
@@ -1245,7 +1227,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         setFieldValue('#ml-e-zeitbedarf', method.zeitbedarf);
         setFieldValue('#ml-e-gruppengroesse', method.gruppengroesse);
         setFieldValue('#ml-e-kurzbeschreibung', method.kurzbeschreibung);
-        setFieldValue('#ml-e-komplexitaet', method.komplexitaet);
         setFieldValue('#ml-e-vorbereitung', method.vorbereitung);
         setFieldValue('#ml-e-materialtechnik', method.materialtechnik);
         setFieldValue('#ml-e-ablauf', method.ablauf);
@@ -1269,7 +1250,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         setSelectMulti('#ml-e-seminarphase', method.seminarphase);
-        setSelectMulti('#ml-e-kognitive', method.kognitive);
         setSelectMulti('#ml-e-raum', method.raum);
         setSelectMulti('#ml-e-sozialform', method.sozialform);
         refreshEditAlternativeOptions(method.id);
@@ -1313,8 +1293,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         });
     };
 
-    const BULK_MULTI_FIELDS = ['seminarphase', 'raum', 'sozialform', 'kognitive'];
-    const BULK_SELECT_FIELDS = ['zeitbedarf', 'gruppengroesse', 'komplexitaet', 'vorbereitung'];
+    const BULK_MULTI_FIELDS = ['seminarphase', 'raum', 'sozialform'];
+    const BULK_SELECT_FIELDS = ['zeitbedarf', 'gruppengroesse', 'vorbereitung'];
 
     const updateBulkToolbar = () => {
         const toolbar = bySel('#ml-bulk-toolbar');
@@ -1908,7 +1888,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             zeitbedarf: (bySel('#ml-e-zeitbedarf') ? bySel('#ml-e-zeitbedarf').value : '').trim(),
             gruppengroesse: (bySel('#ml-e-gruppengroesse') ? bySel('#ml-e-gruppengroesse').value : '').trim(),
             kurzbeschreibung: getFieldValue('#ml-e-kurzbeschreibung'),
-            komplexitaet: (bySel('#ml-e-komplexitaet') ? bySel('#ml-e-komplexitaet').value : '').trim(),
             vorbereitung: (bySel('#ml-e-vorbereitung') ? bySel('#ml-e-vorbereitung').value : '').trim(),
             raum: getSelectMulti('#ml-e-raum'),
             sozialform: getSelectMulti('#ml-e-sozialform'),
@@ -1921,7 +1900,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             materialtechnik: getFieldValue('#ml-e-materialtechnik'),
             tags: (bySel('#ml-e-tags') ? bySel('#ml-e-tags').value : '').trim(),
             autor: (bySel('#ml-e-autor') ? bySel('#ml-e-autor').value : '').trim(),
-            kognitive: getSelectMulti('#ml-e-kognitive'),
             alternativen: getSelectMulti('#ml-e-alternativen')
         });
         methods[idx].alternativen = (methods[idx].alternativen || []).filter((id) => String(id) !== String(methods[idx].id));
@@ -2045,6 +2023,200 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
     };
 
+    // ---- D29/D33: Globale Bibliothek (immer durchsuchbar, ohne Vor-Import) ----
+    // Facetten entstehen dynamisch aus dem freien Tags-Feld (D29); die
+    // endgueltige Facetten-Struktur folgt erst mit weiteren realen Bestaenden.
+    let globalMethods = [];
+    const globalFilter = {query: '', tags: new Set()};
+    const GLOBAL_FACET_LIMIT = 24;
+
+    const setGlobalStatus = (text, iserror) => {
+        const el = bySel('#gl-status');
+        if (el) {
+            el.textContent = text || '';
+            el.classList.toggle('kg-status-error', !!iserror);
+        }
+    };
+
+    const matchesGlobalFilter = (m) => {
+        for (const tag of globalFilter.tags) {
+            if (!m.tags.some((t) => t.toLowerCase() === tag)) {
+                return false;
+            }
+        }
+        const q = globalFilter.query.trim().toLowerCase();
+        if (!q) {
+            return true;
+        }
+        const haystack = [m.titel, m.kurzbeschreibung, m.setname, m.tags.join(' ')]
+            .join(' ').toLowerCase();
+        return q.split(/\s+/).every((part) => haystack.includes(part));
+    };
+
+    const renderGlobalFacets = () => {
+        const host = bySel('#gl-facets');
+        if (!host) {
+            return;
+        }
+        const counts = new Map();
+        const labels = new Map();
+        globalMethods.forEach((m) => {
+            m.tags.forEach((tag) => {
+                const key = tag.toLowerCase();
+                counts.set(key, (counts.get(key) || 0) + 1);
+                if (!labels.has(key)) {
+                    labels.set(key, tag);
+                }
+            });
+        });
+        const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'de'));
+        // Meistgenutzte Tags zeigen; aktive Tags bleiben immer sichtbar.
+        const shown = sorted.filter(([key], index) => index < GLOBAL_FACET_LIMIT || globalFilter.tags.has(key));
+        host.innerHTML = shown.map(([key, count]) => {
+            const active = globalFilter.tags.has(key);
+            return `<button type="button" class="gl-facet${active ? ' gl-facet--active' : ''}" data-gl-tag="${escapeHtml(key)}">
+                ${escapeHtml(labels.get(key) || key)} <span class="gl-facet__count">${count}</span></button>`;
+        }).join('');
+    };
+
+    const renderGlobalList = () => {
+        const host = bySel('#gl-list');
+        if (!host) {
+            return;
+        }
+        const visible = globalMethods.filter(matchesGlobalFilter);
+        if (!globalMethods.length) {
+            host.innerHTML = '';
+            return;
+        }
+        setGlobalStatus(`${visible.length} von ${globalMethods.length} Methoden`);
+        host.innerHTML = visible.map((m) => {
+            const phaseLabel = m.seminarphase.filter(Boolean).join(', ');
+            const tagChips = m.tags.map((tag) => `<span class="ml-card-tag">${escapeHtml(tag)}</span>`).join('');
+            return `
+              <div class="kg-library-card sp-card gl-card" data-gl-methodid="${m.methodid}">
+                <div class="ml-card-head">
+                  <div class="sp-card-title ml-card-title"><strong>${escapeHtml(m.titel)}</strong></div>
+                </div>
+                <div class="sp-card-compact">
+                  <div class="sp-card-meta">
+                    ${m.zeitbedarf ? `<span class="sp-badge">⏱️ ${escapeHtml(m.zeitbedarf)}</span>` : ''}
+                    ${m.gruppengroesse ? `<span class="sp-badge">👥 ${escapeHtml(m.gruppengroesse)}</span>` : ''}
+                    ${phaseLabel ? `<span class="sp-badge sp-badge--phase">🚩 ${escapeHtml(phaseLabel)}</span>` : ''}
+                    ${m.vorbereitung ? `<span class="sp-badge">🧰 Vorbereitung: ${escapeHtml(m.vorbereitung)}</span>` : ''}
+                  </div>
+                  ${tagChips ? `<div class="ml-card-tags">${tagChips}</div>` : ''}
+                  ${m.kurzbeschreibung ? `<div class="sp-card-description">${escapeHtml(m.kurzbeschreibung)}</div>` : ''}
+                </div>
+                <div class="ml-card-footer">
+                  <span class="gl-card__source">Aus „${escapeHtml(m.setname)}"</span>
+                  <button type="button" class="kg-btn kg-btn-primary gl-card__adopt" data-gl-adopt="${m.methodid}">
+                    Übernehmen</button>
+                </div>
+              </div>`;
+        }).join('');
+        if (!visible.length) {
+            host.innerHTML = '<div class="sp-filter-status">Keine Methode passt zu Suche und Tags – '
+                + 'setz einen Filter zurück oder such mit anderen Begriffen.</div>';
+        }
+    };
+
+    const adoptGlobalMethod = (cmid, methodid, button) => {
+        if (button) {
+            button.disabled = true;
+            button.textContent = 'Übernehme …';
+        }
+        asCall('mod_seminarplaner_adopt_global_method', {cmid, methodid}).then((result) => {
+            setGlobalStatus(`„${result.titel}" ist jetzt als eigene Kopie in deinem Bestand.`);
+            if (button) {
+                button.textContent = '✓ Übernommen';
+            }
+            // Den lokalen Bestand oben direkt auffrischen, damit die Kopie sichtbar ist.
+            return loadMethods(cmid).then(() => renderList());
+        }).catch((e) => {
+            Notification.exception(e);
+            setGlobalStatus('Übernehmen fehlgeschlagen.', true);
+            if (button) {
+                button.disabled = false;
+                button.textContent = 'Übernehmen';
+            }
+        });
+    };
+
+    const initGlobalLibrary = (cmid) => {
+        const section = bySel('#gl-section');
+        if (!section) {
+            return;
+        }
+        const search = bySel('#gl-search');
+        if (search) {
+            search.addEventListener('input', () => {
+                globalFilter.query = search.value || '';
+                renderGlobalList();
+            });
+        }
+        const facets = bySel('#gl-facets');
+        if (facets) {
+            facets.addEventListener('click', (event) => {
+                const chip = event.target.closest('[data-gl-tag]');
+                if (!chip) {
+                    return;
+                }
+                const tag = chip.getAttribute('data-gl-tag');
+                if (globalFilter.tags.has(tag)) {
+                    globalFilter.tags.delete(tag);
+                } else {
+                    globalFilter.tags.add(tag);
+                }
+                renderGlobalFacets();
+                renderGlobalList();
+            });
+        }
+        const list = bySel('#gl-list');
+        if (list) {
+            list.addEventListener('click', (event) => {
+                const adopt = event.target.closest('[data-gl-adopt]');
+                if (adopt) {
+                    adoptGlobalMethod(cmid, Number.parseInt(adopt.getAttribute('data-gl-adopt'), 10), adopt);
+                }
+            });
+        }
+
+        setGlobalStatus('Globale Bibliothek wird geladen …');
+        asCall('mod_seminarplaner_browse_global_library', {cmid}).then((result) => {
+            if (!result.available) {
+                section.classList.add('kg-hidden');
+                return;
+            }
+            if (result.message) {
+                setGlobalStatus(result.message);
+                return;
+            }
+            globalMethods = (result.methods || []).map((m) => ({
+                methodid: Number(m.methodid),
+                setid: Number(m.setid),
+                setname: String(m.setname || ''),
+                titel: String(m.titel || ''),
+                seminarphase: Array.isArray(m.seminarphase) ? m.seminarphase.map(String) : [],
+                zeitbedarf: String(m.zeitbedarf || ''),
+                gruppengroesse: String(m.gruppengroesse || ''),
+                sozialform: Array.isArray(m.sozialform) ? m.sozialform.map(String) : [],
+                vorbereitung: String(m.vorbereitung || ''),
+                kurzbeschreibung: String(m.kurzbeschreibung || ''),
+                tags: Array.isArray(m.tags) ? m.tags.map(String) : [],
+            }));
+            if (!globalMethods.length) {
+                setGlobalStatus('Noch keine veröffentlichten Methoden-Sammlungen vorhanden.');
+                return;
+            }
+            renderGlobalFacets();
+            renderGlobalList();
+        }).catch((e) => {
+            Notification.exception(e);
+            setGlobalStatus('Die globale Bibliothek konnte nicht geladen werden.', true);
+        });
+    };
+
     return {
         init: function(cmid) {
             runtimeCmid = cmid;
@@ -2053,6 +2225,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             bindFormMultiDropdowns();
             bindBulkSelectionUI(cmid);
             refreshEditAlternativeOptions('');
+            initGlobalLibrary(cmid);
 
             const addbtn = bySel('#kg-add-method');
             if (addbtn) {

@@ -661,12 +661,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             } else if (res.message) {
                 setGlobalStatus(res.message, true);
             } else if (!globalMethodsets.length) {
-                setGlobalStatus('Keine veröffentlichten globalen Konzepte gefunden.', false);
+                setGlobalStatus('Keine veröffentlichten Methoden-Sammlungen gefunden.', false);
             } else {
-                setGlobalStatus(`${globalMethodsets.length} globale Konzepte verfügbar.`, false);
+                setGlobalStatus(`${globalMethodsets.length} globale Methoden-Sammlungen verfügbar.`, false);
             }
         }).catch((e) => {
-            setGlobalStatus(`Globale Konzepte konnten nicht geladen werden: ${e.message || e}`, true);
+            setGlobalStatus(`Globale Methoden-Sammlungen konnten nicht geladen werden: ${e.message || e}`, true);
         });
     };
 
@@ -700,7 +700,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             autoswitch.checked = false;
             autoswitch.disabled = true;
             applybtn.disabled = true;
-            setGlobalSyncInfo('Bitte zuerst ein globales Konzept auswählen.', false);
+            setGlobalSyncInfo('Bitte zuerst eine Methoden-Sammlung auswählen.', false);
             return;
         }
         if (!selected) {
@@ -708,7 +708,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             autoswitch.checked = !!pendingAutosyncPrefs[setid];
             applybtn.disabled = true;
             setGlobalSyncInfo(
-                'Dieses Konzept ist noch nicht verknüpft. Auto-Update wird nach dem Import angewendet.',
+                'Diese Sammlung ist noch nicht verknüpft. Auto-Update wird nach dem Import angewendet.',
                 false
             );
             return;
@@ -724,7 +724,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 false
             );
         } else {
-            setGlobalSyncInfo('Aktivität ist auf dem aktuellen Stand dieses Konzepts.', false);
+            setGlobalSyncInfo('Aktivität ist auf dem aktuellen Stand dieser Sammlung.', false);
         }
     };
 
@@ -2042,7 +2042,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             globalSetImportBtn.addEventListener('click', () => {
                 const setid = Number.parseInt(globalSetSelect ? (globalSetSelect.value || '0') : '0', 10) || 0;
                 if (!setid) {
-                    setGlobalStatus('Bitte zuerst ein globales Konzept auswählen.', true);
+                    setGlobalStatus('Bitte zuerst eine Methoden-Sammlung auswählen.', true);
                     return;
                 }
                 asCall('mod_seminarplaner_import_global_methodset', {cmid, methodsetid: setid})
@@ -2068,7 +2068,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     })
                     .catch((e) => {
                         Notification.exception(e);
-                        setGlobalStatus('Import des globalen Konzepts fehlgeschlagen.', true);
+                        setGlobalStatus('Import der Methoden-Sammlung fehlgeschlagen.', true);
                     });
             });
         }
@@ -2108,7 +2108,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             globalSetApplyBtn.addEventListener('click', () => {
                 const selected = getSelectedSyncLink();
                 if (!selected) {
-                    setGlobalStatus('Bitte zuerst ein verknüpftes globales Konzept auswählen.', true);
+                    setGlobalStatus('Bitte zuerst eine verknüpfte Methoden-Sammlung auswählen.', true);
                     return;
                 }
                 asCall('mod_seminarplaner_apply_methodset_updates', {

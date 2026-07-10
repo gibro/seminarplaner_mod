@@ -785,6 +785,198 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Collect the method rows of all published global collections visible
+     * from this activity (system scope + own course category scope).
+     *
+     * @param \stdClass $course Course record.
+     * @return array{sets: array<int, \stdClass>, rows: array<int, \stdClass>}
+     */
+    private static function collect_published_global_methods(\stdClass $course): array {
+        global $DB;
+
+        $repo = new \local_seminarplaner\local\repository\methodset_repository();
+        $syscontext = context_system::instance();
+        $catcontext = context_coursecat::instance((int)$course->category);
+        $sets = [];
+        foreach ($repo->list_methodsets((int)$syscontext->id, 'published') as $set) {
+            $sets[(int)$set->id] = $set;
+        }
+        foreach ($repo->list_methodsets((int)$catcontext->id, 'published') as $set) {
+            $sets[(int)$set->id] = $set;
+        }
+        if (!$sets) {
+            return ['sets' => [], 'rows' => []];
+        }
+
+        $rows = [];
+        foreach ($sets as $set) {
+            $setrows = [];
+            if (!empty($set->currentversion)) {
+                $setrows = $DB->get_records('local_kgen_method', [
+                    'methodsetid' => (int)$set->id,
+                    'methodsetversionid' => (int)$set->currentversion,
+                ]);
+            }
+            if (!$setrows) {
+                $setrows = $DB->get_records('local_kgen_method', ['methodsetid' => (int)$set->id]);
+            }
+            foreach ($setrows as $row) {
+                $rows[(int)$row->id] = $row;
+            }
+        }
+        return ['sets' => $sets, 'rows' => $rows];
+    }
+
+    public static function browse_global_library_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+        ]);
+    }
+
+    /**
+     * D29/D33: the global library is always browsable while planning -
+     * individual methods of every published collection, no prior set
+     * import required. Filtering/facets happen client-side on the tags.
+     */
+    public static function browse_global_library(int $cmid): array {
+        $params = self::validate_parameters(self::browse_global_library_parameters(), ['cmid' => $cmid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:view', $resolved['context']);
+
+        if (!self::global_plugin_available()) {
+            return ['available' => false, 'message' => 'local_seminarplaner ist nicht installiert.', 'methods' => []];
+        }
+        if (!self::can_view_global_methodsets($resolved['context'])) {
+            return ['available' => true, 'message' => 'Keine Berechtigung für die globale Bibliothek.', 'methods' => []];
+        }
+
+        $collected = self::collect_published_global_methods($resolved['course']);
+        $out = [];
+        foreach ($collected['rows'] as $row) {
+            $title = trim(strip_tags((string)($row->title ?? '')));
+            if ($title === '') {
+                continue;
+            }
+            $set = $collected['sets'][(int)$row->methodsetid] ?? null;
+            $summary = trim(strip_tags((string)($row->kurzbeschreibung ?? '')));
+            if (\core_text::strlen($summary) > 280) {
+                $summary = \core_text::substr($summary, 0, 279) . '…';
+            }
+            $out[] = [
+                'methodid' => (int)$row->id,
+                'setid' => (int)$row->methodsetid,
+                'setname' => $set ? (string)$set->displayname : '',
+                'titel' => $title,
+                'seminarphase' => self::split_multi_text($row->seminarphase ?? '', true),
+                'zeitbedarf' => trim((string)($row->zeitbedarf ?? '')),
+                'gruppengroesse' => trim((string)($row->gruppengroesse ?? '')),
+                'sozialform' => self::split_multi_text($row->sozialform ?? ''),
+                'vorbereitung' => trim((string)($row->vorbereitung ?? '')),
+                'kurzbeschreibung' => $summary,
+                'tags' => self::split_multi_text($row->tags ?? ''),
+            ];
+        }
+        \core_collator::asort_array_of_arrays_by_key($out, 'titel');
+
+        return ['available' => true, 'message' => '', 'methods' => array_values($out)];
+    }
+
+    public static function browse_global_library_returns(): external_single_structure {
+        return new external_single_structure([
+            'available' => new external_value(PARAM_BOOL, 'Local plugin available'),
+            'message' => new external_value(PARAM_TEXT, 'Status message'),
+            'methods' => new external_multiple_structure(new external_single_structure([
+                'methodid' => new external_value(PARAM_INT, 'Global method id'),
+                'setid' => new external_value(PARAM_INT, 'Method set id'),
+                'setname' => new external_value(PARAM_TEXT, 'Method set display name'),
+                'titel' => new external_value(PARAM_TEXT, 'Title'),
+                'seminarphase' => new external_multiple_structure(new external_value(PARAM_TEXT, 'Phase')),
+                'zeitbedarf' => new external_value(PARAM_TEXT, 'Duration'),
+                'gruppengroesse' => new external_value(PARAM_TEXT, 'Group size'),
+                'sozialform' => new external_multiple_structure(new external_value(PARAM_TEXT, 'Social form')),
+                'vorbereitung' => new external_value(PARAM_TEXT, 'Preparation'),
+                'kurzbeschreibung' => new external_value(PARAM_TEXT, 'Short description (plain text)'),
+                'tags' => new external_multiple_structure(new external_value(PARAM_TEXT, 'Tag')),
+            ])),
+        ]);
+    }
+
+    public static function adopt_global_method_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'methodid' => new external_value(PARAM_INT, 'Global method id'),
+        ]);
+    }
+
+    /**
+     * D33: adopting a single global method creates an independent local
+     * copy right away - deliberately WITHOUT the _kgsync link that whole-set
+     * imports get: later changes to the global original must not touch
+     * adopted copies.
+     */
+    public static function adopt_global_method(int $cmid, int $methodid): array {
+        global $DB;
+
+        $params = self::validate_parameters(self::adopt_global_method_parameters(), [
+            'cmid' => $cmid,
+            'methodid' => $methodid,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
+        self::enforce_write_rate_limit('adopt_global_method', 30, 60);
+
+        if (!self::global_plugin_available()) {
+            throw new invalid_parameter_exception('local_seminarplaner ist nicht installiert');
+        }
+        if (!self::can_view_global_methodsets($resolved['context'])) {
+            throw new invalid_parameter_exception('Keine Berechtigung für die globale Bibliothek');
+        }
+
+        $row = $DB->get_record('local_kgen_method', ['id' => (int)$params['methodid']]);
+        if (!$row) {
+            throw new invalid_parameter_exception('Unbekannte Methode');
+        }
+        $repo = new \local_seminarplaner\local\repository\methodset_repository();
+        $set = $repo->get_methodset((int)$row->methodsetid);
+        if (!$set || (string)$set->status !== 'published') {
+            throw new invalid_parameter_exception('Die Methode gehört zu keiner veröffentlichten Sammlung');
+        }
+        // Only methods visible through the activity's scopes may be adopted.
+        $collected = self::collect_published_global_methods($resolved['course']);
+        if (!isset($collected['sets'][(int)$set->id])) {
+            throw new invalid_parameter_exception('Keine Berechtigung für die gewählte Sammlung');
+        }
+
+        $mapped = self::map_global_method_record($row);
+        $attachments = self::load_global_method_material_attachments([(int)$row->id]);
+        $mapped['materialien'] = $attachments[(int)$row->id] ?? [];
+
+        $service = new method_card_service();
+        $existing = $service->get_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id, (int)$resolved['context']->id);
+        if (!is_array($existing)) {
+            $existing = [];
+        }
+        $existing[] = $mapped;
+        $service->save_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id, (int)$resolved['context']->id, $existing);
+
+        return [
+            'success' => true,
+            'localid' => (string)$mapped['id'],
+            'titel' => (string)$mapped['titel'],
+            'totalcount' => count($existing),
+        ];
+    }
+
+    public static function adopt_global_method_returns(): external_single_structure {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'Adoption result'),
+            'localid' => new external_value(PARAM_TEXT, 'New local method card id'),
+            'titel' => new external_value(PARAM_TEXT, 'Adopted title'),
+            'totalcount' => new external_value(PARAM_INT, 'Total local methods after adoption'),
+        ]);
+    }
+
     public static function get_methodset_sync_status_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),

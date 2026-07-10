@@ -6389,3 +6389,47 @@ details[open] > .sq-gap__summary .sq-gap__chevron {
     margin: 0 0 8px;
     font-size: 13px;
 }
+
+/* ==========================================================================
+   D29/D33: Globale Bibliothek (Tag-Facetten, Übernehmen als Kopie)
+   ========================================================================== */
+.gl-facets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 10px 0;
+}
+
+.gl-facet {
+    border: 1px solid var(--ig-lightgray);
+    background: #fff;
+    color: var(--ig-gray);
+    padding: 4px 10px;
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.gl-facet--active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+}
+
+.gl-facet__count {
+    opacity: .7;
+    font-weight: 400;
+}
+
+.gl-card__source {
+    font-size: 12px;
+    color: var(--ig-gray);
+}
+
+.gl-card__adopt[disabled] {
+    opacity: .7;
+    cursor: default;
+}

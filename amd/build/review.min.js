@@ -29,7 +29,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return;
         }
         if (!existingCandidates.length) {
-            host.innerHTML = '<div class="kg-ie-item">Keine neuen/geänderten Seminareinheiten für dieses Konzept gefunden.</div>';
+            host.innerHTML = '<div class="kg-ie-item">Keine neuen/geänderten Seminareinheiten für diese Sammlung gefunden.</div>';
             return;
         }
         host.innerHTML = '';
@@ -112,7 +112,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             changedMethodsForNewSet = [];
             newSetSelection = [];
             renderNewSetMethods();
-            setStatus('#kg-review-new-status', 'Keine globalen Konzepte als Vergleich verfügbar.', true);
+            setStatus('#kg-review-new-status', 'Keine globalen Methoden-Sammlungen als Vergleich verfügbar.', true);
             return Promise.resolve();
         }
 
@@ -153,7 +153,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             newSetSelection = changedMethodsForNewSet.map(() => true);
             renderNewSetMethods();
             setStatus('#kg-review-new-status',
-                `${changedMethodsForNewSet.length} geänderte/neue Seminareinheiten für ein neues Konzept verfügbar.`,
+                `${changedMethodsForNewSet.length} geänderte/neue Seminareinheiten für eine neue Methoden-Sammlung verfügbar.`,
                 false
             );
         });
@@ -164,7 +164,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         if (!methodsetid) {
             existingCandidates = [];
             renderExistingCandidates();
-            setStatus('#kg-review-existing-status', 'Bitte zuerst ein globales Konzept wählen.', true);
+            setStatus('#kg-review-existing-status', 'Bitte zuerst eine Methoden-Sammlung wählen.', true);
             return Promise.resolve();
         }
         return asCall('mod_seminarplaner_get_review_method_candidates', {cmid, methodsetid}).then((res) => {
@@ -183,7 +183,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const submitExistingSelection = (cmid) => {
         const methodsetid = getSelectedExistingSetId();
         if (!methodsetid) {
-            setStatus('#kg-review-existing-status', 'Bitte ein bestehendes Konzept auswählen.', true);
+            setStatus('#kg-review-existing-status', 'Bitte eine bestehende Methoden-Sammlung auswählen.', true);
             return;
         }
         const selected = existingCandidates.filter((c) => c.selected)
@@ -201,7 +201,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             methodids: selected
         }).then((res) => {
             setStatus('#kg-review-existing-status',
-                `Erfolgreich eingereicht (Konzept #${res.methodsetid}, Version #${res.versionid}, ${res.savedcount} Seminareinheiten im Konzept).`,
+                `Erfolgreich eingereicht (Sammlung #${res.methodsetid}, Version #${res.versionid}, ${res.savedcount} Seminareinheiten in der Sammlung).`,
                 false
             );
             return loadExistingCandidates(cmid);
@@ -238,13 +238,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             methodids: selectedids
         }).then((res) => {
             setStatus('#kg-review-new-status',
-                `Neues Konzept eingereicht (Konzept #${res.methodsetid}, Version #${res.versionid}, ${res.savedcount} Seminareinheiten).`,
+                `Methoden-Sammlung eingereicht (Sammlung #${res.methodsetid}, Version #${res.versionid}, ${res.savedcount} Seminareinheiten).`,
                 false
             );
             return loadReviewTargets(cmid).then(() => loadChangedMethodsForNewSet(cmid));
         }).catch((e) => {
             Notification.exception(e);
-            setStatus('#kg-review-new-status', 'Einreichen des neuen Konzepts fehlgeschlagen.', true);
+            setStatus('#kg-review-new-status', 'Einreichen der Methoden-Sammlung fehlgeschlagen.', true);
         });
     };
 

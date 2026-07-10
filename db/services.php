@@ -32,6 +32,20 @@ $functions = [
         'type' => 'write',
         'ajax' => true,
     ],
+    'mod_seminarplaner_browse_global_library' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'browse_global_library',
+        'description' => 'Browse individual methods of all published global collections (D29/D33, no prior import).',
+        'type' => 'read',
+        'ajax' => true,
+    ],
+    'mod_seminarplaner_adopt_global_method' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'adopt_global_method',
+        'description' => 'Adopt one global method as an independent local copy (D33).',
+        'type' => 'write',
+        'ajax' => true,
+    ],
     'mod_seminarplaner_get_methodset_sync_status' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'get_methodset_sync_status',

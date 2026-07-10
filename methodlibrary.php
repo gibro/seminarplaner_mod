@@ -106,24 +106,6 @@ foreach (['5', '10', '20', '30', '45', '60', '90', '120', '150', '180', 'mehr al
 }
 echo '</div></div></div></label>';
 
-echo '<label class="sp-filter"><span class="sp-filter__label">Kognitive Dimension</span>';
-echo '<div class="kg-tag-dropdown" id="ml-filter-cognitive-dropdown">';
-echo '<button type="button" class="kg-input kg-tag-dropdown-toggle" id="ml-filter-cognitive-toggle">Alle Dimensionen</button>';
-echo '<div class="kg-tag-dropdown-panel kg-hidden" id="ml-filter-cognitive-panel">';
-echo '<label class="kg-tag-option"><input type="checkbox" id="ml-filter-cognitive-all" checked><span>Alle</span></label>';
-echo '<div id="ml-filter-cognitive-options">';
-foreach ([
-    'Erinnern' => 'Erinnern: Wissen wiedergeben oder abrufen (z.B. benennen, definieren)',
-    'Verstehen' => 'Verstehen: Informationen interpretieren oder erklären (z.B. zusammenfassen, vergleichen)',
-    'Anwenden' => 'Anwenden: Wissen in neuen Situationen umsetzen (z.B. ausführen, verallgemeinern)',
-    'Analysieren' => 'Analysieren: Informationen in ihre Bestandteile zerlegen (z.B. unterscheiden, klassifizieren)',
-    'Bewerten' => 'Bewerten: Urteile fällen und Kriterien anwenden (z.B. überprüfen, kritisch bewerten)',
-    'Erschaffen' => 'Erschaffen: Neues Wissen oder neue Produkte entwickeln (z.B. planen, erzeugen, bauen)',
-] as $value => $label) {
-    echo '<label class="kg-tag-option"><input type="checkbox" value="' . s($value) . '"><span>' . s($label) . '</span></label>';
-}
-echo '</div></div></div></label>';
-
 echo '<label class="sp-filter kg-hidden" id="ml-filter-origin-wrap"><span class="sp-filter__label">Herkunft</span>';
 echo '<select id="ml-filter-origin" class="kg-input">';
 echo '<option value="">Alle Seminareinheiten</option>';
@@ -177,14 +159,6 @@ $bulkmultifields = [
         'Galeriegang' => 'Galeriegang',
         'Fishbowl' => 'Fishbowl',
     ], 'Sozialformen wählen', 'Sozialformen'],
-    'kognitive' => ['Kognitive Dimension', [
-        'Erinnern' => 'Erinnern: Wissen wiedergeben oder abrufen (z.B. benennen, definieren)',
-        'Verstehen' => 'Verstehen: Informationen interpretieren oder erklären (z.B. zusammenfassen, vergleichen)',
-        'Anwenden' => 'Anwenden: Wissen in neuen Situationen umsetzen (z.B. ausführen, verallgemeinern)',
-        'Analysieren' => 'Analysieren: Informationen in ihre Bestandteile zerlegen (z.B. unterscheiden, klassifizieren)',
-        'Bewerten' => 'Bewerten: Urteile fällen und Kriterien anwenden (z.B. überprüfen, kritisch bewerten)',
-        'Erschaffen' => 'Erschaffen: Neues Wissen oder neue Produkte entwickeln (z.B. planen, erzeugen, bauen)',
-    ], 'Dimensionen wählen', 'Dimensionen'],
 ];
 foreach ($bulkmultifields as $fieldname => $fielddef) {
     [$label, $options, $placeholder, $labelprefix] = $fielddef;
@@ -226,7 +200,6 @@ echo html_writer::end_div();
 $bulkselectfields = [
     'zeitbedarf' => ['Zeitbedarf', ['5', '10', '20', '30', '45', '60', '90', '120', '150', '180', 'mehr als 180 Minuten']],
     'gruppengroesse' => ['Gruppengröße', ['1', '2-3', '3–5', '6–12', '13–24', '25+', 'beliebig']],
-    'komplexitaet' => ['Komplexitätsgrad', ['sehr niedrig', 'niedrig', 'mittel', 'hoch']],
     'vorbereitung' => ['Vorbereitung nötig', ['keine', '<10 Min', '10–30 Min', '>30 Min']],
 ];
 foreach ($bulkselectfields as $fieldname => $fielddef) {
@@ -313,17 +286,6 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Kognitive Dimension', ['for' => 'ml-e-kognitive', 'class' => 'kg-label']);
-echo seminarplaner_render_multi_dropdown('ml-e-kognitive', [
-    'Erinnern' => 'Erinnern: Wissen wiedergeben oder abrufen (z.B. benennen, definieren)',
-    'Verstehen' => 'Verstehen: Informationen interpretieren oder erklären (z.B. zusammenfassen, vergleichen)',
-    'Anwenden' => 'Anwenden: Wissen in neuen Situationen umsetzen (z.B. ausführen, verallgemeinern)',
-    'Analysieren' => 'Analysieren: Informationen in ihre Bestandteile zerlegen (z.B. unterscheiden, klassifizieren)',
-    'Bewerten' => 'Bewerten: Urteile fällen und Kriterien anwenden (z.B. überprüfen, kritisch bewerten)',
-    'Erschaffen' => 'Erschaffen: Neues Wissen oder neue Produkte entwickeln (z.B. planen, erzeugen, bauen)',
-], 'Dimensionen wählen', 'Dimensionen');
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Kurzbeschreibung', ['for' => 'ml-e-kurzbeschreibung', 'class' => 'kg-label']);
 echo html_writer::tag('textarea', '', ['id' => 'ml-e-kurzbeschreibung', 'class' => 'kg-input', 'rows' => '10', 'autocomplete' => 'off']);
 echo html_writer::end_div();
@@ -338,20 +300,8 @@ echo html_writer::tag('label', 'Ablauf', ['for' => 'ml-e-ablauf', 'class' => 'kg
 echo html_writer::tag('textarea', '', ['id' => 'ml-e-ablauf', 'class' => 'kg-input', 'rows' => '10', 'autocomplete' => 'off']);
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
-echo html_writer::start_div('kg-two');
-echo html_writer::start_div();
-echo html_writer::tag('label', 'Komplexitätsgrad', ['for' => 'ml-e-komplexitaet', 'class' => 'kg-label']);
-echo html_writer::start_tag('select', ['id' => 'ml-e-komplexitaet', 'class' => 'kg-input']);
-foreach (['sehr niedrig', 'niedrig', 'mittel', 'hoch'] as $v) {
-    echo html_writer::tag('option', s($v), ['value' => $v]);
-}
-echo html_writer::end_tag('select');
-echo html_writer::end_div();
-echo html_writer::start_div();
 echo html_writer::tag('label', 'Autor*in / Kontakt', ['for' => 'ml-e-autor', 'class' => 'kg-label']);
 echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'ml-e-autor', 'class' => 'kg-input']);
-echo html_writer::end_div();
-echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
@@ -459,6 +409,21 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 
 echo html_writer::tag('div', '', ['id' => 'ml-status', 'class' => 'kg-status']);
+
+// D29/D33: globale Bibliothek - immer durchsuchbar, kein Vor-Import einer
+// ganzen Methoden-Sammlung noetig; Uebernehmen legt sofort eine lokale Kopie an.
+echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'gl-section']);
+echo html_writer::tag('h4', 'Globale Bibliothek');
+echo html_writer::tag('p', 'Stöbere in den Methoden aller veröffentlichten Methoden-Sammlungen – '
+    . 'ohne sie vorher importieren zu müssen. „Übernehmen" legt sofort eine eigene Kopie '
+    . 'in deinem Bestand oben an; das globale Original bleibt unberührt.');
+echo '<label class="sp-filter"><span class="sp-filter__label">Suche</span>'
+    . '<input id="gl-search" class="kg-input" type="search" placeholder="Titel, Beschreibung, Tags, Sammlung"></label>';
+echo html_writer::tag('div', '', ['id' => 'gl-facets', 'class' => 'gl-facets']);
+echo html_writer::tag('div', '', ['id' => 'gl-status', 'class' => 'sp-filter-status']);
+echo html_writer::tag('div', '', ['id' => 'gl-list', 'class' => 'kg-library-list gl-list']);
+echo html_writer::end_div();
+
 echo html_writer::end_div();
 
 // Enable preferred Moodle editor (Tiny in Moodle 5.x by default) on rich text fields.

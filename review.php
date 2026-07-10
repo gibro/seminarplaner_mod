@@ -22,10 +22,10 @@ echo html_writer::tag('h3', get_string('einreichenmenu', 'mod_seminarplaner'));
 
 // D37: Flussdiagramm-Erklaerung des Pruefprozesses.
 $flowsteps = [
-    ['titel' => 'Einreichen', 'text' => 'Du gibst dein Konzept bei den Konzeptverantwortlichen ab.'],
+    ['titel' => 'Einreichen', 'text' => 'Du gibst deinen Beitrag bei den Konzeptverantwortlichen ab.'],
     ['titel' => 'Prüfung', 'text' => 'Sie schauen fachlich darüber – bei Fragen melden sie sich bei dir.'],
-    ['titel' => 'Freigabe', 'text' => 'Passt alles, geben sie dein Konzept frei.'],
-    ['titel' => 'Für alle da', 'text' => 'Dein Konzept erscheint in der globalen Bibliothek.'],
+    ['titel' => 'Freigabe', 'text' => 'Passt alles, geben sie deinen Beitrag frei.'],
+    ['titel' => 'Für alle da', 'text' => 'Dein Beitrag erscheint in der globalen Bibliothek.'],
 ];
 echo html_writer::start_div('kg-flow', ['aria-label' => 'So läuft der Prüfprozess']);
 foreach ($flowsteps as $index => $step) {
@@ -43,7 +43,7 @@ echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block');
 echo html_writer::tag('h4', '1. Geänderte oder neue Seminareinheit bereitstellen');
-echo html_writer::tag('label', 'Bestehendes Konzept auswählen', ['for' => 'kg-review-existing-set-select', 'class' => 'kg-label']);
+echo html_writer::tag('label', 'Bestehende Methoden-Sammlung auswählen', ['for' => 'kg-review-existing-set-select', 'class' => 'kg-label']);
 echo html_writer::start_tag('select', ['id' => 'kg-review-existing-set-select', 'class' => 'kg-input']);
 echo html_writer::tag('option', 'Bitte wählen', ['value' => '0']);
 echo html_writer::end_tag('select');
@@ -54,7 +54,7 @@ echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block');
 echo html_writer::tag('h4', 'Geänderte oder neue Seminareinheiten bereitstellen');
-echo html_writer::tag('p', 'Nach Auswahl eines Konzepts erscheinen hier neue/geänderte Seminareinheiten für das bestehende Konzept.');
+echo html_writer::tag('p', 'Nach Auswahl einer Methoden-Sammlung erscheinen hier neue/geänderte Seminareinheiten für die bestehende Sammlung.');
 echo html_writer::start_div('kg-row');
 echo html_writer::tag('button', 'Alle auswählen', ['type' => 'button', 'id' => 'kg-review-existing-select-all', 'class' => 'kg-btn']);
 echo html_writer::tag('button', 'Keine auswählen', ['type' => 'button', 'id' => 'kg-review-existing-select-none', 'class' => 'kg-btn']);
@@ -62,7 +62,7 @@ echo html_writer::tag('button', 'Änderungen neu prüfen', ['type' => 'button', 
 echo html_writer::end_div();
 echo html_writer::tag('div', '', ['id' => 'kg-review-existing-candidates', 'class' => 'kg-ie-preview']);
 echo html_writer::start_div('kg-row kg-pdf-actions');
-echo html_writer::tag('button', 'Ausgewählte zur Review einreichen', [
+echo html_writer::tag('button', 'Ausgewählte Seminareinheiten einreichen', [
     'type' => 'button',
     'id' => 'kg-review-existing-submit',
     'class' => 'kg-btn kg-btn-primary',
@@ -71,8 +71,8 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h4', '2. Globales Konzept zur Review bereitstellen');
-echo html_writer::tag('p', 'Wähle aus allen vorhandenen Seminareinheiten aus und bündele sie zu einem neuen globalen Konzept.');
+echo html_writer::tag('h4', '2. Neue Methoden-Sammlung einreichen');
+echo html_writer::tag('p', 'Wähle aus allen vorhandenen Seminareinheiten aus und bündele sie zu einer neuen Methoden-Sammlung – einer Sammlung ohne Ablauf/Reihenfolge.');
 echo html_writer::start_div('kg-two');
 echo html_writer::start_div();
 echo html_writer::tag('label', 'Name', ['for' => 'kg-review-new-displayname', 'class' => 'kg-label']);
@@ -95,7 +95,7 @@ echo html_writer::tag('button', 'Keine auswählen', ['type' => 'button', 'id' =>
 echo html_writer::end_div();
 echo html_writer::tag('div', '', ['id' => 'kg-review-new-methods', 'class' => 'kg-ie-preview']);
 echo html_writer::start_div('kg-row kg-pdf-actions');
-echo html_writer::tag('button', 'Neues Konzept zur Review einreichen', [
+echo html_writer::tag('button', 'Methoden-Sammlung einreichen', [
     'type' => 'button',
     'id' => 'kg-review-new-submit',
     'class' => 'kg-btn kg-btn-primary',

@@ -116,17 +116,6 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
-echo html_writer::tag('label', $rendericontext('brain', 'Kognitive Dimension'), ['for' => 'kg-f-kognitive', 'class' => 'kg-label']);
-echo seminarplaner_render_multi_dropdown('kg-f-kognitive', [
-    'Erinnern' => 'Erinnern: Wissen wiedergeben oder abrufen (z.B. benennen, definieren)',
-    'Verstehen' => 'Verstehen: Informationen interpretieren oder erklären (z.B. zusammenfassen, vergleichen)',
-    'Anwenden' => 'Anwenden: Wissen in neuen Situationen umsetzen (z.B. ausführen, verallgemeinern)',
-    'Analysieren' => 'Analysieren: Informationen in ihre Bestandteile zerlegen (z.B. unterscheiden, klassifizieren)',
-    'Bewerten' => 'Bewerten: Urteile fällen und Kriterien anwenden (z.B. überprüfen, kritisch bewerten)',
-    'Erschaffen' => 'Erschaffen: Neues Wissen oder neue Produkte entwickeln (z.B. planen, erzeugen, bauen)',
-], 'Dimensionen wählen', 'Dimensionen');
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Kurzbeschreibung', ['for' => 'kg-f-kurzbeschreibung', 'class' => 'kg-label']);
 echo html_writer::tag('textarea', '', ['id' => 'kg-f-kurzbeschreibung', 'name' => 'kg_f_kurzbeschreibung', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
@@ -141,20 +130,8 @@ echo html_writer::tag('label', 'Ablauf', ['for' => 'kg-f-ablauf', 'class' => 'kg
 echo html_writer::tag('textarea', '', ['id' => 'kg-f-ablauf', 'name' => 'kg_f_ablauf', 'class' => 'kg-input', 'rows' => '10']);
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
-echo html_writer::start_div('kg-two');
-echo html_writer::start_div();
-echo html_writer::tag('label', 'Komplexitätsgrad', ['for' => 'kg-f-komplexitaet', 'class' => 'kg-label']);
-echo html_writer::start_tag('select', ['id' => 'kg-f-komplexitaet', 'class' => 'kg-input']);
-foreach (['sehr niedrig', 'niedrig', 'mittel', 'hoch'] as $v) {
-    echo html_writer::tag('option', s($v), ['value' => $v]);
-}
-echo html_writer::end_tag('select');
-echo html_writer::end_div();
-echo html_writer::start_div();
 echo html_writer::tag('label', 'Autor*in / Kontakt', ['for' => 'kg-f-autor', 'class' => 'kg-label']);
 echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'kg-f-autor', 'class' => 'kg-input']);
-echo html_writer::end_div();
-echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');

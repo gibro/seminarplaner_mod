@@ -77,18 +77,18 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h4', 'Globale Konzepte (local Plugin)');
-echo html_writer::tag('p', 'Importiere veröffentlichte globale Konzepte aus dem lokalen Seminarplaner-Plugin.');
+echo html_writer::tag('h4', 'Globale Methoden-Sammlungen');
+echo html_writer::tag('p', 'Importiere veröffentlichte globale Methoden-Sammlungen komplett in deinen Bestand. Einzelne Methoden findest du auch ohne Import in der Bibliothek (Tab „Seminareinheiten“).');
 echo html_writer::start_div('kg-row');
 echo html_writer::start_tag('select', ['id' => 'kg-global-set-select', 'class' => 'kg-input']);
 echo html_writer::tag('option', 'Bitte wählen', ['value' => '']);
 echo html_writer::end_tag('select');
-echo html_writer::tag('button', 'Globales Konzept importieren', ['type' => 'button', 'id' => 'kg-global-set-import', 'class' => 'kg-btn kg-btn-primary']);
+echo html_writer::tag('button', 'Methoden-Sammlung importieren', ['type' => 'button', 'id' => 'kg-global-set-import', 'class' => 'kg-btn kg-btn-primary']);
 echo html_writer::end_div();
 echo html_writer::start_div('kg-row');
 echo '<label class="kg-label" style="display:flex;align-items:center;gap:8px;margin:0">'
     . '<input type="checkbox" id="kg-global-set-autosync">'
-    . '<span>Auto-Update für dieses Konzept aktivieren</span>'
+    . '<span>Auto-Update für diese Sammlung aktivieren</span>'
     . '</label>';
 echo html_writer::tag('button', 'Ausstehende Updates übernehmen', ['type' => 'button', 'id' => 'kg-global-set-apply', 'class' => 'kg-btn']);
 echo html_writer::end_div();
