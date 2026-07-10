@@ -7019,12 +7019,15 @@ a.kg-btn-primary:focus {
     display: none;
 }
 
-/* Tag-Navigation, Veröffentlichen, Empfehlungen und Neue-Einheit-Button
-   stehen in EINER Zeile; nur bei sehr schmalen Fenstern bricht die
-   Aktionsgruppe unter die Navigation. */
-.sq-toolbar__nav,
-.sq-toolbar__actions {
+/* Alle Toolbar-Elemente nebeneinander auf gleicher Höhe, aber responsiv:
+   bei schmalen Fenstern brechen ganze Elemente um (kein Umbruch mitten
+   im Label). Nur die Tag-Navigation bleibt als Einheit zusammen. */
+.sq-toolbar__nav {
     flex-wrap: nowrap;
+}
+
+.sq-toolbar__actions {
+    flex-wrap: wrap;
 }
 
 .sq-toggle span,
