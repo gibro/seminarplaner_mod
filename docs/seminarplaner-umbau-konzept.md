@@ -43,6 +43,7 @@ Zweck: Dieses Dokument hält den Stand der konzeptionellen Überlegungen zum Umb
 - 9. Juli 2026 (aj): D47 ergänzt (Korrektur zu D3): Drag & Drop wurde in der laufenden Entwicklung nicht beibehalten – Reihenfolge-Änderung in der Sequenzansicht erfolgt ausschließlich über ↑/↓-Buttons, bewusste Entscheidung für Barrierefreiheit (ein robuster Weg statt zweier paralleler). Grundidee von D3 (Reihenfolge bestimmt Zeiten, keine Zeitkonflikte) bleibt unverändert. A11y-Backlog-Punkt „Drag & Drop braucht Tastaturalternative" damit hinfällig.
 - 9. Juli 2026 (ak): D47 korrigiert – Missverständnis aus dem vorigen Eintrag richtiggestellt: **Beide** Bedienwege sollen nebeneinander funktionieren, nicht nur Buttons statt Drag. ↑/↓-Buttons erfüllen die Tastaturalternative, Drag & Drop bleibt zusätzlich für Maus-/Touch-Nutzerinnen erhalten. Aktueller Stand (nur Buttons funktionieren, Drag & Drop ist derzeit nicht funktionsfähig) als offene Umsetzungslücke im Backlog vermerkt, nicht als Zielzustand. D3-Fußnote und A11y-Backlog-Punkt entsprechend angepasst.
 - 9. Juli 2026 (al): D48 ergänzt (Revision von D13): Themenplan-Import läuft nicht mehr über einen PHP-Parser im Plugin, sondern wieder über die externe Seminarschmiede – Gründe: Pflegeaufwand des Plugin-Parsers, die Schmiede kann inzwischen mehr und wird ohnehin für KI-generierte Seminarkonzepte benötigt. Der Medienbruch aus D5 kehrt bewusst zurück (nicht technisch gelöst), als bewusste Abwägung, nicht als Wiederholung des alten Bequemlichkeitsarguments. D13 und D19 als revidiert bzw. hinfällig markiert (D19 bleibt als fachliche Referenz stehen, da bereits in der Schmiede umgesetzt). Abschnitt 4/5 und Backlog-Punkt „Themenplan-Parser" entsprechend angepasst. D-Range in Abschnitt 9 auf D1–D48 aktualisiert.
+- 9. Juli 2026 (am): D49 ergänzt (Präzisierung zu D11/D34): Wochen-/Tages-Umschalter im Überblick entfällt ersatzlos (Überblick bleibt reiner Wochen-Gesamtblick, D11); Klick auf eine Seminareinheit im Überblick öffnet direkt den passenden Tag in der Sequenzansicht zum Bearbeiten, ergänzend zum bestehenden allgemeinen „Zur Sequenz wechseln"-Button (D34); Microcopy-Hinweis „Klicke auf eine Seminareinheit, um sie in der Sequenzansicht zu ändern" ergänzt. Anlass war eine Rückmeldung, dass Überblick und Sequenz in der laufenden Entwicklung nicht synchronisiert sind – dazu neuer Backlog-Punkt in Abschnitt 7 (Überblick lädt noch das alte Grid statt der Sequenz-Daten, D20; offene Umsetzungslücke, kein Konzeptthema, analog zu D47 vermerkt). D-Range in Abschnitt 9 auf D1–D49 aktualisiert.
 
 ---
 
@@ -714,6 +715,18 @@ Betrifft die Feldliste aus D21 (Abschnitt „Ablauf und Rahmen", Punkt 4) sowie 
 
 **Konsequenz für Abschnitt 5 (Import-Zielformat):** Der Import läuft weiterhin über das bestehende `seminarplaner-component-export`-JSON-Format – die Schmiede liefert dieses Format, der Import/Export-Tab im Plugin nimmt es entgegen wie jeden anderen Import auch. Kein neuer Weg, sondern der alte Weg aus D5, nur mit dem seither unveränderten Zielformat.
 
+### D49 – Überblick: Klick-Navigation zur Sequenz statt Wochen-/Tagesansicht (Präzisierung zu D11/D34)
+
+**Anlass:** Rückmeldung, dass der Überblick in der laufenden Entwicklung noch nicht mit der Sequenzansicht synchronisiert ist (siehe Backlog, Abschnitt 7) – daraus abgeleitet zwei konzeptionelle Präzisierungen, wie der Überblick künftig mit der Sequenz zusammenspielen soll.
+
+**Entscheidung:**
+
+1. **Der Wochen-/Tages-Umschalter im Überblick entfällt ersatzlos.** Der Überblick zeigt ausschließlich den Wochen-Gesamtblick – das entspricht bereits dem in D11 festgelegten Zweck („Grid = Überblick über alle Tage"). Eine zusätzliche Tagesansicht dort würde die Sequenzansicht-Funktion verdoppeln, ohne einen eigenen Zweck zu erfüllen.
+2. **Klick auf eine Seminareinheit im Überblick öffnet direkt den entsprechenden Tag in der Sequenzansicht zum Bearbeiten.** Das ergänzt den bisher nur allgemein am Kopf stehenden „Zur Sequenz wechseln"-Button (D34) um eine kontextbezogene Navigation: Referentin sieht einen Baustein im Wochenblick, klickt drauf, landet zum Bearbeiten genau an dieser Stelle in der Sequenz. Der allgemeine „Zur Sequenz wechseln"-Button bleibt zusätzlich bestehen, für den Fall, dass die Referentin ohne Bezug zu einer bestimmten Einheit wechseln möchte.
+3. **Microcopy-Hinweis:** „Klicke auf eine Seminareinheit, um sie in der Sequenzansicht zu ändern" ergänzt den bestehenden Hinweistext im Überblick.
+
+**Konsequenz:** `grid-ueberblick-wireframe-vertraut.html` braucht eine entsprechende Anpassung (Woche/Tag-Buttons entfernen, Events klickbar machen) – Design-Detailarbeit, keine neue Richtungsfrage. Die Klick-Navigation setzt voraus, dass der Überblick aus denselben Daten wie die Sequenzansicht liest (siehe offene Umsetzungslücke in Abschnitt 7); ohne diese Synchronisation lässt sich die Navigation nicht sauber verdrahten.
+
 ## 4. Themenplan-Format und Mapping (verifiziert am Original TP_2026_ki.docx)
 
 Standardisiertes Word-Dokument, eine Tabelle. Kopf: Seminartitel, Seminartyp, Bildungsziel, Inhaltliche Schwerpunkte. Danach Seminarplan-Zeilen: Tag | Inhalt | Kompetenzerwartungen.
@@ -787,6 +800,7 @@ Aufgelöste Fragen:
 - **UX-Konzept „Bibliothek ohne Vor-Import" (D33, offen):** Grundsatzentscheidung liegt vor (globale Methoden-Sammlungen immer durchsuchbar, direkte Übernahme einzelner Methoden als Kopie ohne vorherigen Sammlungs-Import). Noch offen: konkrete Einbindung in den Planbau-Workflow (Andock-Panel, Suchen-und-Ablegen, separates Bibliotheksfenster o. Ä.) – eigener Konzeptions-Schritt.
 - **Vierter, jederzeit erreichbarer Einstieg zum Einheiten-Editor (Idee, Ergänzung zu D17/D39):** „Seminareinheit hinzufügen" als Button, der unabhängig vom aktuellen Tab/View erreichbar ist – nicht nur aus dem „Anlegen"-Bereich des Seminareinheiten-Tabs (D39). Noch offen: schwebender Button oder feste Position, auf jeder Seite oder nur in der Sequenzansicht – Design-Detailarbeit, keine Richtungsentscheidung.
 - **Aufräum-Punkt „Bausteine"-Tab entfernen (D16, D46):** Im aktuellen Entwicklungsstand (Testplaner 5.1.4) ist der eigenständige Bausteine-Tab noch sichtbar – laut D16 soll er entfallen, da Bausteine nur noch als optionale Überschrift in der Sequenz existieren (D10). Kein Konzeptthema, reine Umsetzungs-Nacharbeit.
+- **Überblick/Sequenz-Synchronisation (offene Umsetzungslücke, Voraussetzung für D49):** Im aktuellen Entwicklungsstand lädt der Überblick noch das alte Grid statt aus den Sequenz-Daten (D20) abzuleiten – beide Ansichten sind dadurch nicht synchron. Konzeptionell ist die Sequenz seit D20 die maßgebliche Datenstruktur; der Überblick soll rein lesend darauf aufsetzen (D11), nicht auf einer eigenen, parallel gepflegten Datenquelle. Kein neuer Konzeptbeschluss, sondern technischer Nachholbedarf für Claude Code – analog zu D47 (Drag & Drop) als offene Lücke vermerkt, nicht als Zielzustand.
 
 ## 8. Entwicklungs- und Rollout-Strategie
 
@@ -804,7 +818,7 @@ Aufgelöste Fragen:
 
 ## 9. Vorschlag für die Projekt-Anweisungen (Claude-Projekt)
 
-> Wir entwickeln das Moodle-Plugin „Seminarplaner" (mod_seminarplaner + local_seminarplaner) für die IG-Metall-Bildungsarbeit konzeptionell weiter. Zielgruppe sind hauptamtliche und ehrenamtliche Referentinnen: erfahrene Pädagoginnen ohne akademische Ausbildung und mit geringer IT-Kompetenz – alle Vorschläge müssen didaktische statt IT-Metaphern nutzen. Grundlage aller Arbeit ist das Dokument „seminarplaner-umbau-konzept.md" im Projektwissen; getroffene Entscheidungen (D1–D48) gelten, bis sie ausdrücklich revidiert werden. Aktuelle Phase: Konzeption und Richtungsklärung – keinen Code generieren, außer es wird ausdrücklich verlangt. Bei neuen Entscheidungen das Konzeptdokument fortschreiben. Antworten auf Deutsch.
+> Wir entwickeln das Moodle-Plugin „Seminarplaner" (mod_seminarplaner + local_seminarplaner) für die IG-Metall-Bildungsarbeit konzeptionell weiter. Zielgruppe sind hauptamtliche und ehrenamtliche Referentinnen: erfahrene Pädagoginnen ohne akademische Ausbildung und mit geringer IT-Kompetenz – alle Vorschläge müssen didaktische statt IT-Metaphern nutzen. Grundlage aller Arbeit ist das Dokument „seminarplaner-umbau-konzept.md" im Projektwissen; getroffene Entscheidungen (D1–D49) gelten, bis sie ausdrücklich revidiert werden. Aktuelle Phase: Konzeption und Richtungsklärung – keinen Code generieren, außer es wird ausdrücklich verlangt. Bei neuen Entscheidungen das Konzeptdokument fortschreiben. Antworten auf Deutsch.
 
 Empfohlenes Projektwissen: dieses Dokument, die Plugin-Code-Referenz, ein Beispiel-Themenplan (TP_2026_ki.docx), das Wireframe der Sequenzansicht, die Workshop-Fragensammlung (workshop-fragen.md).
 
