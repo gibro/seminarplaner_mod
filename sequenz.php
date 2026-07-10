@@ -153,6 +153,13 @@ echo html_writer::start_tag('label', ['class' => 'sq-toggle', 'for' => 'sq-drama
 echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'sq-drama-toggle']);
 echo html_writer::tag('span', get_string('sequenz_dramatoggle', 'mod_seminarplaner'));
 echo html_writer::end_tag('label');
+// CD-Handoff: Neue Einheiten lassen sich jederzeit aus der Werkzeugleiste
+// heraus gestalten (Quick-Create). Die Anker-Buttons darunter übernehmen
+// weiterhin nur Bestehendes aus der Bibliothek.
+echo html_writer::tag('button', '＋ Neue Einheit anlegen', [
+    'type' => 'button', 'id' => 'sq-new-unit', 'class' => 'kg-btn',
+    'title' => 'Neue Seminareinheit anlegen und in den aktuellen Tag einplanen',
+]);
 // Saving happens automatically in the background; this passive indicator
 // replaces the former Speichern button (it only confused once nothing
 // had to be saved manually anymore).

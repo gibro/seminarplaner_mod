@@ -6557,17 +6557,25 @@ details[open] > .sq-gap__summary .sq-gap__chevron {
    !important nötig: die neutrale Button-Regel („Neutral controls + clear IG
    action hierarchy", ~Z. 3630) arbeitet ebenfalls mit !important. */
 [data-sq-action="add-unit"].kg-btn,
-[data-sq-action="add-pause"].kg-btn {
+[data-sq-action="add-pause"].kg-btn,
+#sq-new-unit.kg-btn {
     border: 2px solid var(--ig-red) !important;
     color: var(--ig-red) !important;
     background: #fff !important;
 }
 
 [data-sq-action="add-unit"].kg-btn:hover:not(:disabled),
-[data-sq-action="add-pause"].kg-btn:hover:not(:disabled) {
+[data-sq-action="add-pause"].kg-btn:hover:not(:disabled),
+#sq-new-unit.kg-btn:hover:not(:disabled) {
     background: var(--ig-red) !important;
     border-color: var(--ig-red) !important;
     color: #fff !important;
+}
+
+/* Werkzeugleisten-Button ohne die Standard-Außenabstände der kg-btn. */
+#sq-new-unit.kg-btn {
+    margin-top: 0;
+    margin-bottom: 0;
 }
 
 /* Entfallende Anker (An-/Abreisetag): Hinzufügen bleibt gedämpft. */

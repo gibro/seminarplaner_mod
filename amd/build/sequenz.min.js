@@ -241,6 +241,19 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             if (next) {
                 next.addEventListener('click', () => this.stepDay(1));
             }
+            // CD-Handoff: Werkzeugleisten-Button legt eine neue Einheit an
+            // (Quick-Create) und plant sie in den ersten aktiven Anker des
+            // aktuellen Tages ein.
+            const newunit = bySel('#sq-new-unit');
+            if (newunit) {
+                newunit.addEventListener('click', () => {
+                    if (!this.sequenz || !this.dayCount()) {
+                        this.setStatus('Lade zuerst einen Seminarplan, dann kannst du Einheiten anlegen.', true);
+                        return;
+                    }
+                    this.openQuickCreate({anker: this.firstActiveAnker()});
+                });
+            }
             const select = bySel('#sq-grid-select');
             if (select) {
                 select.addEventListener('change', () => {
@@ -1224,6 +1237,14 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 end: end === null ? 1050 : end,
                 midday,
             };
+        }
+
+        // Erster Anker des aktuellen Tages, der nicht entfällt (D45:
+        // am Anreisetag hat der Vormittag kein Zeitfenster).
+        firstActiveAnker() {
+            const frame = this.dayFrame(this.dayIndex);
+            const vmbudget = Math.max(0, Math.min(frame.midday.start, frame.end) - frame.start);
+            return vmbudget > 0 ? 'vormittag' : 'nachmittag';
         }
 
         placement(pid) {
