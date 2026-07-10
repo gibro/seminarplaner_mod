@@ -114,6 +114,49 @@ echo html_writer::end_div();
 echo html_writer::tag('div', '', ['id' => 'kg-review-new-status', 'class' => 'kg-status']);
 echo html_writer::end_div();
 
+// D32: Seminarkonzept einreichen - kompletter Plan (inkl. Ablauf/Sequenz)
+// über denselben Prüfprozess wie die Methoden-Sammlungen.
+echo html_writer::start_div('kg-ie-block');
+echo html_writer::tag('h4', 'Seminarkonzept einreichen');
+echo html_writer::tag('p', 'Reiche einen kompletten Seminarplan mit Ablauf ein – im Unterschied zur '
+    . 'Methoden-Sammlung (Sammlung ohne Reihenfolge) wandert hier der ganze Plan samt Sequenz und den '
+    . 'darin verwendeten Seminareinheiten in die Prüfung.');
+echo html_writer::tag('label', 'Seminarplan auswählen', ['for' => 'kg-review-konzept-plan', 'class' => 'kg-label']);
+echo html_writer::start_tag('select', ['id' => 'kg-review-konzept-plan', 'class' => 'kg-input']);
+echo html_writer::tag('option', 'Bitte wählen', ['value' => '0']);
+echo html_writer::end_tag('select');
+echo html_writer::tag('label', 'Einreichen als', ['for' => 'kg-review-konzept-target', 'class' => 'kg-label']);
+echo html_writer::start_tag('select', ['id' => 'kg-review-konzept-target', 'class' => 'kg-input']);
+echo html_writer::tag('option', 'Neues Seminarkonzept', ['value' => '0']);
+echo html_writer::end_tag('select');
+echo html_writer::start_div('', ['id' => 'kg-review-konzept-newfields']);
+echo html_writer::start_div('kg-two');
+echo html_writer::start_div();
+echo html_writer::tag('label', 'Name', ['for' => 'kg-review-konzept-displayname', 'class' => 'kg-label']);
+echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'kg-review-konzept-displayname', 'class' => 'kg-input']);
+echo html_writer::tag('small', 'Name = sichtbarer Anzeigename (vorbelegt mit dem Plan-Namen).');
+echo html_writer::end_div();
+echo html_writer::start_div();
+echo html_writer::tag('label', 'Kurzbezeichnung', ['for' => 'kg-review-konzept-shortname', 'class' => 'kg-label']);
+echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'kg-review-konzept-shortname', 'class' => 'kg-input']);
+echo html_writer::tag('small', 'Technischer, eindeutiger Schlüssel ohne Leerzeichen.');
+echo html_writer::end_div();
+echo html_writer::end_div();
+echo html_writer::tag('label', 'Beschreibung', ['for' => 'kg-review-konzept-description', 'class' => 'kg-label']);
+echo html_writer::tag('textarea', '', ['id' => 'kg-review-konzept-description', 'class' => 'kg-input', 'rows' => 3]);
+echo html_writer::end_div();
+echo html_writer::tag('label', 'Update-Hinweis für Konzeptverantwortliche', ['for' => 'kg-review-konzept-changelog', 'class' => 'kg-label']);
+echo html_writer::tag('textarea', '', ['id' => 'kg-review-konzept-changelog', 'class' => 'kg-input', 'rows' => 3]);
+echo html_writer::start_div('kg-row kg-pdf-actions');
+echo html_writer::tag('button', 'Seminarkonzept einreichen', [
+    'type' => 'button',
+    'id' => 'kg-review-konzept-submit',
+    'class' => 'kg-btn kg-btn-primary',
+]);
+echo html_writer::end_div();
+echo html_writer::tag('div', '', ['id' => 'kg-review-konzept-status', 'class' => 'kg-status']);
+echo html_writer::end_div();
+
 echo html_writer::end_div();
 
 echo $OUTPUT->footer();

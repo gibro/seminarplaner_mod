@@ -9,6 +9,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     let existingCandidates = [];
     let changedMethodsForNewSet = [];
     let newSetSelection = [];
+    // D32: Seminarpläne der Aktivität für das Seminarkonzept-Einreichen.
+    let konzeptPlans = [];
+
+    // D32: Objektart eines Review-Ziels ('sammlung' | 'seminarkonzept').
+    const targetTyp = (set) => String(set && set.typ ? set.typ : 'sammlung');
+    const TYP_LABELS = {sammlung: 'Methoden-Sammlung', seminarkonzept: 'Seminarkonzept'};
 
     const setStatus = (selector, text, isError) => {
         const el = bySel(selector);
@@ -113,11 +119,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
         host.innerHTML = reviewTargets.map((set) => {
             const info = STATUS_LABELS[String(set.status)] || {label: String(set.status), step: '', cls: 'draft'};
+            const typlabel = TYP_LABELS[targetTyp(set)] || TYP_LABELS.sammlung;
             return `
               <div class="kg-review-status-row">
                 <span class="kg-review-status-chip kg-review-status-chip--${info.cls}">${escapeHtml(info.label)}</span>
                 <span class="kg-review-status-name">${escapeHtml(set.displayname)}</span>
-                <span class="kg-review-status-step">${escapeHtml(info.step)}
+                <span class="kg-review-status-step">${escapeHtml(typlabel)} · ${escapeHtml(info.step)}
                   · Konzeptverantwortliche: ${Number(set.reviewercount) || 0}</span>
               </div>`;
         }).join('');
@@ -131,14 +138,127 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return asCall('mod_seminarplaner_list_review_targets', {cmid}).then((res) => {
             reviewTargets = Array.isArray(res.methodsets) ? res.methodsets : [];
             select.innerHTML = '<option value="0">Bitte wählen</option>';
-            reviewTargets.forEach((set) => {
+            // D32: der Diff-Flow vergleicht Seminareinheiten und zielt daher
+            // nur auf Methoden-Sammlungen; Seminarkonzepte haben unten ihren
+            // eigenen Einreichen-Block.
+            reviewTargets.filter((set) => targetTyp(set) === 'sammlung').forEach((set) => {
                 const statuslabel = (STATUS_LABELS[String(set.status)] || {label: set.status}).label;
                 const opt = document.createElement('option');
                 opt.value = String(set.id);
                 opt.textContent = `${set.displayname} [${statuslabel}] · Konzeptverantwortliche: ${set.reviewercount || 0}`;
                 select.appendChild(opt);
             });
+            renderKonzeptTargets();
             renderStatusList();
+        });
+    };
+
+    // ---- D32: Seminarkonzept einreichen ---------------------------------
+
+    const renderKonzeptTargets = () => {
+        const select = bySel('#kg-review-konzept-target');
+        if (!select) {
+            return;
+        }
+        const previous = select.value;
+        select.innerHTML = '<option value="0">Neues Seminarkonzept</option>';
+        reviewTargets.filter((set) => targetTyp(set) === 'seminarkonzept').forEach((set) => {
+            const statuslabel = (STATUS_LABELS[String(set.status)] || {label: set.status}).label;
+            const opt = document.createElement('option');
+            opt.value = String(set.id);
+            opt.textContent = `${set.displayname} [${statuslabel}] – neue Version einreichen`;
+            select.appendChild(opt);
+        });
+        if (previous && select.querySelector(`option[value="${previous}"]`)) {
+            select.value = previous;
+        }
+        toggleKonzeptNewFields();
+    };
+
+    const toggleKonzeptNewFields = () => {
+        const select = bySel('#kg-review-konzept-target');
+        const fields = bySel('#kg-review-konzept-newfields');
+        if (fields) {
+            fields.classList.toggle('kg-hidden', !!(select && Number.parseInt(select.value || '0', 10)));
+        }
+    };
+
+    const slugify = (text) => String(text || '')
+        .toLowerCase()
+        .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 60);
+
+    const prefillKonzeptFields = () => {
+        const planselect = bySel('#kg-review-konzept-plan');
+        const plan = konzeptPlans.find((p) => String(p.id) === String(planselect ? planselect.value : ''));
+        if (!plan) {
+            return;
+        }
+        const displayname = bySel('#kg-review-konzept-displayname');
+        if (displayname && !displayname.value.trim()) {
+            displayname.value = String(plan.name || '');
+        }
+        const shortname = bySel('#kg-review-konzept-shortname');
+        if (shortname && !shortname.value.trim()) {
+            const slug = slugify(plan.name) || 'seminarkonzept';
+            shortname.value = `${slug}-${String(Date.now()).slice(-5)}`;
+        }
+    };
+
+    const loadKonzeptPlans = (cmid) => {
+        const select = bySel('#kg-review-konzept-plan');
+        if (!select) {
+            return Promise.resolve();
+        }
+        return asCall('mod_seminarplaner_list_grids', {cmid}).then((res) => {
+            konzeptPlans = (Array.isArray(res.grids) ? res.grids : []).filter((g) => !Number(g.isarchived));
+            select.innerHTML = '<option value="0">Bitte wählen</option>';
+            konzeptPlans.forEach((plan) => {
+                const opt = document.createElement('option');
+                opt.value = String(plan.id);
+                opt.textContent = String(plan.name || `Plan ${plan.id}`);
+                select.appendChild(opt);
+            });
+        }).catch(() => {
+            konzeptPlans = [];
+        });
+    };
+
+    const submitKonzept = (cmid) => {
+        const gridid = Number.parseInt((bySel('#kg-review-konzept-plan') || {value: '0'}).value || '0', 10) || 0;
+        if (!gridid) {
+            setStatus('#kg-review-konzept-status', 'Bitte zuerst einen Seminarplan auswählen.', true);
+            return;
+        }
+        const methodsetid = Number.parseInt((bySel('#kg-review-konzept-target') || {value: '0'}).value || '0', 10) || 0;
+        const displayname = String((bySel('#kg-review-konzept-displayname') || {}).value || '').trim();
+        const shortname = String((bySel('#kg-review-konzept-shortname') || {}).value || '').trim();
+        const description = String((bySel('#kg-review-konzept-description') || {}).value || '').trim();
+        const changelog = String((bySel('#kg-review-konzept-changelog') || {}).value || '').trim();
+        if (!methodsetid && (!displayname || !shortname)) {
+            setStatus('#kg-review-konzept-status', 'Bitte Name und Kurzbezeichnung ausfüllen.', true);
+            return;
+        }
+        asCall('mod_seminarplaner_submit_seminarkonzept_for_review', {
+            cmid,
+            gridid,
+            methodsetid,
+            shortname,
+            displayname,
+            description,
+            changelog
+        }).then((res) => {
+            setStatus('#kg-review-konzept-status',
+                `Seminarkonzept „${res.planname}" eingereicht (Version #${res.versionid}, `
+                + `${res.savedcount} Seminareinheiten enthalten).`,
+                false
+            );
+            return loadReviewTargets(cmid);
+        }).catch((e) => {
+            Notification.exception(e);
+            setStatus('#kg-review-konzept-status', 'Einreichen des Seminarkonzepts fehlgeschlagen.', true);
         });
     };
 
@@ -337,11 +457,28 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 renderNewSetMethods();
             });
         }
+
+        // D32: Seminarkonzept-Block.
+        const konzeptplan = bySel('#kg-review-konzept-plan');
+        if (konzeptplan) {
+            konzeptplan.addEventListener('change', prefillKonzeptFields);
+        }
+        const konzepttarget = bySel('#kg-review-konzept-target');
+        if (konzepttarget) {
+            konzepttarget.addEventListener('change', toggleKonzeptNewFields);
+        }
+        const konzeptsubmit = bySel('#kg-review-konzept-submit');
+        if (konzeptsubmit) {
+            konzeptsubmit.addEventListener('click', () => submitKonzept(cmid));
+        }
     };
 
     return {
         init: function(cmid) {
-            loadReviewTargets(cmid).then(() => loadChangedMethodsForNewSet(cmid)).then(() => {
+            Promise.all([
+                loadReviewTargets(cmid),
+                loadKonzeptPlans(cmid)
+            ]).then(() => loadChangedMethodsForNewSet(cmid)).then(() => {
                 bind(cmid);
                 renderExistingCandidates();
                 renderNewSetMethods();

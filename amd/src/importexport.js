@@ -653,7 +653,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             globalMethodsets.forEach((set) => {
                 const opt = document.createElement('option');
                 opt.value = String(set.id);
-                opt.textContent = `${set.displayname}`;
+                // D32: Seminarkonzepte (kompletter Plan) sichtbar von den
+                // Methoden-Sammlungen unterscheiden.
+                opt.textContent = String(set.typ) === 'seminarkonzept'
+                    ? `${set.displayname} [Seminarkonzept]`
+                    : `${set.displayname}`;
                 select.appendChild(opt);
             });
             if (res.available === false) {
@@ -2061,8 +2065,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     })
                     .then((res) => {
                         refreshGlobalSyncUi();
-                        setGlobalStatus(
-                            `Import erfolgreich: ${res.importedcount} Seminareinheiten aus "${res.setname}" importiert (insgesamt ${res.totalcount}).`,
+                        // D32: beim Seminarkonzept entsteht zusätzlich ein
+                        // neuer Plan (nie überschreibend).
+                        setGlobalStatus(res.plancreated
+                            ? `Import erfolgreich: Seminarkonzept "${res.setname}" als neuer Plan „${res.planname}" angelegt, `
+                                + `${res.importedcount} Seminareinheiten übernommen (insgesamt ${res.totalcount}).`
+                            : `Import erfolgreich: ${res.importedcount} Seminareinheiten aus "${res.setname}" importiert (insgesamt ${res.totalcount}).`,
                             false
                         );
                     })

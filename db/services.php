@@ -102,6 +102,13 @@ $functions = [
         'type' => 'write',
         'ajax' => true,
     ],
+    'mod_seminarplaner_submit_seminarkonzept_for_review' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'submit_seminarkonzept_for_review',
+        'description' => 'D32: Submit a complete Seminarkonzept (plan incl. sequence) for review.',
+        'type' => 'write',
+        'ajax' => true,
+    ],
     'mod_seminarplaner_create_grid' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'create_grid',

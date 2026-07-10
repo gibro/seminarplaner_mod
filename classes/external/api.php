@@ -678,6 +678,9 @@ class api extends external_api {
                 'displayname' => (string)$set->displayname,
                 'shortname' => (string)$set->shortname,
                 'status' => (string)$set->status,
+                // D32: 'sammlung' oder 'seminarkonzept' (Altdaten ohne Spalte
+                // zählen als Sammlung).
+                'typ' => (string)($set->concepttype ?? 'sammlung'),
                 'methodcount' => $count,
             ];
         }
@@ -694,6 +697,7 @@ class api extends external_api {
                 'displayname' => new external_value(PARAM_TEXT, 'Display name'),
                 'shortname' => new external_value(PARAM_ALPHANUMEXT, 'Short name'),
                 'status' => new external_value(PARAM_ALPHA, 'Status'),
+                'typ' => new external_value(PARAM_ALPHA, 'Object kind (D32): sammlung or seminarkonzept'),
                 'methodcount' => new external_value(PARAM_INT, 'Method count'),
             ])),
         ]);
@@ -728,6 +732,12 @@ class api extends external_api {
         $set = $repo->get_methodset((int)$params['methodsetid']);
         if (!$set) {
             throw new invalid_parameter_exception('Unbekanntes Konzept');
+        }
+
+        // D32: Seminarkonzepte tragen den Plan im Versions-Snapshot und
+        // werden als kompletter neuer Plan samt Einheiten importiert.
+        if ((string)($set->concepttype ?? 'sammlung') === 'seminarkonzept') {
+            return self::import_global_seminarkonzept($resolved, $set, $repo);
         }
 
         $rows = [];
@@ -773,6 +783,8 @@ class api extends external_api {
             'importedcount' => count($imported),
             'totalcount' => count($merged),
             'setname' => (string)$set->displayname,
+            'plancreated' => false,
+            'planname' => '',
         ];
     }
 
@@ -782,7 +794,142 @@ class api extends external_api {
             'importedcount' => new external_value(PARAM_INT, 'Imported methods'),
             'totalcount' => new external_value(PARAM_INT, 'Total methods after import'),
             'setname' => new external_value(PARAM_TEXT, 'Methodset display name'),
+            'plancreated' => new external_value(PARAM_BOOL, 'Whether a new plan was created (D32 Seminarkonzept)'),
+            'planname' => new external_value(PARAM_TEXT, 'Name of the created plan'),
         ]);
+    }
+
+    /**
+     * D32: Import a global Seminarkonzept - creates a NEW plan (never
+     * overwriting an existing one) from the snapshot's plan state and adds
+     * the plan's units as independent local copies.
+     *
+     * The snapshot carries the units with their original ids; every card gets
+     * a fresh id on import and all sequence references (Einheiten-Auswahlen)
+     * are rewritten accordingly. `legacy:<uid>` references point into the
+     * plan's own day entries and stay untouched.
+     *
+     * @param array $resolved Resolved cm/course/context.
+     * @param \stdClass $set Global methodset record (concepttype seminarkonzept).
+     * @param \local_seminarplaner\local\repository\methodset_repository $repo Repository.
+     * @return array
+     */
+    private static function import_global_seminarkonzept(array $resolved, \stdClass $set,
+        \local_seminarplaner\local\repository\methodset_repository $repo): array {
+        global $DB;
+
+        if (empty($set->currentversion)) {
+            throw new invalid_parameter_exception('Dieses Seminarkonzept hat keine veröffentlichte Version');
+        }
+        $version = $repo->get_version((int)$set->currentversion);
+        $payload = $version ? json_decode((string)$version->snapshotjson, true) : null;
+        if (!is_array($payload) || (string)($payload['typ'] ?? '') !== 'seminarkonzept'
+                || !is_array($payload['plan'] ?? null)) {
+            throw new invalid_parameter_exception('Seminarkonzept-Daten konnten nicht gelesen werden');
+        }
+        $snapshotmethods = is_array($payload['methods'] ?? null) ? $payload['methods'] : [];
+        $plan = $payload['plan'];
+        $state = is_array($plan['state'] ?? null) ? $plan['state'] : [];
+        $actorid = (int)$GLOBALS['USER']->id;
+
+        // Attachments live at the global set's method rows; match them back
+        // to the snapshot units by normalized title.
+        $rows = $DB->get_records('local_kgen_method', [
+            'methodsetid' => (int)$set->id,
+            'methodsetversionid' => (int)$set->currentversion,
+        ]);
+        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function($row) {
+            return (int)$row->id;
+        }, array_values($rows)));
+        $attachmentsbytitle = [];
+        foreach ($rows as $row) {
+            $key = self::normalize_method_title((string)($row->title ?? ''));
+            if ($key !== '') {
+                $attachmentsbytitle[$key] = $attachmentsbymethod[(int)$row->id] ?? [];
+            }
+        }
+
+        // Fresh ids for every unit; the map drives the reference rewrite.
+        $idmap = [];
+        $imported = [];
+        $counter = 0;
+        foreach ($snapshotmethods as $method) {
+            if (!is_array($method)) {
+                continue;
+            }
+            $oldid = trim((string)($method['id'] ?? ''));
+            $title = trim((string)($method['titel'] ?? ''));
+            if ($oldid === '' || $title === '') {
+                continue;
+            }
+            $counter++;
+            $newid = 'konzept-' . time() . '-' . $counter . '-' . random_int(100, 999);
+            $idmap[$oldid] = $newid;
+            $copy = $method;
+            $copy['id'] = $newid;
+            // Independent copy (same principle as D33 adopt): no live link to
+            // the global original, no stale sync metadata or draft pointers.
+            unset($copy['_kgsync'], $copy['materialiendraftitemid'], $copy['h5pdraftitemid']);
+            $copy['materialien'] = $attachmentsbytitle[self::normalize_method_title($title)] ?? [];
+            $imported[] = $copy;
+        }
+
+        // Rewrite the sequence's card references onto the fresh ids.
+        $statekey = \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY;
+        if (isset($state[$statekey]) && is_array($state[$statekey])
+                && isset($state[$statekey]['einheitenauswahlen']) && is_array($state[$statekey]['einheitenauswahlen'])) {
+            foreach ($state[$statekey]['einheitenauswahlen'] as $eaid => $auswahl) {
+                if (!is_array($auswahl)) {
+                    continue;
+                }
+                $kandidaten = [];
+                foreach ((array)($auswahl['kandidaten'] ?? []) as $ref) {
+                    $ref = (string)$ref;
+                    $kandidaten[] = $idmap[$ref] ?? $ref;
+                }
+                $auswahl['kandidaten'] = $kandidaten;
+                if (isset($auswahl['aktiv']) && $auswahl['aktiv'] !== null && $auswahl['aktiv'] !== '') {
+                    $aktiv = (string)$auswahl['aktiv'];
+                    $auswahl['aktiv'] = $idmap[$aktiv] ?? $aktiv;
+                }
+                $state[$statekey]['einheitenauswahlen'][$eaid] = $auswahl;
+            }
+        }
+
+        // Units become part of the activity library.
+        $service = new method_card_service();
+        $existing = $service->get_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id);
+        if (!is_array($existing)) {
+            $existing = [];
+        }
+        $merged = array_merge($existing, $imported);
+        $service->save_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id, $merged);
+
+        // New plan, never overwriting: unique name within the activity.
+        $gridservice = new grid_service();
+        $existingnames = [];
+        foreach ($gridservice->list_grids((int)$resolved['cm']->id) as $grid) {
+            $existingnames[trim((string)$grid->name)] = true;
+        }
+        $planname = trim((string)($plan['name'] ?? '')) !== '' ? trim((string)$plan['name']) : (string)$set->displayname;
+        $uniquename = $planname;
+        $suffix = 2;
+        while (isset($existingnames[$uniquename])) {
+            $uniquename = $planname . ' (' . $suffix . ')';
+            $suffix++;
+        }
+        $newgridid = $gridservice->create_grid((int)$resolved['cm']->id, $uniquename, $actorid,
+            trim((string)($plan['description'] ?? '')) !== '' ? (string)$plan['description'] : null);
+        $gridservice->save_user_state($newgridid, $actorid, $state);
+
+        return [
+            'success' => true,
+            'importedcount' => count($imported),
+            'totalcount' => count($merged),
+            'setname' => (string)$set->displayname,
+            'plancreated' => true,
+            'planname' => $uniquename,
+        ];
     }
 
     /**
@@ -1107,6 +1254,9 @@ class api extends external_api {
                 'displayname' => (string)$set->displayname,
                 'description' => (string)($set->description ?? ''),
                 'status' => (string)$set->status,
+                // D32: 'sammlung' oder 'seminarkonzept' (Altdaten ohne Spalte
+                // zählen als Sammlung).
+                'typ' => (string)($set->concepttype ?? 'sammlung'),
                 'scopecontextid' => (int)$set->scopecontextid,
                 'reviewercount' => $reviewercount,
             ];
@@ -1125,6 +1275,7 @@ class api extends external_api {
                 'displayname' => new external_value(PARAM_TEXT, 'Display name'),
                 'description' => new external_value(PARAM_RAW, 'Description'),
                 'status' => new external_value(PARAM_ALPHA, 'Status'),
+                'typ' => new external_value(PARAM_ALPHA, 'Object kind (D32): sammlung or seminarkonzept'),
                 'scopecontextid' => new external_value(PARAM_INT, 'Scope context id'),
                 'reviewercount' => new external_value(PARAM_INT, 'Assigned reviewer count'),
             ])),
@@ -1615,6 +1766,263 @@ class api extends external_api {
             'versionid' => new external_value(PARAM_INT, 'Version id'),
             'savedcount' => new external_value(PARAM_INT, 'Saved seminar units into set version'),
             'reviewercount' => new external_value(PARAM_INT, 'Assigned reviewers'),
+        ]);
+    }
+
+    /**
+     * Collect the method-card references a plan's sequence section uses (D20).
+     *
+     * Both candidate lists and the active pick of every Einheiten-Auswahl are
+     * card references; `legacy:<uid>` fallbacks point into the plan's own
+     * legacy day entries and are skipped.
+     *
+     * @param mixed $sequenz Decoded sequence section (arrays and/or stdClass).
+     * @return string[] Unique card ids.
+     */
+    private static function collect_plan_card_refs($sequenz): array {
+        $refs = [];
+        $auswahlen = is_object($sequenz) ? ($sequenz->einheitenauswahlen ?? []) : ($sequenz['einheitenauswahlen'] ?? []);
+        foreach ((array)$auswahlen as $auswahl) {
+            $auswahl = (array)$auswahl;
+            $kandidaten = (array)($auswahl['kandidaten'] ?? []);
+            if (isset($auswahl['aktiv']) && $auswahl['aktiv'] !== null && $auswahl['aktiv'] !== '') {
+                $kandidaten[] = $auswahl['aktiv'];
+            }
+            foreach ($kandidaten as $ref) {
+                $ref = trim((string)$ref);
+                if ($ref === '' || strpos($ref, 'legacy:') === 0) {
+                    continue;
+                }
+                $refs[$ref] = true;
+            }
+        }
+        return array_keys($refs);
+    }
+
+    public static function submit_seminarkonzept_for_review_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'gridid' => new external_value(PARAM_INT, 'Seminarplan id'),
+            'methodsetid' => new external_value(PARAM_INT, 'Existing Seminarkonzept set id (0 = create new)',
+                VALUE_DEFAULT, 0),
+            'shortname' => new external_value(PARAM_ALPHANUMEXT, 'New set shortname (only for new sets)',
+                VALUE_DEFAULT, ''),
+            'displayname' => new external_value(PARAM_TEXT, 'New set displayname (only for new sets)',
+                VALUE_DEFAULT, ''),
+            'description' => new external_value(PARAM_RAW, 'New set description', VALUE_DEFAULT, ''),
+            'changelog' => new external_value(PARAM_TEXT, 'Update note', VALUE_DEFAULT, ''),
+        ]);
+    }
+
+    /**
+     * D32: Submit a complete Seminarkonzept (plan incl. sequence) for review.
+     *
+     * Runs over the exact same methodset/review/workflow mechanism as the
+     * Methoden-Sammlungen: the set carries concepttype 'seminarkonzept' and
+     * its version snapshot holds an object payload with the plan state plus
+     * the method cards the plan references (ids intact, so a reimport can
+     * rebuild the plan 1:1). The referenced units are also written as
+     * local_kgen_method rows, so they stay browsable in the global library.
+     */
+    public static function submit_seminarkonzept_for_review(int $cmid, int $gridid, int $methodsetid = 0,
+        string $shortname = '', string $displayname = '', string $description = '', string $changelog = ''): array {
+        global $DB;
+
+        $params = self::validate_parameters(self::submit_seminarkonzept_for_review_parameters(), [
+            'cmid' => $cmid,
+            'gridid' => $gridid,
+            'methodsetid' => $methodsetid,
+            'shortname' => $shortname,
+            'displayname' => $displayname,
+            'description' => $description,
+            'changelog' => $changelog,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('submit_seminarkonzept_for_review', 20, 60);
+        if (\core_text::strlen((string)$params['description']) > self::MAX_METHODSET_DESCRIPTION_CHARS) {
+            throw new invalid_parameter_exception('description exceeds allowed length');
+        }
+        if (\core_text::strlen((string)$params['changelog']) > self::MAX_CHANGELOG_CHARS) {
+            throw new invalid_parameter_exception('changelog exceeds allowed length');
+        }
+
+        if (!self::global_plugin_available()) {
+            throw new invalid_parameter_exception('local_seminarplaner ist nicht installiert');
+        }
+
+        $scopecontexts = self::resolve_submit_scope_contexts($resolved['course']);
+        if (!$scopecontexts) {
+            throw new invalid_parameter_exception('Keine Berechtigung zum Einreichen für Review');
+        }
+        $allowedscopeids = array_map(static function($ctx) {
+            return (int)$ctx->id;
+        }, $scopecontexts);
+        $actorid = (int)$GLOBALS['USER']->id;
+
+        // Load the plan: master data plus the shared collaborative state.
+        $gridrepository = new \mod_seminarplaner\local\repository\grid_repository();
+        $grid = $gridrepository->get_grid((int)$params['gridid']);
+        if (!$grid || (int)$grid->cmid !== (int)$resolved['cm']->id || (int)($grid->isarchived ?? 0) === 1) {
+            throw new invalid_parameter_exception('Unbekannter Seminarplan');
+        }
+        $gridservice = new grid_service();
+        $stateresult = $gridservice->get_user_state((int)$grid->id, $actorid);
+        $state = is_array($stateresult['state'] ?? null) ? $stateresult['state'] : [];
+        $sequenz = $state[\mod_seminarplaner\local\sequence\sequence_state::STATE_KEY] ?? null;
+        if (!$sequenz) {
+            throw new invalid_parameter_exception(
+                'Dieser Seminarplan hat noch keine Sequenz – bitte einmal in der Sequenzansicht öffnen.');
+        }
+
+        // The plan's units travel inside the snapshot with their original ids,
+        // so the sequence references survive the roundtrip (table rows below
+        // get new ids on import and could not be re-linked).
+        $methodservice = new method_card_service();
+        $allactivitymethods = $methodservice->get_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id);
+        if (!is_array($allactivitymethods)) {
+            $allactivitymethods = [];
+        }
+        $refs = array_fill_keys(self::collect_plan_card_refs($sequenz), true);
+        $planmethods = [];
+        foreach ($allactivitymethods as $method) {
+            if (!is_array($method)) {
+                continue;
+            }
+            $mid = trim((string)($method['id'] ?? ''));
+            if ($mid === '' || empty($refs[$mid])) {
+                continue;
+            }
+            if (trim((string)($method['titel'] ?? '')) === '') {
+                continue;
+            }
+            $planmethods[] = $method;
+        }
+
+        $repo = new \local_seminarplaner\local\repository\methodset_repository();
+        $reviewerrepo = new \local_seminarplaner\local\repository\reviewer_repository();
+        $workflow = new \local_seminarplaner\local\service\workflow_service();
+
+        if ((int)$params['methodsetid'] > 0) {
+            // Resubmit an existing Seminarkonzept as a new version.
+            $set = $repo->get_methodset((int)$params['methodsetid']);
+            if (!$set) {
+                throw new invalid_parameter_exception('Unbekanntes Seminarkonzept');
+            }
+            if ((string)($set->concepttype ?? 'sammlung') !== 'seminarkonzept') {
+                throw new invalid_parameter_exception('Das gewählte Ziel ist keine Seminarkonzept-Einreichung');
+            }
+            if (!in_array((int)$set->scopecontextid, $allowedscopeids, true)) {
+                throw new invalid_parameter_exception('Keine Berechtigung für das gewählte Seminarkonzept');
+            }
+            if ((string)$set->status !== 'draft') {
+                $repo->update_methodset_status((int)$set->id, 'draft', $actorid);
+            }
+            $setid = (int)$set->id;
+            $versionnum = (int)$DB->get_field_sql(
+                'SELECT COALESCE(MAX(versionnum), 0) + 1 FROM {local_kgen_methodset_ver} WHERE methodsetid = :methodsetid',
+                ['methodsetid' => $setid]
+            );
+        } else {
+            $newshortname = trim((string)$params['shortname']);
+            $newdisplayname = trim((string)$params['displayname']);
+            if ($newshortname === '' || $newdisplayname === '') {
+                throw new invalid_parameter_exception('Bitte Name und Kurzbezeichnung angeben');
+            }
+            $targetscope = $scopecontexts[0];
+            $setid = $repo->create_methodset_draft($newshortname, $newdisplayname,
+                (string)$params['description'], (int)$targetscope->id, $actorid, 'seminarkonzept');
+            $versionnum = 1;
+        }
+
+        // Snapshot payload (D32): object instead of the plain method array a
+        // Methoden-Sammlung uses - plan state 1:1 plus the referenced units.
+        $snapshotpayload = [
+            'typ' => 'seminarkonzept',
+            'methods' => $planmethods,
+            'plan' => [
+                'name' => (string)$grid->name,
+                'description' => (string)($grid->description ?? ''),
+                'state' => $state,
+            ],
+        ];
+        $snapshotjson = json_encode($snapshotpayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($snapshotjson === false) {
+            throw new invalid_parameter_exception('Seminarkonzept konnte nicht serialisiert werden');
+        }
+        $versionid = $repo->create_version($setid, (int)$versionnum, 'draft', $snapshotjson, $actorid);
+
+        // Reviewer handling mirrors the Sammlung flows: keep assigned
+        // reviewers, otherwise auto-assign everyone with review capability.
+        $set = $repo->get_methodset($setid);
+        $scopecontext = \context::instance_by_id((int)$set->scopecontextid, MUST_EXIST);
+        $assignedreviewers = $reviewerrepo->get_reviewer_userids($setid);
+        if (!$assignedreviewers) {
+            $autocandidates = get_users_by_capability($scopecontext, 'local/seminarplaner:reviewset',
+                'u.id,u.deleted,u.suspended', 'u.id ASC');
+            $autorreviewerids = [];
+            foreach ($autocandidates as $candidate) {
+                if (!empty($candidate->deleted) || !empty($candidate->suspended)) {
+                    continue;
+                }
+                $autorreviewerids[] = (int)$candidate->id;
+            }
+            $autorreviewerids = array_values(array_unique(array_filter($autorreviewerids)));
+            if (!$autorreviewerids) {
+                throw new invalid_parameter_exception('Keine Konzeptverantwortliche mit Review-Berechtigung gefunden');
+            }
+            $reviewerrepo->replace_reviewers($setid, $autorreviewerids, $actorid);
+            $assignedreviewers = $autorreviewerids;
+        }
+
+        // Write the referenced units as global method rows so the plan's
+        // units are browsable/adoptable in the global library (D29/D33).
+        $now = time();
+        $DB->delete_records('local_kgen_method', ['methodsetversionid' => (int)$versionid]);
+        $savedcount = 0;
+        foreach ($planmethods as $method) {
+            $mapped = self::map_activity_method_to_global_record($method);
+            if (trim((string)$mapped['title']) === '') {
+                continue;
+            }
+            $record = (object)array_merge($mapped, [
+                'methodsetid' => $setid,
+                'methodsetversionid' => (int)$versionid,
+                'timecreated' => $now,
+                'timemodified' => $now,
+                'createdby' => $actorid,
+                'modifiedby' => $actorid,
+            ]);
+            $newmethodid = (int)$DB->insert_record('local_kgen_method', $record);
+            $savedcount++;
+            self::copy_method_material_files_to_global($method, $newmethodid,
+                (int)$resolved['context']->id, $actorid, true);
+        }
+
+        $comment = trim((string)$params['changelog']) !== ''
+            ? trim((string)$params['changelog'])
+            : 'Seminarkonzept submitted from mod_seminarplaner';
+        $workflow->transition($setid, (int)$versionid, 'review', $actorid, $comment);
+
+        return [
+            'success' => true,
+            'methodsetid' => $setid,
+            'versionid' => (int)$versionid,
+            'savedcount' => $savedcount,
+            'reviewercount' => count($assignedreviewers),
+            'planname' => (string)$grid->name,
+        ];
+    }
+
+    public static function submit_seminarkonzept_for_review_returns(): external_single_structure {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'Submit status'),
+            'methodsetid' => new external_value(PARAM_INT, 'Method set id'),
+            'versionid' => new external_value(PARAM_INT, 'Version id'),
+            'savedcount' => new external_value(PARAM_INT, 'Saved seminar units into set version'),
+            'reviewercount' => new external_value(PARAM_INT, 'Assigned reviewers'),
+            'planname' => new external_value(PARAM_TEXT, 'Submitted plan name'),
         ]);
     }
 
