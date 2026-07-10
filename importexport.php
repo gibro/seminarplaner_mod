@@ -26,7 +26,10 @@ echo '<script src="' . s($vendorbase . '/jspdf-autotable/jspdf.plugin.autotable.
 echo '<script>try { if (window.__kg_prev_define !== undefined) { window.define = window.__kg_prev_define; } else { delete window.define; } } catch (e) {} delete window.__kg_prev_define;</script>';
 
 echo html_writer::start_div('kg-shell');
+echo html_writer::start_div('sq-pagehead');
 echo html_writer::tag('h3', 'Import / Export');
+echo html_writer::div('Seminareinheiten und Methoden-Sammlungen als Datei ein- und auslesen.', 'sq-pagehead__sub');
+echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-layout');
 

@@ -64,7 +64,10 @@ echo seminarplaner_render_method_subnav((int)$cm->id, 'methods');
 
 echo html_writer::start_div('kg-shell');
 echo html_writer::start_div('ig-container kg-container-full', ['id' => 'kg-add-method-section']);
+echo html_writer::start_div('sq-pagehead');
 echo html_writer::tag('h3', 'Neue Seminareinheit erstellen');
+echo html_writer::div('Eine neue Einheit für deine Bibliothek anlegen.', 'sq-pagehead__sub');
+echo html_writer::end_div();
 echo html_writer::start_div('ig-nav');
 echo html_writer::link('#kg-section-quick', '1) Schnellfassung');
 echo html_writer::link('#kg-section-quality', '2) Ablauf und Rahmen');

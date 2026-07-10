@@ -5269,7 +5269,7 @@ body.sp-resizing * {
     background: #fff;
     padding: 8px 10px;
 }
-.sq-unit__phase { width: 5px; align-self: stretch; border-radius: 0; flex: 0 0 5px; background: #cfd6dd; }
+.sq-unit__phase { width: 5px; align-self: stretch; border-radius: 0; flex: 0 0 5px; background: var(--ig-lightgray); }
 .sq-unit__main { flex: 1; min-width: 0; }
 .sq-unit__title { font-weight: 600; font-size: 12.8px; color: var(--sq-text); }
 .sq-unit__meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 3px; align-items: center; }
@@ -5987,10 +5987,12 @@ body.sp-resizing * {
     align-items: stretch;
 }
 
+/* Kein background hier: die Phasenfarbe kommt aus .sq-phase-bg--* (gleiche
+   Spezifität — eine background-Angabe an dieser späteren Stelle würde alle
+   Streifen grau übermalen). Neutraler Default steht an der Basisregel. */
 .sq-unit__phase {
     width: 6px;
     flex: 0 0 6px;
-    background: var(--ig-lightgray);
 }
 
 .sq-unit__main {
@@ -6497,4 +6499,394 @@ details[open] > .sq-gap__summary .sq-gap__chevron {
 .kg-grid-readonly .sp-item--sqnav:hover {
     outline: 2px solid var(--color-primary);
     outline-offset: -2px;
+}
+
+/* =========================================================================
+   CD-Handoff Stufe 3: Näher an den Screenshots
+   (docs/design_handoff_seminarplaner/screenshots) — Seitengrund #F1F1F1 mit
+   weißen Karten, Überblick-Wochenraster in vollen Phasenfarben, Bibliotheks-
+   karten mit Phasen-Top-Rule, Seitenköpfe auf allen Tabs.
+   ========================================================================= */
+
+/* Die Phasenfarben gelten überall (auch im Überblick ohne .sq-shell). */
+:root {
+    --sq-phase-orientierung: #2F80AB;
+    --sq-phase-erfahrung: #5B9945;
+    --sq-phase-analyse: #EAB500;
+    --sq-phase-handlung: #882A30;
+    --sq-phase-transfer: #646464;
+}
+
+/* ---- Seitengrund + weiße Inhaltskarten ---- */
+.kg-shell {
+    background: var(--ig-surface-muted);
+    border: none;
+    padding: 16px;
+}
+
+.kg-ie-block,
+.kg-library-step {
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+}
+
+/* Filterleisten liegen in den weißen Karten - kein grauer Unterbau mehr. */
+.sp-filterbar {
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+.sp-wrapper {
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+    padding: 12px;
+}
+
+/* Plan-Auswahl und Veröffentlichen-Zeile der Sequenz als weiße Karten. */
+.sq-planbar,
+.sq-publishbar {
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+    padding: 11px 16px;
+}
+
+/* ---- Sekundär-Aktionen (Handoff: 2px rote Outline, Fill-Invert on hover)
+   !important nötig: die neutrale Button-Regel („Neutral controls + clear IG
+   action hierarchy", ~Z. 3630) arbeitet ebenfalls mit !important. */
+[data-sq-action="add-unit"].kg-btn,
+[data-sq-action="add-pause"].kg-btn {
+    border: 2px solid var(--ig-red) !important;
+    color: var(--ig-red) !important;
+    background: #fff !important;
+}
+
+[data-sq-action="add-unit"].kg-btn:hover:not(:disabled),
+[data-sq-action="add-pause"].kg-btn:hover:not(:disabled) {
+    background: var(--ig-red) !important;
+    border-color: var(--ig-red) !important;
+    color: #fff !important;
+}
+
+/* Entfallende Anker (An-/Abreisetag): Hinzufügen bleibt gedämpft. */
+[data-sq-action="add-unit"].kg-btn:disabled,
+[data-sq-action="add-pause"].kg-btn:disabled {
+    border-color: var(--ig-lightgray) !important;
+    color: var(--ig-midgray) !important;
+    background: #fff !important;
+}
+
+/* Primär-Buttons als Link (Hinweisleiste) brauchen Link-Neutralisierung. */
+a.kg-btn {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+a.kg-btn-primary,
+a.kg-btn-primary:hover,
+a.kg-btn-primary:focus {
+    color: #fff;
+    text-decoration: none;
+}
+
+/* ---- Überblick: Hinweisleiste (tiefrot getönt, Button rechts) ---- */
+.kg-ov-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    background: #F3E6E7;
+    border: 1px solid #E4D3D5;
+    color: var(--ig-darkred);
+    font-size: 13px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+}
+
+.kg-ov-hint__btn {
+    margin: 0;
+    flex: 0 0 auto;
+}
+
+/* ---- Überblick (read-only): Wochenraster nach Handoff ---- */
+
+/* Die Werkzeugzeile ist im Read-only-Modus leer - komplett ausblenden. */
+.kg-grid-readonly .sp-weekbar,
+.kg-grid-readonly #sp-saved-state,
+.kg-grid-readonly .sp-time-scale,
+.kg-grid-readonly #sp-view-label {
+    display: none;
+}
+
+/* Kein Chip-Band über den Tagen - das Raster spricht für sich. */
+.kg-grid-readonly #sp-allday-row {
+    display: none;
+}
+
+/* Tages-Kopfzeile: Grund #FAFAFA, versaler Wochentag. */
+.kg-grid-readonly .sp-colhead {
+    background: #FAFAFA;
+    border-bottom: 1px solid var(--ig-lightgray);
+    border-right: 1px solid var(--ig-lightgray);
+}
+
+.kg-grid-readonly .sp-colhead-day {
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 13px;
+    color: var(--ig-anthracite);
+}
+
+.kg-grid-readonly .sp-sum {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--ig-gray);
+}
+
+.kg-grid-readonly .sp-daycol {
+    border-right: 1px solid var(--ig-lightgray);
+}
+
+.kg-grid-readonly .sp-timecol {
+    background: #FBFBFB;
+    border-right: 1px solid var(--ig-lightgray);
+}
+
+/* Zeitachse: nur Stundenmarken, kleine graue Ziffern. */
+.kg-grid-readonly .sp-timeslot {
+    font-size: 10.5px;
+    color: var(--ig-gray);
+}
+
+.kg-grid-readonly .sp-grid .sp-timeslot--minor {
+    border-bottom-color: transparent;
+}
+
+/* Projektions-Einträge: volle Phasenfarbe, Titel bold, Zeit klein. */
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav {
+    margin: 0 5px;
+    padding: 3px 8px;
+    background: #FAFAFA;
+    border: 1px solid var(--ig-lightgray);
+    color: var(--ig-anthracite);
+    box-shadow: 0 1px 2px rgba(20, 30, 40, .14);
+    overflow: hidden;
+    gap: 1px;
+}
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav .sp-title {
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 1.2;
+    padding-right: 12px;
+    cursor: pointer;
+}
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav .sp-meta {
+    font-size: 10.5px;
+    color: rgba(60, 60, 60, .7);
+}
+
+/* Tooltip-Duplikat im farbigen Block unterdrücken (Titel steht ja da). */
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav .sp-title:hover::after {
+    display: none;
+}
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--orientierung,
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--erfahrung,
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--handlung,
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--transfer {
+    color: #fff;
+    border: none;
+}
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--orientierung { background: var(--sq-phase-orientierung); }
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--erfahrung { background: var(--sq-phase-erfahrung); }
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--handlung { background: var(--sq-phase-handlung); }
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--transfer { background: var(--sq-phase-transfer); }
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--analyse {
+    background: var(--sq-phase-analyse);
+    color: var(--ig-anthracite);
+    border: none;
+}
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--orientierung .sp-meta,
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--erfahrung .sp-meta,
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--handlung .sp-meta,
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--transfer .sp-meta {
+    color: rgba(255, 255, 255, .85);
+}
+
+/* Kurze Blöcke: Zeitzeile ausblenden (Handoff: erst ab ~35 Minuten). */
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-item--short .sp-meta {
+    display: none;
+}
+
+/* Reservierte Bausteine: zurückhaltend statt vollfarbig. */
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-item--reserved {
+    background: #FCFAFA;
+    border: 1px dashed #C9A9AD;
+    color: var(--ig-darkred);
+    box-shadow: none;
+}
+
+/* Pausen: 45°-Schraffur mit zentriertem versalem Label. */
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-item--break {
+    background: repeating-linear-gradient(45deg, #F1F1F1, #F1F1F1 6px, #E4E4E4 6px, #E4E4E4 12px) !important;
+    border: 1px dashed var(--ig-midgray);
+    color: var(--ig-gray);
+    box-shadow: none;
+    justify-content: center;
+}
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-item--break .sp-title {
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 10px;
+    color: var(--ig-gray);
+    text-align: center;
+    padding-right: 0;
+}
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-item--break .sp-meta {
+    display: none;
+}
+
+/* ⇄-Marker oben rechts, wenn Alternativen hinterlegt sind. */
+.sp-item__alt {
+    position: absolute;
+    top: 3px;
+    right: 6px;
+    font-size: 11px;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* ---- Überblick: Legende ---- */
+.kg-ov-legend {
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+    padding: 10px 14px;
+    margin: 12px 0 0;
+    align-items: center;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--ig-anthracite);
+}
+
+.kg-ov-legend .sq-legend__dot {
+    width: 10px;
+    height: 10px;
+}
+
+.kg-ov-legend__label {
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 11px;
+    color: var(--ig-gray);
+}
+
+.kg-ov-legend__alt {
+    color: var(--ig-gray);
+    margin-left: auto;
+}
+
+/* ---- Bibliothekskarten: weiß mit Phasen-Top-Rule statt Bloom-Tönung ---- */
+.kg-library-card.sp-card {
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+    border-top: 3px solid var(--ig-lightgray);
+}
+
+.kg-library-card.sp-card.ml-phase--orientierung { border-top-color: var(--sq-phase-orientierung); }
+.kg-library-card.sp-card.ml-phase--erfahrung { border-top-color: var(--sq-phase-erfahrung); }
+.kg-library-card.sp-card.ml-phase--analyse { border-top-color: var(--sq-phase-analyse); }
+.kg-library-card.sp-card.ml-phase--handlung { border-top-color: var(--sq-phase-handlung); }
+.kg-library-card.sp-card.ml-phase--transfer { border-top-color: var(--sq-phase-transfer); }
+
+/* Meta-Badges neutral (Grund #F2F2F2, Hairline), Phasen-Badge getönt. */
+.kg-library-card.sp-card .sp-card-meta .sp-badge {
+    background: #F2F2F2;
+    border: 1px solid var(--ig-lightgray);
+    color: var(--ig-gray);
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 11px;
+}
+
+.kg-library-card.sp-card .sp-card-meta .sp-badge--phase {
+    background: #F2F2F2;
+    border-color: var(--ig-lightgray);
+    color: var(--ig-gray);
+}
+
+.ml-phase--orientierung .sp-card-meta .sp-badge--phase { background: #E7F0F5; color: #215d7e; border-color: var(--sq-phase-orientierung); }
+.ml-phase--erfahrung .sp-card-meta .sp-badge--phase { background: #E7F1E3; color: #3f6e2f; border-color: var(--sq-phase-erfahrung); }
+.ml-phase--analyse .sp-card-meta .sp-badge--phase { background: #FBF1D0; color: #8a6d00; border-color: var(--sq-phase-analyse); }
+.ml-phase--handlung .sp-card-meta .sp-badge--phase { background: #F3E6E7; color: #882A30; border-color: var(--sq-phase-handlung); }
+.ml-phase--transfer .sp-card-meta .sp-badge--phase { background: #EEEEEE; color: #4a4a4a; border-color: var(--sq-phase-transfer); }
+
+/* Tag-Chips neutral grau statt blau. */
+.ml-card-tag {
+    background: #F2F2F2;
+    color: var(--ig-gray);
+    border: 1px solid var(--ig-lightgray);
+    border-radius: 0;
+    font-weight: 400;
+    font-family: var(--font-head);
+    font-weight: 900;
+    letter-spacing: .03em;
+}
+
+/* ---- Stufe-3-Feinschliff nach erstem Sichttest ---- */
+
+/* Blocktitel im Wochenraster umbrechen statt ellipsen (Handoff). */
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav .sp-title {
+    white-space: normal;
+    text-overflow: clip;
+    overflow: hidden;
+}
+
+/* Primär-Buttons kompakt statt über die volle Kartenbreite. */
+.kg-row--action .kg-btn {
+    width: auto;
+    padding-left: 18px;
+    padding-right: 18px;
+}
+
+/* Trefferzähler des (ausgeblendeten) Filters hat im Überblick keinen Sinn. */
+.kg-grid-readonly #sp-filter-status {
+    display: none;
+}
+
+/* Hinweisleiste: Text darf schrumpfen, damit der Button rechts bleibt. */
+.kg-ov-hint > span {
+    flex: 1 1 320px;
+}
+
+/* Bibliothekskarten: die Bloom-Tönung weicht dem Handoff-Look (weiße Karte,
+   Phasen-Top-Rule). Die Bloom-Levels bleiben in den Daten und im Überblick
+   alter Pläne erhalten - hier werden sie nur nicht mehr eingefärbt. */
+.kg-library-card.sp-card.sp-level-1,
+.kg-library-card.sp-card.sp-level-2,
+.kg-library-card.sp-card.sp-level-3,
+.kg-library-card.sp-card.sp-level-4,
+.kg-library-card.sp-card.sp-level-5,
+.kg-library-card.sp-card.sp-level-6 {
+    border-left: 1px solid var(--ig-lightgray);
+    background: #fff;
 }

@@ -18,6 +18,27 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         bewerten: 5,
         erschaffen: 6
     };
+
+    // Seminarphasen-Zuordnung wie in sequenz.js (dortige phaseKey-Kopie):
+    // die Überblick-Projektion färbt Einträge nach der Phasenpalette des
+    // Design-Handoffs statt nach Bloom-Levels.
+    const PHASE_KEYS = [
+        {key: 'orientierung', match: ['orientierung', 'warm-up', 'einstieg']},
+        {key: 'erfahrung', match: ['erfahrung', 'erwartungsabfrage', 'vorwissen']},
+        {key: 'analyse', match: ['analyse']},
+        {key: 'handlung', match: ['handlung', 'aktion', 'praxis']},
+        {key: 'transfer', match: ['transfer', 'abschluss', 'auswertung']},
+    ];
+
+    const phaseKey = (phase) => {
+        const raw = Array.isArray(phase) ? phase.filter(Boolean).join(', ') : phase;
+        const clean = String(raw || '').trim().toLowerCase();
+        if (!clean) {
+            return '';
+        }
+        const found = PHASE_KEYS.find((candidate) => candidate.match.some((m) => clean.includes(m)));
+        return found ? found.key : '';
+    };
     const FILTER_DROPDOWNS = {
         tags: {
             root: '#sp-filter-tags-dropdown',
@@ -258,7 +279,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.msg = bySel('#sp-msg');
             this.status = bySel('#kg-status');
             this.savedState = bySel('#sp-saved-state');
-            this.zoomIndex = 1;
+            // D34/CD-Handoff: der schreibgeschützte Überblick rendert im
+            // groben Raster (Stundenoptik wie im Design), ohne Zeitraster-Wahl.
+            this.isReadonlyOverview = !!document.querySelector('.kg-grid-readonly');
+            this.zoomIndex = this.isReadonlyOverview ? 2 : 1;
             this.versionhash = '';
             this.methods = [];
             this.methodsetNames = new Map();
@@ -2101,9 +2125,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
             let i = 0;
             for (let t = start; t < end; t += slotMinutes) {
+                // Im Read-only-Überblick beschriften nur volle Stunden die
+                // Zeitachse (Handoff: Stundenmarken 08:00 … 18:00).
+                const showlabel = this.isReadonlyOverview ? (t % 60 === 0) : (i % labelEvery === 0);
                 const d = document.createElement('div');
-                d.className = `sp-timeslot ${i % labelEvery === 0 ? 'sp-timeslot--major' : 'sp-timeslot--minor'}`;
-                d.textContent = i % labelEvery === 0 ? label(t) : '';
+                d.className = `sp-timeslot ${showlabel ? 'sp-timeslot--major' : 'sp-timeslot--minor'}`;
+                d.textContent = showlabel ? label(t) : '';
                 times.appendChild(d);
                 i++;
             }
@@ -2180,8 +2207,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 if (grid) {
                     grid.innerHTML = '';
                     for (let i = 0; i < slotsPerDay; i++) {
+                        // Read-only-Überblick: Rasterlinien nur zur vollen
+                        // Stunde (Handoff: Stundenlinie alle 60 Minuten).
+                        const ismajor = this.isReadonlyOverview
+                            ? ((start + (i * slotMinutes)) % 60 === 0)
+                            : (i % labelEvery === 0);
                         const cell = document.createElement('div');
-                        cell.className = `sp-timeslot ${i % labelEvery === 0 ? 'sp-timeslot--major' : 'sp-timeslot--minor'}`;
+                        cell.className = `sp-timeslot ${ismajor ? 'sp-timeslot--major' : 'sp-timeslot--minor'}`;
                         cell.addEventListener('dragover', (e) => e.preventDefault());
                         cell.addEventListener('drop', (e) => this.onDrop(e, grid, i));
                         grid.appendChild(cell);
@@ -2209,6 +2241,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             const placements = (seq.platzierungen && typeof seq.platzierungen === 'object') ? seq.platzierungen : {};
             const bausteine = (seq.bausteine && typeof seq.bausteine === 'object') ? seq.bausteine : {};
+            const auswahlen = (seq.einheitenauswahlen && typeof seq.einheitenauswahlen === 'object')
+                ? seq.einheitenauswahlen : {};
+            const methodById = new Map(this.methods.map((m) => [String(m.id), m]));
 
             // Farb-/Typ-Lookup: migrierte Platzierungen zeigen auf ihre alten
             // Grid-Eintraege (quelle.uids).
@@ -2252,8 +2287,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         const duration = Math.max(0, Number(p.dauer) || 0);
                         const baustein = p.bausteinid ? bausteine[p.bausteinid] : null;
                         let title = String(p.titel || '').trim();
+                        let reserved = false;
                         if (!title && baustein && baustein.titel) {
                             title = `${baustein.titel} (reserviert)`;
+                            reserved = true;
                         }
                         const item = {
                             uid: `sq-${pid}`,
@@ -2263,13 +2300,31 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             endMin: clock + duration,
                             details: {},
                             sqTag: idx + 1,
+                            sqReserved: reserved,
                         };
+                        // Phasenfarbe (Handoff-Palette): aktive Einheiten-Karte
+                        // -> deren Seminarphase; sonst Phase des Alt-Eintrags.
+                        if (p.typ === 'einheit') {
+                            const auswahl = auswahlen[p.einheitenauswahl] || null;
+                            if (auswahl && Array.isArray(auswahl.kandidaten) && auswahl.kandidaten.length > 1) {
+                                item.sqAlt = true;
+                            }
+                            const aktiv = auswahl && auswahl.aktiv !== null && auswahl.aktiv !== undefined
+                                ? String(auswahl.aktiv) : '';
+                            const card = aktiv ? methodById.get(aktiv) : null;
+                            if (card && card.seminarphase) {
+                                item.sqPhase = phaseKey(card.seminarphase);
+                            }
+                        }
                         const uids = (p.quelle && Array.isArray(p.quelle.uids)) ? p.quelle.uids : [];
                         for (const legacyuid of uids) {
                             const legacy = legacyByUid[String(legacyuid)];
                             if (legacy) {
                                 if (legacy.cognitiveLevel) {
                                     item.cognitiveLevel = legacy.cognitiveLevel;
+                                }
+                                if (!item.sqPhase && legacy.phase) {
+                                    item.sqPhase = phaseKey(legacy.phase);
                                 }
                                 break;
                             }
@@ -2390,6 +2445,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     if (it.cognitiveLevel) {
                         className += ` sp-level-${it.cognitiveLevel}`;
                     }
+                    // CD-Handoff: Projektions-Einträge tragen die volle
+                    // Phasenfarbe (Analyse mit dunklem Text, sonst weiß).
+                    if (it.sqTag && it.sqPhase) {
+                        className += ` sp-phase--${it.sqPhase}`;
+                    }
+                    if (it.sqTag && it.sqReserved) {
+                        className += ' sp-item--reserved';
+                    }
                     div.className = className;
                     div.style.position = 'absolute';
                     div.style.top = `${topPx}px`;
@@ -2432,7 +2495,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     if (it.flowTotal > 1 && it.flowOrder > 1) {
                         title = `${title} (Fortsetzung ${it.flowOrder}/${it.flowTotal})`;
                     }
-                    const timeLabel = `${label(it.startMin)} - ${label(it.endMin)}`;
+                    // Projektions-Blöcke nutzen den Halbgeviertstrich wie im
+                    // Handoff ("09:20–10:05"), das Bearbeiten-Grid bleibt.
+                    const timeLabel = it.sqTag
+                        ? `${label(it.startMin)}–${label(it.endMin)}`
+                        : `${label(it.startMin)} - ${label(it.endMin)}`;
                     const isDayView = this.state.view.mode === VIEW_MODE_DAY;
                     const titleWithTime = isDayView ? `${title} - ${timeLabel}` : title;
 
@@ -2517,6 +2584,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                                 ${defaultActions}
                             </div>
                         </details>`;
+                    // CD-Handoff: ⇄-Marker oben rechts, wenn Alternativen
+                    // hinterlegt sind (nur Sequenz-Projektion).
+                    const altmarker = (it.sqTag && it.sqAlt) ? '<span class="sp-item__alt" aria-hidden="true">⇄</span>' : '';
                     div.innerHTML = `
                         <div class="sp-item-content">
                             ${unitLabelHtml}
@@ -2524,6 +2594,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             ${isDayView ? '' : `<div class="sp-meta">${escapeHtml(timeLabel)}</div>`}
                             ${unitmethodshtml}
                         </div>
+                        ${altmarker}
                         ${contextmenu}
                     `;
                     if (!it.sqTag && (it.kind === 'method' || it.kind === 'break')) {
@@ -2766,6 +2837,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.setupDayGrids();
             this.renderOverlays();
             this.updateZoomControls();
+            // Die Phasen-Legende gehört zur Sequenz-Projektion; Altpläne ohne
+            // sequenz-Abschnitt behalten ihre Bloom-Farben ohne Legende.
+            const legend = bySel('#sp-phase-legend');
+            if (legend) {
+                legend.classList.toggle('kg-hidden', !this.sequenzSection);
+            }
         }
 
         updateZoomControls() {

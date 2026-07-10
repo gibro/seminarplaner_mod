@@ -57,10 +57,13 @@ echo seminarplaner_render_tabs((int)$cm->id, 'methodlibrary');
 echo seminarplaner_render_method_subnav((int)$cm->id, 'methodlibrary');
 
 echo html_writer::start_div('kg-shell');
+echo html_writer::start_div('sq-pagehead');
 echo html_writer::tag('h3', 'Bibliothek verwalten');
+echo html_writer::div('Vorhandene Seminareinheiten durchsuchen, bearbeiten und für deine Pläne übernehmen.', 'sq-pagehead__sub');
+echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block kg-library-step');
-echo html_writer::tag('h4', '1. Seminareinheit suchen');
+echo html_writer::tag('h4', 'Seminareinheit suchen');
 echo html_writer::start_div('sp-filterbar');
 
 echo '<label class="sp-filter"><span class="sp-filter__label">Suche</span><input id="ml-filter-search" class="kg-input" type="search" placeholder="Titel, Beschreibung, Tags"></label>';
@@ -123,7 +126,7 @@ echo html_writer::tag('div', '', ['id' => 'ml-filter-status', 'class' => 'sp-fil
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block kg-library-step');
-echo html_writer::tag('h4', '2. Seminareinheit auswählen');
+echo html_writer::tag('h4', 'Seminareinheit auswählen');
 echo html_writer::tag('div', '', ['id' => 'ml-method-list', 'class' => 'kg-library-list']);
 echo html_writer::end_div();
 
@@ -135,7 +138,7 @@ echo html_writer::tag('button', 'Bearbeiten', ['type' => 'button', 'id' => 'ml-b
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block kg-library-step kg-hidden', ['id' => 'ml-bulk-section']);
-echo html_writer::tag('h4', '3. Mehrere Seminareinheiten stapelweise bearbeiten');
+echo html_writer::tag('h4', 'Mehrere Seminareinheiten stapelweise bearbeiten');
 echo html_writer::start_div('kg-form ig-container kg-container-full', ['id' => 'ml-bulk-form']);
 echo html_writer::start_div('kg-stack field-stack ig-inner');
 
@@ -239,7 +242,7 @@ if ($requestededitmethodid === '') {
     $editsectionclasses .= ' kg-hidden';
 }
 echo html_writer::start_div($editsectionclasses, ['id' => 'ml-edit-section']);
-echo html_writer::tag('h4', '4. Seminareinheit bearbeiten');
+echo html_writer::tag('h4', 'Seminareinheit bearbeiten');
 echo html_writer::start_div('kg-form ig-container kg-container-full', ['id' => 'ml-edit-form']);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'id' => 'ml-edit-id']);
 echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'ml-section-quick', 'open' => 'open']);

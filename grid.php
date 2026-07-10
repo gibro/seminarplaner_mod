@@ -45,11 +45,16 @@ echo html_writer::start_div('kg-shell kg-grid-readonly');
 echo html_writer::tag('div', '', ['id' => 'kg-status', 'class' => 'kg-status']);
 echo html_writer::start_div('sq-pagehead');
 echo html_writer::tag('h3', get_string('ueberblickmenu', 'mod_seminarplaner'));
-echo html_writer::div(
-    get_string('ueberblick_readonlynote', 'mod_seminarplaner') . ' '
-    . html_writer::link(new moodle_url('/mod/seminarplaner/sequenz.php', ['id' => (int)$cm->id]),
-        get_string('ueberblick_tosequenz', 'mod_seminarplaner')),
-    'sq-pagehead__sub'
+echo html_writer::div(get_string('ueberblick_subline', 'mod_seminarplaner'), 'sq-pagehead__sub');
+echo html_writer::end_div();
+
+// CD-Handoff: tiefrot getönte Hinweisleiste — bearbeitet wird in der Sequenz.
+echo html_writer::start_div('kg-ov-hint');
+echo html_writer::tag('span', get_string('ueberblick_readonlynote', 'mod_seminarplaner'));
+echo html_writer::link(
+    new moodle_url('/mod/seminarplaner/sequenz.php', ['id' => (int)$cm->id]),
+    get_string('ueberblick_tosequenz', 'mod_seminarplaner'),
+    ['class' => 'kg-btn kg-btn-primary kg-ov-hint__btn']
 );
 echo html_writer::end_div();
 
@@ -70,7 +75,7 @@ echo html_writer::tag('p',
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block kg-library-step kg-hidden', ['id' => 'kg-grid-step-2']);
-echo html_writer::tag('h4', '2. Seminarplan anzeigen');
+echo html_writer::tag('h4', 'Seminarplan anzeigen');
 echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-row');
 echo html_writer::start_tag('label', ['class' => 'kg-label kg-inline-checkbox']);
@@ -247,6 +252,27 @@ echo html_writer::end_div();
       </div>
 
       <div id="sp-msg" class="sp-warn" style="margin-top:6px"></div>
+
+      <?php
+        // CD-Handoff: Legende der Seminarphasen. Nur sinnvoll, wenn der
+        // Überblick aus der Sequenz projiziert (Phasenfarben) - grid.js
+        // blendet sie dann ein.
+        $phases = [
+            'orientierung' => 'Orientierung',
+            'erfahrung' => 'Erfahrungserhebung',
+            'analyse' => 'Analyse',
+            'handlung' => 'Handlungsteil',
+            'transfer' => 'Transfer',
+        ];
+        echo html_writer::start_div('sq-legend kg-ov-legend kg-hidden', ['id' => 'sp-phase-legend']);
+        echo html_writer::tag('span', 'Seminarphasen', ['class' => 'kg-ov-legend__label']);
+        foreach ($phases as $key => $label) {
+            echo html_writer::tag('span',
+                html_writer::tag('i', '', ['class' => 'sq-legend__dot sq-phase-bg--' . $key]) . s($label));
+        }
+        echo html_writer::tag('span', '⇄ Alternative hinterlegt', ['class' => 'kg-ov-legend__alt']);
+        echo html_writer::end_div();
+      ?>
     </main>
   </div>
 

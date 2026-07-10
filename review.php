@@ -18,7 +18,10 @@ echo $OUTPUT->heading(format_string($seminarplaner->name));
 echo seminarplaner_render_tabs((int)$cm->id, 'review');
 
 echo html_writer::start_div('kg-shell');
+echo html_writer::start_div('sq-pagehead');
 echo html_writer::tag('h3', get_string('einreichenmenu', 'mod_seminarplaner'));
+echo html_writer::div('Beiträge zur Prüfung an die Konzeptverantwortlichen übergeben.', 'sq-pagehead__sub');
+echo html_writer::end_div();
 
 // D37: Flussdiagramm-Erklaerung des Pruefprozesses.
 $flowsteps = [
@@ -49,7 +52,7 @@ echo html_writer::tag('div', '', ['id' => 'kg-review-status-list', 'class' => 'k
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h4', '1. Geänderte oder neue Seminareinheit bereitstellen');
+echo html_writer::tag('h4', 'Geänderte oder neue Seminareinheit bereitstellen');
 echo html_writer::tag('label', 'Bestehende Methoden-Sammlung auswählen', ['for' => 'kg-review-existing-set-select', 'class' => 'kg-label']);
 echo html_writer::start_tag('select', ['id' => 'kg-review-existing-set-select', 'class' => 'kg-input']);
 echo html_writer::tag('option', 'Bitte wählen', ['value' => '0']);
@@ -78,7 +81,7 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h4', '2. Neue Methoden-Sammlung einreichen');
+echo html_writer::tag('h4', 'Neue Methoden-Sammlung einreichen');
 echo html_writer::tag('p', 'Wähle aus allen vorhandenen Seminareinheiten aus und bündele sie zu einer neuen Methoden-Sammlung – einer Sammlung ohne Ablauf/Reihenfolge.');
 echo html_writer::start_div('kg-two');
 echo html_writer::start_div();

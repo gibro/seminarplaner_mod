@@ -223,6 +223,26 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     const joinMulti = (arr) => (Array.isArray(arr) ? arr.join(', ') : '');
 
+    // CD-Handoff: Karten tragen eine 3px-Top-Rule in der Farbe ihrer ersten
+    // Seminarphase (Palette wie in der Sequenzansicht).
+    const PHASE_CLASS_KEYS = [
+        {key: 'orientierung', match: ['orientierung', 'warm-up', 'einstieg']},
+        {key: 'erfahrung', match: ['erfahrung', 'erwartungsabfrage', 'vorwissen']},
+        {key: 'analyse', match: ['analyse']},
+        {key: 'handlung', match: ['handlung', 'aktion', 'praxis']},
+        {key: 'transfer', match: ['transfer', 'abschluss', 'auswertung']},
+    ];
+
+    const phaseClassOf = (phases) => {
+        const raw = Array.isArray(phases) ? phases.filter(Boolean).join(', ') : String(phases || '');
+        const clean = normalizePhase(raw.split(',')[0] || '').toLowerCase();
+        if (!clean) {
+            return '';
+        }
+        const found = PHASE_CLASS_KEYS.find((candidate) => candidate.match.some((m) => clean.includes(m)));
+        return found ? ` ml-phase--${found.key}` : '';
+    };
+
     const readMulti = (selector) => {
         const el = bySel(selector);
         if (!el) {
@@ -921,7 +941,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             const card = document.createElement('div');
             const cognitiveLevel = cognitiveLevelOf(m);
-            card.className = 'kg-library-card sp-card' + (cognitiveLevel ? ` sp-level-${cognitiveLevel}` : '');
+            card.className = 'kg-library-card sp-card' + (cognitiveLevel ? ` sp-level-${cognitiveLevel}` : '') + phaseClassOf(m.seminarphase);
             card.setAttribute('data-id', String(m.id));
             card.draggable = true;
             const showlock = shouldShowFreezeLock(m);
@@ -2094,7 +2114,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const phaseLabel = m.seminarphase.filter(Boolean).join(', ');
             const tagChips = m.tags.map((tag) => `<span class="ml-card-tag">${escapeHtml(tag)}</span>`).join('');
             return `
-              <div class="kg-library-card sp-card gl-card" data-gl-methodid="${m.methodid}">
+              <div class="kg-library-card sp-card gl-card${phaseClassOf(m.seminarphase)}" data-gl-methodid="${m.methodid}">
                 <div class="ml-card-head">
                   <div class="sp-card-title ml-card-title"><strong>${escapeHtml(m.titel)}</strong></div>
                 </div>
