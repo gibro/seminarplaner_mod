@@ -270,9 +270,9 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
                 }
             });
-            // CD-Handoff: Werkzeugleisten-Button legt eine neue Einheit an
-            // (Quick-Create) und plant sie in den ersten aktiven Anker des
-            // aktuellen Tages ein.
+            // D50: Werkzeugleisten-Button öffnet den vollen Einheiten-Editor
+            // (ohne Vorbelegung) und plant die neue Einheit in den ersten
+            // aktiven Anker des aktuellen Tages ein.
             const newunit = bySel('#sq-new-unit');
             if (newunit) {
                 newunit.addEventListener('click', () => {
@@ -280,7 +280,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                         this.setStatus('Lade zuerst einen Seminarplan, dann kannst du Einheiten anlegen.', true);
                         return;
                     }
-                    this.openQuickCreate({anker: this.firstActiveAnker()});
+                    this.openCreateEditor({anker: this.firstActiveAnker()});
                 });
             }
             const select = bySel('#sq-grid-select');
@@ -1793,6 +1793,11 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                         this.dissolveBaustein(action.getAttribute('data-bid') || '');
                     } else if (type === 'quick-save') {
                         this.saveQuickCreate();
+                    } else if (type === 'create-save') {
+                        this.saveCreateEditor();
+                    } else if (type === 'picker-create') {
+                        // D50: aus dem Picker in den vollen Editor wechseln.
+                        this.openCreateEditor({anker: this.pickerAnker || 'vormittag'});
                     }
                 });
             }
@@ -1823,6 +1828,42 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             return value === null || value === undefined ? '' : String(value);
         }
 
+        // D17/D21: gemeinsame Feldliste des Karten-Editors – genutzt beim
+        // Bearbeiten (openEditor) und beim Anlegen (openCreateEditor, D50).
+        cardEditorFields(card) {
+            const text = (label, key, value, hint = '') => `
+                <div class="sq-field">
+                  <label class="kg-label">${label}</label>
+                  <input type="text" class="kg-input" data-sq-field="${key}" value="${escapeHtml(value)}">
+                  ${hint ? `<div class="sq-field__hint">${hint}</div>` : ''}
+                </div>`;
+            const area = (label, key, value, rows = 3) => `
+                <div class="sq-field">
+                  <label class="kg-label">${label}</label>
+                  <textarea class="kg-input" rows="${rows}" data-sq-field="${key}">${escapeHtml(value)}</textarea>
+                </div>`;
+            return `
+                ${text('Titel', 'titel', this.fieldValue(card, 'titel'))}
+                ${area('Lernziele (Ich kann …)', 'lernziele', this.fieldValue(card, 'lernziele'))}
+                ${area('Kurzbeschreibung', 'kurzbeschreibung', this.fieldValue(card, 'kurzbeschreibung'))}
+                ${text('Zeitbedarf (Minuten)', 'zeitbedarf', this.fieldValue(card, 'zeitbedarf'))}
+                ${text('Seminarphase', 'seminarphase', this.fieldValue(card, 'seminarphase'), 'Mehrere Phasen mit Komma trennen')}
+                ${text('Sozialform', 'sozialform', this.fieldValue(card, 'sozialform'))}
+                <details class="sq-section"><summary>Ablauf und Rahmen</summary><div class="sq-section__inner">
+                  ${area('Ablauf', 'ablauf', this.fieldValue(card, 'ablauf'), 5)}
+                  ${text('Raumanforderungen', 'raum', this.fieldValue(card, 'raum'))}
+                  ${text('Gruppengröße', 'gruppengroesse', this.fieldValue(card, 'gruppengroesse'))}
+                  ${area('Risiken/Tipps', 'risiken', this.fieldValue(card, 'risiken'))}
+                  ${area('Debrief/Reflexionsfragen', 'debrief', this.fieldValue(card, 'debrief'))}
+                  ${text('Tags/Schlüsselworte', 'tags', this.fieldValue(card, 'tags'), 'Hilft beim Wiederfinden und bei Vorschlägen')}
+                  ${text('Autor*in / Kontakt', 'autor', this.fieldValue(card, 'autor'))}
+                </div></details>
+                <details class="sq-section"><summary>Materialien und Technik</summary><div class="sq-section__inner">
+                  ${area('Material/Technik', 'materialtechnik', this.fieldValue(card, 'materialtechnik'))}
+                  <div class="sq-field__hint">Datei-Anhänge verwaltest du weiterhin im Tab „Bibliothek".</div>
+                </div></details>`;
+        }
+
         openEditor(pid) {
             const placement = this.placement(pid);
             const card = placement ? this.activeCardForPlacement(placement) : null;
@@ -1837,34 +1878,10 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                   <input type="text" class="kg-input" data-sq-field="${key}" value="${escapeHtml(value)}">
                   ${hint ? `<div class="sq-field__hint">${hint}</div>` : ''}
                 </div>`;
-            const area = (label, key, value, rows = 3) => `
-                <div class="sq-field">
-                  <label class="kg-label">${label}</label>
-                  <textarea class="kg-input" rows="${rows}" data-sq-field="${key}">${escapeHtml(value)}</textarea>
-                </div>`;
 
             let body;
             if (card) {
-                body = `
-                    ${text('Titel', 'titel', this.fieldValue(card, 'titel'))}
-                    ${area('Lernziele (Ich kann …)', 'lernziele', this.fieldValue(card, 'lernziele'))}
-                    ${area('Kurzbeschreibung', 'kurzbeschreibung', this.fieldValue(card, 'kurzbeschreibung'))}
-                    ${text('Zeitbedarf (Minuten)', 'zeitbedarf', this.fieldValue(card, 'zeitbedarf'))}
-                    ${text('Seminarphase', 'seminarphase', this.fieldValue(card, 'seminarphase'), 'Mehrere Phasen mit Komma trennen')}
-                    ${text('Sozialform', 'sozialform', this.fieldValue(card, 'sozialform'))}
-                    <details class="sq-section"><summary>Ablauf und Rahmen</summary><div class="sq-section__inner">
-                      ${area('Ablauf', 'ablauf', this.fieldValue(card, 'ablauf'), 5)}
-                      ${text('Raumanforderungen', 'raum', this.fieldValue(card, 'raum'))}
-                      ${text('Gruppengröße', 'gruppengroesse', this.fieldValue(card, 'gruppengroesse'))}
-                      ${area('Risiken/Tipps', 'risiken', this.fieldValue(card, 'risiken'))}
-                      ${area('Debrief/Reflexionsfragen', 'debrief', this.fieldValue(card, 'debrief'))}
-                      ${text('Tags/Schlüsselworte', 'tags', this.fieldValue(card, 'tags'), 'Hilft beim Wiederfinden und bei Vorschlägen')}
-                      ${text('Autor*in / Kontakt', 'autor', this.fieldValue(card, 'autor'))}
-                    </div></details>
-                    <details class="sq-section"><summary>Materialien und Technik</summary><div class="sq-section__inner">
-                      ${area('Material/Technik', 'materialtechnik', this.fieldValue(card, 'materialtechnik'))}
-                      <div class="sq-field__hint">Datei-Anhänge verwaltest du weiterhin im Tab „Seminareinheiten".</div>
-                    </div></details>`;
+                body = this.cardEditorFields(card);
             } else {
                 const ispause = placement.typ === 'pause';
                 body = `
@@ -1945,6 +1962,103 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 this.toast('Gespeichert – Dauer geändert? Dann sind die Zeiten schon angepasst.');
             }).catch(() => {
                 this.setStatus('Die Einheit konnte nicht gespeichert werden.', true);
+            });
+        }
+
+        // ---- Neue Seminareinheit anlegen (D50) -------------------------------
+        // Vierter D17-Einstieg: voller Editor ohne Vorbelegung, erreichbar aus
+        // dem Einheiten-Picker und über den Werkzeugleisten-Button. Legt die
+        // Karte in der Bibliothek an und plant sie sofort ein.
+
+        openCreateEditor(target) {
+            this.createTarget = target || {};
+            const template = {
+                titel: '',
+                lernziele: '',
+                kurzbeschreibung: '',
+                zeitbedarf: '30',
+                seminarphase: [],
+                sozialform: [],
+                ablauf: '',
+                raum: [],
+                gruppengroesse: '',
+                risiken: '',
+                debrief: '',
+                tags: '',
+                autor: '',
+                materialtechnik: '',
+            };
+            const root = this.modalRoot();
+            root.innerHTML = `
+                <div class="sq-modal">
+                  <div class="sq-modal__head">
+                    <h3>Neue Seminareinheit anlegen</h3>
+                    <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
+                  </div>
+                  <div class="sq-modal__body">${this.cardEditorFields(template)}</div>
+                  <div class="sq-modal__footer">
+                    <button type="button" class="kg-btn" data-sq-action="modal-close">Abbrechen</button>
+                    <button type="button" class="kg-btn kg-btn-primary" data-sq-action="create-save">Anlegen und einplanen</button>
+                  </div>
+                </div>`;
+            root.classList.add('open');
+            const title = root.querySelector('[data-sq-field="titel"]');
+            if (title) {
+                title.focus();
+            }
+        }
+
+        saveCreateEditor() {
+            const root = bySel('#sq-modal');
+            if (!root) {
+                return;
+            }
+            const values = {};
+            root.querySelectorAll('[data-sq-field]').forEach((field) => {
+                values[field.getAttribute('data-sq-field')] = field.value;
+            });
+            const titel = String(values.titel || '').trim();
+            if (!titel) {
+                const title = root.querySelector('[data-sq-field="titel"]');
+                if (title) {
+                    title.focus();
+                }
+                return;
+            }
+            const duration = Number.parseInt(String(values.zeitbedarf || '').replace(/\D+/g, ''), 10);
+            // Feldform wie beim Anlegen in der Bibliothek (methods-Karten):
+            // seminarphase/sozialform/raum sind Arrays, der Rest Strings.
+            const splitList = (raw) => String(raw || '').split(',').map((part) => part.trim()).filter(Boolean);
+            const card = {
+                id: `${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+                titel,
+                seminarphase: splitList(values.seminarphase),
+                zeitbedarf: String(Number.isFinite(duration) && duration > 0 ? duration : 30),
+                gruppengroesse: String(values.gruppengroesse || '').trim(),
+                kurzbeschreibung: String(values.kurzbeschreibung || ''),
+                autor: String(values.autor || '').trim(),
+                lernziele: String(values.lernziele || ''),
+                raum: splitList(values.raum),
+                sozialform: splitList(values.sozialform),
+                risiken: String(values.risiken || ''),
+                debrief: String(values.debrief || ''),
+                materialien: [],
+                materialtechnik: String(values.materialtechnik || ''),
+                ablauf: String(values.ablauf || ''),
+                tags: String(values.tags || '').trim(),
+                alternativen: [],
+                timemodified: Date.now(),
+            };
+            this.methodCardList.push(card);
+            this.methodCards[String(card.id)] = card;
+            asCall('mod_seminarplaner_save_method_cards', {
+                cmid: this.cmid,
+                methodsjson: JSON.stringify(this.methodCardList),
+            }).then(() => {
+                this.closeModal();
+                this.applySuggestTarget(String(card.id), this.createTarget || {});
+            }).catch(() => {
+                this.setStatus('Die neue Einheit konnte nicht angelegt werden.', true);
             });
         }
 
@@ -2046,6 +2160,9 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                       <input type="text" class="kg-input" id="sq-picker-search" placeholder="Suchen …">
                     </div>
                     <div id="sq-picker-list" class="sq-picker"></div>
+                    <div class="sq-picker__createrow">
+                      <button type="button" class="kg-btn" data-sq-action="picker-create">＋ Neue Seminareinheit anlegen</button>
+                    </div>
                   </div>
                 </div>`;
             root.classList.add('open');

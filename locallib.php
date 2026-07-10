@@ -263,20 +263,22 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
         ]);
     };
 
-    // Sub-areas share one tab (D16/D39): the merged tab stays highlighted.
+    // D50: die frühere Anlegen-Seite (methods.php) leitet auf die Bibliothek
+    // um; beide Schlüssel markieren denselben Tab.
     $tabaliases = ['methodlibrary' => 'methods'];
     $active = $tabaliases[$active] ?? $active;
 
     $tabs = [];
     if ($canmanageseminarplaner) {
-        // Tab order and naming per D16: Überblick · Sequenz · Seminareinheiten
-        // (Anlegen/Bibliothek) · Roter Faden · Import/Export · Einreichen.
+        // Tab order and naming per D16/D50: Überblick · Sequenz · Bibliothek
+        // · Roter Faden · Import/Export · Einreichen.
         // Der frühere Bausteine-Tab ist entfallen; die Baustein-Stammdaten
-        // werden in der Sequenzansicht gepflegt.
+        // werden in der Sequenzansicht gepflegt. Der Anlegen-Unterbereich ist
+        // laut D50 entfallen – Anlegen ist ein Button in der Bibliothek.
         $tabs = [
             'grid' => ['label' => get_string('ueberblickmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/grid.php', 'icon' => 'calendar-range'],
             'sequenz' => ['label' => get_string('sequenzmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/sequenz.php', 'icon' => 'list-checks'],
-            'methods' => ['label' => get_string('methodcards', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methods.php', 'icon' => 'layout-grid'],
+            'methods' => ['label' => get_string('bibliothekmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methodlibrary.php', 'icon' => 'layout-grid'],
             'importexport' => ['label' => get_string('importexport', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/importexport.php', 'icon' => 'arrow-left-right'],
             'review' => ['label' => get_string('einreichenmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/review.php', 'icon' => 'clipboard-check'],
         ];
@@ -307,29 +309,6 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
             ['class' => 'kg-tab-content']
         );
         $out .= html_writer::link(new moodle_url($tab['path'], ['id' => $cmid]), $content, ['class' => $classes]);
-    }
-    $out .= html_writer::end_div();
-
-    return $out;
-}
-
-/**
- * Render the sub-navigation of the merged Seminareinheiten tab (D16/D39).
- *
- * @param int $cmid Course module id.
- * @param string $active Active sub-area: 'methods' or 'methodlibrary'.
- * @return string
- */
-function seminarplaner_render_method_subnav(int $cmid, string $active): string {
-    $areas = [
-        'methods' => ['label' => get_string('method_subnav_create', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methods.php'],
-        'methodlibrary' => ['label' => get_string('method_subnav_library', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methodlibrary.php'],
-    ];
-
-    $out = html_writer::start_div('kg-subnav');
-    foreach ($areas as $key => $area) {
-        $classes = 'kg-subnav__link' . ($key === $active ? ' kg-subnav__link--active' : '');
-        $out .= html_writer::link(new moodle_url($area['path'], ['id' => $cmid]), s((string)$area['label']), ['class' => $classes]);
     }
     $out .= html_writer::end_div();
 

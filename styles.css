@@ -6558,6 +6558,7 @@ details[open] > .sq-gap__summary .sq-gap__chevron {
    action hierarchy", ~Z. 3630) arbeitet ebenfalls mit !important. */
 [data-sq-action="add-unit"].kg-btn,
 [data-sq-action="add-pause"].kg-btn,
+[data-sq-action="picker-create"].kg-btn,
 #sq-new-unit.kg-btn {
     border: 2px solid var(--ig-red) !important;
     color: var(--ig-red) !important;
@@ -6566,6 +6567,7 @@ details[open] > .sq-gap__summary .sq-gap__chevron {
 
 [data-sq-action="add-unit"].kg-btn:hover:not(:disabled),
 [data-sq-action="add-pause"].kg-btn:hover:not(:disabled),
+[data-sq-action="picker-create"].kg-btn:hover:not(:disabled),
 #sq-new-unit.kg-btn:hover:not(:disabled) {
     background: var(--ig-red) !important;
     border-color: var(--ig-red) !important;
@@ -7047,4 +7049,11 @@ a.kg-btn-primary:focus {
 
 #sq-new-unit.kg-btn {
     min-height: 38px;
+}
+
+/* ---- D50: Anlegen-Zeile im Einheiten-Picker --------------------------- */
+.sq-picker__createrow {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--ig-lightgray, #ddd);
 }

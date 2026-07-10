@@ -142,6 +142,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     let methods = [];
     let currentEditId = '';
+    // D50: Anlegen läuft über denselben Editor wie Bearbeiten, nur leer.
+    let creatingNew = false;
     let runtimeCmid = 0;
     let autosyncSetIds = new Set();
     let methodsetNames = new Map();
@@ -1230,6 +1232,60 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return Array.from(el.selectedOptions).map((o) => o.value);
     };
 
+    const setEditHeading = (text) => {
+        const heading = bySel('#ml-edit-heading');
+        if (heading) {
+            heading.textContent = text;
+        }
+    };
+
+    const resetEditForm = () => {
+        const form = bySel('#ml-edit-form');
+        if (form && typeof form.reset === 'function') {
+            form.reset();
+        }
+        setFieldValue('#ml-edit-id', '');
+        ['#ml-e-kurzbeschreibung', '#ml-e-ablauf', '#ml-e-lernziele',
+            '#ml-e-risiken', '#ml-e-debrief', '#ml-e-materialtechnik'].forEach((selector) => {
+            setFieldValue(selector, '');
+        });
+        const materialcurrent = bySel('#ml-e-materialien-current');
+        if (materialcurrent) {
+            materialcurrent.textContent = '';
+        }
+    };
+
+    // D50: "Neue Seminareinheit anlegen" öffnet den Bearbeiten-Editor leer –
+    // kein eigener Anlegen-Bereich mehr.
+    const openCreateEditor = () => {
+        creatingNew = true;
+        currentEditId = '';
+        setEditHeading('Neue Seminareinheit anlegen');
+        resetEditForm();
+        setFieldValue('#ml-e-titel', '');
+        setFieldValue('#ml-e-tags', '');
+        setFieldValue('#ml-e-autor', '');
+        setSelectMulti('#ml-e-seminarphase', []);
+        setSelectMulti('#ml-e-raum', []);
+        setSelectMulti('#ml-e-sozialform', []);
+        refreshEditAlternativeOptions('');
+        setSelectMulti('#ml-e-alternativen', []);
+        const editsection = bySel('#ml-edit-section');
+        if (editsection) {
+            editsection.classList.remove('kg-hidden');
+            editsection.scrollIntoView({behavior: 'auto', block: 'start'});
+            window.setTimeout(() => {
+                const top = editsection.getBoundingClientRect().top + window.scrollY;
+                window.scrollTo({top: Math.max(0, top - 80), behavior: 'auto'});
+            }, 0);
+        }
+        const titlefield = bySel('#ml-e-titel');
+        if (titlefield) {
+            titlefield.focus();
+        }
+        setStatus('Neue Seminareinheit – nur der Titel ist Pflicht, alles Weitere kannst du später ergänzen.', false);
+    };
+
     const openEditor = (id) => {
         const method = methods.find((m) => String(m.id) === String(id));
         if (!method) {
@@ -1237,6 +1293,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return;
         }
         currentEditId = String(id);
+        creatingNew = false;
+        setEditHeading('Seminareinheit bearbeiten');
         const editsection = bySel('#ml-edit-section');
         if (editsection) {
             editsection.classList.remove('kg-hidden');
@@ -1884,7 +1942,60 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             'Seminareinheit wieder für globale Aktualisierung freigegeben.', false);
     };
 
+    // D50: Anlegen-Zweig des Editors – baut eine neue Karte in derselben
+    // Feldform wie methods.js/buildMethod und hängt sie an den Bestand an.
+    const saveNewMethod = async (cmid) => {
+        const title = (bySel('#ml-e-titel') ? bySel('#ml-e-titel').value : '').trim();
+        if (!title) {
+            setStatus('Titel ist erforderlich.', true);
+            return;
+        }
+        const currentdraftitemid = readMaterialDraftItemId();
+        const method = touchMethod({
+            id: uid(),
+            titel: title,
+            seminarphase: getSelectMulti('#ml-e-seminarphase'),
+            zeitbedarf: (bySel('#ml-e-zeitbedarf') ? bySel('#ml-e-zeitbedarf').value : '').trim(),
+            gruppengroesse: (bySel('#ml-e-gruppengroesse') ? bySel('#ml-e-gruppengroesse').value : '').trim(),
+            kurzbeschreibung: getFieldValue('#ml-e-kurzbeschreibung'),
+            autor: (bySel('#ml-e-autor') ? bySel('#ml-e-autor').value : '').trim(),
+            lernziele: getFieldValue('#ml-e-lernziele'),
+            vorbereitung: (bySel('#ml-e-vorbereitung') ? bySel('#ml-e-vorbereitung').value : '').trim(),
+            raum: getSelectMulti('#ml-e-raum'),
+            sozialform: getSelectMulti('#ml-e-sozialform'),
+            risiken: getFieldValue('#ml-e-risiken'),
+            debrief: getFieldValue('#ml-e-debrief'),
+            materialien: [],
+            materialiendraftitemid: currentdraftitemid || 0,
+            materialtechnik: getFieldValue('#ml-e-materialtechnik'),
+            ablauf: getFieldValue('#ml-e-ablauf'),
+            tags: (bySel('#ml-e-tags') ? bySel('#ml-e-tags').value : '').trim(),
+            alternativen: getSelectMulti('#ml-e-alternativen')
+        });
+        methods.push(method);
+        reconcileAlternativesForMethod(method.id, method.alternativen || []);
+        normalizeMethodAlternatives();
+
+        await persist(cmid);
+        await loadMethods(cmid);
+        creatingNew = false;
+        setEditHeading('Seminareinheit bearbeiten');
+        resetEditForm();
+        bySel('#ml-edit-section')?.classList.add('kg-hidden');
+        if (typeof window !== 'undefined' && window.history && window.location) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('create');
+            window.history.replaceState({}, '', url.toString());
+        }
+        suppressLeavePrompt();
+        setStatus(`Seminareinheit "${title}" angelegt und gespeichert.`, false);
+    };
+
     const saveEditor = async (cmid) => {
+        if (creatingNew) {
+            await saveNewMethod(cmid);
+            return;
+        }
         if (!currentEditId) {
             setStatus('Bitte zuerst eine Seminareinheit auswählen.', true);
             return;
@@ -2017,6 +2128,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const params = new URLSearchParams(window.location.search || '');
         const requested = String(params.get('editmethodid') || '').trim();
         if (!requested) {
+            // D50: Link-Einstieg "Neue Seminareinheit anlegen" (create=1).
+            if (String(params.get('create') || '') === '1') {
+                openCreateEditor();
+            }
             return;
         }
         const exists = methods.some((m) => String(m.id) === requested);
@@ -2285,20 +2400,38 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (cancelbtn) {
                 cancelbtn.addEventListener('click', () => {
                     currentEditId = '';
-                    const form = bySel('#ml-edit-form');
-                    if (form && typeof form.reset === 'function') {
-                        form.reset();
-                    }
-                    ['#ml-e-kurzbeschreibung', '#ml-e-ablauf', '#ml-e-lernziele',
-                        '#ml-e-risiken', '#ml-e-debrief', '#ml-e-materialtechnik'].forEach((selector) => {
-                        setFieldValue(selector, '');
-                    });
-                    const materialcurrent = bySel('#ml-e-materialien-current');
-                    if (materialcurrent) {
-                        materialcurrent.textContent = '';
-                    }
+                    creatingNew = false;
+                    setEditHeading('Seminareinheit bearbeiten');
+                    resetEditForm();
                     bySel('#ml-edit-section')?.classList.add('kg-hidden');
+                    if (typeof window !== 'undefined' && window.history && window.location) {
+                        const url = new URL(window.location.href);
+                        url.searchParams.delete('create');
+                        window.history.replaceState({}, '', url.toString());
+                    }
                     suppressLeavePrompt();
+                });
+            }
+
+            // D50: Anlegen-Button in der Bibliothek. Wenn die Seite mit einem
+            // editmethodid-Parameter geladen wurde, gehört der vorbereitete
+            // Datei-Entwurfsbereich zu dieser Einheit – dann sauber neu laden,
+            // damit ein leerer Entwurfsbereich entsteht.
+            const createbtn = bySel('#ml-create-open');
+            if (createbtn) {
+                createbtn.addEventListener('click', () => {
+                    const params = new URLSearchParams(window.location.search || '');
+                    if (params.get('editmethodid')) {
+                        suppressLeavePrompt();
+                        const url = new URL(window.location.href);
+                        url.searchParams.delete('editmethodid');
+                        url.searchParams.delete('editmaterialitemid');
+                        url.searchParams.delete('_mlts');
+                        url.searchParams.set('create', '1');
+                        window.location.assign(url.toString());
+                        return;
+                    }
+                    openCreateEditor();
                 });
             }
 

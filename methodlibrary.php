@@ -54,12 +54,21 @@ echo $OUTPUT->header();
 
 echo $OUTPUT->heading(format_string($seminarplaner->name));
 echo seminarplaner_render_tabs((int)$cm->id, 'methodlibrary');
-echo seminarplaner_render_method_subnav((int)$cm->id, 'methodlibrary');
 
 echo html_writer::start_div('kg-shell');
 echo html_writer::start_div('sq-pagehead');
-echo html_writer::tag('h3', 'Bibliothek verwalten');
-echo html_writer::div('Vorhandene Seminareinheiten durchsuchen, bearbeiten und für deine Pläne übernehmen.', 'sq-pagehead__sub');
+echo html_writer::tag('h3', 'Bibliothek');
+echo html_writer::div('Alle Seminareinheiten durchsuchen, bearbeiten und für deine Pläne übernehmen – oder eine neue anlegen.', 'sq-pagehead__sub');
+echo html_writer::end_div();
+
+// D50: Anlegen ist kein eigener Bereich mehr, sondern ein Button in der
+// Bibliothek, der den Editor unten öffnet (leer, im Anlegen-Modus).
+echo html_writer::start_div('kg-row kg-row--action');
+echo html_writer::tag('button', get_string('bibliothek_create', 'mod_seminarplaner'), [
+    'type' => 'button',
+    'id' => 'ml-create-open',
+    'class' => 'kg-btn kg-btn-primary',
+]);
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block kg-library-step');
@@ -242,7 +251,7 @@ if ($requestededitmethodid === '') {
     $editsectionclasses .= ' kg-hidden';
 }
 echo html_writer::start_div($editsectionclasses, ['id' => 'ml-edit-section']);
-echo html_writer::tag('h4', 'Seminareinheit bearbeiten');
+echo html_writer::tag('h4', 'Seminareinheit bearbeiten', ['id' => 'ml-edit-heading']);
 echo html_writer::start_div('kg-form ig-container kg-container-full', ['id' => 'ml-edit-form']);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'id' => 'ml-edit-id']);
 echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'ml-section-quick', 'open' => 'open']);

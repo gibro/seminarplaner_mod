@@ -22,7 +22,8 @@ $context = context_module::instance($cm->id);
 
 if (has_capability('mod/seminarplaner:managemethods', $context)
     || has_capability('mod/seminarplaner:managegrids', $context)) {
-    redirect(new moodle_url('/mod/seminarplaner/methods.php', ['id' => $cm->id]));
+    // D50: Der Anlegen-Bereich ist entfallen – Einstieg ist die Bibliothek.
+    redirect(new moodle_url('/mod/seminarplaner/methodlibrary.php', ['id' => $cm->id]));
 }
 
 require_capability('mod/seminarplaner:viewroterfaden', $context);

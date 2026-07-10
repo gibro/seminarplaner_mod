@@ -150,7 +150,8 @@ function seminarplaner_extend_settings_navigation(settings_navigation $settingsn
         );
         $modulenode->add(
             get_string('addmethodcardmenu', 'mod_seminarplaner'),
-            new moodle_url('/mod/seminarplaner/methods.php', ['id' => $cmid], 'kg-add-method-section'),
+            // D50: Anlegen öffnet den Editor direkt in der Bibliothek.
+            new moodle_url('/mod/seminarplaner/methodlibrary.php', ['id' => $cmid, 'create' => 1]),
             navigation_node::TYPE_SETTING,
             null,
             'seminarplaner_addmethodcard'
