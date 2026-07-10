@@ -251,6 +251,25 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             if (next) {
                 next.addEventListener('click', () => this.stepDay(1));
             }
+            // ⓘ-Popover in der Werkzeugleiste: Klick auf den Knopf öffnet die
+            // Erklärung, jeder Klick woanders schließt alle offenen Popover.
+            document.addEventListener('click', (event) => {
+                const btn = event.target.closest('.sq-info__btn');
+                document.querySelectorAll('.sq-info--open').forEach((wrap) => {
+                    if (!btn || wrap !== btn.parentElement) {
+                        wrap.classList.remove('sq-info--open');
+                        const other = wrap.querySelector('.sq-info__btn');
+                        if (other) {
+                            other.setAttribute('aria-expanded', 'false');
+                        }
+                    }
+                });
+                if (btn) {
+                    const wrap = btn.parentElement;
+                    const open = wrap.classList.toggle('sq-info--open');
+                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                }
+            });
             // CD-Handoff: Werkzeugleisten-Button legt eine neue Einheit an
             // (Quick-Create) und plant sie in den ersten aktiven Anker des
             // aktuellen Tages ein.
@@ -2298,7 +2317,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             }
             panel.classList.add('sq-drama--visible');
             panel.innerHTML = `
-                <h4>Dramaturgie-Blick</h4>
+                <h4>Didaktische Empfehlungen</h4>
                 ${findings.map((finding) => `
                     <div class="sq-drama__item sq-drama__item--${finding.ok ? 'ok' : 'hint'}">
                       <span class="sq-drama__icon">${finding.ok ? '✓' : '💡'}</span>

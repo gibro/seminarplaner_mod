@@ -138,20 +138,34 @@ echo html_writer::tag('button', '›', [
     'aria-label' => get_string('sequenz_nextday', 'mod_seminarplaner'),
 ]);
 echo html_writer::end_div();
+// Kleiner ⓘ-Button mit Erklär-Popover (Öffnen/Schließen macht sequenz.js).
+$renderinfo = static function(string $text): string {
+    return html_writer::tag('span',
+        html_writer::tag('button', 'i', [
+            'type' => 'button', 'class' => 'sq-info__btn',
+            'aria-label' => 'Erklärung anzeigen', 'aria-expanded' => 'false',
+        ])
+        . html_writer::tag('span', s($text), ['class' => 'sq-info__pop', 'role' => 'tooltip']),
+        ['class' => 'sq-info']);
+};
+
 echo html_writer::start_div('sq-toolbar__actions');
 // D16/D37: the finished sequence can be published as the Common Thread
-// directly from the toolbar (moved out of its own card on user request).
+// directly from the toolbar. Schieberegler wie der Empfehlungs-Toggle,
+// die genaue Erklärung steckt im ⓘ-Popover.
 echo html_writer::start_tag('span', ['class' => 'sq-publish', 'id' => 'sq-publish-wrap']);
-echo html_writer::start_tag('label', ['class' => 'kg-label kg-inline-checkbox']);
+echo html_writer::start_tag('label', ['class' => 'sq-toggle', 'for' => 'sq-publish-roterfaden']);
 echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'sq-publish-roterfaden']);
-echo html_writer::tag('span', get_string('roterfaden_publishlabel', 'mod_seminarplaner'));
+echo html_writer::tag('span', get_string('sequenz_publishlabel', 'mod_seminarplaner'));
 echo html_writer::end_tag('label');
+echo $renderinfo(get_string('sequenz_publishlabel_info', 'mod_seminarplaner'));
 echo html_writer::tag('span', '', ['id' => 'sq-publish-roterfaden-status', 'class' => 'sp-filter-status']);
 echo html_writer::end_tag('span');
 echo html_writer::start_tag('label', ['class' => 'sq-toggle', 'for' => 'sq-drama-toggle']);
 echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'sq-drama-toggle']);
 echo html_writer::tag('span', get_string('sequenz_dramatoggle', 'mod_seminarplaner'));
 echo html_writer::end_tag('label');
+echo $renderinfo(get_string('sequenz_dramatoggle_info', 'mod_seminarplaner'));
 // CD-Handoff: Neue Einheiten lassen sich jederzeit aus der Werkzeugleiste
 // heraus gestalten (Quick-Create). Die Anker-Buttons darunter übernehmen
 // weiterhin nur Bestehendes aus der Bibliothek.

@@ -4,7 +4,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_seminarplaner';
-$plugin->version = 2026070929;
+$plugin->version = 2026070930;
 $plugin->requires = 2024042200; // Moodle 4.5 minimum.
 $plugin->maturity = MATURITY_BETA;
 $plugin->release = '0.7.0-beta';
