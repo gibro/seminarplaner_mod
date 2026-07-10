@@ -892,10 +892,12 @@ class api extends external_api {
                 'setname' => new external_value(PARAM_TEXT, 'Method set display name'),
                 'titel' => new external_value(PARAM_TEXT, 'Title'),
                 'seminarphase' => new external_multiple_structure(new external_value(PARAM_TEXT, 'Phase')),
-                'zeitbedarf' => new external_value(PARAM_TEXT, 'Duration'),
-                'gruppengroesse' => new external_value(PARAM_TEXT, 'Group size'),
-                'sozialform' => new external_multiple_structure(new external_value(PARAM_TEXT, 'Social form')),
-                'vorbereitung' => new external_value(PARAM_TEXT, 'Preparation'),
+                'zeitbedarf' => new external_value(PARAM_RAW, 'Duration'),
+                'gruppengroesse' => new external_value(PARAM_RAW, 'Group size'),
+                'sozialform' => new external_multiple_structure(new external_value(PARAM_RAW, 'Social form')),
+                // PARAM_RAW: Werte wie "<10 Min" wuerden von PARAM_TEXT als
+                // Tag-Anfang verworfen; der Client escaped beim Rendern.
+                'vorbereitung' => new external_value(PARAM_RAW, 'Preparation'),
                 'kurzbeschreibung' => new external_value(PARAM_TEXT, 'Short description (plain text)'),
                 'tags' => new external_multiple_structure(new external_value(PARAM_TEXT, 'Tag')),
             ])),
@@ -971,8 +973,8 @@ class api extends external_api {
     public static function adopt_global_method_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Adoption result'),
-            'localid' => new external_value(PARAM_TEXT, 'New local method card id'),
-            'titel' => new external_value(PARAM_TEXT, 'Adopted title'),
+            'localid' => new external_value(PARAM_RAW, 'New local method card id'),
+            'titel' => new external_value(PARAM_RAW, 'Adopted title'),
             'totalcount' => new external_value(PARAM_INT, 'Total local methods after adoption'),
         ]);
     }
