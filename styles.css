@@ -7005,3 +7005,29 @@ a.kg-btn-primary:focus {
 .sq-publish .sp-filter-status {
     font-size: 12px;
 }
+
+/* Veröffentlichungs-Status lebt im ⓘ-Popover (eigene Zeile, abgesetzt). */
+.sq-info__status {
+    display: block;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #EDEDED;
+    font-weight: 700;
+}
+
+.sq-info__status:empty {
+    display: none;
+}
+
+/* Tag-Navigation, Veröffentlichen, Empfehlungen und Neue-Einheit-Button
+   stehen in EINER Zeile; nur bei sehr schmalen Fenstern bricht die
+   Aktionsgruppe unter die Navigation. */
+.sq-toolbar__nav,
+.sq-toolbar__actions {
+    flex-wrap: nowrap;
+}
+
+.sq-toggle span,
+#sq-new-unit.kg-btn {
+    white-space: nowrap;
+}

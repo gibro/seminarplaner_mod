@@ -158,8 +158,18 @@ echo html_writer::start_tag('label', ['class' => 'sq-toggle', 'for' => 'sq-publi
 echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'sq-publish-roterfaden']);
 echo html_writer::tag('span', get_string('sequenz_publishlabel', 'mod_seminarplaner'));
 echo html_writer::end_tag('label');
-echo $renderinfo(get_string('sequenz_publishlabel_info', 'mod_seminarplaner'));
-echo html_writer::tag('span', '', ['id' => 'sq-publish-roterfaden-status', 'class' => 'sp-filter-status']);
+// Erklärung UND der dynamische Veröffentlichungs-Status stecken im Popover;
+// die Toolbar-Zeile bleibt dadurch einzeilig.
+echo html_writer::tag('span',
+    html_writer::tag('button', 'i', [
+        'type' => 'button', 'class' => 'sq-info__btn',
+        'aria-label' => 'Erklärung anzeigen', 'aria-expanded' => 'false',
+    ])
+    . html_writer::tag('span',
+        s(get_string('sequenz_publishlabel_info', 'mod_seminarplaner'))
+        . html_writer::tag('span', '', ['id' => 'sq-publish-roterfaden-status', 'class' => 'sq-info__status']),
+        ['class' => 'sq-info__pop', 'role' => 'tooltip']),
+    ['class' => 'sq-info']);
 echo html_writer::end_tag('span');
 echo html_writer::start_tag('label', ['class' => 'sq-toggle', 'for' => 'sq-drama-toggle']);
 echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'sq-drama-toggle']);
