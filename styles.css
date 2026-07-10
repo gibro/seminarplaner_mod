@@ -6917,3 +6917,12 @@ a.kg-btn-primary:focus {
 .sq-toolbar .sq-publish .sp-filter-status {
     margin: 0;
 }
+
+/* Setup-Panel (Neuer Seminarplan / Einrichtung) läuft wie alle anderen
+   Karten über die volle Breite der Shell (Basisregel: max-width 760px). */
+.sq-setup {
+    max-width: none;
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+    padding: 14px 16px;
+}
