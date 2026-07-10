@@ -6339,3 +6339,53 @@ details[open] > .sq-gap__summary .sq-gap__chevron {
     color: var(--ig-red-hover);
     font-weight: 600;
 }
+
+/* ==========================================================================
+   D47: Drag & Drop in der Sequenz (zweiter Bedienweg neben den ↑/↓-Pfeilen)
+   ========================================================================== */
+
+/* Sechs-Punkte-Grip als Anfass-Affordance (Handoff SeqUnit). */
+.sq-grip {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    padding-left: 6px;
+    color: #C4C4C4;
+    cursor: grab;
+}
+
+.sq-baustein__title .sq-grip {
+    padding-left: 0;
+}
+
+/* Gezogene Zeile bleibt sichtbar, aber erkennbar „unterwegs". */
+.sq-dragging {
+    opacity: .45;
+}
+
+/* Einfüge-Linie: Drop auf einer Zeile sortiert davor ein. */
+.sq-drop-before {
+    box-shadow: 0 -3px 0 0 var(--color-primary);
+}
+
+/* Drop auf dem Anker-Body hängt ans Ende an. */
+.sq-anchor__body.sq-drop-append {
+    outline: 2px dashed var(--color-primary);
+    outline-offset: -2px;
+}
+
+/* ==========================================================================
+   D48: Hinweis auf die Seminarschmiede im Import/Export-Tab
+   ========================================================================== */
+.kg-ie-hint {
+    border: 1px solid var(--ig-lightgray);
+    border-left: 4px solid var(--color-primary);
+    background: #FAFAFA;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+}
+
+.kg-ie-hint p {
+    margin: 0 0 8px;
+    font-size: 13px;
+}

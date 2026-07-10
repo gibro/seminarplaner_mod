@@ -38,6 +38,18 @@ echo html_writer::tag('span', '2) Vorschau & Import', ['class' => 'kg-step', 'id
 echo html_writer::end_div();
 
 echo html_writer::start_div('', ['id' => 'kg-ie-panel-1']);
+// D48: Themenpläne werden nicht im Plugin geparst, sondern in der
+// externen Seminarschmiede in eine Import-Datei umgewandelt.
+echo html_writer::start_div('kg-ie-hint');
+echo html_writer::tag('p', 'Du startest mit einem <strong>Themenplan</strong> (Word-Datei)? '
+    . 'Die <strong>Seminarschmiede</strong> wandelt ihn in eine Import-Datei für den Seminarplaner um. '
+    . 'Lade den Themenplan dort hoch und importiere die erzeugte Datei anschließend hier.');
+echo html_writer::link('https://igmetall-seminarschmiede.de', 'Zur Seminarschmiede ↗', [
+    'class' => 'kg-btn',
+    'target' => '_blank',
+    'rel' => 'noopener',
+]);
+echo html_writer::end_div();
 echo html_writer::tag('p', 'Unterstützte Formate: mod_data CSV-Export, ZIP mit CSV, JSON-Export.');
 echo html_writer::tag('p', 'Wähle per Mehrfachauswahl, welche Inhalte importiert werden sollen: Seminareinheiten, Bausteine und/oder Seminarpläne.');
 echo html_writer::empty_tag('input', [

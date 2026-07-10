@@ -215,6 +215,10 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             // Remembered open/closed state of the collapsible suggestion
             // boxes, keyed per day and target, across re-renders.
             this.openSuggest = {};
+            // D47: active drag (pid + optional module id) and the element
+            // currently marked as drop target.
+            this.drag = null;
+            this.dropMarkerEl = null;
         }
 
         init() {
@@ -238,6 +242,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             const container = bySel('#sq-day');
             if (container) {
                 container.addEventListener('click', (event) => this.handleDayClick(event));
+                this.initDragAndDrop(container);
                 // Remember which suggestion boxes are open (toggle does not
                 // bubble, so listen in the capture phase).
                 container.addEventListener('toggle', (event) => {
@@ -1316,6 +1321,153 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 }
                 const targetDay = this.sequenz.tage[anchors[nextAnchorIdx].dayIdx];
                 this.setStatus(`Verschoben: jetzt am ${anchors[nextAnchorIdx].ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag'} von Tag ${targetDay.tag}.`);
+            }
+            this.setDirty(true);
+            this.render();
+        }
+
+        // ---- D47: drag & drop as the second way to reorder (besides ↑/↓) --
+        // Draggable are the top-level rows of the current day: standalone
+        // units, breaks and whole modules. Units inside a module are not
+        // draggable (membership stays a deliberate action); the arrows
+        // still cover fine-grained moves and cross-day moves.
+
+        initDragAndDrop(container) {
+            container.addEventListener('dragstart', (event) => {
+                const row = event.target.closest('[data-sq-drag]');
+                if (!row) {
+                    return;
+                }
+                this.drag = {
+                    pid: row.getAttribute('data-sq-drag'),
+                    bid: row.getAttribute('data-sq-group') || '',
+                };
+                event.dataTransfer.effectAllowed = 'move';
+                // Firefox only starts the drag once data is set.
+                event.dataTransfer.setData('text/plain', this.drag.pid);
+                row.classList.add('sq-dragging');
+            });
+            container.addEventListener('dragover', (event) => {
+                if (!this.drag) {
+                    return;
+                }
+                const target = this.dropTarget(event);
+                this.markDropTarget(target);
+                if (target) {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                }
+            });
+            container.addEventListener('drop', (event) => {
+                if (!this.drag) {
+                    return;
+                }
+                const target = this.dropTarget(event);
+                this.clearDropMarkers();
+                if (!target) {
+                    return;
+                }
+                event.preventDefault();
+                this.dropMove(target);
+            });
+            container.addEventListener('dragend', () => {
+                this.drag = null;
+                this.clearDropMarkers();
+                document.querySelectorAll('.sq-dragging').forEach((el) => el.classList.remove('sq-dragging'));
+            });
+        }
+
+        // Drop on a row = insert before it, drop on the anchor body = append
+        // at the end. Anchors that do not take place (arrival/departure day)
+        // accept no drops, mirroring their disabled add buttons.
+        dropTarget(event) {
+            const anchorEl = event.target.closest('.sq-anchor');
+            if (!anchorEl || anchorEl.hasAttribute('data-off')) {
+                return null;
+            }
+            const ankername = anchorEl.getAttribute('data-anker') || 'vormittag';
+            const row = event.target.closest('[data-sq-drag]');
+            if (row) {
+                return row.classList.contains('sq-dragging')
+                    ? null
+                    : {ankername, beforePid: row.getAttribute('data-sq-drag'), el: row};
+            }
+            const body = event.target.closest('.sq-anchor__body');
+            return body ? {ankername, beforePid: '', el: body} : null;
+        }
+
+        markDropTarget(target) {
+            const el = target ? target.el : null;
+            if (this.dropMarkerEl === el) {
+                return;
+            }
+            this.clearDropMarkers();
+            if (el) {
+                el.classList.add(target.beforePid ? 'sq-drop-before' : 'sq-drop-append');
+                this.dropMarkerEl = el;
+            }
+        }
+
+        clearDropMarkers() {
+            document.querySelectorAll('.sq-drop-before, .sq-drop-append').forEach((el) => {
+                el.classList.remove('sq-drop-before', 'sq-drop-append');
+            });
+            this.dropMarkerEl = null;
+        }
+
+        // The dragged pids: a single placement, or - for a module drag - the
+        // contiguous run of unit placements of that module (same grouping as
+        // renderSequence uses).
+        draggedPids() {
+            const found = this.locate(this.drag.pid);
+            if (!found) {
+                return null;
+            }
+            if (!this.drag.bid) {
+                return {found, pids: [this.drag.pid]};
+            }
+            const seq = found.anchors[found.anchorIdx].seq;
+            const pids = [];
+            for (let i = found.pos; i < seq.length; i++) {
+                const placement = this.placement(seq[i]);
+                if (!placement || placement.typ !== 'einheit'
+                        || String(placement.bausteinid || '') !== String(this.drag.bid)) {
+                    break;
+                }
+                pids.push(seq[i]);
+            }
+            return {found, pids};
+        }
+
+        dropMove(target) {
+            const dragged = this.draggedPids();
+            if (!dragged || !dragged.pids.length) {
+                return;
+            }
+            const {found, pids} = dragged;
+            const anchors = found.anchors;
+            const srcSeq = anchors[found.anchorIdx].seq;
+            const dstAnchorIdx = this.dayIndex * 2 + (target.ankername === 'vormittag' ? 0 : 1);
+            if (dstAnchorIdx < 0 || dstAnchorIdx >= anchors.length
+                    || (target.beforePid && pids.indexOf(target.beforePid) >= 0)) {
+                return;
+            }
+            const dstSeq = anchors[dstAnchorIdx].seq;
+            if (srcSeq === dstSeq) {
+                const refIdx = target.beforePid ? srcSeq.indexOf(target.beforePid) : srcSeq.length;
+                if (refIdx === found.pos || refIdx === found.pos + pids.length) {
+                    return;
+                }
+            }
+            srcSeq.splice(found.pos, pids.length);
+            let insertAt = target.beforePid ? dstSeq.indexOf(target.beforePid) : dstSeq.length;
+            if (insertAt < 0) {
+                insertAt = dstSeq.length;
+            }
+            dstSeq.splice(insertAt, 0, ...pids);
+            if (found.anchorIdx !== dstAnchorIdx) {
+                const targetDay = this.sequenz.tage[anchors[dstAnchorIdx].dayIdx];
+                this.setStatus(`Verschoben: jetzt am ${target.ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag'} von Tag ${targetDay.tag}.`);
             }
             this.setDirty(true);
             this.render();
@@ -2513,7 +2665,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 </div>`;
 
             return `
-                <div class="sq-anchor${anchoroff ? ' sq-anchor--off' : ''}" data-anker="${ankername}">
+                <div class="sq-anchor${anchoroff ? ' sq-anchor--off' : ''}" data-anker="${ankername}"${anchoroff ? ' data-off="1"' : ''}>
                   <div class="sq-anchor__head">
                     <div class="sq-anchor__title">${title} <span class="sq-anchor__time">${timespan}</span></div>
                     <div class="sq-budget">
@@ -2562,9 +2714,10 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 }).join('');
 
                 return `
-                    <div class="sq-baustein${unfilled ? ' sq-baustein--empty' : ''}">
+                    <div class="sq-baustein${unfilled ? ' sq-baustein--empty' : ''}" draggable="true"
+                      data-sq-drag="${escapeHtml(group.items[0].pid)}" data-sq-group="${escapeHtml(group.bausteinid)}">
                       <div class="sq-baustein__head">
-                        <div class="sq-baustein__title">${escapeHtml(baustein.titel || 'Baustein')}
+                        <div class="sq-baustein__title">${this.renderGrip()}${escapeHtml(baustein.titel || 'Baustein')}
                           ${continuation ? '<span class="sq-badge sq-badge--variant">Fortsetzung</span>' : ''}
                           <span class="sq-badge">${unfilled ? `${duration} Min. reserviert` : `${duration} Min.`}</span>
                         </div>
@@ -2651,6 +2804,13 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             return `<div class="sq-pills" role="group" aria-label="Baustein-Variante wählen">${pills}</div>`;
         }
 
+        // D47: six-dot grip as drag affordance (visual handle from the
+        // design handoff; the whole row is draggable).
+        renderGrip() {
+            return `<span class="sq-grip" title="Ziehen, um zu verschieben" aria-hidden="true">
+                <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="2.5" cy="3" r="1.4"/><circle cx="7.5" cy="3" r="1.4"/><circle cx="2.5" cy="8" r="1.4"/><circle cx="7.5" cy="8" r="1.4"/><circle cx="2.5" cy="13" r="1.4"/><circle cx="7.5" cy="13" r="1.4"/></svg></span>`;
+        }
+
         renderMoveButtons(pid) {
             return `
                 <span class="sq-move">
@@ -2707,7 +2867,8 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
 
             if (data.typ === 'pause') {
                 return `
-                    <div class="sq-pause">
+                    <div class="sq-pause" draggable="true" data-sq-drag="${escapeHtml(p.pid)}">
+                      ${this.renderGrip()}
                       <span class="sq-pause__label">${escapeHtml(data.titel || 'Pause')}</span>
                       <span class="sq-badge">${duration} Min.</span>
                       <span class="sq-unit__time">${timelabel}</span>
@@ -2741,8 +2902,9 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             const phasetext = legacy && legacy.phase ? String(legacy.phase) : '';
 
             return `
-                <div class="sq-unit${inBaustein ? '' : ' sq-unit--standalone'}">
+                <div class="sq-unit${inBaustein ? '' : ' sq-unit--standalone'}"${inBaustein ? '' : ` draggable="true" data-sq-drag="${escapeHtml(p.pid)}"`}>
                   <div class="sq-unit__phase${phase ? ' sq-phase-bg--' + phase : ''}"></div>
+                  ${inBaustein ? '' : this.renderGrip()}
                   <div class="sq-unit__main">
                     <div class="sq-unit__title">${escapeHtml(data.titel || 'Seminareinheit')}</div>
                     <div class="sq-unit__meta">
