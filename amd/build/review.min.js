@@ -1,6 +1,9 @@
 define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
+    const escapeHtml = (str) => String(str || '').replace(/[&<>"']/g, (ch) => (
+        {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch] || ch
+    ));
 
     let reviewTargets = [];
     let existingCandidates = [];
@@ -90,6 +93,36 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         });
     };
 
+    // D37: Statusanzeige entlang des Flussdiagramms oben.
+    const STATUS_LABELS = {
+        draft: {label: 'Entwurf – noch nicht eingereicht', step: 'Schritt 1 steht noch aus', cls: 'draft'},
+        review: {label: 'In Prüfung', step: 'Die Konzeptverantwortlichen schauen gerade darüber', cls: 'review'},
+        published: {label: 'Für alle da', step: 'Freigegeben – sichtbar in der globalen Bibliothek', cls: 'published'},
+        archived: {label: 'Archiviert', step: 'Nicht mehr in der globalen Bibliothek', cls: 'archived'},
+    };
+
+    const renderStatusList = () => {
+        const host = bySel('#kg-review-status-list');
+        if (!host) {
+            return;
+        }
+        if (!reviewTargets.length) {
+            host.innerHTML = '<div class="kg-ie-item">Noch keine Methoden-Sammlungen in deinem Bereich – '
+                + 'reiche unten deine erste Sammlung ein.</div>';
+            return;
+        }
+        host.innerHTML = reviewTargets.map((set) => {
+            const info = STATUS_LABELS[String(set.status)] || {label: String(set.status), step: '', cls: 'draft'};
+            return `
+              <div class="kg-review-status-row">
+                <span class="kg-review-status-chip kg-review-status-chip--${info.cls}">${escapeHtml(info.label)}</span>
+                <span class="kg-review-status-name">${escapeHtml(set.displayname)}</span>
+                <span class="kg-review-status-step">${escapeHtml(info.step)}
+                  · Konzeptverantwortliche: ${Number(set.reviewercount) || 0}</span>
+              </div>`;
+        }).join('');
+    };
+
     const loadReviewTargets = (cmid) => {
         const select = bySel('#kg-review-existing-set-select');
         if (!select) {
@@ -99,11 +132,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             reviewTargets = Array.isArray(res.methodsets) ? res.methodsets : [];
             select.innerHTML = '<option value="0">Bitte wählen</option>';
             reviewTargets.forEach((set) => {
+                const statuslabel = (STATUS_LABELS[String(set.status)] || {label: set.status}).label;
                 const opt = document.createElement('option');
                 opt.value = String(set.id);
-                opt.textContent = `${set.displayname} [${set.status}] · Konzeptverantwortliche: ${set.reviewercount || 0}`;
+                opt.textContent = `${set.displayname} [${statuslabel}] · Konzeptverantwortliche: ${set.reviewercount || 0}`;
                 select.appendChild(opt);
             });
+            renderStatusList();
         });
     };
 

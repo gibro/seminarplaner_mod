@@ -41,6 +41,13 @@ foreach ($flowsteps as $index => $step) {
 }
 echo html_writer::end_div();
 
+// D37: laufende Einreichungen samt Status sichtbar machen - die Liste
+// zeigt je Methoden-Sammlung, wo sie im Flussdiagramm oben steht.
+echo html_writer::start_div('kg-ie-block');
+echo html_writer::tag('h4', 'Wo stehen deine Einreichungen?');
+echo html_writer::tag('div', '', ['id' => 'kg-review-status-list', 'class' => 'kg-review-status-list']);
+echo html_writer::end_div();
+
 echo html_writer::start_div('kg-ie-block');
 echo html_writer::tag('h4', '1. Geänderte oder neue Seminareinheit bereitstellen');
 echo html_writer::tag('label', 'Bestehende Methoden-Sammlung auswählen', ['for' => 'kg-review-existing-set-select', 'class' => 'kg-label']);
