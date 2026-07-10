@@ -145,6 +145,82 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
 
     const cardTitle = (card) => String((card && (card.titel || card.title)) || '');
 
+    // ---- Statischer Einheiten-Editor (D17 + Rich-Text) --------------------
+    // Feldliste des Modals in sequenz.php; die sechs Rich-Text-Felder tragen
+    // den Moodle-Editor (Tiny), der beim Seitenladen an die festen IDs
+    // sq-e-<key> gebunden wird. Lese-/Schreib-Helfer nach dem bewährten
+    // Muster aus methodlibrary.js (Editor → Iframe → Textarea-Fallback).
+    const UNIT_FIELD_KEYS = ['titel', 'lernziele', 'kurzbeschreibung', 'zeitbedarf', 'seminarphase',
+        'sozialform', 'ablauf', 'raum', 'gruppengroesse', 'risiken', 'debrief', 'tags', 'autor', 'materialtechnik'];
+    const UNIT_RICH_FIELDS = ['lernziele', 'kurzbeschreibung', 'ablauf', 'risiken', 'debrief', 'materialtechnik'];
+
+    const tinyEditorFor = (el) => {
+        if (typeof window === 'undefined' || !window.tinyMCE || !el || !el.id) {
+            return null;
+        }
+        return window.tinyMCE.get(el.id);
+    };
+
+    const setTinyIframeValue = (el, value) => {
+        const iframe = el && el.id ? document.getElementById(`${el.id}_ifr`) : null;
+        if (!iframe || !iframe.contentDocument || !iframe.contentDocument.body) {
+            return false;
+        }
+        iframe.contentDocument.body.innerHTML = value;
+        return true;
+    };
+
+    const getRichValue = (el) => {
+        if (!el) {
+            return '';
+        }
+        const editor = tinyEditorFor(el);
+        if (editor) {
+            return String(editor.getContent() || '').trim();
+        }
+        const iframe = el.id ? document.getElementById(`${el.id}_ifr`) : null;
+        if (iframe && iframe.contentDocument && iframe.contentDocument.body) {
+            return String(iframe.contentDocument.body.innerHTML || '').trim();
+        }
+        return String(el.value || '').trim();
+    };
+
+    const setRichValue = (el, value) => {
+        if (!el) {
+            return;
+        }
+        const normalized = value === null || value === undefined ? '' : String(value);
+        el.value = normalized;
+        const editor = tinyEditorFor(el);
+        if (!editor || typeof editor.setContent !== 'function') {
+            setTinyIframeValue(el, normalized);
+            return;
+        }
+        const apply = () => {
+            if (editor.destroyed) {
+                return;
+            }
+            try {
+                editor.setContent(normalized);
+            } catch (error) {
+                window.setTimeout(() => {
+                    if (!editor.destroyed) {
+                        try {
+                            editor.setContent(normalized);
+                        } catch (retryerror) {
+                            // Textarea-Wert bleibt gesetzt; Tiny holt ihn beim nächsten Refresh.
+                        }
+                    }
+                }, 100);
+            }
+        };
+        if (editor.initialized === false && typeof editor.once === 'function') {
+            editor.once('init', apply);
+            return;
+        }
+        apply();
+    };
+
     // Themenplan topics arrive as HTML fragments; reduce them to plain lines.
     const htmlToLines = (html) => {
         const doc = document.createElement('div');
@@ -281,6 +357,26 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                         return;
                     }
                     this.openCreateEditor({anker: this.firstActiveAnker()});
+                });
+            }
+            // Statisches Einheiten-Modal (Rich-Text, D17/D50): Speichern,
+            // Abbrechen/Schließen und Klick auf den Overlay-Hintergrund.
+            const unitsave = bySel('#sq-unit-save');
+            if (unitsave) {
+                unitsave.addEventListener('click', () => this.saveUnitModal());
+            }
+            ['#sq-unit-cancel', '#sq-unit-close'].forEach((sel) => {
+                const btn = bySel(sel);
+                if (btn) {
+                    btn.addEventListener('click', () => this.closeUnitModal());
+                }
+            });
+            const unitoverlay = bySel('#sq-unit-modal');
+            if (unitoverlay) {
+                unitoverlay.addEventListener('click', (event) => {
+                    if (event.target === unitoverlay) {
+                        this.closeUnitModal();
+                    }
                 });
             }
             const select = bySel('#sq-grid-select');
@@ -1793,8 +1889,6 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                         this.dissolveBaustein(action.getAttribute('data-bid') || '');
                     } else if (type === 'quick-save') {
                         this.saveQuickCreate();
-                    } else if (type === 'create-save') {
-                        this.saveCreateEditor();
                     } else if (type === 'picker-create') {
                         // D50: aus dem Picker in den vollen Editor wechseln.
                         this.openCreateEditor({anker: this.pickerAnker || 'vormittag'});
@@ -1828,110 +1922,79 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             return value === null || value === undefined ? '' : String(value);
         }
 
-        // D17/D21: gemeinsame Feldliste des Karten-Editors – genutzt beim
-        // Bearbeiten (openEditor) und beim Anlegen (openCreateEditor, D50).
-        cardEditorFields(card) {
-            const text = (label, key, value, hint = '') => `
-                <div class="sq-field">
-                  <label class="kg-label">${label}</label>
-                  <input type="text" class="kg-input" data-sq-field="${key}" value="${escapeHtml(value)}">
-                  ${hint ? `<div class="sq-field__hint">${hint}</div>` : ''}
-                </div>`;
-            const area = (label, key, value, rows = 3) => `
-                <div class="sq-field">
-                  <label class="kg-label">${label}</label>
-                  <textarea class="kg-input" rows="${rows}" data-sq-field="${key}">${escapeHtml(value)}</textarea>
-                </div>`;
-            return `
-                ${text('Titel', 'titel', this.fieldValue(card, 'titel'))}
-                ${area('Lernziele (Ich kann …)', 'lernziele', this.fieldValue(card, 'lernziele'))}
-                ${area('Kurzbeschreibung', 'kurzbeschreibung', this.fieldValue(card, 'kurzbeschreibung'))}
-                ${text('Zeitbedarf (Minuten)', 'zeitbedarf', this.fieldValue(card, 'zeitbedarf'))}
-                ${text('Seminarphase', 'seminarphase', this.fieldValue(card, 'seminarphase'), 'Mehrere Phasen mit Komma trennen')}
-                ${text('Sozialform', 'sozialform', this.fieldValue(card, 'sozialform'))}
-                <details class="sq-section"><summary>Ablauf und Rahmen</summary><div class="sq-section__inner">
-                  ${area('Ablauf', 'ablauf', this.fieldValue(card, 'ablauf'), 5)}
-                  ${text('Raumanforderungen', 'raum', this.fieldValue(card, 'raum'))}
-                  ${text('Gruppengröße', 'gruppengroesse', this.fieldValue(card, 'gruppengroesse'))}
-                  ${area('Risiken/Tipps', 'risiken', this.fieldValue(card, 'risiken'))}
-                  ${area('Debrief/Reflexionsfragen', 'debrief', this.fieldValue(card, 'debrief'))}
-                  ${text('Tags/Schlüsselworte', 'tags', this.fieldValue(card, 'tags'), 'Hilft beim Wiederfinden und bei Vorschlägen')}
-                  ${text('Autor*in / Kontakt', 'autor', this.fieldValue(card, 'autor'))}
-                </div></details>
-                <details class="sq-section"><summary>Materialien und Technik</summary><div class="sq-section__inner">
-                  ${area('Material/Technik', 'materialtechnik', this.fieldValue(card, 'materialtechnik'))}
-                  <div class="sq-field__hint">Datei-Anhänge verwaltest du weiterhin im Tab „Bibliothek".</div>
-                </div></details>`;
-        }
+        // ---- Statisches Einheiten-Modal (sequenz.php, mit Tiny) ------------
 
-        openEditor(pid) {
-            const placement = this.placement(pid);
-            const card = placement ? this.activeCardForPlacement(placement) : null;
-            if (!placement) {
+        setUnitField(key, value) {
+            const el = bySel('#sq-e-' + key);
+            if (!el) {
                 return;
             }
-            this.editorPid = pid;
-            const root = this.modalRoot();
-            const text = (label, key, value, hint = '') => `
-                <div class="sq-field">
-                  <label class="kg-label">${label}</label>
-                  <input type="text" class="kg-input" data-sq-field="${key}" value="${escapeHtml(value)}">
-                  ${hint ? `<div class="sq-field__hint">${hint}</div>` : ''}
-                </div>`;
-
-            let body;
-            if (card) {
-                body = this.cardEditorFields(card);
-            } else {
-                const ispause = placement.typ === 'pause';
-                body = `
-                    ${text('Titel', 'titel', placement.titel || '')}
-                    ${text('Dauer (Minuten)', 'zeitbedarf', String(placement.dauer || ''))}
-                    ${ispause ? '' : '<div class="sq-field__hint">Diese Einheit hat noch keinen Bibliothekseintrag – nur Titel und Dauer sind änderbar.</div>'}`;
+            if (UNIT_RICH_FIELDS.includes(key)) {
+                setRichValue(el, value);
+                return;
             }
-
-            root.innerHTML = `
-                <div class="sq-modal">
-                  <div class="sq-modal__head">
-                    <h3>${placement.typ === 'pause' ? 'Pause bearbeiten' : 'Seminareinheit bearbeiten'}</h3>
-                    <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
-                  </div>
-                  <div class="sq-modal__body">${body}</div>
-                  <div class="sq-modal__footer">
-                    <button type="button" class="kg-btn" data-sq-action="modal-close">Abbrechen</button>
-                    <button type="button" class="kg-btn kg-btn-primary" data-sq-action="editor-save">Übernehmen</button>
-                  </div>
-                </div>`;
-            root.classList.add('open');
+            el.value = value === null || value === undefined ? '' : String(value);
         }
 
-        saveEditor() {
-            const root = bySel('#sq-modal');
+        getUnitField(key) {
+            const el = bySel('#sq-e-' + key);
+            if (!el) {
+                return '';
+            }
+            if (UNIT_RICH_FIELDS.includes(key)) {
+                return getRichValue(el);
+            }
+            return String(el.value || '').trim();
+        }
+
+        // mode: 'edit' (bestehende Karte) oder 'create' (D50, leer).
+        openUnitModal(mode, card) {
+            this.unitModalMode = mode;
+            // Ein evtl. offenes dynamisches Modal (z. B. der Picker) schließt.
+            this.closeModal();
+            UNIT_FIELD_KEYS.forEach((key) => this.setUnitField(key, this.fieldValue(card, key)));
+            const title = bySel('#sq-unit-modal-title');
+            if (title) {
+                title.textContent = mode === 'create' ? 'Neue Seminareinheit anlegen' : 'Seminareinheit bearbeiten';
+            }
+            const save = bySel('#sq-unit-save');
+            if (save) {
+                save.textContent = mode === 'create' ? 'Anlegen und einplanen' : 'Übernehmen';
+            }
+            const overlay = bySel('#sq-unit-modal');
+            if (overlay) {
+                overlay.classList.add('open');
+                overlay.scrollTop = 0;
+            }
+            const titlefield = bySel('#sq-e-titel');
+            if (titlefield) {
+                titlefield.focus();
+            }
+        }
+
+        closeUnitModal() {
+            const overlay = bySel('#sq-unit-modal');
+            if (overlay) {
+                overlay.classList.remove('open');
+            }
+        }
+
+        saveUnitModal() {
+            if (this.unitModalMode === 'create') {
+                this.saveCreateEditor();
+                return;
+            }
             const placement = this.placement(this.editorPid);
-            if (!root || !placement) {
+            const card = placement ? this.activeCardForPlacement(placement) : null;
+            if (!placement || !card) {
+                this.closeUnitModal();
                 return;
             }
             const values = {};
-            root.querySelectorAll('[data-sq-field]').forEach((field) => {
-                values[field.getAttribute('data-sq-field')] = field.value;
+            UNIT_FIELD_KEYS.forEach((key) => {
+                values[key] = this.getUnitField(key);
             });
-            const card = this.activeCardForPlacement(placement);
             const duration = Number.parseInt(String(values.zeitbedarf || '').replace(/\D+/g, ''), 10);
-
-            if (!card) {
-                if (values.titel && values.titel.trim()) {
-                    placement.titel = values.titel.trim();
-                }
-                if (Number.isFinite(duration) && duration > 0) {
-                    placement.dauer = duration;
-                }
-                this.closeModal();
-                this.setDirty(true);
-                this.render();
-                this.toast('Einheit angepasst – Zeiten sind aktualisiert.');
-                return;
-            }
-
             Object.keys(values).forEach((key) => {
                 const incoming = values[key];
                 if (Array.isArray(card[key])) {
@@ -1956,13 +2019,80 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                         }
                     }
                 });
-                this.closeModal();
+                this.closeUnitModal();
                 this.setDirty(true);
                 this.render();
                 this.toast('Gespeichert – Dauer geändert? Dann sind die Zeiten schon angepasst.');
             }).catch(() => {
                 this.setStatus('Die Einheit konnte nicht gespeichert werden.', true);
             });
+        }
+
+        openEditor(pid) {
+            const placement = this.placement(pid);
+            const card = placement ? this.activeCardForPlacement(placement) : null;
+            if (!placement) {
+                return;
+            }
+            this.editorPid = pid;
+            if (card) {
+                // Karten-Editor mit Rich-Text: statisches Modal.
+                this.openUnitModal('edit', card);
+                return;
+            }
+            // Pausen und Einheiten ohne Bibliothekseintrag: schlanker
+            // dynamischer Dialog (nur Titel und Dauer, kein Rich-Text).
+            const root = this.modalRoot();
+            const text = (label, key, value, hint = '') => `
+                <div class="sq-field">
+                  <label class="kg-label">${label}</label>
+                  <input type="text" class="kg-input" data-sq-field="${key}" value="${escapeHtml(value)}">
+                  ${hint ? `<div class="sq-field__hint">${hint}</div>` : ''}
+                </div>`;
+            const ispause = placement.typ === 'pause';
+            const body = `
+                ${text('Titel', 'titel', placement.titel || '')}
+                ${text('Dauer (Minuten)', 'zeitbedarf', String(placement.dauer || ''))}
+                ${ispause ? '' : '<div class="sq-field__hint">Diese Einheit hat noch keinen Bibliothekseintrag – nur Titel und Dauer sind änderbar.</div>'}`;
+
+            root.innerHTML = `
+                <div class="sq-modal">
+                  <div class="sq-modal__head">
+                    <h3>${ispause ? 'Pause bearbeiten' : 'Seminareinheit bearbeiten'}</h3>
+                    <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
+                  </div>
+                  <div class="sq-modal__body">${body}</div>
+                  <div class="sq-modal__footer">
+                    <button type="button" class="kg-btn" data-sq-action="modal-close">Abbrechen</button>
+                    <button type="button" class="kg-btn kg-btn-primary" data-sq-action="editor-save">Übernehmen</button>
+                  </div>
+                </div>`;
+            root.classList.add('open');
+        }
+
+        // Speichern des schlanken dynamischen Dialogs (Pause / Einheit ohne
+        // Bibliothekseintrag); der Karten-Editor speichert über saveUnitModal.
+        saveEditor() {
+            const root = bySel('#sq-modal');
+            const placement = this.placement(this.editorPid);
+            if (!root || !placement) {
+                return;
+            }
+            const values = {};
+            root.querySelectorAll('[data-sq-field]').forEach((field) => {
+                values[field.getAttribute('data-sq-field')] = field.value;
+            });
+            const duration = Number.parseInt(String(values.zeitbedarf || '').replace(/\D+/g, ''), 10);
+            if (values.titel && values.titel.trim()) {
+                placement.titel = values.titel.trim();
+            }
+            if (Number.isFinite(duration) && duration > 0) {
+                placement.dauer = duration;
+            }
+            this.closeModal();
+            this.setDirty(true);
+            this.render();
+            this.toast('Einheit angepasst – Zeiten sind aktualisiert.');
         }
 
         // ---- Neue Seminareinheit anlegen (D50) -------------------------------
@@ -1972,54 +2102,17 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
 
         openCreateEditor(target) {
             this.createTarget = target || {};
-            const template = {
-                titel: '',
-                lernziele: '',
-                kurzbeschreibung: '',
-                zeitbedarf: '30',
-                seminarphase: [],
-                sozialform: [],
-                ablauf: '',
-                raum: [],
-                gruppengroesse: '',
-                risiken: '',
-                debrief: '',
-                tags: '',
-                autor: '',
-                materialtechnik: '',
-            };
-            const root = this.modalRoot();
-            root.innerHTML = `
-                <div class="sq-modal">
-                  <div class="sq-modal__head">
-                    <h3>Neue Seminareinheit anlegen</h3>
-                    <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
-                  </div>
-                  <div class="sq-modal__body">${this.cardEditorFields(template)}</div>
-                  <div class="sq-modal__footer">
-                    <button type="button" class="kg-btn" data-sq-action="modal-close">Abbrechen</button>
-                    <button type="button" class="kg-btn kg-btn-primary" data-sq-action="create-save">Anlegen und einplanen</button>
-                  </div>
-                </div>`;
-            root.classList.add('open');
-            const title = root.querySelector('[data-sq-field="titel"]');
-            if (title) {
-                title.focus();
-            }
+            this.openUnitModal('create', {zeitbedarf: '30'});
         }
 
         saveCreateEditor() {
-            const root = bySel('#sq-modal');
-            if (!root) {
-                return;
-            }
             const values = {};
-            root.querySelectorAll('[data-sq-field]').forEach((field) => {
-                values[field.getAttribute('data-sq-field')] = field.value;
+            UNIT_FIELD_KEYS.forEach((key) => {
+                values[key] = this.getUnitField(key);
             });
             const titel = String(values.titel || '').trim();
             if (!titel) {
-                const title = root.querySelector('[data-sq-field="titel"]');
+                const title = bySel('#sq-e-titel');
                 if (title) {
                     title.focus();
                 }
@@ -2055,7 +2148,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 cmid: this.cmid,
                 methodsjson: JSON.stringify(this.methodCardList),
             }).then(() => {
-                this.closeModal();
+                this.closeUnitModal();
                 this.applySuggestTarget(String(card.id), this.createTarget || {});
             }).catch(() => {
                 this.setStatus('Die neue Einheit konnte nicht angelegt werden.', true);
@@ -2161,7 +2254,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                     </div>
                     <div id="sq-picker-list" class="sq-picker"></div>
                     <div class="sq-picker__createrow">
-                      <button type="button" class="kg-btn" data-sq-action="picker-create">＋ Neue Seminareinheit anlegen</button>
+                      <button type="button" class="kg-btn" data-sq-action="picker-create">＋ Neue Einheit anlegen</button>
                     </div>
                   </div>
                 </div>`;

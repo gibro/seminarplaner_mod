@@ -2,6 +2,7 @@
 // This file is part of Moodle - http://moodle.org/
 
 require_once(__DIR__ . '/bootstrap.php');
+require_once($CFG->libdir . '/editorlib.php');
 require_once(__DIR__ . '/locallib.php');
 
 $id = required_param('id', PARAM_INT);
@@ -9,6 +10,7 @@ $activity = seminarplaner_require_activity_context($id, 'mod/seminarplaner:manag
 $cm = $activity['cm'];
 $course = $activity['course'];
 $seminarplaner = $activity['seminarplaner'];
+$context = $activity['context'];
 
 seminarplaner_prepare_page('/mod/seminarplaner/sequenz.php', $cm, $course, $seminarplaner, 'sequenz');
 
@@ -217,5 +219,96 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 
 echo html_writer::tag('div', '', ['id' => 'sq-toast', 'class' => 'sq-toast', 'role' => 'status', 'aria-live' => 'polite']);
+
+// ---------------------------------------------------------------------------
+// D17-Einheiten-Editor als statisches Modal: Der Moodle-Editor (Tiny) wird an
+// feste Element-IDs gebunden und beim Seitenladen initialisiert – deshalb
+// liegt dieses Modal im Seitenmarkup statt im dynamisch gebauten #sq-modal.
+// Bearbeiten (openEditor) und Anlegen (openCreateEditor, D50) teilen es sich;
+// sequenz.js füllt die Felder und schaltet Überschrift/Speichern-Button um.
+// ---------------------------------------------------------------------------
+$sqtext = static function(string $label, string $key, string $hint = ''): string {
+    $out = html_writer::start_div('sq-field');
+    $out .= html_writer::tag('label', s($label), ['class' => 'kg-label', 'for' => 'sq-e-' . $key]);
+    $out .= html_writer::empty_tag('input', ['type' => 'text', 'class' => 'kg-input', 'id' => 'sq-e-' . $key]);
+    if ($hint !== '') {
+        $out .= html_writer::div(s($hint), 'sq-field__hint');
+    }
+    $out .= html_writer::end_div();
+    return $out;
+};
+$sqrich = static function(string $label, string $key, int $rows = 6): string {
+    $out = html_writer::start_div('sq-field');
+    $out .= html_writer::tag('label', s($label), ['class' => 'kg-label', 'for' => 'sq-e-' . $key]);
+    $out .= html_writer::tag('textarea', '', ['class' => 'kg-input', 'id' => 'sq-e-' . $key, 'rows' => (string)$rows]);
+    $out .= html_writer::end_div();
+    return $out;
+};
+
+echo html_writer::start_div('sq-modal-overlay', ['id' => 'sq-unit-modal']);
+echo html_writer::start_div('sq-modal');
+echo html_writer::start_div('sq-modal__head');
+echo html_writer::tag('h3', 'Seminareinheit bearbeiten', ['id' => 'sq-unit-modal-title']);
+echo html_writer::tag('button', '✕', ['type' => 'button', 'class' => 'sq-modal__close', 'id' => 'sq-unit-close']);
+echo html_writer::end_div();
+echo html_writer::start_div('sq-modal__body');
+echo $sqtext('Titel', 'titel');
+echo $sqrich('Lernziele (Ich kann …)', 'lernziele');
+echo $sqrich('Kurzbeschreibung', 'kurzbeschreibung');
+echo $sqtext('Zeitbedarf (Minuten)', 'zeitbedarf');
+echo $sqtext('Seminarphase', 'seminarphase', 'Mehrere Phasen mit Komma trennen');
+echo $sqtext('Sozialform', 'sozialform');
+echo html_writer::start_tag('details', ['class' => 'sq-section']);
+echo html_writer::tag('summary', 'Ablauf und Rahmen');
+echo html_writer::start_div('sq-section__inner');
+echo $sqrich('Ablauf', 'ablauf', 8);
+echo $sqtext('Raumanforderungen', 'raum');
+echo $sqtext('Gruppengröße', 'gruppengroesse');
+echo $sqrich('Risiken/Tipps', 'risiken');
+echo $sqrich('Debrief/Reflexionsfragen', 'debrief');
+echo $sqtext('Tags/Schlüsselworte', 'tags', 'Hilft beim Wiederfinden und bei Vorschlägen');
+echo $sqtext('Autor*in / Kontakt', 'autor');
+echo html_writer::end_div();
+echo html_writer::end_tag('details');
+echo html_writer::start_tag('details', ['class' => 'sq-section']);
+echo html_writer::tag('summary', 'Materialien und Technik');
+echo html_writer::start_div('sq-section__inner');
+echo $sqrich('Material/Technik', 'materialtechnik');
+echo html_writer::div('Datei-Anhänge verwaltest du weiterhin im Tab „Bibliothek".', 'sq-field__hint');
+echo html_writer::end_div();
+echo html_writer::end_tag('details');
+echo html_writer::end_div();
+echo html_writer::start_div('sq-modal__footer');
+echo html_writer::tag('button', 'Abbrechen', ['type' => 'button', 'class' => 'kg-btn', 'id' => 'sq-unit-cancel']);
+echo html_writer::tag('button', 'Übernehmen', ['type' => 'button', 'class' => 'kg-btn kg-btn-primary', 'id' => 'sq-unit-save']);
+echo html_writer::end_div();
+echo html_writer::end_div();
+echo html_writer::end_div();
+
+// Moodle-Editor (Tiny in 5.x) auf den Rich-Text-Feldern – gleiche Verdrahtung
+// wie in library.php/methodlibrary.php (Backlog „Rich-Text im Sequenz-Modal").
+$editor = editors_get_preferred_editor(FORMAT_HTML);
+$contentstyle = 'html,body{max-width:100%;overflow-x:hidden;box-sizing:border-box;}'
+    . 'body{white-space:normal;word-break:break-word;overflow-wrap:anywhere;}'
+    . 'p,div,span,li,td,th{max-width:100%;word-break:break-word;overflow-wrap:anywhere;}'
+    . 'img,table,iframe,pre,code{max-width:100%;}';
+$editoroptions = [
+    'context' => $context,
+    'maxfiles' => 0,
+    'maxbytes' => 0,
+    'trusttext' => false,
+    'subdirs' => 0,
+    'content_style' => $contentstyle,
+];
+foreach ([
+    'sq-e-lernziele',
+    'sq-e-kurzbeschreibung',
+    'sq-e-ablauf',
+    'sq-e-risiken',
+    'sq-e-debrief',
+    'sq-e-materialtechnik',
+] as $editorid) {
+    $editor->use_editor($editorid, $editoroptions, null);
+}
 
 echo $OUTPUT->footer();
