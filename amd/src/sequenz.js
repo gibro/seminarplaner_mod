@@ -864,6 +864,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 this.gridid = gridid;
                 this.state = state;
                 this.sequenz = (state && typeof state.sequenz === 'object' && state.sequenz) ? state.sequenz : null;
+                this.normalizeSequenz();
                 this.ensureSequenzScaffold();
                 this.versionhash = String(res.versionhash || '');
                 this.dayIndex = 0;
@@ -877,6 +878,51 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 this.maybeShowIntro();
             }).catch(() => {
                 this.setStatus('Der Seminarplan konnte nicht geladen werden.', true);
+            });
+        }
+
+        // The PHP round trip turns empty JSON objects into arrays. If the
+        // map sections arrive as arrays, string-keyed entries added to them
+        // would be dropped silently by JSON.stringify on save - placements
+        // got lost that way while their ids stayed in the anchor sequences,
+        // and re-used ids then rendered twice. Coerce the maps back to
+        // plain objects and drop duplicate or dangling references.
+        normalizeSequenz() {
+            const seq = this.sequenz;
+            if (!seq) {
+                return;
+            }
+            const toMap = (value) => {
+                if (Array.isArray(value)) {
+                    return {};
+                }
+                return (value && typeof value === 'object') ? value : {};
+            };
+            seq.platzierungen = toMap(seq.platzierungen);
+            seq.einheitenauswahlen = toMap(seq.einheitenauswahlen);
+            seq.bausteine = toMap(seq.bausteine);
+            Object.keys(seq.bausteine).forEach((bid) => {
+                const baustein = seq.bausteine[bid];
+                if (baustein && typeof baustein === 'object') {
+                    baustein.varianten = toMap(baustein.varianten);
+                }
+            });
+            const seen = {};
+            (Array.isArray(seq.tage) ? seq.tage : []).forEach((day) => {
+                ANCHORS.forEach((ankername) => {
+                    const anker = (day && day.anker) ? day.anker[ankername] : null;
+                    if (!anker || !Array.isArray(anker.sequenz)) {
+                        return;
+                    }
+                    anker.sequenz = anker.sequenz.filter((pid) => {
+                        const key = String(pid);
+                        if (seen[key] || !seq.platzierungen[key]) {
+                            return false;
+                        }
+                        seen[key] = true;
+                        return true;
+                    });
+                });
             });
         }
 

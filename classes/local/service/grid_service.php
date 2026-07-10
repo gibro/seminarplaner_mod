@@ -141,6 +141,13 @@ class grid_service {
             throw new \invalid_parameter_exception(self::CONFLICT_MARKER . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         }
 
+        // Empty sequence maps must stay JSON objects across the
+        // decode/encode round trip, otherwise clients receive arrays and
+        // silently lose entries (see sequence_state::normalize_maps).
+        if (isset($state[sequence_state::STATE_KEY]) && is_array($state[sequence_state::STATE_KEY])) {
+            $state[sequence_state::STATE_KEY] = sequence_state::normalize_maps($state[sequence_state::STATE_KEY]);
+        }
+
         $json = json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($json === false) {
             throw new coding_exception('Failed to encode grid state JSON');
@@ -361,6 +368,12 @@ class grid_service {
         $decoded = json_decode((string)$record->statejson, true);
         if (!is_array($decoded)) {
             $decoded = [];
+        }
+
+        // The read path re-encodes the decoded state for the client; keep
+        // empty sequence maps as JSON objects here as well.
+        if (isset($decoded[sequence_state::STATE_KEY]) && is_array($decoded[sequence_state::STATE_KEY])) {
+            $decoded[sequence_state::STATE_KEY] = sequence_state::normalize_maps($decoded[sequence_state::STATE_KEY]);
         }
 
         return ['state' => $decoded, 'versionhash' => (string)$record->versionhash];

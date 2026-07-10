@@ -72,6 +72,35 @@ class sequence_state {
     }
 
     /**
+     * Keep the map sections of a sequence encodable as JSON objects.
+     *
+     * PHP cannot distinguish an empty map from an empty list after
+     * json_decode: a client-sent "platzierungen": {} comes back as [] and
+     * would be re-encoded as a JSON array. Clients then treat the section
+     * as an array and JSON.stringify silently drops string-keyed entries,
+     * losing placements. Casting empty maps to stdClass keeps them
+     * objects across every decode/encode round trip.
+     *
+     * @param array $sequenz Sequence section.
+     * @return array
+     */
+    public static function normalize_maps(array $sequenz): array {
+        foreach (['platzierungen', 'einheitenauswahlen', 'bausteine'] as $key) {
+            if (array_key_exists($key, $sequenz) && $sequenz[$key] === []) {
+                $sequenz[$key] = new \stdClass();
+            }
+        }
+        if (is_array($sequenz['bausteine'] ?? null)) {
+            foreach ($sequenz['bausteine'] as $bid => $baustein) {
+                if (is_array($baustein) && ($baustein['varianten'] ?? null) === []) {
+                    $sequenz['bausteine'][$bid]['varianten'] = new \stdClass();
+                }
+            }
+        }
+        return $sequenz;
+    }
+
+    /**
      * Whether the given grid state already carries a sequence section.
      *
      * @param array $state Decoded grid state.

@@ -277,6 +277,23 @@ final class mod_seminarplaner_grid_to_sequence_converter_test extends basic_test
         $this->assertSame($enriched, $converter->enrich_bausteine($enriched, [['id' => 'x']]));
     }
 
+    public function test_normalize_maps_keeps_empty_maps_as_json_objects(): void {
+        // Simulate the PHP round trip of a freshly created plan: the
+        // client sent {} for the map sections, json_decode made [] of it.
+        $sequenz = json_decode(json_encode(sequence_state::create_empty()), true);
+        $sequenz['bausteine'] = ['b1' => ['titel' => 'X', 'varianten' => [], 'aktivevariante' => null]];
+
+        $normalized = sequence_state::normalize_maps($sequenz);
+        $json = json_encode($normalized, JSON_UNESCAPED_UNICODE);
+
+        $this->assertStringContainsString('"platzierungen":{}', $json);
+        $this->assertStringContainsString('"einheitenauswahlen":{}', $json);
+        $this->assertStringContainsString('"varianten":{}', $json);
+        // Non-empty maps and the day list are untouched.
+        $this->assertStringContainsString('"tage":[]', $json);
+        $this->assertStringContainsString('"titel":"X"', $json);
+    }
+
     public function test_validate_reports_broken_references(): void {
         $sequenz = sequence_state::create_empty();
         $day = sequence_state::create_day(1, 'Montag');
