@@ -301,6 +301,41 @@ echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Kurzbeschreibung', ['for' => 'ml-e-kurzbeschreibung', 'class' => 'kg-label']);
 echo html_writer::tag('textarea', '', ['id' => 'ml-e-kurzbeschreibung', 'class' => 'kg-input', 'rows' => '10', 'autocomplete' => 'off']);
 echo html_writer::end_div();
+echo html_writer::start_div('field-card');
+echo html_writer::tag('label', 'Alternative Seminareinheiten', ['for' => 'ml-e-alternativen', 'class' => 'kg-label']);
+echo html_writer::start_div('kg-tag-dropdown', [
+    'id' => 'ml-e-alternativen-dropdown',
+    'data-kg-form-multi-dropdown' => '1',
+    'data-kg-field' => '#ml-e-alternativen',
+    'data-kg-label-prefix' => 'Alternativen',
+    'data-kg-placeholder' => 'Alternativen wählen',
+]);
+echo html_writer::tag('button', 'Alternativen wählen', [
+    'type' => 'button',
+    'class' => 'kg-input kg-tag-dropdown-toggle',
+    'id' => 'ml-e-alternativen-toggle',
+    'data-kg-form-multi-toggle' => '1',
+]);
+echo html_writer::start_div('kg-tag-dropdown-panel kg-hidden', [
+    'id' => 'ml-e-alternativen-panel',
+    'data-kg-form-multi-panel' => '1',
+]);
+echo html_writer::empty_tag('input', [
+    'type' => 'search',
+    'class' => 'kg-input kg-multi-search',
+    'placeholder' => 'Titel der Seminareinheit suchen',
+    'data-kg-form-multi-search' => '1',
+]);
+echo html_writer::start_div('', ['id' => 'ml-e-alternativen-options']);
+echo html_writer::end_div();
+echo html_writer::end_div();
+echo html_writer::end_div();
+echo html_writer::empty_tag('input', [
+    'type' => 'hidden',
+    'id' => 'ml-e-alternativen',
+    'value' => '',
+]);
+echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_tag('details');
 
@@ -373,41 +408,6 @@ echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Material/Technik', ['for' => 'ml-e-materialtechnik', 'class' => 'kg-label']);
 echo html_writer::tag('textarea', '', ['id' => 'ml-e-materialtechnik', 'class' => 'kg-input', 'rows' => '10', 'autocomplete' => 'off']);
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Alternative Seminareinheiten', ['for' => 'ml-e-alternativen', 'class' => 'kg-label']);
-echo html_writer::start_div('kg-tag-dropdown', [
-    'id' => 'ml-e-alternativen-dropdown',
-    'data-kg-form-multi-dropdown' => '1',
-    'data-kg-field' => '#ml-e-alternativen',
-    'data-kg-label-prefix' => 'Alternativen',
-    'data-kg-placeholder' => 'Alternativen wählen',
-]);
-echo html_writer::tag('button', 'Alternativen wählen', [
-    'type' => 'button',
-    'class' => 'kg-input kg-tag-dropdown-toggle',
-    'id' => 'ml-e-alternativen-toggle',
-    'data-kg-form-multi-toggle' => '1',
-]);
-echo html_writer::start_div('kg-tag-dropdown-panel kg-hidden', [
-    'id' => 'ml-e-alternativen-panel',
-    'data-kg-form-multi-panel' => '1',
-]);
-echo html_writer::empty_tag('input', [
-    'type' => 'search',
-    'class' => 'kg-input kg-multi-search',
-    'placeholder' => 'Titel der Seminareinheit suchen',
-    'data-kg-form-multi-search' => '1',
-]);
-echo html_writer::start_div('', ['id' => 'ml-e-alternativen-options']);
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::empty_tag('input', [
-    'type' => 'hidden',
-    'id' => 'ml-e-alternativen',
-    'value' => '',
-]);
 echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_tag('details');

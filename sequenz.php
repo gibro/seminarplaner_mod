@@ -264,6 +264,43 @@ $sqselect = static function(string $label, string $key, array $options): string 
     $out .= html_writer::end_div();
     return $out;
 };
+// Alternative Seminareinheiten (D8/D21): wie im Bibliotheks-Editor ein
+// Dropdown mit Suche; die Optionen (alle anderen Einheiten) füllt sequenz.js
+// beim Öffnen dynamisch, da sie vom Bestand abhängen.
+$sqalternativen = static function(): string {
+    $out = html_writer::start_div('sq-field');
+    $out .= html_writer::tag('label', 'Alternative Seminareinheiten', ['class' => 'kg-label', 'for' => 'sq-e-alternativen']);
+    $out .= html_writer::start_div('kg-tag-dropdown', [
+        'id' => 'sq-e-alternativen-dropdown',
+        'data-kg-form-multi-dropdown' => '1',
+        'data-kg-field' => '#sq-e-alternativen',
+        'data-kg-label-prefix' => 'Alternativen',
+        'data-kg-placeholder' => 'Alternativen wählen',
+    ]);
+    $out .= html_writer::tag('button', 'Alternativen wählen', [
+        'type' => 'button',
+        'class' => 'kg-input kg-tag-dropdown-toggle',
+        'id' => 'sq-e-alternativen-toggle',
+        'data-kg-form-multi-toggle' => '1',
+    ]);
+    $out .= html_writer::start_div('kg-tag-dropdown-panel kg-hidden', [
+        'id' => 'sq-e-alternativen-panel',
+        'data-kg-form-multi-panel' => '1',
+    ]);
+    $out .= html_writer::empty_tag('input', [
+        'type' => 'search',
+        'class' => 'kg-input kg-multi-search',
+        'placeholder' => 'Titel der Seminareinheit suchen',
+        'data-kg-form-multi-search' => '1',
+    ]);
+    $out .= html_writer::start_div('', ['id' => 'sq-e-alternativen-options']);
+    $out .= html_writer::end_div();
+    $out .= html_writer::end_div();
+    $out .= html_writer::end_div();
+    $out .= html_writer::empty_tag('input', ['type' => 'hidden', 'id' => 'sq-e-alternativen', 'value' => '']);
+    $out .= html_writer::end_div();
+    return $out;
+};
 
 echo html_writer::start_div('sq-modal-overlay', ['id' => 'sq-unit-modal']);
 echo html_writer::start_div('sq-modal');
@@ -275,6 +312,7 @@ echo html_writer::start_div('sq-modal__body');
 echo $sqtext('Titel', 'titel');
 echo $sqrich('Lernziele (Ich kann …)', 'lernziele');
 echo $sqrich('Kurzbeschreibung', 'kurzbeschreibung');
+echo $sqalternativen();
 echo $sqtext('Zeitbedarf (Minuten)', 'zeitbedarf');
 echo $sqmulti('Seminarphase', 'seminarphase', seminarplaner_phase_options(), 'Seminarphasen wählen', 'Seminarphasen');
 echo $sqmulti('Sozialform', 'sozialform', [

@@ -248,6 +248,22 @@ function(Ajax, UserRepository, Fragment, Templates) {
                     setMultiDropdownValues(selector, selected);
                 });
             });
+            // Suchfeld (nur beim Alternativen-Dropdown): filtert die Optionen
+            // live – greift auch für später dynamisch ergänzte Optionen.
+            const searchinput = dropdown.querySelector('[data-kg-form-multi-search="1"]');
+            if (searchinput) {
+                searchinput.addEventListener('input', () => {
+                    const term = String(searchinput.value || '').trim().toLowerCase();
+                    dropdown.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
+                        const row = checkbox.closest('.kg-tag-option');
+                        if (!row) {
+                            return;
+                        }
+                        const label = String(row.textContent || '').toLowerCase();
+                        row.style.display = !term || label.includes(term) ? '' : 'none';
+                    });
+                });
+            }
         });
     };
 
@@ -2052,6 +2068,45 @@ function(Ajax, UserRepository, Fragment, Templates) {
             return String(el.value || '').trim();
         }
 
+        // Alternative Seminareinheiten (D8/D21): Optionen sind alle anderen
+        // Einheiten des Bestands; daher dynamisch beim Öffnen des Modals
+        // gefüllt (wie refreshEditAlternativeOptions im Bibliotheks-Editor).
+        // preselected = Liste von Karten-IDs, currentid = die bearbeitete
+        // Einheit (schließt sich selbst aus).
+        refreshUnitAlternativeOptions(preselected, currentid) {
+            const host = bySel('#sq-e-alternativen-options');
+            const hidden = bySel('#sq-e-alternativen');
+            if (!host || !hidden) {
+                return;
+            }
+            const selected = (Array.isArray(preselected) ? preselected : [])
+                .map((v) => String(v).trim()).filter(Boolean);
+            hidden.value = selected.join('##');
+            host.innerHTML = '';
+            this.methodCardList.forEach((card) => {
+                const id = String(card.id || '').trim();
+                const title = cardTitle(card).trim();
+                if (!id || !title || id === String(currentid || '')) {
+                    return;
+                }
+                const row = document.createElement('label');
+                row.className = 'kg-tag-option';
+                row.innerHTML = `<input type="checkbox" value="${escapeHtml(id)}" data-kg-form-multi-option="1">`
+                    + `<span>${escapeHtml(title)}</span>`;
+                host.appendChild(row);
+            });
+            host.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
+                checkbox.checked = selected.includes(String(checkbox.value || '').trim());
+                checkbox.addEventListener('change', () => {
+                    const values = Array.from(host.querySelectorAll('[data-kg-form-multi-option="1"]:checked'))
+                        .map((cb) => String(cb.value || '').trim())
+                        .filter(Boolean);
+                    setMultiDropdownValues('#sq-e-alternativen', values);
+                });
+            });
+            setMultiDropdownValues('#sq-e-alternativen', selected);
+        }
+
         // Datei-Anhänge: Filemanager-Formular je Einheit über die Fragment-API
         // nachladen (leere methodid = Anlegen-Modus, leerer Entwurfsbereich).
         loadUnitMaterials(methodid) {
@@ -2089,7 +2144,9 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 const raw = UNIT_MULTI_FIELDS.includes(key) ? card[key] : this.fieldValue(card, key);
                 this.setUnitField(key, raw);
             });
-            this.loadUnitMaterials(mode === 'edit' && card && card.id ? String(card.id) : '');
+            const currentid = mode === 'edit' && card && card.id ? String(card.id) : '';
+            this.refreshUnitAlternativeOptions(card && Array.isArray(card.alternativen) ? card.alternativen : [], currentid);
+            this.loadUnitMaterials(currentid);
             const title = bySel('#sq-unit-modal-title');
             if (title) {
                 title.textContent = mode === 'create' ? 'Neue Seminareinheit anlegen' : 'Seminareinheit bearbeiten';
@@ -2143,6 +2200,10 @@ function(Ajax, UserRepository, Fragment, Templates) {
                     card[key] = incoming;
                 }
             });
+            // Alternative Seminareinheiten (dynamische IDs, eigene Behandlung):
+            // sich selbst nie als Alternative speichern.
+            card.alternativen = readMultiDropdownValues('#sq-e-alternativen')
+                .filter((id) => String(id) !== String(card.id));
             // Datei-Anhänge: Der Entwurfsbereich (Fragment) wird beim Speichern
             // serverseitig in den Dateibestand der Einheit übernommen.
             const draftid = this.unitMaterialDraftItemId();
@@ -2289,7 +2350,7 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 materialtechnik: String(values.materialtechnik || ''),
                 ablauf: String(values.ablauf || ''),
                 tags: String(values.tags || '').trim(),
-                alternativen: [],
+                alternativen: readMultiDropdownValues('#sq-e-alternativen'),
                 timemodified: Date.now(),
             };
             this.methodCardList.push(card);
