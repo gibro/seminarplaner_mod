@@ -7108,6 +7108,59 @@ a.kg-btn-primary:focus {
     line-height: 1.35;
 }
 
+/* Ausklappbare Erklaerung Methoden-Sammlung vs. Seminarkonzept */
+.kg-review-diff {
+    margin-top: 12px;
+    border: 1px solid var(--ig-lightgray, #ddd);
+    background: #fff;
+}
+
+.kg-review-diff > summary {
+    cursor: pointer;
+    padding: 9px 12px;
+    font-weight: 600;
+    color: var(--color-primary, #e2001a);
+    list-style: none;
+}
+
+.kg-review-diff > summary::-webkit-details-marker {
+    display: none;
+}
+
+.kg-review-diff > summary::before {
+    content: "\203A";
+    display: inline-block;
+    margin-right: 8px;
+    transition: transform 0.15s ease;
+}
+
+.kg-review-diff[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.kg-review-diff__body {
+    padding: 4px 14px 14px;
+    border-top: 1px solid var(--ig-lightgray, #eee);
+}
+
+.kg-review-diff__svg {
+    display: block;
+    width: 100%;
+    max-width: 640px;
+    height: auto;
+    margin: 8px auto 4px;
+}
+
+.kg-review-diff__list {
+    margin: 6px 0 0;
+    padding-left: 20px;
+    line-height: 1.45;
+}
+
+.kg-review-diff__list li {
+    margin-bottom: 5px;
+}
+
 /* ---- D58: Uebersichtsliste der Konzeptverantwortlichen ---------------- */
 .kg-review-reviewers {
     display: flex;

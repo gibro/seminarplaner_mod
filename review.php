@@ -104,6 +104,62 @@ foreach ($reviewchoices as $choice) {
     echo html_writer::end_tag('label');
 }
 echo html_writer::end_div();
+
+// Ausklappbare Erklärung des Unterschieds Methoden-Sammlung vs. Seminarkonzept
+// (D28/D38): dieselben Seminareinheiten - der Unterschied ist der Ablauf.
+// Grafik im Plugin-CD (kantig, Phasenfarben der Sequenzansicht).
+$diffsvg = <<<'SVG'
+<svg viewBox="0 0 640 272" class="kg-review-diff__svg" role="img"
+     aria-label="Eine Methoden-Sammlung ist eine Kiste voller Seminareinheiten ohne Reihenfolge. Ein Seminarkonzept bringt dieselben Einheiten in einen fertigen Ablauf mit Zeiten. Der Unterschied ist der Ablauf.">
+  <text x="12" y="20" font-family="sans-serif" font-size="15" font-weight="700" fill="#20242b">Methoden-Sammlung</text>
+  <text x="12" y="39" font-family="sans-serif" font-size="12" fill="#666e79">Kiste voller Einheiten &#8211; ohne Reihenfolge</text>
+  <rect x="10" y="50" width="280" height="196" fill="#ffffff" stroke="#cfd4da" stroke-width="1.5" stroke-dasharray="7 5"/>
+  <g transform="translate(82,104) rotate(-7)"><rect x="-38" y="-21" width="76" height="42" fill="#EAB500"/><rect x="-26" y="-9" width="46" height="5" fill="#ffffff" opacity="0.85"/><rect x="-26" y="2" width="30" height="5" fill="#ffffff" opacity="0.6"/></g>
+  <g transform="translate(198,94) rotate(5)"><rect x="-38" y="-21" width="76" height="42" fill="#2F80AB"/><rect x="-26" y="-9" width="46" height="5" fill="#ffffff" opacity="0.85"/><rect x="-26" y="2" width="30" height="5" fill="#ffffff" opacity="0.6"/></g>
+  <g transform="translate(112,168) rotate(4)"><rect x="-38" y="-21" width="76" height="42" fill="#882A30"/><rect x="-26" y="-9" width="46" height="5" fill="#ffffff" opacity="0.85"/><rect x="-26" y="2" width="30" height="5" fill="#ffffff" opacity="0.6"/></g>
+  <g transform="translate(214,184) rotate(-5)"><rect x="-38" y="-21" width="76" height="42" fill="#5B9945"/><rect x="-26" y="-9" width="46" height="5" fill="#ffffff" opacity="0.85"/><rect x="-26" y="2" width="30" height="5" fill="#ffffff" opacity="0.6"/></g>
+
+  <line x1="320" y1="46" x2="320" y2="248" stroke="#cfd4da" stroke-width="1.5"/>
+
+  <text x="352" y="20" font-family="sans-serif" font-size="15" font-weight="700" fill="#20242b">Seminarkonzept</text>
+  <text x="352" y="39" font-family="sans-serif" font-size="12" fill="#666e79">Fertiger Ablauf &#8211; mit Reihenfolge &amp; Zeiten</text>
+  <line x1="392" y1="60" x2="392" y2="238" stroke="#cfd4da" stroke-width="2"/>
+
+  <text x="384" y="79" text-anchor="end" font-family="sans-serif" font-size="11" font-weight="600" fill="#666e79">09:00</text>
+  <circle cx="392" cy="75" r="3.5" fill="#98a0aa"/>
+  <rect x="408" y="60" width="210" height="30" fill="#EAB500"/><rect x="420" y="72" width="96" height="5" fill="#ffffff" opacity="0.85"/>
+
+  <text x="384" y="115" text-anchor="end" font-family="sans-serif" font-size="11" font-weight="600" fill="#666e79">10:15</text>
+  <circle cx="392" cy="111" r="3.5" fill="#98a0aa"/>
+  <rect x="408" y="96" width="210" height="30" fill="#2F80AB"/><rect x="420" y="108" width="96" height="5" fill="#ffffff" opacity="0.85"/>
+
+  <text x="408" y="152" font-family="sans-serif" font-size="11" font-weight="600" fill="#666e79">&#9749; Mittagspause</text>
+
+  <text x="384" y="187" text-anchor="end" font-family="sans-serif" font-size="11" font-weight="600" fill="#666e79">13:00</text>
+  <circle cx="392" cy="183" r="3.5" fill="#98a0aa"/>
+  <rect x="408" y="168" width="210" height="30" fill="#882A30"/><rect x="420" y="180" width="96" height="5" fill="#ffffff" opacity="0.85"/>
+
+  <text x="384" y="223" text-anchor="end" font-family="sans-serif" font-size="11" font-weight="600" fill="#666e79">14:15</text>
+  <circle cx="392" cy="219" r="3.5" fill="#98a0aa"/>
+  <rect x="408" y="204" width="210" height="30" fill="#5B9945"/><rect x="420" y="216" width="96" height="5" fill="#ffffff" opacity="0.85"/>
+
+  <text x="320" y="266" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="700" fill="#20242b">Gleiche Seminareinheiten &#8211; der Unterschied ist der Ablauf.</text>
+</svg>
+SVG;
+echo html_writer::start_tag('details', ['class' => 'kg-review-diff']);
+echo html_writer::tag('summary', 'Worin liegt der Unterschied zwischen Methoden-Sammlung und Seminarkonzept?');
+echo html_writer::start_div('kg-review-diff__body');
+echo $diffsvg;
+echo html_writer::start_tag('ul', ['class' => 'kg-review-diff__list']);
+echo html_writer::tag('li', '<strong>Methoden-Sammlung:</strong> eine Kiste voller Seminareinheiten '
+    . '<em>ohne</em> feste Reihenfolge – zum Stöbern und einzeln Herauspicken.');
+echo html_writer::tag('li', '<strong>Seminarkonzept:</strong> dieselben Einheiten, aber in einen '
+    . 'fertigen Ablauf gebracht – mit Reihenfolge, Zeiten und Dramaturgie. Ein kompletter Plan, '
+    . 'den andere übernehmen können.');
+echo html_writer::end_tag('ul');
+echo html_writer::end_div();
+echo html_writer::end_tag('details');
+
 echo html_writer::end_div();
 
 // D51: Weg 1 - bestehende Sammlung. Die beiden früher getrennten Kästen
