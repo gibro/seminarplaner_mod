@@ -50,7 +50,11 @@ function seminarplaner_add_instance($data, $mform = null) {
         $data->defaultmethodsetid = null;
     }
 
-    return $DB->insert_record('seminarplaner', $data);
+    $instanceid = $DB->insert_record('seminarplaner', $data);
+
+    seminarplaner_save_logo_file($data);
+
+    return $instanceid;
 }
 
 /**
@@ -70,7 +74,32 @@ function seminarplaner_update_instance($data, $mform = null) {
         $data->defaultmethodsetid = null;
     }
 
-    return $DB->update_record('seminarplaner', $data);
+    $result = $DB->update_record('seminarplaner', $data);
+
+    seminarplaner_save_logo_file($data);
+
+    return $result;
+}
+
+/**
+ * Persist the uploaded PDF logo (D52) from the activity settings form.
+ *
+ * @param stdClass $data Form data with the logofile draft area id and coursemodule.
+ * @return void
+ */
+function seminarplaner_save_logo_file($data) {
+    if (empty($data->coursemodule) || !isset($data->logofile)) {
+        return;
+    }
+    $context = context_module::instance($data->coursemodule);
+    file_save_draft_area_files(
+        $data->logofile,
+        $context->id,
+        'mod_seminarplaner',
+        'logo',
+        0,
+        ['subdirs' => 0, 'maxfiles' => 1]
+    );
 }
 
 /**
@@ -194,10 +223,24 @@ function seminarplaner_pluginfile($course, $cm, $context, $filearea, $args, $for
     if ($context->contextlevel !== CONTEXT_MODULE) {
         return false;
     }
-    if (!in_array($filearea, ['method_materialien', 'method_h5p'], true)) {
+    if (!in_array($filearea, ['method_materialien', 'method_h5p', 'logo'], true)) {
         return false;
     }
     require_capability('mod/seminarplaner:view', $context);
+
+    // D52: PDF-Logo liegt als einzelne Datei unter itemid 0.
+    if ($filearea === 'logo') {
+        $filename = array_pop($args);
+        $filepath = empty($args) ? '/' : '/' . implode('/', $args) . '/';
+        $fs = get_file_storage();
+        $file = $fs->get_file($context->id, 'mod_seminarplaner', 'logo', 0, $filepath, $filename);
+        if (!$file || $file->is_directory()) {
+            return false;
+        }
+        send_stored_file($file, 0, 0, $forcedownload, $options);
+        return;
+    }
+
     if (count($args) < 2) {
         return false;
     }
@@ -238,6 +281,7 @@ function seminarplaner_get_file_areas($course, $cm, $context): array {
     return [
         'method_materialien' => 'Materialien',
         'method_h5p' => 'H5P-Inhalte',
+        'logo' => get_string('pdflogo', 'mod_seminarplaner'),
     ];
 }
 
@@ -272,7 +316,7 @@ function seminarplaner_get_file_info(
     if (!isset($areas[$filearea])) {
         return null;
     }
-    if (!in_array($filearea, ['method_materialien', 'method_h5p'], true)) {
+    if (!in_array($filearea, ['method_materialien', 'method_h5p', 'logo'], true)) {
         return null;
     }
 

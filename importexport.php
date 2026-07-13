@@ -9,9 +9,11 @@ $activity = seminarplaner_require_activity_context($id, 'mod/seminarplaner:view'
 $cm = $activity['cm'];
 $course = $activity['course'];
 $seminarplaner = $activity['seminarplaner'];
+$context = $activity['context'];
 
 seminarplaner_prepare_page('/mod/seminarplaner/importexport.php', $cm, $course, $seminarplaner, null);
-$PAGE->requires->js_call_amd('mod_seminarplaner/importexport', 'init', [(int)$cm->id]);
+$pdflogo = seminarplaner_get_pdf_logo($context, $seminarplaner);
+$PAGE->requires->js_call_amd('mod_seminarplaner/importexport', 'init', [(int)$cm->id, $pdflogo]);
 
 echo $OUTPUT->header();
 
@@ -167,6 +169,7 @@ echo html_writer::end_div();
 echo html_writer::start_div('kg-row kg-pdf-actions');
 echo html_writer::tag('button', 'ZIM-PDF erstellen', ['type' => 'button', 'id' => 'kg-pdf-zim', 'class' => 'kg-btn kg-btn-primary']);
 echo html_writer::tag('button', 'Konzeptsammlung-PDF erstellen', ['type' => 'button', 'id' => 'kg-pdf-flow', 'class' => 'kg-btn']);
+echo html_writer::tag('button', 'Materialliste-PDF erstellen', ['type' => 'button', 'id' => 'kg-pdf-materials', 'class' => 'kg-btn']);
 echo html_writer::end_div();
 echo html_writer::end_div();
 

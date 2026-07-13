@@ -16,6 +16,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     let currentImportPayload = null;
     let globalMethodsets = [];
     let globalSyncLinks = [];
+    // D52: dauerhaftes Logo für den Seitenkopf aller PDF-Exporte.
+    let pdfLogo = null;
     const PDF_COLUMN_ORDER = ['uhrzeit', 'titel', 'seminarphase', 'kognitive', 'kurzbeschreibung', 'debrief', 'ablauf', 'lernziele', 'risiken', 'materialtechnik', 'sonstiges'];
     const PDF_COLUMN_LABELS = {
         uhrzeit: 'Uhrzeit',
@@ -1255,7 +1257,71 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return lines;
     };
 
+    // D52: Logo-Format aus der Data-URL ableiten (jsPDF erwartet PNG/JPEG/GIF/WEBP).
+    const detectPdfLogoFormat = (dataurl) => {
+        const match = /^data:image\/([a-z0-9.+-]+)/i.exec(String(dataurl || ''));
+        const mime = match ? match[1].toLowerCase() : 'png';
+        if (mime === 'jpg' || mime === 'jpeg') {
+            return 'JPEG';
+        }
+        if (mime === 'gif') {
+            return 'GIF';
+        }
+        if (mime === 'webp') {
+            return 'WEBP';
+        }
+        return 'PNG';
+    };
+
+    // D52: Logo aus PHP übernehmen und die Bildmaße vorab bestimmen, damit das
+    // Stempeln beim Export synchron ohne Ladeverzögerung erfolgen kann.
+    const preparePdfLogo = (logo) => {
+        if (!logo || !logo.dataurl) {
+            pdfLogo = null;
+            return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                pdfLogo = {
+                    dataurl: logo.dataurl,
+                    position: logo.position === 'left' ? 'left' : 'right',
+                    format: detectPdfLogoFormat(logo.dataurl),
+                    w: img.naturalWidth || img.width || 1,
+                    h: img.naturalHeight || img.height || 1
+                };
+                resolve();
+            };
+            img.onerror = () => {
+                pdfLogo = null;
+                resolve();
+            };
+            img.src = logo.dataurl;
+        });
+    };
+
+    // D52: Logo oben links/rechts in den Seitenkopf der aktuellen Seite stempeln.
+    const stampPdfLogo = (doc) => {
+        if (!pdfLogo || !pdfLogo.dataurl) {
+            return;
+        }
+        try {
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const maxH = 14;
+            const maxW = 45;
+            const scale = Math.min(maxH / pdfLogo.h, maxW / pdfLogo.w, 1);
+            const w = pdfLogo.w * scale;
+            const h = pdfLogo.h * scale;
+            const x = pdfLogo.position === 'left' ? 14 : (pageWidth - 14 - w);
+            doc.addImage(pdfLogo.dataurl, pdfLogo.format, x, 8, w, h);
+        } catch (e) {
+            // Logo-Fehler dürfen den PDF-Export nie blockieren.
+            pdfLogo = null;
+        }
+    };
+
     const drawPdfTitlePage = (doc, title, meta, subtitle = '') => {
+        stampPdfLogo(doc);
         const pageHeight = doc.internal.pageSize.getHeight();
         let y = 48;
         doc.setFont(undefined, 'bold');
@@ -1299,6 +1365,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     const addBausteinCoverPage = (doc, day, unit, methodCount) => {
         doc.addPage();
+        stampPdfLogo(doc);
         let y = 24;
         doc.setFont(undefined, 'bold');
         doc.setFontSize(20);
@@ -1338,6 +1405,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     };
 
     const renderFlowMethodPage = (doc, day, item) => {
+        stampPdfLogo(doc);
         let y = 20;
         const details = item && item.details ? item.details : {};
         const duration = Math.max(5, (Number(item.endMin) || 0) - (Number(item.startMin) || 0));
@@ -1380,6 +1448,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             if (y > 252) {
                 doc.addPage();
+                stampPdfLogo(doc);
                 y = 20;
             }
             doc.setFontSize(11);
@@ -1547,7 +1616,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             headStyles: {fillColor: [43, 104, 197], textColor: 255, fontStyle: 'bold'},
             alternateRowStyles: {fillColor: [245, 247, 250]},
             margin: {top: 30},
-            columnStyles
+            columnStyles,
+            didDrawPage: () => stampPdfLogo(doc)
         });
 
         const filename = meta.title ? `ZIM-${meta.title}.pdf` : 'ZIM-Papier.pdf';
@@ -1588,6 +1658,108 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 });
         });
         const filename = meta.title ? `Konzeptsammlung-${meta.title}.pdf` : 'Konzeptsammlung.pdf';
+        doc.save(filename);
+    };
+
+    // D52: Freitext-Materialfeld in einzelne Abhak-Einträge zerlegen. Block- und
+    // Zeilenumbrüche werden als Trenner erhalten, restliche Tags entfernt.
+    const splitMaterialEntries = (text) => {
+        const withBreaks = String(text || '')
+            .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+            .replace(/<\/\s*(?:p|div|li|tr)\s*>/gi, '\n')
+            .replace(/<[^>]*>/g, ' ');
+        const decoder = document.createElement('textarea');
+        decoder.innerHTML = withBreaks;
+        return (decoder.value || '')
+            .split(/\r?\n|;|•|·|,/)
+            .map((entry) => entry.replace(/^[\s\-–—*·•]+/, '').replace(/\s+/g, ' ').trim())
+            .filter(Boolean);
+    };
+
+    // D52: Alle Materialeinträge eines Plan-Eintrags (Baustein oder Einzelmethode).
+    const getMaterialEntriesForItem = (item) => {
+        const unit = getUnitForPdf(item);
+        const texts = [];
+        if (unit) {
+            unit.methods.forEach((method) => texts.push(method.details.materials || ''));
+        } else {
+            const details = item && item.details ? item.details : {};
+            texts.push(details.materials || '');
+        }
+        const entries = [];
+        texts.forEach((text) => splitMaterialEntries(text).forEach((entry) => entries.push(entry)));
+        return entries;
+    };
+
+    // D52: Eigenständige Materialliste als Abgabeliste (pro Tag dedupliziert, zum Abhaken).
+    const exportPdfMaterials = () => {
+        const jsPDF = ensurePdfReady();
+        const meta = getPdfMeta();
+        const days = getOrderedDays();
+        const plan = getPlanByDay();
+        const doc = new jsPDF();
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        drawPdfTitlePage(doc, 'Materialliste', meta, 'Abgabeliste');
+
+        let anyMaterial = false;
+        days.forEach((day) => {
+            const entries = (plan[day] || []).filter((entry) => entry && entry.kind !== 'break');
+            const seen = {};
+            const materials = [];
+            entries.forEach((item) => {
+                getMaterialEntriesForItem(item).forEach((material) => {
+                    const key = material.toLowerCase();
+                    if (!seen[key]) {
+                        seen[key] = true;
+                        materials.push(material);
+                    }
+                });
+            });
+            if (!materials.length) {
+                return;
+            }
+            anyMaterial = true;
+
+            doc.addPage();
+            stampPdfLogo(doc);
+            let y = 26;
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(16);
+            doc.text(escapeTextForPdf(day), 14, y);
+            y += 4;
+            doc.setDrawColor(220, 224, 233);
+            doc.setLineWidth(0.3);
+            doc.line(14, y, 196, y);
+            y += 10;
+
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(11);
+            materials.forEach((material) => {
+                const lines = doc.splitTextToSize(escapeTextForPdf(material), 168);
+                const blockHeight = Math.max(8, lines.length * 6);
+                if (y + blockHeight > pageHeight - 16) {
+                    doc.addPage();
+                    stampPdfLogo(doc);
+                    y = 26;
+                }
+                doc.setDrawColor(120, 120, 120);
+                doc.setLineWidth(0.4);
+                doc.rect(14, y - 4, 5, 5);
+                doc.text(lines, 24, y);
+                y += blockHeight;
+            });
+        });
+
+        if (!anyMaterial) {
+            doc.addPage();
+            stampPdfLogo(doc);
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(12);
+            doc.text('Für diesen Seminarplan sind keine Materialien hinterlegt.', 14, 30);
+        }
+
+        const filename = meta.title ? `Materialliste-${meta.title}.pdf` : 'Materialliste.pdf';
         doc.save(filename);
     };
 
@@ -1803,6 +1975,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const pdfGrid = bySel('#kg-pdf-grid');
         const pdfZimBtn = bySel('#kg-pdf-zim');
         const pdfFlowBtn = bySel('#kg-pdf-flow');
+        const pdfMaterialsBtn = bySel('#kg-pdf-materials');
         const globalSetSelect = bySel('#kg-global-set-select');
         const globalSetImportBtn = bySel('#kg-global-set-import');
         const globalSetApplyBtn = bySel('#kg-global-set-apply');
@@ -2037,6 +2210,16 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 }
             });
         }
+        if (pdfMaterialsBtn) {
+            pdfMaterialsBtn.addEventListener('click', () => {
+                try {
+                    exportPdfMaterials();
+                    setStatus('Materiallisten-PDF erstellt.', false);
+                } catch (e) {
+                    setStatus(`PDF-Export fehlgeschlagen: ${e.message || e}`, true);
+                }
+            });
+        }
         if (globalSetImportBtn) {
             globalSetImportBtn.addEventListener('click', () => {
                 const setid = Number.parseInt(globalSetSelect ? (globalSetSelect.value || '0') : '0', 10) || 0;
@@ -2098,14 +2281,15 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     };
 
     return {
-        init: function(cmid) {
+        init: function(cmid, logo) {
             ensureExternalLibraries().then(() => {
                 return Promise.all([
                     loadMethods(cmid),
                     loadGrids(cmid),
                     loadPlanningState(cmid),
                     loadGlobalMethodsets(cmid),
-                    loadGlobalSyncStatus(cmid)
+                    loadGlobalSyncStatus(cmid),
+                    preparePdfLogo(logo)
                 ]);
             }).then(() => {
                     bind(cmid);

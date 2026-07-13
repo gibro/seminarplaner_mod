@@ -260,5 +260,16 @@ function xmldb_seminarplaner_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026071400, 'seminarplaner');
     }
 
+    if ($oldversion < 2026071503) {
+        // D52: dauerhaftes PDF-Logo pro Aktivität – Positions-Spalte ergänzen.
+        $table = new xmldb_table('seminarplaner');
+        $field = new xmldb_field('logoposition', XMLDB_TYPE_CHAR, '10', null, null, null, null, 'defaultmethodsetid');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026071503, 'seminarplaner');
+    }
+
     return true;
 }

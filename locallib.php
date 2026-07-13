@@ -30,6 +30,37 @@ function seminarplaner_require_activity_context(int $id, string $capability): ar
 }
 
 /**
+ * Build the PDF logo payload (D52) for the client-side export.
+ *
+ * The stored logo file is embedded as a base64 data URL so the browser-side
+ * jsPDF export can place it in the header of every PDF without an extra fetch.
+ *
+ * @param context_module $context Module context.
+ * @param stdClass $seminarplaner Activity record (provides the logo position).
+ * @return array{dataurl: string, position: string}|null Logo payload or null when no logo is set.
+ */
+function seminarplaner_get_pdf_logo(context_module $context, stdClass $seminarplaner): ?array {
+    $fs = get_file_storage();
+    $files = $fs->get_area_files($context->id, 'mod_seminarplaner', 'logo', 0, 'itemid, filepath, filename', false);
+    $file = reset($files);
+    if (!$file || $file->is_directory()) {
+        return null;
+    }
+
+    $content = $file->get_content();
+    if ($content === '') {
+        return null;
+    }
+
+    $position = ($seminarplaner->logoposition ?? '') === 'left' ? 'left' : 'right';
+
+    return [
+        'dataurl' => 'data:' . $file->get_mimetype() . ';base64,' . base64_encode($content),
+        'position' => $position,
+    ];
+}
+
+/**
  * Install a runtime guard for malformed unserialize() notices in user preferences.
  *
  * The handler targets only the known unserialize offset notice and tries to
