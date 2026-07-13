@@ -7370,3 +7370,137 @@ a.kg-btn-primary:focus {
 .sq-gap-results:empty {
     margin-top: 0;
 }
+
+/* =========================================================================
+   D61 - Seminarziele des Gesamtplans: aufklappbarer Bereich oben in der
+   Sequenz, je Ziel Freitext + Verknüpfungs-Checkliste der platzierten
+   Einheiten. Speist die neunte "Zielabdeckung"-Regel der Empfehlungen.
+   ========================================================================= */
+.sq-goals {
+    margin: 0 0 14px;
+}
+.sq-goals__box {
+    background: #fff;
+    border: 1px solid var(--ig-lightgray, #DADADA);
+    border-top: 3px solid var(--color-primary, #E2001A);
+}
+.sq-goals__summary {
+    cursor: pointer;
+    padding: 10px 14px;
+    font-family: var(--font-head, inherit);
+    text-transform: uppercase;
+    letter-spacing: .02em;
+    font-weight: 700;
+    font-size: 14px;
+}
+.sq-goals__body {
+    padding: 4px 14px 14px;
+    border-top: 1px solid var(--ig-lightgray, #DADADA);
+}
+.sq-goals__hint {
+    margin: 10px 0;
+    font-size: 13px;
+    color: var(--ig-gray, #646464);
+}
+.sq-goals__list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.sq-goal {
+    border: 1px solid var(--ig-lightgray, #DADADA);
+    padding: 8px 10px;
+    background: var(--ig-offwhite, #FAFAFA);
+}
+.sq-goal__head {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.sq-goal__head .sq-goal-text {
+    flex: 1 1 auto;
+}
+.sq-goal__del {
+    flex: 0 0 auto;
+    line-height: 1;
+    padding: 6px 10px;
+}
+.sq-goal-links {
+    margin-top: 8px;
+}
+.sq-goal-links > summary {
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--ig-gray, #646464);
+}
+.sq-goal-links__list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 6px;
+    padding-left: 4px;
+}
+.sq-goal-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    cursor: pointer;
+}
+.sq-goals__add {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+.sq-goals__add .kg-input {
+    flex: 1 1 auto;
+}
+.sq-goals__add .kg-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+/* =========================================================================
+   D62 - Geführter Lernziel-Editor: Phase → Verb → Inhalt → Satz. Modaler
+   Baukasten, aufgerufen am Lernziele-Feld (Einheiten-Modal) und an den
+   Seminarzielen (D61). Liegt über dem Einheiten-Modal.
+   ========================================================================= */
+.sq-lz-overlay {
+    z-index: 2100;
+}
+.sq-lz-modal {
+    max-width: 560px;
+}
+.sq-lz-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.sq-lz-chip {
+    border: 1px solid var(--ig-lightgray, #DADADA);
+    background: #fff;
+    padding: 5px 12px;
+    font-size: 14px;
+    cursor: pointer;
+}
+.sq-lz-chip:hover {
+    border-color: var(--color-primary, #E2001A);
+}
+.sq-lz-chip.active {
+    background: var(--color-primary, #E2001A);
+    border-color: var(--color-primary, #E2001A);
+    color: #fff;
+}
+.sq-lz-preview {
+    margin-top: 6px;
+    padding: 12px 14px;
+    background: var(--ig-offwhite, #FAFAFA);
+    border-left: 3px solid var(--color-primary, #E2001A);
+    font-size: 15px;
+    min-height: 20px;
+}
+.sq-lz-trigger {
+    margin: -4px 0 10px;
+    font-size: 13px;
+    padding: 5px 12px;
+}

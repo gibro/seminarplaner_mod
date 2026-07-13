@@ -379,6 +379,17 @@ function(Ajax, UserRepository, Fragment, Templates) {
         {phase: 'transfer', stems: ['bewert', 'beurteil', 'einschätz', 'entwickel', 'gestalt', 'konzipier', 'reflektier', 'übertrag']},
     ];
 
+    // D62: Verb-Listen je Seminarphase für den geführten Lernziel-Editor
+    // (5 Phasen als Stufen statt der klassischen Bloom-Stufen; die Phase ist
+    // zugleich die Vorbelegung, deckt sich mit den D41-Verbstämmen).
+    const LERNZIEL_VERBS = {
+        orientierung: ['benennen', 'nennen', 'definieren', 'beschreiben', 'aufzählen', 'wiedergeben', 'zuordnen'],
+        erfahrung: ['schildern', 'austauschen', 'einbringen', 'sammeln', 'berichten', 'erkunden', 'reflektieren'],
+        analyse: ['erklären', 'vergleichen', 'unterscheiden', 'analysieren', 'einordnen', 'zusammenfassen', 'klassifizieren'],
+        handlung: ['anwenden', 'durchführen', 'umsetzen', 'erproben', 'üben', 'anleiten', 'erstellen'],
+        transfer: ['bewerten', 'beurteilen', 'einschätzen', 'entwickeln', 'gestalten', 'übertragen', 'reflektieren'],
+    };
+
     const STOPWORDS = ['eine', 'einer', 'eines', 'einem', 'einen', 'der', 'die', 'das', 'den', 'dem', 'des',
         'und', 'oder', 'für', 'nach', 'über', 'unter', 'beim', 'zum', 'zur', 'mit', 'ohne', 'sich', 'sind',
         'werden', 'wird', 'können', 'lernenden', 'teilnehmenden', 'sowie', 'auch', 'nicht', 'ist', 'als'];
@@ -419,6 +430,10 @@ function(Ajax, UserRepository, Fragment, Templates) {
             // Remembered open/closed state of the collapsible suggestion
             // boxes, keyed per day and target, across re-renders.
             this.openSuggest = {};
+            // D61: Auf-/Zu-Zustand des Seminarziele-Panels und der einzelnen
+            // Verknüpfungs-Checklisten (je Ziel), über Re-Renders gemerkt.
+            this.goalsOpen = false;
+            this.openGoalLinks = {};
             // D47: active drag (pid + optional module id) and the element
             // currently marked as drop target.
             this.drag = null;
@@ -480,6 +495,19 @@ function(Ajax, UserRepository, Fragment, Templates) {
             // Statisches Einheiten-Modal (Rich-Text, D17/D50): Speichern,
             // Abbrechen/Schließen und Klick auf den Overlay-Hintergrund.
             bindUnitMultiDropdowns();
+            // D62: geführter Lernziel-Editor am Lernziele-Feld des Einheiten-Modals.
+            const lzopen = bySel('#sq-lz-open-lernziele');
+            if (lzopen) {
+                lzopen.addEventListener('click', () => {
+                    this.openLernzielEditor((sentence, phase) => {
+                        const el = bySel('#sq-e-lernziele');
+                        const current = getRichValue(el);
+                        const addition = `<p>${escapeHtml(sentence)}</p>`;
+                        setRichValue(el, current ? current + addition : addition);
+                        this.suggestUnitPhase(phase);
+                    }, {phase: this.currentUnitPhaseKey()});
+                });
+            }
             const unitsave = bySel('#sq-unit-save');
             if (unitsave) {
                 unitsave.addEventListener('click', () => this.saveUnitModal());
@@ -546,6 +574,7 @@ function(Ajax, UserRepository, Fragment, Templates) {
                     event.returnValue = '';
                 }
             });
+            this.bindGoals();
             this.initDramaToggle();
             this.initSetupPanel();
             this.initPublishControl();
@@ -1222,6 +1251,15 @@ function(Ajax, UserRepository, Fragment, Templates) {
             seq.platzierungen = toMap(seq.platzierungen);
             seq.einheitenauswahlen = toMap(seq.einheitenauswahlen);
             seq.bausteine = toMap(seq.bausteine);
+            // D61: Seminarziele des Gesamtplans – Liste einzelner Ziele, jedes
+            // mit Freitext und den verknüpften Seminareinheiten (Karten-IDs).
+            seq.seminarziele = (Array.isArray(seq.seminarziele) ? seq.seminarziele : [])
+                .map((ziel) => ({
+                    id: String((ziel && ziel.id) || this.uniqueId('zl', {})),
+                    text: String((ziel && ziel.text) || ''),
+                    einheiten: Array.isArray(ziel && ziel.einheiten) ? ziel.einheiten.map(String) : [],
+                }))
+                .filter((ziel) => ziel.id);
             Object.keys(seq.bausteine).forEach((bid) => {
                 const baustein = seq.bausteine[bid];
                 if (baustein && typeof baustein === 'object') {
@@ -2801,7 +2839,392 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 }
             }
 
+            // Regel 9 (Seminar): Zielabdeckung (D61). Hinweis, wenn ein
+            // Seminarziel noch mit keiner Seminareinheit verknüpft ist. Still,
+            // solange keine Seminarziele eingetragen sind.
+            const ziele = (this.sequenz && Array.isArray(this.sequenz.seminarziele)) ? this.sequenz.seminarziele : [];
+            const namedziele = ziele.filter((ziel) => String(ziel.text || '').trim());
+            if (namedziele.length) {
+                const offen = namedziele.filter((ziel) => !(Array.isArray(ziel.einheiten) && ziel.einheiten.length));
+                if (!offen.length) {
+                    findings.push({ok: true, text: 'Alle Seminarziele sind mit mindestens einer Seminareinheit verknüpft.'});
+                } else if (offen.length === 1) {
+                    findings.push({ok: false, text: `Das Seminarziel „${offen[0].text.trim()}" ist noch mit keiner Seminareinheit verknüpft.`});
+                } else {
+                    findings.push({ok: false, text: `${offen.length} Seminarziele sind noch mit keiner Seminareinheit verknüpft.`});
+                }
+            }
+
             return findings;
+        }
+
+        // ---- D61: Seminarziele ------------------------------------------------
+
+        // Alle im Plan platzierten (gefüllten) Seminareinheiten, dedupliziert
+        // nach Karten-ID – Grundlage der Verknüpfungs-Checkliste je Ziel.
+        allPlacedUnits() {
+            const seen = {};
+            const list = [];
+            (this.sequenz && Array.isArray(this.sequenz.tage) ? this.sequenz.tage : []).forEach((day) => {
+                ANCHORS.forEach((ankername) => {
+                    const seq = (day && day.anker && day.anker[ankername] && day.anker[ankername].sequenz) || [];
+                    seq.forEach((pid) => {
+                        const placement = this.placement(pid);
+                        if (!placement || placement.typ !== 'einheit' || this.isUnfilled(placement)) {
+                            return;
+                        }
+                        const auswahl = this.auswahl(placement);
+                        const cardid = auswahl && auswahl.aktiv ? String(auswahl.aktiv) : '';
+                        if (!cardid || seen[cardid]) {
+                            return;
+                        }
+                        seen[cardid] = true;
+                        const card = this.methodCardForRef(cardid);
+                        list.push({cardid, titel: (card && cardTitle(card)) || placement.titel || 'Einheit'});
+                    });
+                });
+            });
+            return list;
+        }
+
+        goalMap() {
+            const map = {};
+            ((this.sequenz && this.sequenz.seminarziele) || []).forEach((ziel) => {
+                map[ziel.id] = true;
+            });
+            return map;
+        }
+
+        goalById(id) {
+            return ((this.sequenz && this.sequenz.seminarziele) || []).find((ziel) => String(ziel.id) === String(id)) || null;
+        }
+
+        addGoal(text) {
+            if (!this.sequenz) {
+                return;
+            }
+            if (!Array.isArray(this.sequenz.seminarziele)) {
+                this.sequenz.seminarziele = [];
+            }
+            const id = this.uniqueId('zl', this.goalMap());
+            this.sequenz.seminarziele.push({id, text: String(text || ''), einheiten: []});
+            this.goalsOpen = true;
+            this.setDirty(true);
+            this.renderGoals();
+            this.renderDrama();
+        }
+
+        deleteGoal(id) {
+            if (!this.sequenz || !id) {
+                return;
+            }
+            this.sequenz.seminarziele = ((this.sequenz.seminarziele) || []).filter((ziel) => String(ziel.id) !== String(id));
+            delete this.openGoalLinks[id];
+            this.setDirty(true);
+            this.renderGoals();
+            this.renderDrama();
+        }
+
+        setGoalText(id, text) {
+            const ziel = this.goalById(id);
+            if (!ziel) {
+                return;
+            }
+            ziel.text = String(text || '');
+            this.setDirty(true);
+            // Kein renderGoals() (Fokus im Eingabefeld erhalten); die
+            // Zielabdeckungs-Regel arbeitet ohnehin mit den Verknüpfungen.
+            this.renderDrama();
+        }
+
+        toggleGoalLink(id, cardid, checked) {
+            const ziel = this.goalById(id);
+            if (!ziel || !cardid) {
+                return;
+            }
+            const set = {};
+            (ziel.einheiten || []).forEach((ref) => {
+                set[String(ref)] = true;
+            });
+            if (checked) {
+                set[String(cardid)] = true;
+            } else {
+                delete set[String(cardid)];
+            }
+            ziel.einheiten = Object.keys(set);
+            this.openGoalLinks[id] = true;
+            this.setDirty(true);
+            this.renderGoals();
+            this.renderDrama();
+        }
+
+        renderGoalRow(ziel, units) {
+            const linked = {};
+            (ziel.einheiten || []).forEach((ref) => {
+                linked[String(ref)] = true;
+            });
+            const linkedcount = units.filter((unit) => linked[unit.cardid]).length;
+            const options = units.map((unit) => `
+                <label class="sq-goal-link">
+                  <input type="checkbox" class="sq-goal-link__cb" data-goalid="${escapeHtml(ziel.id)}" data-cardid="${escapeHtml(unit.cardid)}"${linked[unit.cardid] ? ' checked' : ''}>
+                  <span>${escapeHtml(unit.titel)}</span>
+                </label>`).join('');
+            const emptyunits = units.length ? '' : '<div class="sq-field__hint">Noch keine Einheiten im Plan platziert.</div>';
+            const linksopen = this.openGoalLinks[ziel.id] ? ' open' : '';
+            return `
+                <div class="sq-goal" data-goalid="${escapeHtml(ziel.id)}">
+                  <div class="sq-goal__head">
+                    <input type="text" class="kg-input sq-goal-text" data-goalid="${escapeHtml(ziel.id)}" value="${escapeHtml(ziel.text)}" placeholder="Seminarziel …">
+                    <button type="button" class="kg-btn sq-goal__del" data-sq-goal="delete" data-goalid="${escapeHtml(ziel.id)}" title="Ziel löschen">✕</button>
+                  </div>
+                  <details class="sq-goal-links" data-goalid="${escapeHtml(ziel.id)}"${linksopen}>
+                    <summary>Verknüpfte Einheiten (${linkedcount}${units.length ? '/' + units.length : ''})</summary>
+                    <div class="sq-goal-links__list">${options || emptyunits}</div>
+                  </details>
+                </div>`;
+        }
+
+        renderGoals() {
+            const host = bySel('#sq-goals');
+            if (!host) {
+                return;
+            }
+            if (!this.sequenz) {
+                host.innerHTML = '';
+                return;
+            }
+            const ziele = Array.isArray(this.sequenz.seminarziele) ? this.sequenz.seminarziele : [];
+            const units = this.allPlacedUnits();
+            const rows = ziele.map((ziel) => this.renderGoalRow(ziel, units)).join('');
+            const open = this.goalsOpen ? ' open' : '';
+            host.innerHTML = `
+                <details class="sq-goals__box"${open}>
+                  <summary class="sq-goals__summary">🎯 Seminarziele${ziele.length ? ` (${ziele.length})` : ''}</summary>
+                  <div class="sq-goals__body">
+                    <p class="sq-goals__hint">Formuliere die übergeordneten Ziele des Seminars und hake je Ziel ab, welche Einheiten es adressieren.</p>
+                    <div class="sq-goals__list">${rows}</div>
+                    <div class="sq-goals__add">
+                      <input type="text" class="kg-input" id="sq-goal-new" placeholder="Neues Seminarziel …">
+                      <button type="button" class="kg-btn sq-lz-trigger" data-sq-goal="editor" title="Geführt formulieren">✎ Formulieren</button>
+                      <button type="button" class="kg-btn kg-btn-primary" data-sq-goal="add">＋ Ziel hinzufügen</button>
+                    </div>
+                  </div>
+                </details>`;
+        }
+
+        bindGoals() {
+            const host = bySel('#sq-goals');
+            if (!host) {
+                return;
+            }
+            host.addEventListener('click', (event) => {
+                const action = event.target.closest('[data-sq-goal]');
+                if (!action) {
+                    return;
+                }
+                const type = action.getAttribute('data-sq-goal');
+                if (type === 'add') {
+                    const input = bySel('#sq-goal-new');
+                    const text = input ? input.value.trim() : '';
+                    if (!text) {
+                        return;
+                    }
+                    this.addGoal(text);
+                } else if (type === 'editor') {
+                    // D62: geführt ein Seminarziel formulieren.
+                    this.openLernzielEditor((sentence) => this.addGoal(sentence));
+                } else if (type === 'delete') {
+                    this.deleteGoal(action.getAttribute('data-goalid') || '');
+                }
+            });
+            host.addEventListener('change', (event) => {
+                const checkbox = event.target.closest('.sq-goal-link__cb');
+                if (checkbox) {
+                    this.toggleGoalLink(checkbox.getAttribute('data-goalid') || '', checkbox.getAttribute('data-cardid') || '', checkbox.checked);
+                    return;
+                }
+                const textinput = event.target.closest('.sq-goal-text');
+                if (textinput) {
+                    this.setGoalText(textinput.getAttribute('data-goalid') || '', textinput.value);
+                }
+            });
+            // Auf-/Zu-Zustand merken (toggle bubbelt nicht → Capture-Phase).
+            host.addEventListener('toggle', (event) => {
+                const target = event.target;
+                if (!target || !target.classList) {
+                    return;
+                }
+                if (target.classList.contains('sq-goals__box')) {
+                    this.goalsOpen = target.open;
+                } else if (target.classList.contains('sq-goal-links')) {
+                    const goalid = target.getAttribute('data-goalid') || '';
+                    if (goalid) {
+                        if (target.open) {
+                            this.openGoalLinks[goalid] = true;
+                        } else {
+                            delete this.openGoalLinks[goalid];
+                        }
+                    }
+                }
+            }, true);
+        }
+
+        // ---- D62: Geführter Lernziel-Editor -----------------------------------
+
+        buildLernzielSentence(verb, inhalt) {
+            const v = String(verb || '').trim();
+            const i = String(inhalt || '').trim().replace(/\s+/g, ' ');
+            if (!v || !i) {
+                return '';
+            }
+            // Deutsche Wortstellung: Infinitiv steht am Satzende.
+            return `Die Teilnehmenden können ${i} ${v}.`;
+        }
+
+        closeLernzielEditor() {
+            const overlay = document.getElementById('sq-lz-overlay');
+            if (overlay) {
+                overlay.remove();
+            }
+            this.lernzielAccept = null;
+        }
+
+        // Aktuelle erste Seminarphase der im Modal bearbeiteten Einheit (für die
+        // Vorbelegung des Editors).
+        currentUnitPhaseKey() {
+            const values = readMultiDropdownValues('#sq-e-seminarphase') || [];
+            for (let i = 0; i < values.length; i++) {
+                const key = phaseKey(values[i]);
+                if (key) {
+                    return key;
+                }
+            }
+            return '';
+        }
+
+        // D62/D41: das gewählte Verb schlägt die passende Seminarphase vor –
+        // als Vorbelegung im Modal, ohne bereits Gewähltes zu entfernen.
+        suggestUnitPhase(phaseKey) {
+            const label = PHASE_LABELS[phaseKey];
+            if (!label) {
+                return;
+            }
+            const current = (readMultiDropdownValues('#sq-e-seminarphase') || []).map(String);
+            if (!current.includes(label)) {
+                setMultiDropdownValues('#sq-e-seminarphase', current.concat([label]));
+            }
+        }
+
+        // onAccept(sentence, phase) wird mit dem fertigen Satz aufgerufen.
+        openLernzielEditor(onAccept, options) {
+            const opts = options || {};
+            this.closeLernzielEditor();
+            this.lernzielAccept = typeof onAccept === 'function' ? onAccept : null;
+            let phase = opts.phase && LERNZIEL_VERBS[opts.phase] ? opts.phase : 'orientierung';
+            let verb = '';
+            let inhalt = '';
+
+            const overlay = document.createElement('div');
+            overlay.className = 'sq-modal-overlay sq-lz-overlay open';
+            overlay.id = 'sq-lz-overlay';
+            document.body.appendChild(overlay);
+
+            const previewText = () => {
+                const sentence = this.buildLernzielSentence(verb, inhalt);
+                return sentence
+                    ? escapeHtml(sentence)
+                    : '<span class="sq-field__hint">Wähle ein Verb und ergänze den Inhalt.</span>';
+            };
+
+            const render = () => {
+                const phasechips = Object.keys(PHASE_LABELS).map((key) =>
+                    `<button type="button" class="sq-lz-chip${key === phase ? ' active' : ''}" data-lz-phase="${key}">${escapeHtml(PHASE_LABELS[key])}</button>`).join('');
+                const verbchips = (LERNZIEL_VERBS[phase] || []).map((v) =>
+                    `<button type="button" class="sq-lz-chip${v === verb ? ' active' : ''}" data-lz-verb="${escapeHtml(v)}">${escapeHtml(v)}</button>`).join('');
+                const sentence = this.buildLernzielSentence(verb, inhalt);
+                overlay.innerHTML = `
+                    <div class="sq-modal sq-lz-modal">
+                      <div class="sq-modal__head">
+                        <h3>Lernziel formulieren</h3>
+                        <button type="button" class="sq-modal__close" data-lz="close">✕</button>
+                      </div>
+                      <div class="sq-modal__body">
+                        <div class="sq-field">
+                          <label class="kg-label">1. Phase wählen</label>
+                          <div class="sq-lz-chips">${phasechips}</div>
+                        </div>
+                        <div class="sq-field">
+                          <label class="kg-label">2. Verb wählen</label>
+                          <div class="sq-lz-chips">${verbchips}</div>
+                        </div>
+                        <div class="sq-field">
+                          <label class="kg-label">3. Inhalt ergänzen</label>
+                          <input type="text" class="kg-input" id="sq-lz-inhalt" value="${escapeHtml(inhalt)}" placeholder="z. B. ihre Beteiligungsrechte">
+                        </div>
+                        <div class="sq-lz-preview" id="sq-lz-preview">${previewText()}</div>
+                      </div>
+                      <div class="sq-modal__footer">
+                        <button type="button" class="kg-btn" data-lz="close">Abbrechen</button>
+                        <button type="button" class="kg-btn kg-btn-primary" data-lz="accept"${sentence ? '' : ' disabled'}>Übernehmen</button>
+                      </div>
+                    </div>`;
+            };
+
+            overlay.addEventListener('click', (event) => {
+                if (event.target === overlay) {
+                    this.closeLernzielEditor();
+                    return;
+                }
+                const phasebtn = event.target.closest('[data-lz-phase]');
+                if (phasebtn) {
+                    phase = phasebtn.getAttribute('data-lz-phase');
+                    verb = '';
+                    render();
+                    return;
+                }
+                const verbbtn = event.target.closest('[data-lz-verb]');
+                if (verbbtn) {
+                    verb = verbbtn.getAttribute('data-lz-verb');
+                    render();
+                    return;
+                }
+                const action = event.target.closest('[data-lz]');
+                if (!action) {
+                    return;
+                }
+                const type = action.getAttribute('data-lz');
+                if (type === 'close') {
+                    this.closeLernzielEditor();
+                } else if (type === 'accept') {
+                    const sentence = this.buildLernzielSentence(verb, inhalt);
+                    const accept = this.lernzielAccept;
+                    if (sentence && accept) {
+                        accept(sentence, phase);
+                    }
+                    this.closeLernzielEditor();
+                }
+            });
+            // Live-Vorschau ohne Re-Render, damit der Fokus im Inhaltsfeld bleibt.
+            overlay.addEventListener('input', (event) => {
+                if (!event.target || event.target.id !== 'sq-lz-inhalt') {
+                    return;
+                }
+                inhalt = event.target.value;
+                const preview = overlay.querySelector('#sq-lz-preview');
+                if (preview) {
+                    preview.innerHTML = previewText();
+                }
+                const accept = overlay.querySelector('[data-lz="accept"]');
+                if (accept) {
+                    accept.disabled = !this.buildLernzielSentence(verb, inhalt);
+                }
+            });
+
+            render();
+            const input = overlay.querySelector('#sq-lz-inhalt');
+            if (input) {
+                input.focus();
+            }
         }
 
         renderDrama() {
@@ -3258,6 +3681,7 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 return;
             }
             this.renderPlanInfo();
+            this.renderGoals();
             if (!this.sequenz || !this.dayCount()) {
                 container.innerHTML = '';
                 if (label) {

@@ -200,6 +200,9 @@ echo html_writer::end_div();
 echo html_writer::tag('div', '', ['id' => 'sq-plan-info', 'class' => 'sq-toolbar__info']);
 echo html_writer::end_div();
 
+// D61: Seminarziele des Gesamtplans (aufklappbar, von sequenz.js gefüllt).
+echo html_writer::tag('div', '', ['id' => 'sq-goals', 'class' => 'sq-goals']);
+
 // Anchors are rendered by the AMD module.
 echo html_writer::tag('div', '', ['id' => 'sq-day']);
 echo html_writer::tag('div', '', ['id' => 'sq-drama', 'class' => 'sq-drama']);
@@ -314,6 +317,12 @@ echo html_writer::end_div();
 echo html_writer::start_div('sq-modal__body');
 echo $sqtext('Titel', 'titel');
 echo $sqrich('Lernziele (Ich kann …)', 'lernziele');
+// D62: geführter Lernziel-Editor (Phase → Verb → Inhalt → Satz).
+echo html_writer::tag('button', '✎ Lernziel formulieren', [
+    'type' => 'button',
+    'class' => 'kg-btn sq-lz-trigger',
+    'id' => 'sq-lz-open-lernziele',
+]);
 echo $sqrich('Kurzbeschreibung', 'kurzbeschreibung');
 echo $sqalternativen();
 echo $sqtext('Zeitbedarf (Minuten)', 'zeitbedarf');
