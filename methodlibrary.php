@@ -451,7 +451,7 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_div();
 
-echo html_writer::tag('div', '', ['id' => 'ml-status', 'class' => 'kg-status']);
+echo html_writer::tag('div', '', ['id' => 'ml-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
 
 echo html_writer::end_div(); // Ende Tab 1 (#ml-tab-local).
 

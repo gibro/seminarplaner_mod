@@ -20,7 +20,7 @@ echo $OUTPUT->heading(format_string($seminarplaner->name));
 echo seminarplaner_render_tabs((int)$cm->id, 'roterfaden', $context);
 
 echo html_writer::start_div('kg-shell');
-echo html_writer::tag('div', '', ['id' => 'kg-roterfaden-status', 'class' => 'kg-status']);
+echo html_writer::tag('div', '', ['id' => 'kg-roterfaden-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
 echo html_writer::start_div('kg-ie-block');
 echo html_writer::tag('h3', get_string('roterfadenmenu', 'mod_seminarplaner'));
 echo html_writer::start_div('kg-row');

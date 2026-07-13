@@ -76,7 +76,7 @@ echo html_writer::tag('div', '', ['id' => 'kg-ie-preview', 'class' => 'kg-ie-pre
 echo html_writer::start_div('kg-row kg-ie-actions');
 echo html_writer::tag('button', 'Importieren', ['type' => 'button', 'id' => 'kg-ie-import-now', 'class' => 'kg-btn kg-btn-primary']);
 echo html_writer::end_div();
-echo html_writer::tag('div', '', ['id' => 'kg-ie-import-status', 'class' => 'kg-status']);
+echo html_writer::tag('div', '', ['id' => 'kg-ie-import-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
 echo html_writer::end_div();
 
 echo html_writer::end_div();
@@ -98,8 +98,8 @@ echo html_writer::end_div();
 echo html_writer::start_div('kg-row');
 echo html_writer::tag('button', 'Ausstehende Updates übernehmen', ['type' => 'button', 'id' => 'kg-global-set-apply', 'class' => 'kg-btn']);
 echo html_writer::end_div();
-echo html_writer::tag('div', '', ['id' => 'kg-global-set-syncinfo', 'class' => 'kg-status']);
-echo html_writer::tag('div', '', ['id' => 'kg-global-set-status', 'class' => 'kg-status']);
+echo html_writer::tag('div', '', ['id' => 'kg-global-set-syncinfo', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
+echo html_writer::tag('div', '', ['id' => 'kg-global-set-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block');
@@ -175,7 +175,7 @@ echo html_writer::end_div();
 
 echo html_writer::end_div();
 
-echo html_writer::tag('div', '', ['id' => 'kg-ie-status', 'class' => 'kg-status']);
+echo html_writer::tag('div', '', ['id' => 'kg-ie-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
 
 echo html_writer::end_div();
 

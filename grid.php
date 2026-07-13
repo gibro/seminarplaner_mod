@@ -42,7 +42,7 @@ echo $OUTPUT->heading(format_string($seminarplaner->name));
 echo seminarplaner_render_tabs((int)$cm->id, 'grid');
 
 echo html_writer::start_div('kg-shell kg-grid-readonly');
-echo html_writer::tag('div', '', ['id' => 'kg-status', 'class' => 'kg-status']);
+echo html_writer::tag('div', '', ['id' => 'kg-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
 echo html_writer::start_div('sq-pagehead');
 echo html_writer::tag('h3', get_string('ueberblickmenu', 'mod_seminarplaner'));
 echo html_writer::div(get_string('ueberblick_subline', 'mod_seminarplaner'), 'sq-pagehead__sub');

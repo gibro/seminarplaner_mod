@@ -188,7 +188,7 @@ echo html_writer::tag('button', 'Ausgewählte Seminareinheiten einreichen', [
     'class' => 'kg-btn kg-btn-primary',
 ]);
 echo html_writer::end_div();
-echo html_writer::tag('div', '', ['id' => 'kg-review-existing-status', 'class' => 'kg-status']);
+echo html_writer::tag('div', '', ['id' => 'kg-review-existing-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
 echo html_writer::end_div();
 
 // D51: Weg 2 - neue Methoden-Sammlung.
@@ -223,7 +223,7 @@ echo html_writer::tag('button', 'Methoden-Sammlung einreichen', [
     'class' => 'kg-btn kg-btn-primary',
 ]);
 echo html_writer::end_div();
-echo html_writer::tag('div', '', ['id' => 'kg-review-new-status', 'class' => 'kg-status']);
+echo html_writer::tag('div', '', ['id' => 'kg-review-new-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
 echo html_writer::end_div();
 
 // D32/D51: Weg 3 - Seminarkonzept einreichen. Kompletter Plan (inkl.
@@ -266,7 +266,7 @@ echo html_writer::tag('button', 'Seminarkonzept einreichen', [
     'class' => 'kg-btn kg-btn-primary',
 ]);
 echo html_writer::end_div();
-echo html_writer::tag('div', '', ['id' => 'kg-review-konzept-status', 'class' => 'kg-status']);
+echo html_writer::tag('div', '', ['id' => 'kg-review-konzept-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
 echo html_writer::end_div();
 
 echo html_writer::end_div();
