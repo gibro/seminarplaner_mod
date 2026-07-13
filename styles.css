@@ -115,6 +115,31 @@
   transition: var(--transition-fast);
 }
 
+/* Native <select> uebernimmt border-radius:0 zwar, behaelt aber ohne
+   appearance:none je nach Browser (macOS/Safari/Chrome) runde Ecken und den
+   nativen Pfeil. Darum fuer alle Plugin-Selects die native Optik abschalten und
+   einen eigenen, kantigen IG-Metall-Chevron (grau) als Hintergrund setzen –
+   scharfe Ecken wie bei allen anderen Elementen. Gilt fuer .kg-input-Selects
+   und die Modal-Selects. */
+select.kg-input,
+.sp-modal__field select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 30px;
+  background-color: var(--color-background);
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='12'%20height='8'%20viewBox='0%200%2012%208'%3E%3Cpath%20d='M1%201l5%205%205-5'%20fill='none'%20stroke='%23646464'%20stroke-width='1.6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  background-size: 12px 8px;
+}
+
+/* Firefox: internen Fokus-Ring des Selects unterdruecken. */
+select.kg-input:-moz-focusring {
+  color: transparent;
+  text-shadow: 0 0 0 var(--ig-anthracite);
+}
+
 .kg-grid-select,
 .sp-break-days-select {
   min-height: 36px;
@@ -677,12 +702,18 @@
   outline-offset: 1px;
 }
 
+/* Dropdowns in den Karten brauchen Abstand nach unten (sonst klebt z. B. das
+   Sammlungs-Dropdown direkt am „Seminarkonzept importieren"-Button). */
+.kg-ie-card select.kg-input {
+  margin-bottom: 12px;
+}
+
 /* ---- PDF-Metadaten-Raster (2x2) ---- */
 .kg-ie-metagrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 11px;
-  margin: 13px 0;
+  margin: 0 0 13px;
 }
 
 /* Spaltenauswahl nutzt das bestehende .field-card (Dropdown-Container), soll
