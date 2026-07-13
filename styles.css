@@ -695,8 +695,12 @@
   --ig-midgray: #B9B9B9;
 
   /* CD-Handoff Stufe 1: Typografie-Token (Meta IGM mit Handoff-Fallbacks). */
-  --font-head: "Meta Head IGM Cond", "Arial Narrow", "Roboto Condensed", sans-serif;
-  --font-body: "Meta IGM", "Calibri", "Segoe UI", system-ui, sans-serif;
+  /* Font-Familien-Namen muessen exakt den @font-face-Handles im Theme
+     (boost_union Raw SCSS) entsprechen. Primaer: "Meta"/"Meta Head";
+     die frueheren Theme-Handles bleiben als Fallback, falls eine Instanz
+     sie noch so benennt. */
+  --font-head: "Meta Head", "Meta Headline Condensed Bold", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --font-body: "Meta", "Meta Regular Webfont", "Calibri", "Segoe UI", system-ui, sans-serif;
   --ig-sunrise: linear-gradient(20deg, #882A30 0%, #E3051B 50%, #EAB500 100%);
   --ig-sunrise-soft: linear-gradient(20deg, rgba(136, 42, 48, .25) 0%, rgba(227, 5, 27, .2) 50%, rgba(234, 181, 0, .2) 100%);
   --ig-shadow-strong: 0 8px 24px rgba(60, 60, 60, .22);
