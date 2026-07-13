@@ -340,16 +340,7 @@ echo $sqmulti('Raumanforderungen', 'raum', [
     'Gruppenräume' => 'Gruppenräume',
     'akustisch ruhig' => 'akustisch ruhig',
 ], 'Raumanforderungen wählen', 'Raumanforderungen');
-echo $sqselect('Gruppengröße', 'gruppengroesse', [
-    '' => '(keine Angabe)',
-    '1' => '1',
-    '2-3' => '2-3',
-    '3–5' => '3–5',
-    '6–12' => '6–12',
-    '13–24' => '13–24',
-    '25+' => '25+',
-    'beliebig' => 'beliebig',
-]);
+echo $sqselect('Gruppengröße', 'gruppengroesse', ['' => '(keine Angabe)'] + seminarplaner_groupsize_options());
 echo $sqrich('Risiken/Tipps', 'risiken');
 echo $sqrich('Debrief/Reflexionsfragen', 'debrief');
 echo $sqtext('Tags/Schlüsselworte', 'tags', 'Hilft beim Wiederfinden und bei Vorschlägen');

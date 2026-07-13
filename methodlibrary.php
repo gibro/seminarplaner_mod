@@ -102,7 +102,7 @@ echo '<button type="button" class="kg-input kg-tag-dropdown-toggle" id="ml-filte
 echo '<div class="kg-tag-dropdown-panel kg-hidden" id="ml-filter-group-panel">';
 echo '<label class="kg-tag-option"><input type="checkbox" id="ml-filter-group-all" checked><span>Alle</span></label>';
 echo '<div id="ml-filter-group-options">';
-foreach (['1', '2-3', '3–5', '6–12', '13–24', '25+', 'beliebig'] as $v) {
+foreach (array_keys(seminarplaner_groupsize_options()) as $v) {
     echo '<label class="kg-tag-option"><input type="checkbox" value="' . s($v) . '"><span>' . s($v) . '</span></label>';
 }
 echo '</div></div></div></label>';
@@ -211,7 +211,7 @@ echo html_writer::end_div();
 
 $bulkselectfields = [
     'zeitbedarf' => ['Zeitbedarf', ['5', '10', '20', '30', '45', '60', '90', '120', '150', '180', 'mehr als 180 Minuten']],
-    'gruppengroesse' => ['Gruppengröße', ['1', '2-3', '3–5', '6–12', '13–24', '25+', 'beliebig']],
+    'gruppengroesse' => ['Gruppengröße', array_keys(seminarplaner_groupsize_options())],
     'vorbereitung' => ['Vorbereitung nötig', ['keine', '<10 Min', '10–30 Min', '>30 Min']],
 ];
 foreach ($bulkselectfields as $fieldname => $fielddef) {
@@ -290,7 +290,7 @@ echo html_writer::end_div();
 echo html_writer::start_div();
 echo html_writer::tag('label', 'Gruppengröße', ['for' => 'ml-e-gruppengroesse', 'class' => 'kg-label']);
 echo html_writer::start_tag('select', ['id' => 'ml-e-gruppengroesse', 'class' => 'kg-input']);
-foreach (['1', '2-3', '3–5', '6–12', '13–24', '25+', 'beliebig'] as $v) {
+foreach (array_keys(seminarplaner_groupsize_options()) as $v) {
     echo html_writer::tag('option', s($v), ['value' => $v]);
 }
 echo html_writer::end_tag('select');

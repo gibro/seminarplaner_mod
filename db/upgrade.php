@@ -182,5 +182,57 @@ function xmldb_seminarplaner_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070908, 'seminarplaner');
     }
 
+    if ($oldversion < 2026071400) {
+        // Gruppengröße von der alten 7-Werte-Skala (1 / 2-3 / 3–5 / 6–12 /
+        // 13–24 / 25+ / beliebig) auf drei Cluster umstellen und die
+        // Bestandsdaten in den Method-Cards umrechnen. Die Cards liegen als
+        // JSON-Array je Aktivität in config_plugins (methods_cmid_<cmid>).
+        // Mapping (Nutzer-Entscheidung): 2–5 → Gruppenarbeit, 6+ → Plenum,
+        // Einzelarbeit/unbekannt → beliebig. Inline gehalten, damit der
+        // Upgrade-Schritt unabhängig von späteren Codeänderungen bleibt.
+        $groupmap = [
+            '1' => 'beliebig',
+            '2-3' => 'Gruppenarbeit (2-5)',
+            '3–5' => 'Gruppenarbeit (2-5)',
+            '6–12' => 'Plenum (10-20)',
+            '13–24' => 'Plenum (10-20)',
+            '25+' => 'Plenum (10-20)',
+            'beliebig' => 'beliebig',
+        ];
+        $newvalues = ['Gruppenarbeit (2-5)' => true, 'Plenum (10-20)' => true, 'beliebig' => true];
+        $rows = $DB->get_records_select('config_plugins',
+            'plugin = :plugin AND ' . $DB->sql_like('name', ':namelike'),
+            ['plugin' => 'mod_seminarplaner', 'namelike' => 'methods_cmid_%']);
+        foreach ($rows as $row) {
+            $cards = json_decode((string)$row->value, true);
+            if (!is_array($cards)) {
+                continue;
+            }
+            $changed = false;
+            foreach ($cards as $i => $card) {
+                if (!is_array($card) || !array_key_exists('gruppengroesse', $card)) {
+                    continue;
+                }
+                $old = trim((string)$card['gruppengroesse']);
+                if ($old === '' || isset($newvalues[$old])) {
+                    continue;
+                }
+                $new = $groupmap[$old] ?? 'beliebig';
+                if ($new !== (string)$card['gruppengroesse']) {
+                    $cards[$i]['gruppengroesse'] = $new;
+                    $changed = true;
+                }
+            }
+            if ($changed) {
+                $json = json_encode($cards, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                if ($json !== false) {
+                    set_config($row->name, $json, 'mod_seminarplaner');
+                }
+            }
+        }
+
+        upgrade_mod_savepoint(true, 2026071400, 'seminarplaner');
+    }
+
     return true;
 }

@@ -14,7 +14,9 @@ class import_export_validator {
     /** @var array<string, string[]> */
     private const STRICT_ENUMS = [
         'Zeitbedarf' => ['5', '10', '20', '30', '45', '60', '90', '120', '150', '180', 'mehr als 180 Minuten'],
-        'Gruppengröße' => ['1', '2-3', '3–5', '6–12', '13–24', '25+', 'beliebig'],
+        // Muss zu seminarplaner_groupsize_options() passen (const kann keine
+        // Funktion aufrufen). Bei Änderung der Cluster hier mitpflegen.
+        'Gruppengröße' => ['Gruppenarbeit (2-5)', 'Plenum (10-20)', 'beliebig'],
         'Komplexitätsgrad' => ['sehr niedrig', 'niedrig', 'mittel', 'hoch'],
     ];
 
