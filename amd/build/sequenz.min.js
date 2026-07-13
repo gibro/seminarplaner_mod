@@ -2746,6 +2746,43 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 });
             });
 
+            // Regel 8 (Seminar): Zeitrahmen-Hinweis (D53). Summe aller
+            // Platzierungen (Einheiten + Pausen) gegen die verfügbaren
+            // Anker-Fenster über alle Tage (D45-An-/Abreise-Anker = 0).
+            let framecapacity = 0;
+            let frameused = 0;
+            this.sequenz.tage.forEach((tag, idx) => {
+                const dframe = this.dayFrame(idx);
+                ANCHORS.forEach((ankername) => {
+                    framecapacity += this.anchorBudget(dframe, ankername);
+                    const seq = (tag.anker && tag.anker[ankername] && tag.anker[ankername].sequenz) || [];
+                    frameused += this.usedMinutes(seq);
+                });
+            });
+            if (framecapacity > 0 && frameused > 0) {
+                const fmtDuration = (min) => {
+                    const total = Math.max(0, Math.round(min));
+                    const hours = Math.floor(total / 60);
+                    const rest = total % 60;
+                    if (hours && rest) {
+                        return `${hours} Std. ${rest} Min.`;
+                    }
+                    if (hours) {
+                        return `${hours} Std.`;
+                    }
+                    return `${rest} Min.`;
+                };
+                const usedlabel = fmtDuration(frameused);
+                const capacitylabel = fmtDuration(framecapacity);
+                if (frameused > framecapacity + 10) {
+                    findings.push({ok: false, text: `Insgesamt ist etwas mehr geplant, als der Zeitrahmen hergibt (${usedlabel} von ${capacitylabel}) – vielleicht lässt sich etwas kürzen oder auf einen anderen Tag legen.`});
+                } else if (framecapacity - frameused > 60 && frameused < framecapacity * 0.75) {
+                    findings.push({ok: false, text: `Im Zeitrahmen ist noch reichlich Platz (${usedlabel} von ${capacitylabel} verplant) – hier ist Raum für weitere Einheiten oder großzügigere Zeitfenster.`});
+                } else {
+                    findings.push({ok: true, text: `Die geplanten Einheiten passen gut in den Zeitrahmen (${usedlabel} von ${capacitylabel}).`});
+                }
+            }
+
             // Regel 3 (Seminar): Transfer am Ende.
             let lastunit = null;
             this.sequenz.tage.forEach((tag) => {
@@ -2880,10 +2917,23 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 data-cardid="${escapeHtml(String(card.id))}" ${globalattr} ${targetattrs}>Übernehmen</button>`;
         }
 
+        // Kartenrefs der Baustein-eigenen geplanten Einheiten – die stehen schon
+        // als „geplant, noch nicht platziert" oben und sollen in den generischen
+        // Vorschlägen nicht doppelt erscheinen.
+        plannedRefsForBaustein(baustein) {
+            const planningunit = this.planningUnitForBaustein(baustein);
+            if (!planningunit || !Array.isArray(planningunit.methods)) {
+                return [];
+            }
+            return planningunit.methods
+                .map((m) => String((m && m.methodid) || ''))
+                .filter((ref) => ref && this.methodCardForRef(ref));
+        }
+
         renderSuggestions(gapminutes, baustein, targetattrs) {
             const keywords = this.contextKeywords(baustein);
             const bloomphases = baustein ? this.bloomPhasesFor(baustein.themenplanreferenz) : [];
-            const suggestions = this.suggestFor(gapminutes, keywords, bloomphases, []);
+            const suggestions = this.suggestFor(gapminutes, keywords, bloomphases, this.plannedRefsForBaustein(baustein));
 
             const cards = suggestions.map((entry) => {
                 const pkey = phaseKey(entry.card.seminarphase);
@@ -3386,41 +3436,44 @@ function(Ajax, UserRepository, Fragment, Templates) {
             }).join('');
         }
 
-        renderBausteinContent(group, units, unfilled, baustein) {
-            if (!unfilled) {
-                // Partly filled module: suggestions continue for the residual
-                // reservation until it is used up.
-                const residual = group.items.filter((p) => this.isUnfilled(p.data));
-                const restminutes = residual.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
-                const restsuggestions = (residual.length && restminutes >= 10 && this.methodCardList.length)
-                    ? this.renderSuggestions(restminutes, baustein, `data-pid="${escapeHtml(residual[0].pid)}"`)
-                    : '';
-                return `<div class="sq-baustein__units">${units}${restsuggestions}</div>`;
-            }
-            // D14: the reserved duration is the classic suggestion gap - with
-            // keywords and Bloom mapping from the module master data.
-            const placeholderpid = group.items[0].pid;
-            const gapminutes = group.items.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
-            const suggestions = (gapminutes >= 10 && this.methodCardList.length)
-                ? this.renderSuggestions(gapminutes, baustein, `data-pid="${escapeHtml(placeholderpid)}"`)
-                : '';
-            // Reserved module: master data now lives on the module itself;
-            // the planning state only remains as fallback for the unit list.
-            const planningunit = this.planningUnitForBaustein(baustein);
-            const owntopics = htmlToLines(baustein && baustein.unterthemen);
-            const topics = owntopics || (planningunit ? htmlToLines(planningunit.topics) : '');
-            if (!planningunit && !topics) {
-                return suggestions ? `<div class="sq-baustein__units">${suggestions}</div>` : '';
-            }
-            const methods = (Array.isArray(planningunit.methods) ? planningunit.methods : [])
-                .map((m) => this.methodCardForRef(m && m.methodid))
-                .filter((card) => card);
-            if (!topics && !methods.length) {
+        // D14/D6: die Einheiten, die laut Themenplan zu diesem Baustein gehören,
+        // aber noch nicht platziert sind – jeweils direkt platzierbar (Nutzer-
+        // Wunsch: nicht erst in der Bibliothek suchen). Bleibt sichtbar, solange
+        // eine Reservierung offen ist, und schrumpft mit jedem Platzieren.
+        renderPlannedRows(baustein, group, placeholderpid) {
+            // Ohne offene Reservierung gibt es kein Ziel zum Platzieren – dann
+            // die Liste nicht button-los stehenlassen.
+            if (!placeholderpid) {
                 return '';
             }
-            const methodrows = methods.map((card) => {
+            const planningunit = this.planningUnitForBaustein(baustein);
+            const methods = (planningunit && Array.isArray(planningunit.methods) ? planningunit.methods : [])
+                .map((m) => this.methodCardForRef(m && m.methodid))
+                .filter((card) => card);
+            if (!methods.length) {
+                return '';
+            }
+            // Schon in diesem Baustein platzierte Karten herausfiltern.
+            const placed = {};
+            group.items.forEach((item) => {
+                if (this.isUnfilled(item.data)) {
+                    return;
+                }
+                const auswahl = this.auswahl(item.data);
+                if (auswahl && auswahl.aktiv) {
+                    placed[String(auswahl.aktiv)] = true;
+                }
+            });
+            const open = methods.filter((card) => !placed[String(card.id)]);
+            if (!open.length) {
+                return '';
+            }
+            return open.map((card) => {
                 const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
                 const pkey = phaseKey(card.seminarphase);
+                const placebtn = placeholderpid
+                    ? `<button type="button" class="kg-btn kg-btn-primary sq-unit__place" data-sq-action="suggest-add" data-cardid="${escapeHtml(String(card.id))}" data-pid="${escapeHtml(placeholderpid)}">＋ Platzieren</button>`
+                    : '';
                 return `
                     <div class="sq-unit sq-unit--planned">
                       <div class="sq-unit__phase${pkey ? ' sq-phase-bg--' + pkey : ''}"></div>
@@ -3432,12 +3485,44 @@ function(Ajax, UserRepository, Fragment, Templates) {
                           <span class="sq-badge sq-badge--planned">geplant, noch nicht platziert</span>
                         </div>
                       </div>
+                      <div class="sq-unit__actions">${placebtn}</div>
                     </div>`;
             }).join('');
+        }
+
+        renderBausteinContent(group, units, unfilled, baustein) {
+            const residual = group.items.filter((p) => this.isUnfilled(p.data));
+            const restminutes = residual.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
+            const placeholderpid = residual.length ? residual[0].pid : '';
+            const plannedrows = this.renderPlannedRows(baustein, group, placeholderpid);
+
+            if (!unfilled) {
+                // Partly filled module: the planned list continues to show the
+                // still-unplaced units, and suggestions fill the residual
+                // reservation until it is used up.
+                const restsuggestions = (residual.length && restminutes >= 10 && this.methodCardList.length)
+                    ? this.renderSuggestions(restminutes, baustein, `data-pid="${escapeHtml(residual[0].pid)}"`)
+                    : '';
+                return `<div class="sq-baustein__units">${units}${plannedrows}${restsuggestions}</div>`;
+            }
+            // D14: the reserved duration is the classic suggestion gap - with
+            // keywords and Bloom mapping from the module master data.
+            const gapminutes = group.items.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
+            const suggestions = (gapminutes >= 10 && this.methodCardList.length)
+                ? this.renderSuggestions(gapminutes, baustein, `data-pid="${escapeHtml(placeholderpid || group.items[0].pid)}"`)
+                : '';
+            // Reserved module: master data now lives on the module itself;
+            // the planning state only remains as fallback for the topic list.
+            const planningunit = this.planningUnitForBaustein(baustein);
+            const owntopics = htmlToLines(baustein && baustein.unterthemen);
+            const topics = owntopics || (planningunit ? htmlToLines(planningunit.topics) : '');
+            if (!topics && !plannedrows) {
+                return suggestions ? `<div class="sq-baustein__units">${suggestions}</div>` : '';
+            }
             return `
                 <div class="sq-baustein__units">
                   ${topics ? `<div class="sq-baustein__topics">${escapeHtml(topics)}</div>` : ''}
-                  ${methodrows}
+                  ${plannedrows}
                   ${suggestions}
                 </div>`;
         }
