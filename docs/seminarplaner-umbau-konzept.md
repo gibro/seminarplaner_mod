@@ -1,10 +1,27 @@
 # Seminarplaner-Umbau – Konzept- und Entscheidungsdokument
 
-Stand: 9. Juli 2026 · Grundlage: Code-Review `mod_seminarplaner` 0.6.6-beta / `local_seminarplaner` 0.2.2-beta, Analyse eines Original-Themenplans (TP_2026_ki.docx), Vergleich mit SessionLab, Analyse von zwei realen Beispiel-Methodensets (183 Methoden) und vier realen Beispiel-Seminarkonzepten.
+Stand: 12. Juli 2026 · Grundlage: Code-Review `mod_seminarplaner` 0.6.6-beta / `local_seminarplaner` 0.2.2-beta, Analyse eines Original-Themenplans (TP_2026_ki.docx), Vergleich mit SessionLab, Analyse von zwei realen Beispiel-Methodensets (183 Methoden) und vier realen Beispiel-Seminarkonzepten.
 
 Zweck: Dieses Dokument hält den Stand der konzeptionellen Überlegungen zum Umbau des Moodle-Plugins Seminarplaner fest. Es dient als Projektwissen für die Weiterarbeit in einem Claude-Projekt und trennt bewusst zwischen **getroffenen Richtungsentscheidungen**, **offenen Fragen** und **Backlog**. Es soll fortgeschrieben werden, wenn neue Entscheidungen fallen.
 
 Änderungshistorie:
+- 13. Juli 2026 (bd): Umsetzung von Thema C „Einreichen/Austausch abschließen" gestartet (Claude Code). **D51 umgesetzt und dabei präzisiert:** Die Weggabelung „Was möchtest du einreichen?" bekommt **drei** statt zwei Optionen – die dritte („Ein Seminarkonzept einreichen") deckt den seit D51 hinzugekommenen D32-Block ab, der sonst als dauerhaft sichtbarer vierter Kasten die von D51 bekämpfte Verwirrung reproduziert hätte (vom Auftraggeber am 13. Juli bestätigt). D51 Punkt 1 entsprechend angepasst. Die beiden „bestehende Sammlung"-Blöcke sind zu einem durchgängigen Ablauf (1. Sammlung wählen → 2. Kandidaten prüfen → 3. Update-Hinweis → einreichen) verschmolzen. **D58 umgesetzt:** öffentliche Konzeptverantwortlichen-Liste im Einreichen-Tab (nur Name, kein Kontaktweg), neue Opt-in-User-Preference `mod_seminarplaner_konzeptverantwortliche_public` (Default aus), Opt-in-Schalter nur für Nutzer:innen mit `local/seminarplaner:reviewset`-Capability sichtbar. Beide auf Staging (moodle501umbau) browser-verifiziert. Backlog-Punkte D51/D58 damit erledigt. Verbleibend in Thema C: D54 (Auto-Update-Hinweis) und D52 (PDF-Materialliste + Logo).
+- 12. Juli 2026 (bc): D61 und D62 ergänzt. D61: neues Feld „Seminarziele" am Gesamtplan (Freitext, manuell gepflegt, unabhängig von D19), manuelle Verknüpfung mit Seminareinheiten statt automatischem Freitext-Abgleich, neue neunte Regel „Zielabdeckung" in den Didaktischen Empfehlungen. D62: Lernziel-Editor nach Vorbild von `moodle-local_differentiator`/„The Differentiator" (Bloom-Stufe → Verb → Inhalt frei, Satz-Zusammenbau), gilt für D21-Lernziele und D61-Seminarziele gleichermaßen, nutzt die D41-Tabelle für eine Seminarphasen-Vorbelegung mit, kein neues Datenfeld (kein Widerspruch zu D40), Bestandsdaten migrieren nicht automatisch. Backlog um zwei Umsetzungspunkte ergänzt. D-Range in Abschnitt 9 auf D1–D62 aktualisiert.
+- 12. Juli 2026 (bb): D60 um expliziten Umsetzungsstand ergänzt, auf Nachfrage: Die Umbenennung ist bereits vollständig im Code umgesetzt (Commit 12d9b6c) – D60 zieht nur das Konzeptdokument nach, kein Arbeitsauftrag für Claude Code, kein Backlog-Punkt.
+- 12. Juli 2026 (ba): D60 ergänzt: Begriff „Dramaturgie-Check"/„Dramaturgie-Blick" durchgängig auf „Didaktische Empfehlungen" umgestellt – bestätigt eine bereits in Claude Code auf Nutzerwunsch umgesetzte Umbenennung (Commit 12d9b6c, 10. Juli). Fachliche Grundidee aus D15 unverändert, nur der Name ändert sich. Alle Fließtext-Erwähnungen in D15, D22, D23, D25, D27, D53 sowie Abschnitt 1, 6, 8, 10 umgestellt (Änderungshistorie unverändert, wie schon bei D38). „Dramaturgie" (pädagogischer Grundbegriff) und „Dramaturgie-Vorlage" (D3/D4) bleiben unberührt, da eigenständige Begriffe. D-Range in Abschnitt 9 auf D1–D60 aktualisiert.
+- 12. Juli 2026 (az): Abgleich mit dem von Claude Code geschriebenen Arbeitsstand (`seminarplaner-umbau-stand.md`, Stand 10. Juli). Backlog (Abschnitt 7) aktualisiert: Bausteine-Tab-Aufräumpunkt als erledigt markiert (Commit 4b2f8ff), neuer technischer Folgepunkt „planningmode.php/methods.js stilllegen" ergänzt; neuer A11y-Punkt „Touch-Alternative für Drag & Drop" ergänzt; D57-Umsetzungspunkt als bereits erledigt markiert – die Spalte `concepttype` existierte schon vor der D57-Entscheidung (Commits 9f67f79/689303d, 10. Juli), D57 bestätigt nachträglich eine bereits gebaute Lösung; neue offene Konzeptfrage „Eigener Seitenkopf mit Logo in der Weboberfläche" aufgenommen (von D52/PDF-Logo zu unterscheiden). Abschnitt 8 (Rollout-Status) aktualisiert: Block 3 jetzt als abgeschlossen markiert, Block 4 als „in Arbeit" mit Stand der Etappe 1. Offene Rückfrage gestellt: Umbenennung „Dramaturgie-Check"/„Dramaturgie-Blick" → „Didaktische Empfehlungen" in der Weboberfläche (Nutzerwunsch, in Claude Code direkt umgesetzt) – noch nicht ins Konzeptdokument übernommen, da das mehrere bestehende Entscheidungen (D15, D22, D23, D53) betrifft.
+- 12. Juli 2026 (ay): D59 ergänzt, angestoßen durch Rückmeldung aus Claude Code (letzte offene Frage aus den „Nächsten Schritten", Punkt 10): UX-Konzept „Bibliothek beim Planbau" final entschieden – Suchen-und-Ablegen direkt an der D14-Vorschlagsstelle in der Sequenzansicht (Erweiterung eines bestehenden Musters statt neuem Bedienkonzept), zusätzlich bleibt der Bibliothek-Tab (D50/D55) als zweiter, unabhängiger Weg zum freien Stöbern vollständig erhalten. Löst D33-UX, Punkt 10 der „Nächsten Schritte" (Abschnitt 8) und den entsprechenden Backlog-Punkt final ab. D-Range in Abschnitt 9 auf D1–D59 aktualisiert.
+- 12. Juli 2026 (ax): Rückfrage zu „D32 ebenfalls" aus (aw) geklärt: gemeint war die Unterscheidung zwischen Seminarkonzept und Methodensammlung, an der kurz zuvor bereits gearbeitet wurde – als durch **D57** (explizites Typ-Feld in `local_seminarplaner`) abgedeckt eingestuft, kein separater Backlog-Punkt nötig.
+- 12. Juli 2026 (aw): Drei Umsetzungslücken laut Rückmeldung aus Claude Code als erledigt im Backlog (Abschnitt 7) vermerkt: Drag & Drop (seit Commit `4a179a8` wieder funktionsfähig, beide Bedienwege aus D47 funktionieren jetzt nebeneinander), Überblick/Sequenz-Synchronisation (D49 vollständig einsatzbereit), Rich-Text-Editor im Sequenz-Modal (D17-Grundsatz an allen drei Einstiegen erfüllt). Reine Ist-Stand-Aktualisierung, keine neuen Konzeptentscheidungen. Rückfrage zu einem vierten genannten Punkt („D32 ebenfalls") gestellt, da unklar, welcher Backlog-Bezug dort gemeint ist.
+- 12. Juli 2026 (av): D58 ergänzt (vierter und letzter der priorisierten Schnellpunkte): Konzeptverantwortliche werden über eine allgemeine, opt-in-basierte Übersichtsliste sichtbar gemacht (nicht objektbezogen am einzelnen Konzept), Opt-in gilt pro Person für alle ihre betreuten Konzepte, reines Vertrauens-/Orientierungssignal ohne Kontaktweg-Funktion. Backlog-Punkt ergänzt. Damit sind alle vier priorisierten Schnellpunkte (D52–D54, D58) sowie die daraus entstandenen Folgethemen (D55–D57) abgeschlossen. D-Range in Abschnitt 9 auf D1–D58 aktualisiert.
+- 12. Juli 2026 (au): D55, D56 und D57 ergänzt (letzter der vier priorisierten Schnellpunkte war D54; diese drei kamen als direkte Folgethemen dazu, Nachtrag korrigiert eine Auslassung – D55/D56 waren zuvor nur besprochen, nicht geschrieben worden). D55: Bibliothek bekommt drei Tabs („Methodensammlungen" immer durchsuchbar, „Globale Seminarkonzepte" nur nach explizitem Import, „Lokale Seminareinheiten" für alle eigenständigen lokalen Kopien) statt einer durchgehenden Liste – präzisiert D50. D56: Vorschlagsmechanik (D14) durchsucht künftig auch globale Methodensammlungen, nicht nur lokal Vorhandenes. D57: `local_seminarplaner` bekommt ein explizites Typ-Feld Methodensammlung/Seminarkonzept (bisher nur Titel-Konvention) – Konsequenz aus D55, D32 unverändert. Backlog um drei Umsetzungspunkte ergänzt. D-Range in Abschnitt 9 auf D1–D57 aktualisiert.
+- 12. Juli 2026 (at): D54 ergänzt (dritter von vier priorisierten Schnellpunkten, löst zugleich den zurückgestellten Backlog-Punkt „Konfliktfall beim Auto-Update"): Auto-Update-Checkbox entfällt ersatzlos aus dem Import/Export-Tab; stattdessen automatischer Hinweis in der Bibliotheks-Kartenansicht, sobald eine übernommene globale Seminareinheit aktualisiert wurde. Lokale Änderungen haben immer Vorrang, keine stille Überschreibung – konkretisiert D30. Backlog entsprechend bereinigt (Konfliktfall-Punkt als final beantwortet markiert, neuer Umsetzungs-Punkt ergänzt). D-Range in Abschnitt 9 auf D1–D54 aktualisiert.
+- 12. Juli 2026 (as): D53 ergänzt (zweiter von vier priorisierten Schnellpunkten): neue, achte Dramaturgie-Check-Regel „Zeitrahmen-Hinweis" – gleicht die Summe aller geplanten Bausteine gegen den automatisch aus Seminartagen + Anker-Zeiten (D45) ermittelten Zeitrahmen ab, kein zusätzliches Eingabefeld für offiziell gebuchte Stunden. Gleicher Hinweis-Ton wie D15/D22/D23. Backlog-Punkt ergänzt. D-Range in Abschnitt 9 auf D1–D53 aktualisiert.
+- 12. Juli 2026 (ar): D52 ergänzt (erster von vier priorisierten Schnellpunkten aus der Lücken-Analyse): PDF-Export bekommt eine eigenständige, dritte Export-Option „Materialliste-PDF" (dedupliziert, den Seminartagen zugeordnet, Layout als Abgabeliste), dazu ein dauerhaft pro Aktivität gespeichertes Logo-Setting (Upload + Position rechts/links im Seitenkopf), das automatisch in alle PDF-Exporte einfließt. Backlog-Punkt für die Umsetzung ergänzt, Sequenzansicht-für-Referentinnen-Idee als Konkretisierung beim bestehenden Backlog-Punkt „Durchführungsmodus" nachgetragen (kein eigener Beschluss). D-Range in Abschnitt 9 auf D1–D52 aktualisiert.
+- 12. Juli 2026 (aq): Acht offene konzeptionelle Fragen aus der Lücken-Analyse (Perspektive Bildungsreferentin bei Neuerstellung / ehrenamtlicher Referent bei Durchführung) in den Backlog (Abschnitt 7) aufgenommen: Entwurfsstatus für neue Seminarkonzepte, „Als Vorlage nehmen" für ganze Konzepte, Durchführungsmodus (inkl. Sessionplan.de-Live-Modus als Referenz), Live-Abweichungen während der Durchführung, Rückkanal nach der Durchführung, Konfliktfall beim Auto-Update, offene Schnittstelle als OER-Prinzip, Anbindung an Sessionplan.de. Noch keine Entscheidungen – bewusst zurückgestellt, vier eng umrissene Punkte (Materialcheck, Gesamtzeit-Check, Sichtbarkeit bei Auto-Update, Transparenz der Konzeptverantwortlichen) werden als Nächstes einzeln durchgegangen.
+- 12. Juli 2026 (ap): D51 ergänzt (Screenshot-Anlass, Tab „Einreichen"): Weggabelung vor den Formularen der Einreichen-Seite („Was möchtest du einreichen?" mit den Optionen „bestehende Sammlung ergänzen" / „neue Sammlung zusammenstellen") sowie Zusammenführung der beiden bislang getrennten, fast wortgleich betitelten „bestehende Sammlung"-Blöcke zu einem einzigen Ablauf. Der obere Info-Bereich (4-Schritte-Erklärung, Statusliste) bleibt unverändert, da er ein anderes Verständnisproblem bereits gut löst. Neuer Backlog-Punkt für die Umsetzung durch Claude Code ergänzt. D-Range in Abschnitt 9 auf D1–D51 aktualisiert.
+- 10. Juli 2026 (ao): Neue offene Umsetzungslücke im Backlog (Abschnitt 7) ergänzt: Rich-Text-Editor fehlt im aus der Sequenzansicht geöffneten Einheiten-Editor-Modal (Screenshot-Anlass) – Lernziele, Kurzbeschreibung, Ablauf, Risiken, Debrief und Materialien/Technik zeigen aktuell rohe HTML-Tags statt des Moodle-Editors, obwohl dieser in library.php/methodlibrary.php für dieselben Felder bereits korrekt eingebunden ist. Kein neuer Konzeptbeschluss, sondern technischer Nachholbedarf (Anschluss an D17), analog zu D47/Überblick-Sync vermerkt.
+- 10. Juli 2026 (an): D50 ergänzt (Revision von D39, Screenshot-Anlass): Tab „Seminareinheiten" heißt künftig „Bibliothek" und enthält nur noch die durchsuchbare Sammlung – der separate „Anlegen"-Bereich aus D39 entfällt, „Neue Seminareinheit anlegen" wird stattdessen Button innerhalb der Bibliothek (öffnet weiterhin den D17-Modal). Zusätzlich neuer, gleichwertiger Einstiegspunkt in der Sequenzansicht direkt an der bestehenden „Einheit/Pause hinzufügen"-Stelle. Beantwortet damit final den bisher offenen Backlog-Punkt „vierter Einstieg zum Einheiten-Editor". D16-Tabelle und Backlog-Punkt entsprechend angepasst. D-Range in Abschnitt 9 auf D1–D50 aktualisiert.
 - 5. Juli 2026 (a): D8 bis D13 ergänzt (Auflösung der Fragen 1, 2, 3, 5, 6), D5 durch D13 revidiert, Backlog und nächste Schritte aktualisiert.
 - 5. Juli 2026 (b): D3 präzisiert – Baustein-Fortsetzung über Anker/Tage hinweg möglich; kein automatisches Ausdehnen bei Überlauf, stattdessen geführte Verschiebe-Aktion.
 - 5. Juli 2026 (c): Zwei neue offene Fragen aufgenommen – Frage 7 (Vorschlagsmechanik aus D4 konkretisieren) und Frage 8 (D7-Tab-Benennung präzisieren: Tabs bleiben, Benennung nach Tätigkeiten).
@@ -93,7 +110,7 @@ Die Planung eines Tages erfolgt künftig als **vertikale Sequenz** von Einheiten
 **Präzisierung: Baustein-Fortsetzung über Anker und Tage – kein automatisches Ausdehnen bei Überlauf.** Hier sind zwei Dinge zu trennen:
 
 1. **Der Baustein als thematische Klammer darf Anker- und Tagesgrenzen überspannen.** Ein Baustein kann sich über die Mittagspause oder in den nächsten Tag fortsetzen (z. B. „Mitbestimmung bei KI" vormittags und nach der Pause weiter) – in der Praxis völlig normal. Die Überschrift erscheint dann in beiden Abschnitten, im Folgeabschnitt als „… (Fortsetzung)". Da der Baustein nach D10 nur ein Etikett über aufeinanderfolgenden Einheiten ist, hindert nichts dieses Etikett daran, eine Pause oder einen Tageswechsel zu überspannen.
-2. **Das Zeitverhalten dehnt sich dabei nie automatisch aus.** Läuft ein Anker über (z. B. Vormittag +20 Min.), rutschen Einheiten **nicht** stillschweigend über die Mittagspause oder auf den nächsten Tag. Zwei Gründe: Für die Zielgruppe wäre ein Plan, der sich „von selbst" umbaut, beunruhigend – und pädagogisch ist ein Anker-/Tageswechsel nie neutral (der Nachmittag braucht etwas Aktivierendes, der Tag einen Abschluss, der nächste Morgen einen Wiedereinstieg). Ein Automatismus würde genau die Dramaturgie zerstören, die der Dramaturgie-Check (D4) schützen soll.
+2. **Das Zeitverhalten dehnt sich dabei nie automatisch aus.** Läuft ein Anker über (z. B. Vormittag +20 Min.), rutschen Einheiten **nicht** stillschweigend über die Mittagspause oder auf den nächsten Tag. Zwei Gründe: Für die Zielgruppe wäre ein Plan, der sich „von selbst" umbaut, beunruhigend – und pädagogisch ist ein Anker-/Tageswechsel nie neutral (der Nachmittag braucht etwas Aktivierendes, der Tag einen Abschluss, der nächste Morgen einen Wiedereinstieg). Ein Automatismus würde genau die Dramaturgie zerstören, die die Didaktischen Empfehlungen (D4) schützen sollen.
 3. **Stattdessen: geführte Aktion aus der Zeitbudget-Warnung heraus.** Beispiel: „+20 Min. über der Mittagspause – letzte Einheit(en) auf den Nachmittag verschieben?" Ein Klick, die betroffenen Einheiten wandern in den nächsten Abschnitt, der Baustein läuft als Fortsetzung weiter (Punkt 1). Die Referentin entscheidet, das Tool macht es ihr leicht – dieselbe Logik wie in D9: geführte Aktion statt stiller Automatismus.
 
 ### D4 – Lückentext-Prinzip gegen das weiße Blatt
@@ -103,7 +120,7 @@ Das leere Blatt darf nie erscheinen. Zwei Einstiege:
 1. **Themenplan als Startpunkt** (Hauptweg, wenn vorhanden): Der standardisierte Themenplan wird importiert und erzeugt das Baustein-Gerüst über die Tage (siehe D13 und Abschnitt 4).
 2. **Dramaturgie-Vorlage** (wenn kein Themenplan existiert): Ein neuer Tag kommt vorstrukturiert auf Basis der fünf Phasen, als farbige Zonen mit Platzhaltern („Hier fehlt noch ein Einstieg, ca. 30 Min."). Aus dem weißen Blatt wird ein Lückentext.
 
-Zwei Verstärker: **Vorschläge in die Lücke** (Klick auf Platzhalter filtert die Bibliothek automatisch nach Phase und Dauer ≤ Lücke – wählen statt suchen; Mechanik im Detail: D14) und ein **Dramaturgie-Check** als stiller Begleiter (Regeln und Strenge im Detail: D15) – gibt insbesondere Ehrenamtlichen Sicherheit, dass das Konzept „stimmt".
+Zwei Verstärker: **Vorschläge in die Lücke** (Klick auf Platzhalter filtert die Bibliothek automatisch nach Phase und Dauer ≤ Lücke – wählen statt suchen; Mechanik im Detail: D14) und **Didaktische Empfehlungen** als stiller Begleiter (Regeln und Strenge im Detail: D15) – gibt insbesondere Ehrenamtlichen Sicherheit, dass das Konzept „stimmt".
 
 Zielfluss insgesamt: Rahmen (Tage, Zeiten, Gruppe) → Gerüst (Themenplan oder Dramaturgie-Vorlage) → Füllen in der Sequenzansicht mit Vorschlägen und Check → Grid als Überblick → Roter Faden als Veröffentlichung.
 
@@ -208,7 +225,7 @@ Der Themenplan-Import wird **direkt in `mod_seminarplaner`** eingebaut: „Theme
 - **Bei kleinem Pool** dürfen die Filter nicht aggressiv sein (sonst bleibt schnell nichts übrig); der Null-Treffer-Pfad mit Schnellanlage ist hier kein Randfall, sondern ein häufiger, gleichwertiger Weg.
 - **Bei großem Pool** leisten die weiche Sortierung (Stichwort-Abgleich, Bloom-Mapping) und die Begrenzung auf 3–5 erklärte Vorschläge die eigentliche Arbeit: Aus vielen formal passenden Treffern (z. B. dutzende Warmups ≤ 30 Min.) die inhaltlich nächstliegenden nach oben holen.
 
-### D15 – Dramaturgie-Check: ausschließlich Hinweise, sechs Kandidaten-Regeln, Stille bei fehlenden Daten
+### D15 – Didaktische Empfehlungen: ausschließlich Hinweise, sechs Kandidaten-Regeln, Stille bei fehlenden Daten
 
 **Auflösung von Frage 4** (Grundausrichtung; Schwellenwerte und Feinschliff bleiben dem Workshop mit erfahrenen Referentinnen vorbehalten).
 
@@ -226,7 +243,7 @@ Der Themenplan-Import wird **direkt in `mod_seminarplaner`** eingebaut: „Theme
 
 **Design-Prinzip 1 – Stille bei fehlenden Daten:** Da nur der Titel Pflichtfeld ist, sind Phase oder Sozialform oft nicht gepflegt. Der Check meckert dann nicht („Phase fehlt bei 8 Einheiten!") – das wäre eine Datenpflege-Peitsche. Regeln, deren Datengrundlage fehlt, schweigen einfach; der Check arbeitet mit dem, was da ist.
 
-**Design-Prinzip 2 – positiv formulieren, unaufdringlich platzieren:** Kein rotes Ausrufezeichen an der Einheit, sondern ein eigener Bereich („Dramaturgie-Blick") mit Formulierungen wie „Nach der Mittagspause könnte etwas Aktivierendes guttun". Erfüllte Regeln werden als Bestätigung angezeigt („✓ Alle fünf Phasen vertreten") – die Sicherheits-Funktion für Ehrenamtliche entsteht mehr durch die Häkchen als durch die Hinweise.
+**Design-Prinzip 2 – positiv formulieren, unaufdringlich platzieren:** Kein rotes Ausrufezeichen an der Einheit, sondern ein eigener Bereich („Didaktische Empfehlungen") mit Formulierungen wie „Nach der Mittagspause könnte etwas Aktivierendes guttun". Erfüllte Regeln werden als Bestätigung angezeigt („✓ Alle fünf Phasen vertreten") – die Sicherheits-Funktion für Ehrenamtliche entsteht mehr durch die Häkchen als durch die Hinweise.
 
 ### D16 – Tab-Struktur nach dem Umbau: sechs Tabs entlang des Zielflusses, benannt nach Tätigkeit
 
@@ -242,7 +259,7 @@ Der Themenplan-Import wird **direkt in `mod_seminarplaner`** eingebaut: „Theme
 | --- | --- |
 | Seminarplan (Grid, Bearbeitung) | **Planen** (Sequenzansicht; enthält Grobplanung und Themenplan-Import als Einstieg) |
 | – | **Überblick** (Grid, nur lesen) |
-| Seminareinheiten + Bibliothek | **Seminareinheiten** (finden und anlegen; Benennung korrigiert durch D18 – ursprünglich „Methoden") |
+| Seminareinheiten + Bibliothek | **Bibliothek** (finden und anlegen; Benennung korrigiert durch D18 – ursprünglich „Methoden" – und final durch D50 auf „Bibliothek" festgelegt) |
 | Roter Faden | **Roter Faden** (bleibt unverändert – etabliertes didaktisches Vokabular) |
 | Import/Export | **Import/Export** (Name bleibt unverändert – Vorschlag „Austauschen" im Workshop verworfen, siehe D24) |
 | Review | **Einreichen** (final entschieden im Referentinnen-Workshop, siehe **D37** – „Weitergeben"/„Veröffentlichen" verworfen; zusätzlich Prozess als Flussdiagramm erklärt) |
@@ -393,7 +410,7 @@ Die Positionen 1–4 sind das Team-Szenario-Cluster („kurzer Weg"); 5–6 werd
 
 **Felder-Inventur final entschieden (Workshop-Ergebnis B5, D40):** Kognitive Dimension entfällt zugunsten der Seminarphase, Komplexitätsgrad entfällt ersatzlos, Gruppengröße bleibt in den D26-Kategorien, alle übrigen Felder bleiben unverändert. Details und Konsequenz für die Vorschlagsmechanik siehe D40/D41.
 
-### D22 – Dramaturgie-Check: Regeln 2, 4, 5, 6 im Workshop bestätigt (Ergänzung zu D15)
+### D22 – Didaktische Empfehlungen: Regeln 2, 4, 5, 6 im Workshop bestätigt (Ergänzung zu D15)
 
 **Erste Ergebnisse aus dem Referentinnen-Workshop (Teil A, Fragen A1/A3).**
 
@@ -402,19 +419,19 @@ Die Positionen 1–4 sind das Team-Szenario-Cluster („kurzer Weg"); 5–6 werd
 - **Regel 2 (Aktivierung nach der Mittagspause) bleibt bestehen:** Trotz der ursprünglich niedrigen Priorität hat der Workshop die Regel bestätigt, sie wird nicht gestrichen.
 - **Klarstellung zur Darstellung der Mittagspause:** Missverständnis im Vorfeld ausgeräumt – die Pause zwischen Vormittag und Nachmittag wird in der Sequenzansicht weiterhin angezeigt (unverändert zu D11), allerdings nicht mehr als eigene Box mit festem Anfang und Ende, sondern als benannter Pausen-Trenner ohne eigene Zeitgrenzen (siehe Wireframe). Das betrifft nur die Darstellung, nicht Regel 2 selbst.
 
-### D23 – Dramaturgie-Check: neue Kandidaten-Regel 7 „Pausenhinweis" (Ergänzung zu D15)
+### D23 – Didaktische Empfehlungen: neue Kandidaten-Regel 7 „Pausenhinweis" (Ergänzung zu D15)
 
-**Ergebnis aus dem Referentinnen-Workshop (Teil A, Frage A2).** Zusätzlich zu den sechs ursprünglichen Regeln wünschen sich die Referentinnen einen allgemeinen Hinweis auf Pausen zwischen Seminareinheiten, unabhängig von der festen Mittagspause: Der Hinweis erscheint entweder nach dem Ende einer Seminareinheit oder spätestens nach 1,5 Stunden ohne Pause – je nachdem, was zuerst eintritt. Anders als Regel 2 (die sich ausschließlich auf die Mittagspause bezieht) deckt Regel 7 den gesamten Tagesverlauf ab. Der Dramaturgie-Check hat damit künftig **sieben** Kandidaten-Regeln.
+**Ergebnis aus dem Referentinnen-Workshop (Teil A, Frage A2).** Zusätzlich zu den sechs ursprünglichen Regeln wünschen sich die Referentinnen einen allgemeinen Hinweis auf Pausen zwischen Seminareinheiten, unabhängig von der festen Mittagspause: Der Hinweis erscheint entweder nach dem Ende einer Seminareinheit oder spätestens nach 1,5 Stunden ohne Pause – je nachdem, was zuerst eintritt. Anders als Regel 2 (die sich ausschließlich auf die Mittagspause bezieht) deckt Regel 7 den gesamten Tagesverlauf ab. Die Didaktischen Empfehlungen haben damit künftig **sieben** Kandidaten-Regeln.
 
 ### D24 – Tab bleibt „Import/Export"; Vorschlag „Austauschen" verworfen (Korrektur zu D16)
 
 **Ergebnis aus dem Referentinnen-Workshop (Teil B, Frage B2).** Der in D16 vorgeschlagene neue Name „Austauschen" wurde nicht angenommen: Alle Teilnehmerinnen konnten sich unter dem bestehenden Namen „Import/Export" unmittelbar etwas vorstellen, „Austauschen" brachte keinen Erkenntnisgewinn. Der Tab behält daher seinen bisherigen Namen. Inhaltlich ändert sich nichts – die in D16 festgelegte Abgrenzung (alles, was die Plugin-Grenze überquert) bleibt bestehen, nur unter altem Namen. D16-Tabelle und Abgrenzungs-Absatz sind entsprechend korrigiert.
 
-### D25 – Neue Angabe „Veranstaltungsgröße" am Gesamtplan (Seminar/Tagung), steuert Dramaturgie-Check-Tipps
+### D25 – Neue Angabe „Veranstaltungsgröße" am Gesamtplan (Seminar/Tagung), steuert die Tipps der Didaktischen Empfehlungen
 
-**Vorschlag des Auftraggebers im Nachgang des Workshops.** Die Tipps des Dramaturgie-Checks sollen sich künftig an der Größenordnung der Veranstaltung orientieren können: Ein Seminar (10–20 TN) braucht andere Hinweise als eine Tagung (z. B. ein Betriebsrät*innen-Tag mit 80–200 TN) – Hinweise, die für eine kleine Gruppe passen, passen nicht automatisch für eine Großveranstaltung.
+**Vorschlag des Auftraggebers im Nachgang des Workshops.** Die Tipps der Didaktischen Empfehlungen sollen sich künftig an der Größenordnung der Veranstaltung orientieren können: Ein Seminar (10–20 TN) braucht andere Hinweise als eine Tagung (z. B. ein Betriebsrät*innen-Tag mit 80–200 TN) – Hinweise, die für eine kleine Gruppe passen, passen nicht automatisch für eine Großveranstaltung.
 
-Dafür bekommt der Gesamtplan eine neue, bewusst grobe Angabe **„Veranstaltungsgröße"** mit zwei Ausprägungen: **Seminar** (10–20 TN) und **Tagung** (80–200 TN). Es geht ausdrücklich nicht um eine exakte Teilnehmendenzahl, sondern um diese grobe Unterscheidung – dieselbe Grundhaltung wie bei der Vereinfachung des Gruppengröße-Felds (D26). Welche konkreten Dramaturgie-Check-Tipps sich je nach Veranstaltungsgröße unterscheiden, ist noch nicht ausgearbeitet und wird nachgezogen, sobald aus dem Workshop weitere Rückmeldungen zu den Regeln vorliegen.
+Dafür bekommt der Gesamtplan eine neue, bewusst grobe Angabe **„Veranstaltungsgröße"** mit zwei Ausprägungen: **Seminar** (10–20 TN) und **Tagung** (80–200 TN). Es geht ausdrücklich nicht um eine exakte Teilnehmendenzahl, sondern um diese grobe Unterscheidung – dieselbe Grundhaltung wie bei der Vereinfachung des Gruppengröße-Felds (D26). Welche konkreten Tipps der Didaktischen Empfehlungen sich je nach Veranstaltungsgröße unterscheiden, ist noch nicht ausgearbeitet und wird nachgezogen, sobald aus dem Workshop weitere Rückmeldungen zu den Regeln vorliegen.
 
 ### D26 – Gruppengröße-Feld an der Seminareinheit auf drei Kategorien vereinfacht (Korrektur zu D14/D21)
 
@@ -430,9 +447,9 @@ Dafür bekommt der Gesamtplan eine neue, bewusst grobe Angabe **„Veranstaltung
 
 Betrifft die Feldliste aus D21 (Abschnitt „Ablauf und Rahmen", Punkt 4) sowie die entsprechenden Filter-Optionen im Seminareinheiten-Tab.
 
-### D27 – Dramaturgie-Check: Ein/Aus-Schalter, pro Referentin gespeichert (Ergänzung zu D15/D22)
+### D27 – Didaktische Empfehlungen: Ein/Aus-Schalter, pro Referentin gespeichert (Ergänzung zu D15/D22)
 
-**Ergebnis aus dem Referentinnen-Workshop (Teil A, Frage A4 zur Tonlage).** Statt einzelne Formulierungen der Hinweise weiter zu verfeinern, wünschte sich die Runde vor allem eine Möglichkeit, den gesamten Dramaturgie-Check bei Bedarf **auszublenden**. Umgesetzt als Ein/Aus-Schalter:
+**Ergebnis aus dem Referentinnen-Workshop (Teil A, Frage A4 zur Tonlage).** Statt einzelne Formulierungen der Hinweise weiter zu verfeinern, wünschte sich die Runde vor allem eine Möglichkeit, die gesamten Didaktischen Empfehlungen bei Bedarf **auszublenden**. Umgesetzt als Ein/Aus-Schalter:
 
 - Die Einstellung gilt **pro Referentin**, über alle Seminarpläne hinweg – nicht pro einzelnem Plan.
 - Sie bleibt gespeichert, bis sie aktiv wieder umgeschaltet wird (kein Zurückspringen auf „an" beim nächsten Plan oder Login).
@@ -506,7 +523,7 @@ Betrifft die Feldliste aus D21 (Abschnitt „Ablauf und Rahmen", Punkt 4) sowie 
 
 **Was mit der übernommenen Seminareinheit passiert:** Beim Übernehmen entsteht sofort eine **Kopie** – eine eigene, lokal editierbare Seminareinheit, getrennt vom globalen Original, genau wie heute nach einem klassischen Set-Import. Keine Live-Verknüpfung: spätere Änderungen am globalen Original wirken sich nicht rückwirkend auf bereits übernommene Kopien aus. Das entspricht D30 (Kontrolle über eigene, lokale Inhalte hat Vorrang).
 
-**Offen – UX-Konzept folgt als eigener Schritt:** Wie diese immer verfügbare Bibliotheksansicht konkret in den Workflow der Sequenzansicht/Planerstellung eingebunden wird (z. B. dauerhaftes Andock-Panel neben der Sequenz, Suchen-und-Ablegen direkt in den Plan, oder ein separat aufrufbares Bibliotheksfenster) – wird als eigener Konzeptions-Schritt aufgenommen (siehe Nächste Schritte).
+**UX-Konzept final entschieden durch D59:** Suchen-und-Ablegen direkt an der D14-Vorschlagsstelle in der Sequenzansicht, zusätzlich bleibt der Bibliothek-Tab (D50/D55) als zweiter, unabhängiger Weg zum freien Stöbern erhalten.
 
 ### D34 – Übergangsstrategie: kein Umschalter zwischen zwei Bearbeitungsoberflächen, sondern Vertrautheit über drei Hebel
 
@@ -623,7 +640,7 @@ Betrifft die Feldliste aus D21 (Abschnitt „Ablauf und Rahmen", Punkt 4) sowie 
 3. **C3 (Einheiten-Variante, D8):** Der ⇄-Chip mit Auswahl-Popover wurde als „sehr gute Lösung" bestätigt – keine Änderung nötig.
 4. **C4 (Vorschläge in die Lücke, D14):** Die Vorschlagskarten mit „Warum passt das"-Hinweis und der Weg zur Schnellanlage wurden als verständlich bestätigt – keine Änderung nötig.
 5. **C5 (Einheiten-Editor, D17):** Sehr gut aufgenommen, inklusive der sichtbaren Rückmeldung nach dem Speichern (Nachrücken) – keine Änderung nötig.
-6. **C6 (Dramaturgie-Blick, D15):** Als nicht aufdringlich empfunden; die Platzierung am Ende der Seite wurde ausdrücklich als „bestens" bestätigt – keine Änderung nötig.
+6. **C6 (Didaktische Empfehlungen, D15):** Als nicht aufdringlich empfunden; die Platzierung am Ende der Seite wurde ausdrücklich als „bestens" bestätigt – keine Änderung nötig.
 7. **C7 (Unbenannter Abschnitt, D10):** Der Link „＋ Überschrift geben" wurde nach kurzer Orientierung gefunden und als „sehr gut gelöst" bestätigt – keine Änderung nötig.
 
 **Konsequenz:** Teil C ist damit vollständig abgeschlossen. Einzige Korrektur betrifft die Position des Überlauf-Hinweises (C1) – alle übrigen sechs Interaktionsmuster sind ohne Änderung bestätigt. Damit ist die gesamte Workshop-Fragensammlung (Teil A–D) abgearbeitet.
@@ -675,7 +692,7 @@ Betrifft die Feldliste aus D21 (Abschnitt „Ablauf und Rahmen", Punkt 4) sowie 
 
 **Offen – konkrete Uhrzeiten Wochenendseminar:** Die genauen An-/Abreisezeiten für Freitag und Sonntag beim Wochenendseminar sind praxisabhängig und noch nicht festgelegt; als offener Punkt vorgemerkt, berührt aber nicht die Struktur dieser Entscheidung (Vorbelegung, jederzeit änderbar).
 
-**Einordnung in die Rollout-Strategie:** Obwohl D45 inhaltlich näher am Datenmodell (D20/D43) liegt, wird die Umsetzung bewusst in **Block 3** (Vorschlagsmechanik/Dramaturgie-Check, siehe Abschnitt 8) mit erledigt, da die Sequenzansicht-Grundlagen (Block 2) bereits abgeschlossen sind und Claude Code die Anker-Zeiten für die laufende Implementierung braucht, statt auf einen späteren, thematisch passenderen Block zu warten.
+**Einordnung in die Rollout-Strategie:** Obwohl D45 inhaltlich näher am Datenmodell (D20/D43) liegt, wird die Umsetzung bewusst in **Block 3** (Vorschlagsmechanik/Didaktische Empfehlungen, siehe Abschnitt 8) mit erledigt, da die Sequenzansicht-Grundlagen (Block 2) bereits abgeschlossen sind und Claude Code die Anker-Zeiten für die laufende Implementierung braucht, statt auf einen späteren, thematisch passenderen Block zu warten.
 
 ### D46 – Seminarplan-Auswahl ist ein dauerhaft sichtbarer Umschalter im Planen-Tab, kein einmaliges Gate
 
@@ -727,6 +744,173 @@ Betrifft die Feldliste aus D21 (Abschnitt „Ablauf und Rahmen", Punkt 4) sowie 
 
 **Konsequenz:** `grid-ueberblick-wireframe-vertraut.html` braucht eine entsprechende Anpassung (Woche/Tag-Buttons entfernen, Events klickbar machen) – Design-Detailarbeit, keine neue Richtungsfrage. Die Klick-Navigation setzt voraus, dass der Überblick aus denselben Daten wie die Sequenzansicht liest (siehe offene Umsetzungslücke in Abschnitt 7); ohne diese Synchronisation lässt sich die Navigation nicht sauber verdrahten.
 
+### D50 – Tab wird zu „Bibliothek"; „Anlegen" entfällt als eigener Bereich; zusätzlicher Einstiegspunkt in der Sequenz (Revision von D39)
+
+**Anlass:** Ein aktueller Screenshot aus der laufenden Entwicklung (Testplaner) zeigte, dass die D39-Lösung („Anlegen" und „Bibliothek" als zwei Unterbereiche im Tab „Seminareinheiten") in der Umsetzung zu viel Redundanz erzeugt: Der „Anlegen"-Bereich ist im Kern nur das D17-Modal-Formular, groß und vorangestellt, bevor man überhaupt zur eigentlichen Sammlung kommt. Das bringt dieselbe Art von Umweg zurück, die D16/D39 eigentlich beseitigen sollten.
+
+**Entscheidung:**
+
+1. **Der Tab/Menüpunkt heißt künftig „Bibliothek"** statt „Seminareinheiten". Das revidiert die Tab-*Beschriftung* aus D16/D18/D39 – der in D18 festgelegte Grundsatz, dass „Seminareinheit" der führende *Objekt*-Begriff im gesamten UI bleibt, ist davon nicht betroffen, nur der Name dieses einen Tabs ändert sich.
+2. **Der Tab enthält nur noch einen Bereich:** die durchsuchbare Sammlung aller Seminareinheiten mit den bestehenden Filtern/Facetten (D29, D33). Die separate Unteransicht „Anlegen" aus D39 entfällt als eigener sichtbarer Bereich.
+3. **„Neue Seminareinheit anlegen" wird zum Button innerhalb der Bibliothek**, der den bestehenden D17-Modal-Editor öffnet – kein eigenes Unterformular mehr. Das ist weiterhin der zweite der drei D17-Einstiege, nur ohne eigenen Tab-Bereich drumherum.
+4. **Zusätzlicher, gleichwertiger Einstiegspunkt in der Sequenzansicht:** ein „Neue Seminareinheit anlegen"-Button direkt an der Stelle, an der man bereits eine neue Einheit oder Pause einfügen kann – nicht als schwebender Button auf jeder Seite. Öffnet ebenfalls den D17-Modal, aber ohne Vorbelegung (im Unterschied zum D14-Lücken-Einstieg, der Phase/Dauer aus dem Platzhalter vorausfüllt und als dritter, kontextspezifischer Einstieg zusätzlich bestehen bleibt).
+
+**Begründung:** Löst die in D39 nur teilweise behobene Redundanz vollständig auf, ohne den in D39 bestätigten Kern zu verlieren – der gut verstandene Begriff „Bibliothek" (D39-Workshop-Befund) bleibt sichtbar, jetzt sogar als Tab-Name selbst statt nur als Unterbereich. Gleichzeitig beantwortet Punkt 4 den bislang offenen Backlog-Punkt „vierter, jederzeit erreichbarer Einstieg zum Einheiten-Editor" (Ergänzung zu D17/D39): Die Position war dort offen (schwebend vs. feste Stelle, überall vs. nur Sequenz) – jetzt entschieden auf die Sequenzansicht, direkt neben den bestehenden „Hinzufügen"-Kontrollen.
+
+**Konsequenz:** D39 wird durch D50 abgelöst (Änderungshistorie bleibt wie üblich unverändert). D16-Tabelle (Tab-Name „Seminareinheiten" → „Bibliothek") und der Backlog-Punkt „vierter Einstieg" (Abschnitt 7) sind entsprechend angepasst; Letzterer ist damit final beantwortet und kein offener Punkt mehr.
+
+### D51 – Einreichen-Seite: Weggabelung vor den Formularen, Zusammenführung der beiden „bestehende Sammlung"-Blöcke
+
+**Anlass:** Screenshot-Analyse der laufenden Entwicklung (`review.php`, Tab „Einreichen"). Der obere Seitenbereich (4-Schritte-Erklärung „Einreichen → Prüfung → Freigabe → Für alle da" plus Statusliste „Wo stehen deine Einreichungen?") funktioniert gut und bleibt unverändert. Der untere Formularbereich zeigt jedoch drei Blöcke untereinander, die als durchgehende Liste wirken, obwohl es sich um zwei getrennte Wege handelt:
+
+1. „Geänderte oder neue Seminareinheit bereitstellen" (Sammlung wählen + Update-Hinweis) und der direkt folgende, fast wortgleich betitelte Block „Geänderte oder neue Seminareinheit**en** bereitstellen" (Kandidaten auswählen + einreichen) gehören inhaltlich zusammen, sind aber technisch in zwei Boxen mit uneinheitlicher Formulierung (Singular/Plural, fehlende Nummerierung im zweiten Block) gesplittet.
+2. „Neue Methoden-Sammlung einreichen" ist ein eigenständiger, alternativer Vorgang (etwas Neues bündeln statt Bestehendes ergänzen).
+
+Ohne erkennbare Weggabelung entsteht der Eindruck, man müsse alle Blöcke der Reihe nach abarbeiten, statt sich für einen der beiden Wege zu entscheiden.
+
+**Entscheidung:**
+
+1. **Weggabelung vor den Formularen:** Ein neuer, kurzer Auswahlschritt mit der Frage „Was möchtest du einreichen?" und *(ergänzt bei der Umsetzung am 13. Juli 2026, siehe Änderungshistorie bd)* **drei** Optionen – *„Eine bestehende Methoden-Sammlung ergänzen oder aktualisieren"*, *„Eine neue Methoden-Sammlung zusammenstellen"* und *„Ein Seminarkonzept einreichen"*. Die dritte Option kam hinzu, weil seit der Formulierung dieser Entscheidung der D32-Block „Seminarkonzept einreichen" auf derselben Seite entstanden ist; ihn außerhalb der Weggabelung dauerhaft sichtbar zu lassen, hätte genau die „muss ich alle Blöcke abarbeiten?"-Verwirrung wiederhergestellt, die D51 beseitigt. Erst nach Auswahl erscheint der passende Bereich; die jeweils anderen bleiben verborgen statt dauerhaft sichtbar.
+2. **Zusammenführung der beiden „bestehende Sammlung"-Blöcke** zu einem einzigen, durchgängig formulierten Ablauf (Sammlung wählen → Kandidaten prüfen → einreichen) statt zwei optisch getrennter Kästen mit uneinheitlicher Überschrift.
+3. **Info-Bereich oben (4-Schritte-Erklärung, Statusliste) bleibt unverändert** – er löst bereits ein anderes Verständnisproblem gut und ist von dieser Entscheidung nicht betroffen.
+
+**Begründung:** Löst die Verwechslungsgefahr an der Wurzel (fehlende Weggabelung, redundante Blocktitel), ohne die bereits gut funktionierenden Teile der Seite anzufassen. Folgt demselben Prinzip wie D11/D49 (Anker als benannte Abschnitte statt Sammelansicht): erst die Orientierung/Entscheidung, dann die dafür relevanten Felder.
+
+**Konsequenz:** Neuer Backlog-Punkt (Abschnitt 7) für die Umsetzung durch Claude Code: `review.php` entsprechend umbauen (Weggabelung + Blockzusammenführung), Formulierungen vereinheitlichen (Singular/Plural, „Methoden-Sammlung" statt „Konzept"/„Methodenset" gemäß D38, falls dort noch nicht durchgängig). Kein neues Wireframe zwingend nötig, kann aber bei Bedarf im „Vertraut"-Stil ergänzt werden.
+
+### D52 – PDF-Export: eigenständige Materialliste + dauerhaftes Logo im Seitenkopf
+
+**Anlass:** Priorisierter Punkt „Materialcheck" aus der Lücken-Analyse (12. Juli 2026, Perspektive Bildungsreferentin/ehrenamtlicher Referent), konkretisiert durch den Auftraggeber; Logo-Wunsch als eng verwandte Ergänzung zum bestehenden PDF-Export mit aufgenommen.
+
+**Entscheidung:**
+
+1. **Neue, eigenständige Materialliste als separates PDF** (dritte Export-Option neben ZIM-PDF und Konzeptsammlung-PDF, siehe Abschnitt 2/Ist-Stand): listet alle benötigten Materialien ohne Doppelungen, den einzelnen Seminartagen zugeordnet, im Layout einer Abgabeliste (zum Abhaken/Bereitstellen).
+2. **Logo im PDF-Seitenkopf**, wahlweise oben rechts oder oben links positionierbar. Das Logo wird **einmalig pro Aktivität hochgeladen und gespeichert** – gilt danach automatisch für alle künftigen PDF-Exporte dieser Aktivität, kein erneuter Upload pro Export nötig.
+
+**Konsequenz:** Backlog-Punkt für Claude Code: dritter Export-Button „Materialliste-PDF erstellen" neben den bestehenden (`kg-pdf-zim`, `kg-pdf-flow`) im Import/Export-Tab; Logo-Upload und Positions-Auswahl (rechts/links) als neues, dauerhaft gespeichertes Aktivitäts-Setting, das beim PDF-Export automatisch gezogen wird.
+
+### D53 – Didaktische Empfehlungen: neue Regel „Zeitrahmen-Hinweis" (Ergänzung zu D15/D22/D23)
+
+**Anlass:** Priorisierter Punkt „Gesamtzeit-Check" aus der Lücken-Analyse (12. Juli 2026). Die Didaktischen Empfehlungen geben bisher Hinweise pro Tag/Anker, aber keinen Abgleich der Gesamtsumme aller geplanten Bausteine gegen den verfügbaren Zeitrahmen.
+
+**Entscheidung:**
+
+1. **Der Zeitrahmen ergibt sich automatisch** aus den gewählten Seminartagen und den zugehörigen Vormittag-/Nachmittag-Anker-Zeiten (D45) – kein zusätzliches Eingabefeld für „offiziell gebuchte Stunden".
+2. **Neue Regel in den Didaktischen Empfehlungen** (achte Regel, nach D23s Pausenhinweis): Wenn die Summe der geplanten Bausteine den verfügbaren Zeitrahmen über- oder deutlich unterschreitet, erscheint ein Hinweis in den bestehenden Dramaturgie-Empfehlungen.
+3. **Gleicher Ton wie die übrigen Regeln** (D15): reiner Hinweis, keine Warnung/Blockade, positive Formulierung, stille Behandlung bei fehlenden Daten – keine Sonderbehandlung gegenüber den anderen sieben Regeln.
+
+**Konsequenz:** Backlog-Punkt für Claude Code: neue Regel in der Logik der Didaktischen Empfehlungen ergänzen, Formulierung im etablierten Hinweis-Ton (Beispiel folgt bei Bedarf als eigener Konzeptions-Schritt, analog zu D22/D23).
+
+### D54 – Kein Auto-Update-Schalter mehr; Hinweis in der Bibliotheks-Kartenansicht; lokale Änderung hat immer Vorrang
+
+**Anlass:** Priorisierter Punkt „Sichtbarkeit bei Auto-Update", zusammen mit dem im Backlog zurückgestellten „Konfliktfall beim Auto-Update" geklärt – beide lösen sich mit derselben Entscheidung.
+
+**Entscheidung:**
+
+1. **Die Checkbox „Auto-Update für dieses Konzept aktivieren" entfällt ersatzlos** aus dem Import/Export-Tab – niemand versteht, was Aktivieren/Deaktivieren tatsächlich bewirkt.
+2. **Statt eines Ein/Aus-Schalters: automatischer Hinweis in der Karten-Ansicht der Bibliothek.** Sobald eine Seminareinheit innerhalb einer übernommenen globalen Methoden-Sammlung/eines Seminarkonzepts von der Konzeptverantwortlichen aktualisiert wurde, erscheint der Hinweis direkt an der betroffenen Karte – dort, wo ohnehin gearbeitet wird, kein separater Sammel-Ort.
+3. **Konfliktfall eindeutig zugunsten der Nutzerin gelöst:** Wurde die lokale Kopie selbst verändert, hat diese Änderung immer Vorrang. Eine globale Aktualisierung wird nie automatisch übernommen und überschreibt nie etwas still. Es gibt maximal den einen Hinweis „aktualisierte Version verfügbar" – keine Rückfrage-Dialoge, keine erzwungene Übernahme.
+4. Der bestehende Button „Ausstehende Updates übernehmen" bleibt als einziger, bewusster Weg, eine Aktualisierung tatsächlich zu holen – nur eben nie automatisch ausgelöst.
+
+**Begründung:** Konkretisiert D30 (Kontrolle über eigene, lokale Inhalte hat Vorrang) für genau diesen Fall, statt es offenzulassen.
+
+**Konsequenz:** Backlog-Punkt „Konfliktfall beim Auto-Update" ist damit final beantwortet und entfällt aus der offenen Liste. Technischer Umbau des `methodset_sync_service` (Checkbox raus, Hinweis-Logik an der Kartenansicht rein) als neuer Backlog-Punkt für Claude Code.
+
+### D55 – Bibliothek: drei Tabs statt durchgehender Liste (Ergänzung zu D50)
+
+**Anlass:** Rückmeldung, dass in der Bibliothek aktuell unter Umständen mehrere Sammlungen unkomfortabel untereinanderstehen.
+
+**Entscheidung:** Innerhalb des Bibliothek-Tabs (D50) gibt es künftig drei klar getrennte Unterbereiche als Tabs:
+
+1. **„Methodensammlungen"** – globale Methoden-Sammlungen (D29/D33), immer durchsuchbar ohne Vor-Import. Methoden (D28, der inhaltsfreie Sonderfall) gehen hier mit auf, kein eigener Tab dafür.
+2. **„Globale Seminarkonzepte"** – nur die Seminarkonzepte, die aktiv über „Globale Konzepte importieren" (D32) geholt wurden. Kein automatisches „immer da" wie bei den Methodensammlungen.
+3. **„Lokale Seminareinheiten"** – alle eigenständigen lokalen Kopien in der Aktivität: selbst angelegt, über die Seminarschmiede importiert (D48) oder als Kopie aus einer Methodensammlung übernommen (D33). Maßgeblich ist „eigenständige lokale Kopie", nicht „nie importiert".
+
+**Konsequenz:** Präzisiert D50 (der Bibliothek-Tab bleibt als Ganzes bestehen, bekommt aber diese drei internen Unterbereiche statt einer durchgehenden Liste). Backlog-Punkt für Claude Code: Bibliotheksansicht entsprechend umbauen, bestehendes Filternetz (D29) bleibt innerhalb des Tabs „Methodensammlungen" erhalten.
+
+### D56 – Vorschlagsmechanik durchsucht auch globale Methodensammlungen (Erweiterung zu D14)
+
+**Anlass:** Direkte Folge von D55/D33 – wenn Methodensammlungen ohnehin immer durchsuchbar sind, sollte die automatische Vorschlagsmechanik beim Auffüllen einer Lücke das mitnutzen.
+
+**Entscheidung:** D14 (Vorschlagsmechanik) durchsucht künftig nicht nur die lokal vorhandenen Seminareinheiten, sondern auch die global durchsuchbaren Methodensammlungen (D29). Globale Seminarkonzepte bleiben außen vor – die brauchen weiterhin den expliziten Import (D32). Wird ein Vorschlag aus einer Methodensammlung übernommen, entsteht sofort eine lokale Kopie (gleiches Prinzip wie D33).
+
+**Konsequenz:** Backlog-Punkt für Claude Code: Suchraum der Vorschlagsmechanik erweitern.
+
+### D57 – local_seminarplaner: explizites Typ-Feld für Seminarkonzept vs. Methodensammlung (Ergänzung zu D28/D32)
+
+**Anlass:** D55 führt in der Bibliothek getrennte Tabs für „Methodensammlungen" und „Globale Seminarkonzepte" ein. Der Ist-Stand von `local_seminarplaner` unterscheidet beide Objekttypen aber nicht strukturell, nur informell über Titel-Konventionen (vgl. D28-Anlass, FST/KI-Methoden-Beispiel) – das reicht nicht mehr, um ein importiertes globales Konzept zuverlässig dem richtigen Bibliothek-Tab zuzuordnen.
+
+**Entscheidung:** `local_seminarplaner` bekommt ein explizites Typ-Feld je globalem Konzept (Methodensammlung oder Seminarkonzept). Der Typ wird beim Einreichen (D48/D51) festgelegt und bestimmt beim Import (D32), ob das Konzept im Tab „Methodensammlungen" (immer durchsuchbar, D33) oder „Globale Seminarkonzepte" (nur nach explizitem Import, D55) erscheint.
+
+**Begründung:** D32 bleibt unverändert – beide Objekttypen durchlaufen weiterhin denselben Workflow-Mechanismus (Status-Zyklus, Reviewer, Diff-Ansicht). Neu ist nur das strukturelle Unterscheidungsmerkmal, das D55 jetzt braucht, weil die Bibliothek beide Typen erstmals unterschiedlich behandelt.
+
+**Konsequenz:** Backlog-Punkt für Claude Code: neues Typ-Feld in der `local_seminarplaner`-Datenbank, Migration der Bestandsdaten (bisherige Unterscheidung nur über Titel), Typ-Auswahl im Einreichen-Formular (D51) ergänzen, Import-Auswahlliste (`kg-global-set-select`) entsprechend nach Typ filtern/gruppieren.
+
+**Umsetzungsstand (Abgleich mit Claude Code, 12. Juli 2026):** Bereits vollständig umgesetzt, sogar schon **vor** dieser Entscheidung – am 10. Juli wurde im Rahmen von „D32 Seminarkonzept-Einreichen" die Spalte `concepttype` (Werte `sammlung`/`seminarkonzept`) in `local_seminarplaner` ergänzt (Commits 9f67f79 mod / 689303d local, Upgrade-Schritt 2026071001), inklusive Typ-Auswahl im Einreichen-Formular und typbewusster Verarbeitung beim Import. D57 bestätigt damit nachträglich eine bereits gebaute Lösung, statt eine neue anzustoßen.
+
+### D58 – Konzeptverantwortliche: opt-in-basierte Übersichtsliste als Vertrauenssignal
+
+**Anlass:** Vierter priorisierter Punkt aus der Lücken-Analyse (12. Juli 2026). Referentinnen sehen bisher nur eine anonyme Zahl („Konzeptverantwortliche: 1"), ohne zu wissen, wer dahintersteht.
+
+**Entscheidung:**
+
+1. **Allgemeine Liste statt Kennzeichnung am einzelnen Konzept:** Eine Übersicht „Das sind unsere Konzeptverantwortlichen" zeigt alle Personen, die sich dafür sichtbar gemacht haben – nicht objektbezogen an jeder einzelnen Sammlung/jedem Konzept.
+2. **Opt-in pro Person, nicht pro Konzept:** Eine Konzeptverantwortliche entscheidet einmal für sich, ob sie in dieser Liste erscheint – gilt dann einheitlich für alle von ihr betreuten Konzepte, keine Einzelfall-Entscheidung pro Sammlung.
+3. **Reines Vertrauens-/Orientierungssignal**, kein Kontaktweg: Die Liste zeigt nur, dass echte Personen hinter den Konzepten stehen – sie ersetzt keinen Rückmeldeweg (der bereits als eigener, noch offener Backlog-Punkt „Rückkanal nach der Durchführung" vorgemerkt ist).
+
+**Konsequenz:** Backlog-Punkt für Claude Code: neue Übersichtsliste (Platzierung naheliegend im Einreichen-Tab, in der Nähe der bestehenden Prozess-Erklärung aus D37), Opt-in-Einstellung pro Nutzerin mit Konzeptverantwortlichen-Rolle.
+
+### D59 – UX-Konzept „Bibliothek beim Planbau": Suchen-und-Ablegen direkt an der Lücke, zusätzlich zum bestehenden Bibliothek-Tab (löst D33-UX, letzte offene Frage aus Abschnitt 8)
+
+**Anlass:** Letzte offene Gestaltungsfrage aus den „Nächsten Schritten" (Punkt 10) – wie die immer durchsuchbare globale Bibliothek (D33) konkret in den Sequenz-Workflow eingebunden wird.
+
+**Entscheidung:**
+
+1. **Suchen-und-Ablegen direkt an der Lücke:** An der Stelle, an der die Vorschlagsmechanik (D14) bereits automatische Vorschläge einblendet, gibt es zusätzlich ein Suchfeld für die manuelle Suche in der kompletten Bibliothek (D55: Methodensammlungen + lokale Seminareinheiten). Eine übernommene Methode wird sofort als lokale Kopie angelegt (wie D33).
+2. **Der Bibliothek-Tab (D50/D55) bleibt zusätzlich vollständig erhalten** – kein Ersatz, sondern zwei parallele Wege zum selben Bestand: gezieltes Suchen an der konkreten Lücke während des Planbaus, und freies Stöbern/Vorbereiten unabhängig von einer aktuellen Lücke über den Tab.
+
+**Begründung:** Führt kein neues Bedienkonzept ein, sondern erweitert die bereits verstandene Vorschlags-Stelle (D14) um eine manuelle Variante – konsistent mit dem Grundsatz, auf vertrauten Mustern aufzubauen statt Bildschirmfläche dauerhaft zu teilen (Andock-Panel) oder einen zusätzlichen Fokuswechsel zu erzwingen (separates Fenster), wo es nicht nötig ist.
+
+**Konsequenz:** Punkt 10 der „Nächsten Schritte" (Abschnitt 8) ist damit final entschieden. Backlog-Punkt „UX-Konzept Bibliothek ohne Vor-Import (D33, offen)" entfällt, ersetzt durch einen Umsetzungs-Backlog-Punkt für Claude Code: Suchfeld an der D14-Vorschlagsstelle in der Sequenzansicht ergänzen.
+
+### D60 – Begriff „Dramaturgie-Check"/„Dramaturgie-Blick" wird zu „Didaktische Empfehlungen" (Revision der Benennung in D15/D22/D23/D27/D53)
+
+**Anlass:** Beim Abgleich mit dem Arbeitsstand aus Claude Code zeigte sich, dass die Weboberfläche den Bereich bereits auf Nutzerwunsch von „Dramaturgie-Blick" in **„Didaktische Empfehlungen"** umbenannt hat (Commit 12d9b6c, 10. Juli). Diese Umbenennung war noch nicht ins Konzeptdokument zurückgeflossen.
+
+**Entscheidung:** Der Begriff **„Didaktische Empfehlungen"** wird rückwirkend als einheitliche Bezeichnung für den in D15 eingeführten Mechanismus übernommen – ersetzt „Dramaturgie-Check" (fachlicher Name des Mechanismus) und „Dramaturgie-Blick" (bisheriger UI-Bereichsname) einheitlich. Die fachliche Grundidee aus D15 (nur Hinweise, keine Warnungen, Stille bei fehlenden Daten, positive Formulierung) bleibt vollständig unverändert – es ändert sich ausschließlich der Name.
+
+**Nicht betroffen:** Der Begriff „Dramaturgie" für die pädagogische Grundidee des Seminaraufbaus bleibt in Fließtext-Erwähnungen unverändert (z. B. „die Dramaturgie eines Seminartags") – ebenso „Dramaturgie-Vorlage" (D3/D4, die phasenbasierte Vorstrukturierung eines neuen Tags), ein eigenständiger, klar unterschiedener Begriff, der nicht Gegenstand dieser Umbenennung ist.
+
+**Konsequenz:** Alle Erwähnungen von „Dramaturgie-Check"/„Dramaturgie-Blick" als Mechanismus-/Bereichsname in D15, D22, D23, D25, D27, D53 sowie in Abschnitt 1, 6, 8 und 10 werden auf „Didaktische Empfehlungen" umgestellt (Änderungshistorie bleibt wie üblich unverändert, D38-Präzedenzfall). Die D-Nummern selbst behalten ihre ursprünglichen Titel-Anker nicht wortgleich, sondern in der neuen Benennung – die inhaltliche Entscheidung bleibt jeweils dieselbe.
+
+**Umsetzungsstand: bereits vollständig erledigt, kein Arbeitsauftrag für Claude Code.** Anders als bei den übrigen D5x-Entscheidungen ist hier nichts mehr zu bauen – die Umbenennung ist im Code längst umgesetzt (Commit 12d9b6c, 10. Juli: Toolbar-Label, Panel-Überschrift in `sequenz.js`; die interne User-Preference `mod_seminarplaner_dramaturgie` bleibt bewusst unverändert, das betrifft nur den sichtbaren Text). D60 zieht ausschließlich das Konzeptdokument nach, damit Begriff und Code wieder übereinstimmen. Kein Backlog-Punkt nötig.
+
+### D61 – Neues „Seminarziele"-Feld am Gesamtplan + manuelle Verknüpfung mit Seminareinheiten (neue Regel „Zielabdeckung" in den Didaktischen Empfehlungen)
+
+**Anlass:** Wunsch, die Gesamtziele des Seminars mit den Teilzielen (Lernziele, D21) der einzelnen Seminareinheiten abzugleichen, um zu prüfen, ob alle Ziele abgedeckt sind – analog zum Zeitrahmen-Check (D53), aber mit Freitext statt Zahlen.
+
+**Entscheidung:**
+
+1. **Neues Feld „Seminarziele" am Gesamtplan:** eine Liste einzelner, kurzer Zielformulierungen (Freitext, ähnlich den „Ich-kann …"-Lernzielen der Seminareinheiten), von der Referentin selbst eingetragen. Unabhängig vom Themenplan-Import – D19 (Bildungsziel-Kopfblock wird nicht importiert) bleibt unverändert, dies ist ein separates, manuell gepflegtes Feld.
+2. **Manuelle Verknüpfung statt automatischem Abgleich:** Da Lernziele Freitext sind, lässt sich eine Abdeckung nicht zuverlässig automatisch erkennen. Die Referentin verknüpft deshalb jedes Seminarziel händisch mit den Seminareinheiten, die es adressieren (Checkliste je Ziel).
+3. **Neue, neunte Regel in den Didaktischen Empfehlungen** (D15/D22/D23/D53): „Zielabdeckung" – meldet als Hinweis, wenn ein Seminarziel noch mit keiner Seminareinheit verknüpft ist. Gleicher Ton wie die übrigen Regeln: reiner Hinweis, keine Warnung, Stille bei fehlenden Daten (kein Hinweis, solange noch keine Seminarziele eingetragen sind).
+
+**Konsequenz:** Backlog-Punkt für Claude Code: neues Feld/Liste „Seminarziele" am Gesamtplan (Datenmodell-Ergänzung), Verknüpfungs-UI (Checkliste je Ziel gegen die Liste der Seminareinheiten), neue Regel in der Logik der Didaktischen Empfehlungen.
+
+### D62 – Lernziel-Editor: Bloom-Stufe + Verb wählen, Inhalt frei ergänzen (inspiriert von „The Differentiator"; Ergänzung zu D21/D41/D61)
+
+**Anlass:** Wunsch nach einem geführten Editor für Lernziele, angeregt durch `moodle-local_differentiator` (Bösch, basierend auf „The Differentiator" von Ian Byrd) – ein Werkzeug, das Lernziele aus Bloom-Stufe, Verb und Inhalt zusammensetzt statt sie als leeres Textfeld zu verlangen.
+
+**Entscheidung:**
+
+1. **Gilt gleichermaßen** für die Lernziele der Seminareinheit (D21) und die neuen Seminarziele des Gesamtplans (D61) – ein einziger Editor, zwei Einsatzorte (Prinzip wie D17).
+2. **Geführter Aufbau statt leerem Feld:** Referentin wählt zuerst eine Bloom-Stufe (pädagogisch verständlich beschriftet, nicht als Fachbegriff „Kognitive Dimension"), dann ein passendes Verb aus einer kurzen Liste dazu, ergänzt den Inhalt frei. Daraus setzt sich automatisch der Satz „Die Teilnehmenden können [Verb] [Inhalt]" zusammen.
+3. **Doppelnutzung der bestehenden D41-Tabelle:** Das gewählte Bloom-Verb schlägt automatisch die passende Seminarphase vor (als Vorbelegung, nicht zwingend) – dieselbe Zuordnung, die D41 schon für die Vorschlagsmechanik nutzt, keine zweite Pflege.
+4. **Nichts wird zusätzlich gespeichert:** Die Bloom-Stufe ist ein Werkzeug beim Formulieren, kein neues Datenfeld – kein Widerspruch zu D40 (Kognitive Dimension bleibt gestrichen als eigenes Feld).
+5. **Bestandsdaten bleiben unangetastet:** Bereits vorhandene Freitext-Lernziele migrieren nicht automatisch in die neue Struktur, der Editor greift nur bei künftiger Neu-/Bearbeitung.
+
+**Konsequenz:** Backlog-Punkt für Claude Code: Editor-Komponente (Bloom-Stufe-Auswahl → Verb-Liste → Freitext-Ergänzung → Satz-Zusammenbau), Wiederverwendung der D41-Tabelle für die Phasen-Vorbelegung, Einbindung an beiden Stellen (D21-Modal, D61-Seminarziele-Feld).
+
 ## 4. Themenplan-Format und Mapping (verifiziert am Original TP_2026_ki.docx)
 
 Standardisiertes Word-Dokument, eine Tabelle. Kopf: Seminartitel, Seminartyp, Bildungsziel, Inhaltliche Schwerpunkte. Danach Seminarplan-Zeilen: Tag | Inhalt | Kompetenzerwartungen.
@@ -777,7 +961,7 @@ Aufgelöste Fragen:
 - ~~9. Globale Bibliothek auch für Seminarkonzepte?~~ → **D32** (kein separates Verfahren – Seminarkonzepte nutzen denselben Einreichen-/Review-/Filter-Mechanismus wie Methoden-Sammlungen; ergänzt um **D33**: globale Methoden-Sammlungen sollen künftig ohne Vor-Import immer über die Bibliotheksansicht nutzbar sein, UX-Ausgestaltung folgt)
 
 - ~~1. Sequenz-UI (Layout und Anker)~~ → **D11** (ein Tag mit Pfeilwechsel; Grid bleibt Overview; Anker als benannte Abschnitte mit Zeitbudget-Leiste und Pausen-Trenner)
-- ~~4. Dramaturgie-Check~~ → **D15** (nur Hinweise, Stille bei fehlenden Daten, positive Formulierung), im Referentinnen-Workshop validiert und ergänzt: **D22** (Regeln 2/4/5/6 final), **D23** (neue Regel 7 „Pausenhinweis")
+- ~~4. Didaktische Empfehlungen~~ → **D15** (nur Hinweise, Stille bei fehlenden Daten, positive Formulierung), im Referentinnen-Workshop validiert und ergänzt: **D22** (Regeln 2/4/5/6 final), **D23** (neue Regel 7 „Pausenhinweis")
 - ~~2. Migration der Bestandsdaten~~ → **D9** (Archivfeld mit geführtem Zuordnungs-Hinweis)
 - ~~3. Automatische Tages-Platzierung~~ → **D12** (Tag + Anker automatisch, nicht mehr; im Plugin gemäß D13)
 - ~~5. Alternativen-Mechanismus~~ → **D8** (zwei Ebenen, jederzeit austauschbar), abgegrenzt durch **D10** (nur für benannte Bausteine)
@@ -788,7 +972,7 @@ Aufgelöste Fragen:
 ## 7. Backlog (nicht vergessen, unabhängig vom Umbau)
 
 - **Kein Undo** im Planer – im Sequenzmodell neu bewerten, mindestens „letzte Aktion rückgängig".
-- **A11y**: Statuszeile `#kg-status` ohne `aria-live` (Screenreader bekommen Meldungen nicht mit); Tastaturalternative zu Drag & Drop ist mit den ↑/↓-Buttons erfüllt (**D47**). Offen: Drag & Drop selbst ist im aktuellen Entwicklungsstand nicht funktionsfähig und muss wiederhergestellt werden, damit beide Bedienwege wie in D47 vorgesehen nebeneinander funktionieren.
+- **A11y**: Statuszeile `#kg-status` ohne `aria-live` (Screenreader bekommen Meldungen nicht mit); Tastaturalternative zu Drag & Drop ist mit den ↑/↓-Buttons erfüllt (**D47**). ~~Offen: Drag & Drop selbst ist im aktuellen Entwicklungsstand nicht funktionsfähig~~ ✓ Seit Commit `4a179a8` behoben – beide Bedienwege (Buttons und Drag & Drop) funktionieren wie in D47 vorgesehen nebeneinander. Weiterhin offen bleibt nur die fehlende `aria-live`-Anbindung der Statuszeile.
 - **Formularlast Seminareinheit**: ~18 Felder, jetzt 16 nach D40; entschärft durch **D17** (Modal mit offener Schnellfassung, restliche Abschnitte zugeklappt); zusätzlicher Wunsch aus dem Workshop-Nachgang zu B5: Formular insgesamt noch angenehmer bedienbar machen – Idee, noch nicht konkretisiert, bei Umsetzung mitdenken.
 - **Editor-UX der Seminareinheiten-Felder (D17-Feinschliff, Merker):** ✓ aufgelöst durch **D21** (Feldreihenfolge nach Denk- und Arbeitslogik, Lernziele in der Schnellfassung, „Alternative Seminareinheiten" als Vorbelegung). ✓ **Felder-Inventur** final entschieden durch **D40** (Kognitive Dimension und Komplexitätsgrad entfallen, Rest bleibt) – Konsequenz für die Vorschlagsmechanik in **D41** (Bloom-Verb-Mapping zielt jetzt auf Seminarphase).
 - **Grid-Einstieg**: zuletzt geöffneter Plan sollte direkt laden (entfällt ggf. mit Sequenz-UI, sonst umsetzen).
@@ -797,10 +981,33 @@ Aufgelöste Fragen:
 - **Export platzierter Pläne**: Import/Export-Format ggf. um Tag/Anker-Platzierung erweitern (siehe **D20** und Hinweis in Abschnitt 5).
 - **Facetten-Taxonomie der Methoden-Bibliothek (D29):** Vorschlag (Zeitpunkt/Anlass, Format, Aufwand) beruht bislang auf zwei Beispiel-Methodensets (183 Methoden); weitere reale Bestände vom Auftraggeber ausstehen, um die Taxonomie zu verfestigen oder zu korrigieren.
 - **Zeitbedarf als Feldtyp (D31, offen):** Aktuell teils Auswahlfeld mit Überlaufkategorie („mehr als 180 Minuten"), vom Auftraggeber als ungenau eingeschätzt. Ob ein freier Zahlenwert die bessere Lösung ist, wird im Rahmen der Gesamt-Überarbeitung des Seminareinheiten-Formulars (D21) besprochen, sobald das ansteht – noch keine Entscheidung.
-- **UX-Konzept „Bibliothek ohne Vor-Import" (D33, offen):** Grundsatzentscheidung liegt vor (globale Methoden-Sammlungen immer durchsuchbar, direkte Übernahme einzelner Methoden als Kopie ohne vorherigen Sammlungs-Import). Noch offen: konkrete Einbindung in den Planbau-Workflow (Andock-Panel, Suchen-und-Ablegen, separates Bibliotheksfenster o. Ä.) – eigener Konzeptions-Schritt.
-- **Vierter, jederzeit erreichbarer Einstieg zum Einheiten-Editor (Idee, Ergänzung zu D17/D39):** „Seminareinheit hinzufügen" als Button, der unabhängig vom aktuellen Tab/View erreichbar ist – nicht nur aus dem „Anlegen"-Bereich des Seminareinheiten-Tabs (D39). Noch offen: schwebender Button oder feste Position, auf jeder Seite oder nur in der Sequenzansicht – Design-Detailarbeit, keine Richtungsentscheidung.
-- **Aufräum-Punkt „Bausteine"-Tab entfernen (D16, D46):** Im aktuellen Entwicklungsstand (Testplaner 5.1.4) ist der eigenständige Bausteine-Tab noch sichtbar – laut D16 soll er entfallen, da Bausteine nur noch als optionale Überschrift in der Sequenz existieren (D10). Kein Konzeptthema, reine Umsetzungs-Nacharbeit.
-- **Überblick/Sequenz-Synchronisation (offene Umsetzungslücke, Voraussetzung für D49):** Im aktuellen Entwicklungsstand lädt der Überblick noch das alte Grid statt aus den Sequenz-Daten (D20) abzuleiten – beide Ansichten sind dadurch nicht synchron. Konzeptionell ist die Sequenz seit D20 die maßgebliche Datenstruktur; der Überblick soll rein lesend darauf aufsetzen (D11), nicht auf einer eigenen, parallel gepflegten Datenquelle. Kein neuer Konzeptbeschluss, sondern technischer Nachholbedarf für Claude Code – analog zu D47 (Drag & Drop) als offene Lücke vermerkt, nicht als Zielzustand.
+- ~~**UX-Konzept „Bibliothek ohne Vor-Import" (D33, offen).**~~ ✓ Final entschieden durch **D59**: Suchen-und-Ablegen direkt an der D14-Vorschlagsstelle in der Sequenzansicht, zusätzlich bleibt der Bibliothek-Tab (D50/D55) als zweiter, unabhängiger Weg erhalten. Umsetzung für Claude Code: Suchfeld an der D14-Vorschlagsstelle ergänzen.
+- ~~**Vierter, jederzeit erreichbarer Einstieg zum Einheiten-Editor.**~~ ✓ Final entschieden durch **D50**: „Neue Seminareinheit anlegen"-Button in der Sequenzansicht, direkt an der Stelle, an der bereits eine neue Einheit oder Pause eingefügt werden kann.
+- ~~**Aufräum-Punkt „Bausteine"-Tab entfernen (D16, D46).**~~ ✓ Erledigt (Commit 4b2f8ff): Tab ist entfernt, `planningmode.php` nur noch per direkter URL erreichbar. Neu hinzugekommen, noch offen: `planningmode.php` und `methods.js` sind seither komplett ungenutzt (methods.php ist nur noch Redirect auf die Bibliothek) und könnten ganz stillgelegt werden – technischer Aufräumpunkt, kein Konzeptthema.
+- **Touch-Alternative für Drag & Drop (Anschluss an D47):** HTML5-Drag-and-Drop (D47) funktioniert nicht auf Touch-Geräten. Die ↑/↓-Buttons decken die Tastaturalternative bereits ab: Touch-Nutzerinnen können den Plan darüber vollständig bedienen. Falls Touch-Drag als eigener Bedienweg (nicht nur als Ersatz) gewünscht ist, bräuchte es eine Pointer-Events-Emulation – noch nicht entschieden, ob nötig.
+- ~~**Überblick/Sequenz-Synchronisation (offene Umsetzungslücke, Voraussetzung für D49).**~~ ✓ Erledigt: Der Überblick leitet sich jetzt aus den Sequenz-Daten (D20) ab, beide Ansichten sind synchron – D49 (Klick-Navigation Überblick → Sequenz) ist damit vollständig einsatzbereit.
+- ~~**Rich-Text-Editor fehlt im Sequenz-Modal (offene Umsetzungslücke, Anschluss an D17).**~~ ✓ Erledigt: Das aus der Sequenzansicht geöffnete Einheiten-Editor-Modal nutzt jetzt denselben Moodle-Editor (Tiny) wie `library.php`/`methodlibrary.php` – der D17-Grundsatz „ein einziger Editor, drei Einstiege" ist damit an allen drei Einstiegen erfüllt.
+- ~~**Einreichen-Seite umbauen (Anschluss an D51).**~~ ✓ Erledigt (13. Juli 2026, Commit e284017): `review.php` hat jetzt die Weggabelung „Was möchtest du einreichen?" (drei Optionen, siehe Historie bd) vor den Formularen, die beiden „bestehende Sammlung"-Blöcke sind zu einem durchgängigen Ablauf verschmolzen, Formulierungen auf „Methoden-Sammlung" (D38) vereinheitlicht; Info-Bereich oben unverändert. Auf Staging browser-verifiziert.
+- **PDF-Export erweitern (Anschluss an D52):** Dritter Export-Button „Materialliste-PDF erstellen" neben `kg-pdf-zim`/`kg-pdf-flow`; Materialien werden über alle Seminareinheiten hinweg dedupliziert und den Seminartagen zugeordnet, Layout als Abgabeliste. Zusätzlich neues, dauerhaft pro Aktivität gespeichertes Logo-Setting (Upload + Position rechts/links), das automatisch in den Seitenkopf aller PDF-Exporte (ZIM, Konzeptsammlung, Materialliste) einfließt.
+- **Didaktische Empfehlungen um Zeitrahmen-Hinweis erweitern (Anschluss an D53):** Achte Regel ergänzen, die die Summe aller geplanten Bausteine gegen den aus Seminartagen + Anker-Zeiten (D45) automatisch ermittelten Zeitrahmen abgleicht. Gleicher Hinweis-Ton wie D15/D22/D23, keine Sonderbehandlung. Konkrete Formulierung des Hinweistexts steht noch aus.
+
+**Offene konzeptionelle Fragen aus der Lücken-Analyse (12. Juli 2026, Perspektive Bildungsreferentin bei Neuerstellung / ehrenamtlicher Referent bei Durchführung):** Noch nicht ausreichend durchdacht für eine Entscheidung, deshalb hier gesammelt statt vorschnell entschieden.
+
+- **Entwurfsstatus für neue Seminarkonzepte:** Bei der kompletten Neuerstellung eines Seminarkonzepts fehlt ein Zwischenstand „noch nicht fertig" vs. „einsatzbereit" – aktuell wirkt jeder Stand sofort nutzbar. Berührt das Sichtbarkeitsmodell (D30) und das Vier-Objekte-Modell (D28); zu klären, ob ein eigener Status nötig ist oder ob die bestehende lokale Sichtbarkeit (D30) bereits ausreicht und nur deutlicher kommuniziert werden muss.
+- **„Als Vorlage nehmen" für ganze Seminarkonzepte:** D45 kennt Vorlagen bisher nur für Anker-Zeiten. Wer ein bestehendes Seminarkonzept als Ausgangspunkt für ein neues nehmen will, statt bei null anzufangen – unklar, ob/wie sich das von der bestehenden Kopie-Logik beim Übernehmen einzelner Methoden (D33) unterscheiden soll.
+- **Durchführungsmodus:** Während der laufenden Durchführung fehlt eine einfache, ggf. offline-taugliche Live-Ansicht („was kommt jetzt/als Nächstes"). Sessionplan.de hat dafür bereits einen „Live-Modus" (aktueller Block, Restzeit, nächster Punkt) als möglichen Referenzpunkt. Konkretisierung (12. Juli 2026): Eine eigene Sequenzansicht für Referentinnen während der Durchführung, die zum nächsten Seminarschritt zeigt, welche Materialien benötigt werden, ggf. eine dort hochgeladene PowerPoint zum Download anbietet und das zugehörige Skript aus dem Ablauf-Feld anzeigt. Größeres Feature, eigener Konzeptions-Schritt nötig, sobald angegangen.
+- **Live-Abweichungen vom Plan während der Durchführung:** Hängt am Durchführungsmodus – ob/wie Anpassungen während des laufenden Seminars (Zeit läuft aus dem Ruder, Baustein entfällt) erfasst werden, ohne dass es sich wie „Konzept bearbeiten" anfühlt.
+- **Rückkanal nach der Durchführung:** Referentinnen, die ein fremdes Konzept nur durchführen, haben oft Erfahrungswerte, die unterhalb der Schwelle einer vollständigen Einreichung (D48/D51) liegen. Zu klären, ob/wie ein leichterer Feedback-Weg zur Konzeptverantwortlichen aussehen könnte – hängt mit der Transparenz-Frage (Konzeptverantwortliche sichtbar machen, separat als schneller Punkt vorgesehen) zusammen.
+- ~~**Konfliktfall beim Auto-Update.**~~ ✓ Final entschieden durch **D54**: Auto-Update-Checkbox entfällt, stattdessen Hinweis in der Bibliotheks-Kartenansicht; lokale Änderung hat immer Vorrang, kein stilles Überschreiben. Umsetzung für Claude Code: `methodset_sync_service` entsprechend umbauen (Checkbox raus, Hinweis-Logik an der Kartenansicht rein).
+- **Bibliothek auf drei Tabs umbauen (Anschluss an D55):** „Methodensammlungen" (bestehendes Filternetz aus D29 bleibt hier), „Globale Seminarkonzepte", „Lokale Seminareinheiten" – statt einer durchgehenden Liste.
+- **Vorschlagsmechanik-Suchraum erweitern (Anschluss an D56):** D14 soll künftig auch die globalen Methodensammlungen durchsuchen, nicht nur lokal Vorhandenes; Übernahme eines Vorschlags erzeugt sofort eine lokale Kopie (wie D33).
+- ~~**Typ-Feld in local_seminarplaner ergänzen (Anschluss an D57).**~~ ✓ Bereits umgesetzt (Commits 9f67f79 mod / 689303d local, 10. Juli 2026) – Spalte `concepttype` (`sammlung`/`seminarkonzept`), Typ-Auswahl im Einreichen-Formular, typbewusste Verarbeitung beim Import. War bereits vor der D57-Entscheidung gebaut worden.
+- ~~**Übersichtsliste Konzeptverantwortliche (Anschluss an D58).**~~ ✓ Erledigt (13. Juli 2026, Commit e284017): Bereich „Das sind unsere Konzeptverantwortlichen" im Einreichen-Tab (nur Name, kein Kontaktweg), Opt-in-User-Preference `mod_seminarplaner_konzeptverantwortliche_public` (Default aus), Opt-in-Schalter nur für Nutzer:innen mit `local/seminarplaner:reviewset`-Capability. Neuer Webservice `list_public_reviewers`. Auf Staging browser-verifiziert.
+- **Offene Schnittstelle als OER-Prinzip:** Wunsch, den Seminarplaner nicht zum Datensilo werden zu lassen – Daten sollen möglichst leicht kontrolliert entnommen/eingespeist werden können, über die bestehenden plugin-eigenen Formate (Abschnitt 5, JSON/CSV/ZIP) hinaus. Grundsätzliche Richtungsfrage, noch nicht ausgearbeitet.
+- **Anbindung an Sessionplan.de:** Konkreter Anwendungsfall für die offene Schnittstelle. Sessionplan.de hat keine dokumentierte öffentliche API; eine Beispiel-Exportdatei liegt vor und muss noch analysiert werden, um die Machbarkeit einzuschätzen.
+- **Eigener Seitenkopf mit Logo in der Weboberfläche (neue offene Konzeptfrage, gemeldet von Claude Code):** Während der Umsetzung des Corporate-Design-Handoffs bewusst zurückgestellt: ein eigener „Seminarplaner"-Seitenkopf mit Logo oben rechts, statt sich auf den umgebenden Moodle-Rahmen zu verlassen. Zu unterscheiden vom Logo im PDF-Export (**D52**, dort bereits entschieden) – hier geht es um die laufende Weboberfläche selbst. Noch nicht konzipiert, keine Entscheidung.
+- **Seminarziele-Feld + Zielabdeckung umsetzen (Anschluss an D61):** Neues Feld/Liste „Seminarziele" am Gesamtplan, Verknüpfungs-UI (Checkliste je Ziel gegen die Seminareinheiten), neue neunte Regel in der Logik der Didaktischen Empfehlungen.
+- **Lernziel-Editor umsetzen (Anschluss an D62):** Editor-Komponente (Bloom-Stufe → Verb → Freitext-Inhalt → Satz-Zusammenbau), Wiederverwendung der D41-Tabelle für die Phasen-Vorbelegung, Einbindung im D21-Modal und im neuen D61-Seminarziele-Feld.
 
 ## 8. Entwicklungs- und Rollout-Strategie
 
@@ -810,7 +1017,7 @@ Aufgelöste Fragen:
 
 1. **Langlebiger Feature-Branch** (z. B. `umbau-sequenzansicht`) vom aktuellen produktiven Stand abgezweigt; der Stand davor bekommt einen Git-Tag als Rücksprungpunkt.
 2. **Staging bekommt eine echte Kopie der Produktionsdaten** (DB-Dump), damit die Grid→Sequenz-Umrechnung (D20/D43) und die Übersetzungs-Anzeige (D35) an echten, teils „unsauberen" Bestandsplänen getestet werden – nicht nur an synthetischen Testdaten.
-3. **Schrittweise Umsetzung entlang der Entscheidungsreihenfolge:** zuerst Datenmodell und Migrations-Logik (D20/D43), dann die Sequenzansicht selbst (D3/D10/D11) – **Block 2, abgeschlossen** –, dann Vorschlagsmechanik und Dramaturgie-Check (D14/D15/D22/D23/D40/D41) **plus D45** (Vorlagen-Anker-Zeiten der Grid-Einrichtung; thematisch näher an Block 1/2, aber bewusst zu Block 3 gezogen, damit Claude Code sie in der laufenden Implementierung mitnimmt) – **Block 3, aktuell**, zuletzt Bibliothek und Einreichen-Workflow (D28–D33, D37–D39). Nach jedem Block: Test auf Staging, bevor der nächste Block beginnt.
+3. **Schrittweise Umsetzung entlang der Entscheidungsreihenfolge:** zuerst Datenmodell und Migrations-Logik (D20/D43), dann die Sequenzansicht selbst (D3/D10/D11) – **Block 2, abgeschlossen** –, dann Vorschlagsmechanik und Didaktische Empfehlungen (D14/D15/D22/D23/D40/D41) plus D45 (Vorlagen-Anker-Zeiten der Grid-Einrichtung) – **Block 3, abgeschlossen** –, zuletzt Bibliothek und Einreichen-Workflow (D28–D33, D37–D39, D50–D59) – **Block 4, in Arbeit** (Etappe 1 abgeschlossen: globale Bibliothek D29/D33 mit Facetten-Suche, D38-Begriff, D37-Statusliste, D32-Seminarkonzept-Einreichen inkl. D57-Typ-Feld; verbleibend: D59-Suchen-und-Ablegen an der Vorschlagsstelle, D55-Bibliothek-Tabs, D58-Übersichtsliste Konzeptverantwortliche, D56-erweiterte Vorschlagsmechanik, D51/D52/D53/D54-Einreichen-Seite/PDF-Export/Didaktische-Empfehlungen-Erweiterung). Nach jedem Block: Test auf Staging, bevor der nächste Block beginnt.
 4. **Schema-Änderungen laufen über Moodles `upgrade.php`-Mechanismus**, nicht als manuelle Datenbank-Eingriffe – nummerierte, nachvollziehbare Upgrade-Schritte, die beim Versionswechsel automatisch nachgezogen werden. Die Grid→Sequenz-Umrechnung (D43) ist einer dieser Schritte.
 5. **Produktion bleibt vom Umbau unberührt, bis ein zusammenhängender Meilenstein auf Staging überzeugt** – im Zweifel dort auch nochmal mit ein bis zwei Referentinnen getestet, ähnlich wie beim Wireframe-Workshop. Das Tool bleibt während der gesamten Umbauphase produktiv nutzbar, weil ausschließlich auf Branch und Staging gearbeitet wird. Der Umstieg auf Produktion erfolgt als ein einziger, koordinierter Update-Moment (passend zu D34–D36) – alle Referentinnen wechseln gemeinsam von Grid auf Sequenzansicht, keine gestaffelte Teil-Freischaltung.
 6. **Zusätzliche Absicherung gegen versehentliches Deployment:** Ein eigenes Skill (`git-branch-guard-seminarplaner`) verhindert, dass die beiden bestehenden Deploy-/Release-Skills (`deploy-local-seminarplaner`, `seminarplaner-release` – Ziel: GitHub `main` und GitLab) während der Umbau-Arbeit versehentlich mitlaufen. Commits/Pushes auf den Feature-Branch nach GitHub sind normaler Alltag; ein Merge auf GitHub `main` oder **jeder** Push nach GitLab ist dagegen gesperrt, bis explizit eine stabile, produktionsreife Version für den Produktivsystem-Umstieg erklärt wird (D44). Branch-Name im Skill als Platzhalter (`umbau-sequenzansicht`) zu prüfen und ggf. anzupassen.
@@ -818,7 +1025,7 @@ Aufgelöste Fragen:
 
 ## 9. Vorschlag für die Projekt-Anweisungen (Claude-Projekt)
 
-> Wir entwickeln das Moodle-Plugin „Seminarplaner" (mod_seminarplaner + local_seminarplaner) für die IG-Metall-Bildungsarbeit konzeptionell weiter. Zielgruppe sind hauptamtliche und ehrenamtliche Referentinnen: erfahrene Pädagoginnen ohne akademische Ausbildung und mit geringer IT-Kompetenz – alle Vorschläge müssen didaktische statt IT-Metaphern nutzen. Grundlage aller Arbeit ist das Dokument „seminarplaner-umbau-konzept.md" im Projektwissen; getroffene Entscheidungen (D1–D49) gelten, bis sie ausdrücklich revidiert werden. Aktuelle Phase: Konzeption und Richtungsklärung – keinen Code generieren, außer es wird ausdrücklich verlangt. Bei neuen Entscheidungen das Konzeptdokument fortschreiben. Antworten auf Deutsch.
+> Wir entwickeln das Moodle-Plugin „Seminarplaner" (mod_seminarplaner + local_seminarplaner) für die IG-Metall-Bildungsarbeit konzeptionell weiter. Zielgruppe sind hauptamtliche und ehrenamtliche Referentinnen: erfahrene Pädagoginnen ohne akademische Ausbildung und mit geringer IT-Kompetenz – alle Vorschläge müssen didaktische statt IT-Metaphern nutzen. Grundlage aller Arbeit ist das Dokument „seminarplaner-umbau-konzept.md" im Projektwissen; getroffene Entscheidungen (D1–D62) gelten, bis sie ausdrücklich revidiert werden. Aktuelle Phase: Konzeption und Richtungsklärung – keinen Code generieren, außer es wird ausdrücklich verlangt. Bei neuen Entscheidungen das Konzeptdokument fortschreiben. Antworten auf Deutsch.
 
 Empfohlenes Projektwissen: dieses Dokument, die Plugin-Code-Referenz, ein Beispiel-Themenplan (TP_2026_ki.docx), das Wireframe der Sequenzansicht, die Workshop-Fragensammlung (workshop-fragen.md).
 
@@ -826,14 +1033,14 @@ Empfohlenes Projektwissen: dieses Dokument, die Plugin-Code-Referenz, ein Beispi
 
 1. ~~Claude-Projekt anlegen, Anweisungen und Projektwissen einpflegen.~~ ✓ erledigt
 2. ~~Offene Fragen 1 und 6 klären.~~ ✓ erledigt (D8, D10, D11) – ebenso Fragen 2, 3, 5 (D9, D12, D13)
-3. ~~**Frage 4 klären:** Dramaturgie-Check-Regeln formulieren.~~ ✓ Grundausrichtung erledigt (**D15**) – verbleibt: **Workshop mit erfahrenen Referentinnen**; alle Workshop-Fragen sind gesammelt im Begleitdokument **„workshop-fragen.md"** (D15-Regeln inkl. Schwellenwerte und Regel 2, Begriffe „Einreichen" und „Methoden-Sammlung" inzwischen final entschieden, Wireframe-Test mit UX-Prüffragen).
-3a. ~~**Frage 7 klären:** Vorschlagsmechanik aus D4 konkret ausarbeiten.~~ ✓ erledigt (**D14**) – bei der Klärung von Frage 4 (Dramaturgie-Check) berücksichtigen, dass beide auf dieselben Daten zugreifen (Phasen, kognitive Dimension, Dauer).
+3. ~~**Frage 4 klären:** Regeln der Didaktischen Empfehlungen formulieren.~~ ✓ Grundausrichtung erledigt (**D15**) – verbleibt: **Workshop mit erfahrenen Referentinnen**; alle Workshop-Fragen sind gesammelt im Begleitdokument **„workshop-fragen.md"** (D15-Regeln inkl. Schwellenwerte und Regel 2, Begriffe „Einreichen" und „Methoden-Sammlung" inzwischen final entschieden, Wireframe-Test mit UX-Prüffragen).
+3a. ~~**Frage 7 klären:** Vorschlagsmechanik aus D4 konkret ausarbeiten.~~ ✓ erledigt (**D14**) – bei der Klärung von Frage 4 (Didaktische Empfehlungen) berücksichtigen, dass beide auf dieselben Daten zugreifen (Phasen, kognitive Dimension, Dauer).
 3b. ~~**Frage 8 klären:** Tab-Struktur und -Benennungen nach dem Umbau durchdenken.~~ ✓ erledigt (**D16**) – verbleibt nur die finale Wahl „Einreichen" vs. „Weitergeben", ggf. im Workshop abfragen.
-4. ~~**Wireframe verfeinern.**~~ ✓ abgeschlossen: v2 zeigt alle Entscheidungen (Alternativen D8, unbenannte Abschnitte D10, Fortsetzung + Verschiebe-Aktion D3, Tab-Leiste D16/D18, Vorschläge D14, Dramaturgie-Blick D15, Einheiten-Editor-Modal D17 mit drei Einstiegen). Das Wireframe ist das abgestimmte UI-Konzept und Testinstrument für den Referentinnen-Workshop.
+4. ~~**Wireframe verfeinern.**~~ ✓ abgeschlossen: v2 zeigt alle Entscheidungen (Alternativen D8, unbenannte Abschnitte D10, Fortsetzung + Verschiebe-Aktion D3, Tab-Leiste D16/D18, Vorschläge D14, Didaktische Empfehlungen D15, Einheiten-Editor-Modal D17 mit drei Einstiegen). Das Wireframe ist das abgestimmte UI-Konzept und Testinstrument für den Referentinnen-Workshop.
 5. ~~**Themenplan-Parser (D13) spezifizieren.**~~ ✓ erledigt (**D19**): Parsing-Regeln als Spezifikation ausformuliert – Best-Effort mit Import-Bericht, organisatorische Blöcke über leere Kompetenzerwartungen-Zelle, Wochentags-Mapping, Anker-Fallbacks, Kopfblock ignoriert, ein harter Boden bei fehlender Struktur. Keine neuen Workshop-Fragen daraus.
 6. ~~**Datenmodell-Konzept für Sequenz, Anker-Platzierung und Alternativen** (D3, D8, D12).~~ ✓ erledigt (**D20**): Platzierung liegt an der einzelnen Seminareinheit statt am Baustein (löst Fortsetzung ohne Sonderfall); Baustein-Varianten (D8) tauschen als unterschiedlich lange Pakete auf einmal; Einheiten-Auswahl als eigene, neue Ebene für Einheiten-Alternativen.
-7. ~~**Referentinnen-Workshop terminieren und durchführen.**~~ ✓ durchgeführt – erste Ergebnisse ausgewertet und eingearbeitet (**D22–D27**): Dramaturgie-Check-Regeln inkl. Schwellenwert final, neue Regel 7, Ein/Aus-Schalter, Tab-Name „Import/Export" bestätigt, Veranstaltungsgröße und vereinfachte Gruppengröße neu aufgenommen.
+7. ~~**Referentinnen-Workshop terminieren und durchführen.**~~ ✓ durchgeführt – erste Ergebnisse ausgewertet und eingearbeitet (**D22–D27**): Regeln der Didaktischen Empfehlungen inkl. Schwellenwert final, neue Regel 7, Ein/Aus-Schalter, Tab-Name „Import/Export" bestätigt, Veranstaltungsgröße und vereinfachte Gruppengröße neu aufgenommen.
 8. ~~**Verbleibende Workshop-Ergebnisse auswerten.**~~ ✓ Vollständig abgeschlossen: B1 (**D37**), B3 (**D38**), B4 (**D39**), B5 (**D40**/**D41**), Teil C (**D42**). Die gesamte Workshop-Fragensammlung (workshop-fragen.md) ist damit durchgearbeitet.
 9. ~~**Methoden-Bibliothek (D29) konzipieren – Frage 9 klären.**~~ ✓ Frage 9 entschieden (**D32**: Seminarkonzepte nutzen denselben Mechanismus wie Methoden-Sammlungen, kein separates Verfahren). Verbleibt: weitere reale Methodenbestände vom Auftraggeber sichten, Facetten (Zeitpunkt/Anlass, Format, Aufwand) daran verfeinern oder korrigieren, danach UI-Konzept für die Bibliotheksansicht (Filternetz, Kartenansicht) ausarbeiten.
-10. **UX-Konzept „Bibliothek ohne Vor-Import" (D33) ausarbeiten.** Grundsatz steht: globale Methoden-Sammlungen sind beim Planbau immer durchsuchbar, einzelne Methoden werden bei Übernahme sofort als lokale Kopie angelegt. Noch zu konzipieren: wie diese Bibliotheksansicht konkret in den Workflow der Sequenzansicht eingebunden wird (Andock-Panel, Suchen-und-Ablegen, separates Fenster).
+10. ~~**UX-Konzept „Bibliothek ohne Vor-Import" (D33) ausarbeiten.**~~ ✓ Final entschieden durch **D59**: Suchen-und-Ablegen direkt an der D14-Vorschlagsstelle, Bibliothek-Tab (D50/D55) bleibt zusätzlich erhalten.
 11. ~~**Übergangsstrategie (D34) fertig ausarbeiten.**~~ ✓ Abgeschlossen. Übersetzungs-Anzeige konkretisiert (**D35**: ein Beispieltag mit echten eigenen Daten, pro Referentin einmal je Plan). Der ursprünglich geplante optische Stufenplan entfällt (**D36**: kein Wechsel Richtung Flipchart-Optik – Zielbild bleibt dauerhaft die Chrome-Variante „Vertraut"; der eigentliche Übergang ist der Mechanismus-Wechsel Grid-Logik → Sequenzlogik, bereits durch D35 abgedeckt). Verbleibt als rein technische Aufgabe: die Umsetzung der Grid→Sequenz-Umrechnung selbst (D20).
