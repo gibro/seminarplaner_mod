@@ -403,6 +403,11 @@ function(Ajax, UserRepository, Fragment, Templates) {
             this.planningUnits = {};
             this.methodCards = {};
             this.methodCardList = [];
+            // D56/D59: Methoden aus globalen Methoden-Sammlungen (immer
+            // durchsuchbar, D33). Fließen in die Vorschläge ein und sind über
+            // das Suchfeld an der Lücke auffindbar; Übernehmen legt sofort eine
+            // lokale Kopie an (adopt_global_method).
+            this.globalMethods = [];
             this.openSwapPid = '';
             this.headingPid = '';
             this.idCounter = 0;
@@ -505,6 +510,14 @@ function(Ajax, UserRepository, Fragment, Templates) {
             const container = bySel('#sq-day');
             if (container) {
                 container.addEventListener('click', (event) => this.handleDayClick(event));
+                // D59: manuelle Bibliothekssuche an der Lücke (delegiert, damit
+                // der Listener Re-Renders des Tagesinhalts übersteht).
+                container.addEventListener('input', (event) => {
+                    const input = event.target;
+                    if (input && input.classList && input.classList.contains('sq-gap-search')) {
+                        this.renderGapSearchResults(input);
+                    }
+                });
                 this.initDragAndDrop(container);
                 // Remember which suggestion boxes are open (toggle does not
                 // bubble, so listen in the capture phase).
@@ -1119,6 +1132,40 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 });
                 this.render();
             }).catch(() => null);
+            this.loadGlobalMethods();
+        }
+
+        // D56/D59: globale Methoden-Sammlungen laden (kein Vor-Import nötig).
+        loadGlobalMethods() {
+            asCall('mod_seminarplaner_browse_global_library', {cmid: this.cmid}).then((res) => {
+                if (!res || res.available === false || !Array.isArray(res.methods)) {
+                    this.globalMethods = [];
+                    return;
+                }
+                this.globalMethods = res.methods.map((m) => ({
+                    id: 'gl-' + m.methodid,
+                    _globalid: Number(m.methodid) || 0,
+                    _isglobal: true,
+                    _setname: String(m.setname || ''),
+                    titel: String(m.titel || ''),
+                    zeitbedarf: String(m.zeitbedarf || ''),
+                    kurzbeschreibung: String(m.kurzbeschreibung || ''),
+                    tags: Array.isArray(m.tags) ? m.tags.join(', ') : String(m.tags || ''),
+                    seminarphase: Array.isArray(m.seminarphase) ? m.seminarphase : [],
+                }));
+                this.render();
+            }).catch(() => {
+                this.globalMethods = [];
+            });
+        }
+
+        // D56/D59: durchsuchbarer Gesamtbestand = lokale Einheiten + globale
+        // Methoden-Sammlungen. Globale Treffer, deren Titel bereits lokal
+        // existiert, werden ausgeblendet (Übernehmen erzeugt sonst Dubletten).
+        suggestionPool() {
+            const localtitles = new Set(this.methodCardList.map((c) => cardTitle(c).trim().toLowerCase()));
+            const globals = this.globalMethods.filter((m) => !localtitles.has(String(m.titel).trim().toLowerCase()));
+            return this.methodCardList.concat(globals);
         }
 
         loadState(gridid) {
@@ -2778,7 +2825,7 @@ function(Ajax, UserRepository, Fragment, Templates) {
         // Hard filter: duration fits. Soft ranking: keywords + Bloom phase.
         suggestFor(gapminutes, keywords, bloomphases, excluderefs) {
             const scored = [];
-            this.methodCardList.forEach((card) => {
+            this.suggestionPool().forEach((card) => {
                 const duration = this.cardDuration(card);
                 if (duration === null || duration > gapminutes) {
                     return;
@@ -2801,6 +2848,9 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 if (phasematch) {
                     reasons.push('passt zur erwarteten Phase');
                 }
+                if (card._isglobal) {
+                    reasons.push('aus globaler Sammlung');
+                }
                 scored.push({
                     card,
                     duration,
@@ -2820,6 +2870,16 @@ function(Ajax, UserRepository, Fragment, Templates) {
             return scored.slice(0, 4);
         }
 
+        // Übernehmen-Button für einen Vorschlag/Treffer. Globale Methoden tragen
+        // data-global-methodid: Übernehmen legt erst eine lokale Kopie an (D33).
+        suggestButton(card, targetattrs) {
+            const globalattr = card._isglobal
+                ? `data-global-methodid="${escapeHtml(String(card._globalid))}"`
+                : '';
+            return `<button type="button" class="kg-btn kg-btn-primary" data-sq-action="suggest-add"
+                data-cardid="${escapeHtml(String(card.id))}" ${globalattr} ${targetattrs}>Übernehmen</button>`;
+        }
+
         renderSuggestions(gapminutes, baustein, targetattrs) {
             const keywords = this.contextKeywords(baustein);
             const bloomphases = baustein ? this.bloomPhasesFor(baustein.themenplanreferenz) : [];
@@ -2831,20 +2891,21 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 <div class="sq-suggest__card${pkey ? ' sq-suggest__card--' + pkey : ''}">
                   <div class="sq-unit__title">${escapeHtml(cardTitle(entry.card))}</div>
                   <div class="sq-suggest__why">${escapeHtml(entry.reason)}</div>
-                  <button type="button" class="kg-btn kg-btn-primary" data-sq-action="suggest-add"
-                    data-cardid="${escapeHtml(String(entry.card.id))}" ${targetattrs}>Übernehmen</button>
+                  ${this.suggestButton(entry.card, targetattrs)}
                 </div>`;
             }).join('');
 
             const empty = suggestions.length ? '' : `
-                <div class="sq-suggest__empty">In der Bibliothek passt gerade nichts in diese Lücke –
-                  leg direkt eine neue Einheit an.</div>`;
+                <div class="sq-suggest__empty">Für diese Lücke passt automatisch gerade nichts –
+                  such gezielt in der Bibliothek oder leg direkt eine neue Einheit an.</div>`;
 
             // Collapsed by default but visibly inviting; open state is
             // remembered per day and target across re-renders.
             const key = `${this.dayIndex}|${targetattrs}`;
             const open = !!this.openSuggest[key];
             const counter = suggestions.length ? ` (${suggestions.length})` : '';
+            // D59: Suchen-und-Ablegen direkt an der Lücke - manuelle Suche in der
+            // kompletten Bibliothek (lokale Einheiten + globale Sammlungen).
             return `
                 <details class="sq-gap" data-suggest-key="${escapeHtml(key)}"${open ? ' open' : ''}>
                   <summary class="sq-gap__summary">
@@ -2855,9 +2916,82 @@ function(Ajax, UserRepository, Fragment, Templates) {
                   <div class="sq-gap__body">
                     <div class="sq-suggest">${cards}</div>
                     ${empty}
+                    <div class="sq-gap__search">
+                      <input type="search" class="kg-input sq-gap-search"
+                        placeholder="🔎 In der ganzen Bibliothek suchen …" ${targetattrs}>
+                      <div class="sq-gap-results"></div>
+                    </div>
                     <button type="button" class="kg-btn" data-sq-action="quick-create" ${targetattrs}>＋ Neue Einheit anlegen</button>
                   </div>
                 </details>`;
+        }
+
+        // D59: Treffer der manuellen Bibliothekssuche an einer Lücke rendern.
+        renderGapSearchResults(input) {
+            const box = input.closest('.sq-gap__search');
+            const results = box ? box.querySelector('.sq-gap-results') : null;
+            if (!results) {
+                return;
+            }
+            const needle = String(input.value || '').trim().toLowerCase();
+            if (needle.length < 2) {
+                results.innerHTML = '';
+                return;
+            }
+            const targetattrs = (input.dataset.pid ? `data-pid="${escapeHtml(input.dataset.pid)}"` : '')
+                + (input.dataset.anker ? ` data-anker="${escapeHtml(input.dataset.anker)}"` : '');
+            const matches = this.suggestionPool().filter((card) => {
+                const hay = (cardTitle(card) + ' ' + this.fieldValue(card, 'kurzbeschreibung') + ' '
+                    + this.fieldValue(card, 'tags')).toLowerCase();
+                return hay.includes(needle);
+            }).slice(0, 8);
+            if (!matches.length) {
+                results.innerHTML = '<div class="sq-suggest__empty">Nichts gefunden.</div>';
+                return;
+            }
+            results.innerHTML = matches.map((card) => {
+                const duration = this.cardDuration(card);
+                const phase = this.fieldValue(card, 'seminarphase');
+                const meta = [duration ? duration + ' Min.' : '', phase, card._isglobal ? 'aus globaler Sammlung' : '']
+                    .filter(Boolean).join(' · ');
+                const pkey = phaseKey(card.seminarphase);
+                return `
+                <div class="sq-suggest__card${pkey ? ' sq-suggest__card--' + pkey : ''}">
+                  <div class="sq-unit__title">${escapeHtml(cardTitle(card))}</div>
+                  <div class="sq-suggest__why">${escapeHtml(meta)}</div>
+                  ${this.suggestButton(card, targetattrs)}
+                </div>`;
+            }).join('');
+        }
+
+        // D56/D59: globale Methode übernehmen (lokale Kopie, D33) und platzieren.
+        adoptAndPlace(globalid, target) {
+            this.setStatus('Aus der globalen Sammlung wird übernommen …');
+            asCall('mod_seminarplaner_adopt_global_method', {cmid: this.cmid, methodid: globalid}).then((res) => {
+                if (!res || !res.localid) {
+                    throw new Error('no localid');
+                }
+                const newid = String(res.localid);
+                return asCall('mod_seminarplaner_get_method_cards', {cmid: this.cmid}).then((cardres) => {
+                    let decoded = [];
+                    try {
+                        decoded = cardres.methodsjson ? JSON.parse(cardres.methodsjson) : [];
+                    } catch (e) {
+                        decoded = [];
+                    }
+                    this.methodCardList = Array.isArray(decoded) ? decoded : [];
+                    this.methodCards = {};
+                    this.methodCardList.forEach((card) => {
+                        if (card && card.id !== undefined) {
+                            this.methodCards[String(card.id)] = card;
+                        }
+                    });
+                    this.applySuggestTarget(newid, target);
+                    this.setStatus('Übernommen und eingeplant.');
+                });
+            }).catch(() => {
+                this.setStatus('Übernehmen aus der globalen Sammlung ist fehlgeschlagen.', true);
+            });
         }
 
         // Insert a unit into a reserved module: the reservation shrinks.
@@ -3023,10 +3157,16 @@ function(Ajax, UserRepository, Fragment, Templates) {
             } else if (type === 'edit-baustein') {
                 this.openBausteinEditor(action.getAttribute('data-bid') || '');
             } else if (type === 'suggest-add') {
-                this.applySuggestTarget(action.getAttribute('data-cardid') || '', {
+                const suggesttarget = {
                     pid: action.getAttribute('data-pid') || '',
                     anker: action.getAttribute('data-anker') || '',
-                });
+                };
+                const globalid = Number.parseInt(action.getAttribute('data-global-methodid') || '0', 10);
+                if (globalid > 0) {
+                    this.adoptAndPlace(globalid, suggesttarget);
+                } else {
+                    this.applySuggestTarget(action.getAttribute('data-cardid') || '', suggesttarget);
+                }
             } else if (type === 'quick-create') {
                 this.openQuickCreate({
                     pid: action.getAttribute('data-pid') || '',

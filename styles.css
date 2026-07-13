@@ -7347,3 +7347,26 @@ a.kg-btn-primary:focus {
     color: var(--ig-gray, #646464);
     font-style: italic;
 }
+
+/* =========================================================================
+   D56/D59 - Bibliothek beim Planbau: manuelles Suchfeld an der Vorschlags-
+   Lücke (Suchen-und-Ablegen). Ergänzt die automatischen Vorschläge (D14) um
+   eine Suche über den gesamten Bestand (lokale Einheiten + globale Sammlungen).
+   ========================================================================= */
+.sq-gap__search {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--ig-lightgray, #DADADA);
+}
+.sq-gap__search .sq-gap-search {
+    width: 100%;
+}
+.sq-gap-results {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 6px;
+}
+.sq-gap-results:empty {
+    margin-top: 0;
+}
