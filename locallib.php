@@ -195,46 +195,6 @@ function seminarplaner_groupsize_options(): array {
 }
 
 /**
- * Zuordnung der alten Gruppengrößen-Werte auf die neuen Cluster
- * (seminarplaner_groupsize_options). Grundlage für die Datenmigration beim
- * Upgrade. Nutzer-Entscheidung 13. Juli 2026: 2–5 → Gruppenarbeit,
- * 6+ → Plenum, Einzelarbeit/unklar → beliebig.
- *
- * @return array<string,string>
- */
-function seminarplaner_groupsize_migration_map(): array {
-    return [
-        '1' => 'beliebig',
-        '2-3' => 'Gruppenarbeit (2-5)',
-        '3–5' => 'Gruppenarbeit (2-5)',
-        '6–12' => 'Plenum (10-20)',
-        '13–24' => 'Plenum (10-20)',
-        '25+' => 'Plenum (10-20)',
-        'beliebig' => 'beliebig',
-    ];
-}
-
-/**
- * Ein einzelner Gruppengrößen-Wert auf den neuen Cluster abgebildet.
- * Bereits migrierte oder leere Werte bleiben unverändert; unbekannte Altwerte
- * fallen sicher auf „beliebig".
- *
- * @param string $value Bestehender Wert.
- * @return string Neuer Cluster-Wert (oder '' wenn leer).
- */
-function seminarplaner_groupsize_to_cluster(string $value): string {
-    $value = trim($value);
-    if ($value === '') {
-        return '';
-    }
-    if (isset(seminarplaner_groupsize_options()[$value])) {
-        return $value;
-    }
-    $map = seminarplaner_groupsize_migration_map();
-    return $map[$value] ?? 'beliebig';
-}
-
-/**
  * Map legacy seminar phase labels to the current five-phase taxonomy.
  *
  * @param string $phase Raw phase label.

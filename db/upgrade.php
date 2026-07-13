@@ -190,16 +190,35 @@ function xmldb_seminarplaner_upgrade($oldversion) {
         // Mapping (Nutzer-Entscheidung): 2–5 → Gruppenarbeit, 6+ → Plenum,
         // Einzelarbeit/unbekannt → beliebig. Inline gehalten, damit der
         // Upgrade-Schritt unabhängig von späteren Codeänderungen bleibt.
-        $groupmap = [
-            '1' => 'beliebig',
-            '2-3' => 'Gruppenarbeit (2-5)',
-            '3–5' => 'Gruppenarbeit (2-5)',
-            '6–12' => 'Plenum (10-20)',
-            '13–24' => 'Plenum (10-20)',
-            '25+' => 'Plenum (10-20)',
-            'beliebig' => 'beliebig',
-        ];
-        $newvalues = ['Gruppenarbeit (2-5)' => true, 'Plenum (10-20)' => true, 'beliebig' => true];
+        // Bildet einen Alt-Wert auf den neuen Cluster ab oder gibt null zurück,
+        // wenn nichts zu tun ist (leer oder bereits ein Cluster). Reine
+        // Zahlenwerte (auch Streuwerte wie "25") werden nach Größe eingeordnet;
+        // 1–3-stellig optional mit '+', damit lange Hash-Strings (korrupte
+        // Altdaten im Feld) NICHT als Zahl durchgehen, sondern auf "beliebig"
+        // fallen.
+        $tocluster = static function (string $old): ?string {
+            static $explicit = [
+                '1' => 'beliebig',
+                '2-3' => 'Gruppenarbeit (2-5)',
+                '3–5' => 'Gruppenarbeit (2-5)',
+                '6–12' => 'Plenum (10-20)',
+                '13–24' => 'Plenum (10-20)',
+                '25+' => 'Plenum (10-20)',
+            ];
+            static $isnew = ['Gruppenarbeit (2-5)' => true, 'Plenum (10-20)' => true, 'beliebig' => true];
+            $old = trim($old);
+            if ($old === '' || isset($isnew[$old])) {
+                return null;
+            }
+            if (isset($explicit[$old])) {
+                return $explicit[$old];
+            }
+            if (preg_match('/^(\d{1,3})\+?$/', $old, $m)) {
+                $n = (int)$m[1];
+                return $n <= 1 ? 'beliebig' : ($n <= 5 ? 'Gruppenarbeit (2-5)' : 'Plenum (10-20)');
+            }
+            return 'beliebig';
+        };
         $rows = $DB->get_records_select('config_plugins',
             'plugin = :plugin AND ' . $DB->sql_like('name', ':namelike'),
             ['plugin' => 'mod_seminarplaner', 'namelike' => 'methods_cmid_%']);
@@ -213,12 +232,8 @@ function xmldb_seminarplaner_upgrade($oldversion) {
                 if (!is_array($card) || !array_key_exists('gruppengroesse', $card)) {
                     continue;
                 }
-                $old = trim((string)$card['gruppengroesse']);
-                if ($old === '' || isset($newvalues[$old])) {
-                    continue;
-                }
-                $new = $groupmap[$old] ?? 'beliebig';
-                if ($new !== (string)$card['gruppengroesse']) {
+                $new = $tocluster((string)$card['gruppengroesse']);
+                if ($new !== null && $new !== (string)$card['gruppengroesse']) {
                     $cards[$i]['gruppengroesse'] = $new;
                     $changed = true;
                 }
