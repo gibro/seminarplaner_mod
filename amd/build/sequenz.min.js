@@ -2945,7 +2945,7 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 titel,
                 seminarphase: [],
                 zeitbedarf: String(Number.isFinite(dauer) && dauer > 0 ? dauer : 30),
-                gruppengroesse: [],
+                gruppengroesse: '',
                 kurzbeschreibung: '',
                 sozialform: [],
                 tags: [],

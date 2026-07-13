@@ -232,8 +232,19 @@ function xmldb_seminarplaner_upgrade($oldversion) {
                 if (!is_array($card) || !array_key_exists('gruppengroesse', $card)) {
                     continue;
                 }
-                $new = $tocluster((string)$card['gruppengroesse']);
-                if ($new !== null && $new !== (string)$card['gruppengroesse']) {
+                $raw = $card['gruppengroesse'];
+                if (is_array($raw)) {
+                    // Fehlerhafter Array-Typ aus einem älteren Schnellanlage-
+                    // Scaffold: auf String normalisieren ([] → '', sonst erstes
+                    // Element) und dabei gleich auf den Cluster abbilden.
+                    $rawstr = ($raw === []) ? '' : (string)reset($raw);
+                    $new = $tocluster($rawstr);
+                    $cards[$i]['gruppengroesse'] = $new ?? $rawstr;
+                    $changed = true;
+                    continue;
+                }
+                $new = $tocluster((string)$raw);
+                if ($new !== null && $new !== (string)$raw) {
                     $cards[$i]['gruppengroesse'] = $new;
                     $changed = true;
                 }
