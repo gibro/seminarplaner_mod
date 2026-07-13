@@ -816,6 +816,16 @@
   /* Transitions */
   --transition-fast: 0.15s ease;
   --transition-base: 0.2s ease;
+
+  /* Phasenfarben (CD-Handoff Stufe 3). Global auf :root, damit sie ueberall
+     gelten - auch im Ueberblick ohne .sq-shell. .sq-shell setzt sie zusaetzlich
+     lokal mit identischen Werten (Refactoring: zweiter :root-Block Z.~6555
+     hierher zusammengefuehrt, gleiche Werte -> optikneutral). */
+  --sq-phase-orientierung: #2F80AB;
+  --sq-phase-erfahrung: #5B9945;
+  --sq-phase-analyse: #EAB500;
+  --sq-phase-handlung: #882A30;
+  --sq-phase-transfer: #646464;
 }
 
 .kg-shell,
@@ -3088,6 +3098,11 @@ body.sp-resizing * {
 
 .sp-tab-panel {
   display: none;
+  /* Refactoring: width-Deklarationen aus zweitem .sp-tab-panel-Block (Z.~3116)
+     hierher zusammengefuehrt (disjunkt, optikneutral). */
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .sp-tab-panel.active {
@@ -3101,12 +3116,6 @@ body.sp-resizing * {
   max-height: 220px;
   overflow-x: auto;
   overflow-y: hidden;
-}
-
-.sp-tab-panel {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
 }
 
 #sp-methods,
@@ -3212,8 +3221,11 @@ body.sp-resizing * {
 .sp-filterbar .kg-btn {
   min-height: 36px;
   height: 36px;
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
+  /* Refactoring: important-Flag entfernt - dieser Selektor (0,2,0) schlaegt die
+     .kg-btn-Basis (0,1,0, margin:8px) bereits per Spezifitaet; kein Konkurrent
+     >=0,2,0 setzt hier margin. Optikneutral. */
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .sp-filterbar .kg-tag-dropdown {
@@ -5165,12 +5177,10 @@ body.sp-resizing * {
     align-items: center;
     gap: 10px;
     margin-bottom: 10px;
+    flex-wrap: wrap; /* Refactoring: aus zweitem .sq-planbar-Block hierher (optikneutral). */
 }
 .sq-planbar__label { margin: 0; }
 .sq-planbar__select { max-width: 320px; }
-.sq-planbar {
-    flex-wrap: wrap;
-}
 
 /* D45: plan creation/setup panel in the sequence view. */
 .sq-setup {
@@ -5488,7 +5498,8 @@ body.sp-resizing * {
     border-radius: 0;
     padding: 8px 10px;
 }
-.sq-anchor__add { margin-top: 4px; }
+/* Refactoring: display/gap/flex-wrap aus zweitem .sq-anchor__add-Block (Z.~5548) hier zusammengefuehrt (disjunkt, optikneutral). */
+.sq-anchor__add { margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; }
 .sq-membership { font-size: 11.5px; padding: 3px 8px; }
 
 /* === Sequenzansicht: Uebersetzungs-Anzeige (D35) === */
@@ -5535,7 +5546,6 @@ body.sp-resizing * {
 /* === Sequenzansicht: Entfernen + Pause (Block 2d) === */
 .sq-move__btn--remove { color: #a02f2f; }
 .sq-move__btn--remove:hover { border-color: #a02f2f; background: #fdf2f2; }
-.sq-anchor__add { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* === Unterbereiche des Seminareinheiten-Tabs (D16/D39) === */
 .kg-subnav { display: flex; gap: 6px; margin: -6px 0 14px; }
@@ -6373,6 +6383,9 @@ details[open] > .sq-gap__summary .sq-gap__chevron {
     font-size: 12.5px;
     color: var(--ig-gray);
     white-space: nowrap;
+    /* Refactoring: margin-left aus spaeterem .sq-savestate-Block (Z.~7085)
+       hierher (schiebt die Anzeige ans rechte Zeilenende; optikneutral). */
+    margin-left: auto;
 }
 
 .sq-savestate--ok {
@@ -6550,14 +6563,10 @@ details[open] > .sq-gap__summary .sq-gap__chevron {
    karten mit Phasen-Top-Rule, Seitenköpfe auf allen Tabs.
    ========================================================================= */
 
-/* Die Phasenfarben gelten überall (auch im Überblick ohne .sq-shell). */
-:root {
-    --sq-phase-orientierung: #2F80AB;
-    --sq-phase-erfahrung: #5B9945;
-    --sq-phase-analyse: #EAB500;
-    --sq-phase-handlung: #882A30;
-    --sq-phase-transfer: #646464;
-}
+/* Die Phasenfarben (--sq-phase-*) sind global auf :root am Dateikopf definiert
+   (Design-System-Block), damit sie überall gelten - auch im Überblick ohne
+   .sq-shell. Der frühere doppelte :root-Block an dieser Stelle wurde dorthin
+   zusammengeführt (identische Werte, optikneutral). */
 
 /* ---- Seitengrund + weiße Inhaltskarten ---- */
 .kg-shell {
@@ -7075,11 +7084,8 @@ a.kg-btn-primary:focus {
     gap: 6px;
 }
 
-/* Speicher-Status wird ans rechte Ende der Zeile geschoben (wie Vorlage). */
-.sq-savestate {
-    margin-left: auto;
-}
-
+/* Speicher-Status wird ans rechte Ende der Zeile geschoben (wie Vorlage) -
+   margin-left:auto ist in den Basis-.sq-savestate-Block oben zusammengefuehrt. */
 .sq-toggle span,
 #sq-new-unit.kg-btn {
     white-space: nowrap;
