@@ -64,6 +64,14 @@ echo html_writer::end_div();
 // D55: Bibliothek in drei Unterbereiche als Tabs - lokale Seminareinheiten
 // (Arbeitsfläche), immer durchsuchbare globale Methodensammlungen und die
 // bereits importierten globalen Seminarkonzepte.
+// Der Konzepte-Tab erscheint nur, wenn tatsächlich welche importiert wurden
+// (Marker aus import_global_seminarkonzept) - sonst gäbe es dort nichts zu
+// zeigen.
+$importedkonzepteraw = get_config('mod_seminarplaner', 'imported_konzepte_cmid_' . (int)$cm->id);
+$importedkonzepte = ($importedkonzepteraw !== false && $importedkonzepteraw !== null && $importedkonzepteraw !== '')
+    ? json_decode((string)$importedkonzepteraw, true) : [];
+$hasimportedkonzepte = is_array($importedkonzepte) && count($importedkonzepte) > 0;
+
 echo html_writer::start_div('ml-subtabs', ['role' => 'tablist']);
 echo html_writer::tag('button', 'Lokale Seminareinheiten', [
     'type' => 'button', 'class' => 'ml-subtab ml-subtab--active', 'data-ml-tab' => 'local',
@@ -73,10 +81,12 @@ echo html_writer::tag('button', 'Methodensammlungen', [
     'type' => 'button', 'class' => 'ml-subtab', 'data-ml-tab' => 'collections',
     'role' => 'tab', 'aria-selected' => 'false',
 ]);
-echo html_writer::tag('button', 'Globale Seminarkonzepte', [
-    'type' => 'button', 'class' => 'ml-subtab', 'data-ml-tab' => 'concepts',
-    'role' => 'tab', 'aria-selected' => 'false',
-]);
+if ($hasimportedkonzepte) {
+    echo html_writer::tag('button', 'Globale Seminarkonzepte', [
+        'type' => 'button', 'class' => 'ml-subtab', 'data-ml-tab' => 'concepts',
+        'role' => 'tab', 'aria-selected' => 'false',
+    ]);
+}
 echo html_writer::end_div();
 
 // ---- Tab 1: Lokale Seminareinheiten (Standard-Ansicht) ------------------
@@ -465,17 +475,21 @@ echo html_writer::end_div(); // Ende Tab 2 (#ml-tab-collections).
 // ---- Tab 3: Globale Seminarkonzepte (bereits importierte, D55) -----------
 // D55: zeigt nur die Seminarkonzepte, die bereits über den Import (D32,
 // Import/Export-Tab) in den lokalen Bestand geholt wurden - kein Import hier.
-echo html_writer::start_div('ml-tabpanel kg-hidden', ['id' => 'ml-tab-concepts', 'role' => 'tabpanel']);
-echo html_writer::start_div('kg-ie-block kg-library-step');
-echo html_writer::tag('h4', 'Globale Seminarkonzepte');
-echo html_writer::tag('p', 'Diese globalen Seminarkonzepte hast du bereits in deinen Bestand geholt. '
-    . 'Jedes Konzept ist als eigener Seminarplan angelegt; die enthaltenen Seminareinheiten '
-    . 'liegen als eigenständige lokale Kopien im Tab „Lokale Seminareinheiten". '
-    . 'Neue Konzepte holst du über den Tab „Import/Export".');
-echo html_writer::tag('div', '', ['id' => 'ml-konzepte-status', 'class' => 'sp-filter-status']);
-echo html_writer::tag('div', '', ['id' => 'ml-konzepte-list', 'class' => 'ml-konzepte-list']);
-echo html_writer::end_div();
-echo html_writer::end_div(); // Ende Tab 3 (#ml-tab-concepts).
+// Panel nur ausgeben, wenn der zugehörige Tab existiert (mindestens ein
+// importiertes Konzept).
+if ($hasimportedkonzepte) {
+    echo html_writer::start_div('ml-tabpanel kg-hidden', ['id' => 'ml-tab-concepts', 'role' => 'tabpanel']);
+    echo html_writer::start_div('kg-ie-block kg-library-step');
+    echo html_writer::tag('h4', 'Globale Seminarkonzepte');
+    echo html_writer::tag('p', 'Diese globalen Seminarkonzepte hast du bereits in deinen Bestand geholt. '
+        . 'Jedes Konzept ist als eigener Seminarplan angelegt; die enthaltenen Seminareinheiten '
+        . 'liegen als eigenständige lokale Kopien im Tab „Lokale Seminareinheiten". '
+        . 'Neue Konzepte holst du über den Tab „Import/Export".');
+    echo html_writer::tag('div', '', ['id' => 'ml-konzepte-status', 'class' => 'sp-filter-status']);
+    echo html_writer::tag('div', '', ['id' => 'ml-konzepte-list', 'class' => 'ml-konzepte-list']);
+    echo html_writer::end_div();
+    echo html_writer::end_div(); // Ende Tab 3 (#ml-tab-concepts).
+}
 
 echo html_writer::end_div();
 
