@@ -5181,6 +5181,10 @@ body.sp-resizing * {
 .sq-toolbar {
     display: flex;
     align-items: center;
+    /* explizit flex-start (nicht nur space-between entfernen): eine evtl.
+       gecachte aeltere Kopie dieser Regel in der aggregierten Theme-CSS
+       wuerde sonst weiter space-between erzwingen. */
+    justify-content: flex-start;
     flex-wrap: wrap;
     gap: 10px 14px;
     background: #fff;
