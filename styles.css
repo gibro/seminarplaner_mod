@@ -5181,9 +5181,8 @@ body.sp-resizing * {
 .sq-toolbar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 10px 14px;
     background: #fff;
     border: 1px solid var(--sq-border);
     border-radius: var(--sq-radius);
@@ -5316,7 +5315,10 @@ body.sp-resizing * {
 .sq-phase-bg--transfer { background: var(--sq-phase-transfer, #8a6fb0); }
 
 /* === Sequenzansicht: Bearbeitungs-Interaktionen (Block 2b, D42 C1-C7) === */
-.sq-toolbar__actions { display: flex; align-items: center; gap: 10px; }
+/* Aktions-Elemente sind direkte Flex-Kinder der Toolbar (display: contents),
+   damit im Standard alles in EINER Reihe steht und beim Verkleinern die
+   einzelnen Elemente umbrechen statt der ganze Block auf einmal. */
+.sq-toolbar__actions { display: contents; }
 .sq-move { display: inline-flex; gap: 2px; flex: 0 0 auto; }
 .sq-move__btn { padding: 2px 8px; font-size: 12px; line-height: 1.2; }
 .sq-unit__actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; flex-wrap: wrap; }
@@ -6910,9 +6912,7 @@ a.kg-btn-primary:focus {
 .sq-toolbar .sq-publish {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding-right: 12px;
-    border-right: 1px solid var(--ig-lightgray);
+    gap: 6px;
 }
 
 .sq-toolbar .sq-publish .kg-inline-checkbox {
@@ -7032,8 +7032,16 @@ a.kg-btn-primary:focus {
     flex-wrap: nowrap;
 }
 
-.sq-toolbar__actions {
-    flex-wrap: wrap;
+/* Toggle + ⓘ bleiben als Einheit zusammen, auch wenn die Zeile umbricht. */
+.sq-toggle-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Speicher-Status wird ans rechte Ende der Zeile geschoben (wie Vorlage). */
+.sq-savestate {
+    margin-left: auto;
 }
 
 .sq-toggle span,

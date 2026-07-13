@@ -152,16 +152,24 @@ $renderinfo = static function(string $text): string {
 };
 
 echo html_writer::start_div('sq-toolbar__actions');
+// D27: Didaktische Empfehlungen zuerst (Reihenfolge wie in der Vorlage).
+// Toggle + ⓘ bilden eine feste Gruppe, damit sie beim responsiven Umbruch
+// zusammenbleiben und nicht auseinandergerissen werden.
+echo html_writer::start_tag('span', ['class' => 'sq-toggle-group']);
+echo html_writer::start_tag('label', ['class' => 'sq-toggle', 'for' => 'sq-drama-toggle']);
+echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'sq-drama-toggle']);
+echo html_writer::tag('span', get_string('sequenz_dramatoggle', 'mod_seminarplaner'));
+echo html_writer::end_tag('label');
+echo $renderinfo(get_string('sequenz_dramatoggle_info', 'mod_seminarplaner'));
+echo html_writer::end_tag('span');
 // D16/D37: the finished sequence can be published as the Common Thread
 // directly from the toolbar. Schieberegler wie der Empfehlungs-Toggle,
-// die genaue Erklärung steckt im ⓘ-Popover.
+// die genaue Erklärung UND der dynamische Status stecken im ⓘ-Popover.
 echo html_writer::start_tag('span', ['class' => 'sq-publish', 'id' => 'sq-publish-wrap']);
 echo html_writer::start_tag('label', ['class' => 'sq-toggle', 'for' => 'sq-publish-roterfaden']);
 echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'sq-publish-roterfaden']);
 echo html_writer::tag('span', get_string('sequenz_publishlabel', 'mod_seminarplaner'));
 echo html_writer::end_tag('label');
-// Erklärung UND der dynamische Veröffentlichungs-Status stecken im Popover;
-// die Toolbar-Zeile bleibt dadurch einzeilig.
 echo html_writer::tag('span',
     html_writer::tag('button', 'i', [
         'type' => 'button', 'class' => 'sq-info__btn',
@@ -173,11 +181,6 @@ echo html_writer::tag('span',
         ['class' => 'sq-info__pop', 'role' => 'tooltip']),
     ['class' => 'sq-info']);
 echo html_writer::end_tag('span');
-echo html_writer::start_tag('label', ['class' => 'sq-toggle', 'for' => 'sq-drama-toggle']);
-echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'sq-drama-toggle']);
-echo html_writer::tag('span', get_string('sequenz_dramatoggle', 'mod_seminarplaner'));
-echo html_writer::end_tag('label');
-echo $renderinfo(get_string('sequenz_dramatoggle_info', 'mod_seminarplaner'));
 // CD-Handoff: Neue Einheiten lassen sich jederzeit aus der Werkzeugleiste
 // heraus gestalten (Quick-Create). Die Anker-Buttons darunter übernehmen
 // weiterhin nur Bestehendes aus der Bibliothek.
