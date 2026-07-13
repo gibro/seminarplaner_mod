@@ -647,16 +647,15 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return Promise.resolve();
         }
         return asCall('mod_seminarplaner_list_global_methodsets', {cmid}).then((res) => {
-            globalMethodsets = Array.isArray(res.methodsets) ? res.methodsets : [];
+            const all = Array.isArray(res.methodsets) ? res.methodsets : [];
+            // D55: Hier werden nur globale Seminarkonzepte importiert. Methoden-
+            // Sammlungen sind ohne Import jederzeit in der Bibliothek durchsuchbar.
+            globalMethodsets = all.filter((set) => String(set.typ) === 'seminarkonzept');
             select.innerHTML = '<option value="">Bitte wählen</option>';
             globalMethodsets.forEach((set) => {
                 const opt = document.createElement('option');
                 opt.value = String(set.id);
-                // D32: Seminarkonzepte (kompletter Plan) sichtbar von den
-                // Methoden-Sammlungen unterscheiden.
-                opt.textContent = String(set.typ) === 'seminarkonzept'
-                    ? `${set.displayname} [Seminarkonzept]`
-                    : `${set.displayname}`;
+                opt.textContent = String(set.displayname);
                 select.appendChild(opt);
             });
             if (res.available === false) {
@@ -664,12 +663,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             } else if (res.message) {
                 setGlobalStatus(res.message, true);
             } else if (!globalMethodsets.length) {
-                setGlobalStatus('Keine veröffentlichten Methoden-Sammlungen gefunden.', false);
+                setGlobalStatus('Keine veröffentlichten globalen Seminarkonzepte gefunden.', false);
             } else {
-                setGlobalStatus(`${globalMethodsets.length} globale Methoden-Sammlungen verfügbar.`, false);
+                setGlobalStatus(`${globalMethodsets.length} globale Seminarkonzepte verfügbar.`, false);
             }
         }).catch((e) => {
-            setGlobalStatus(`Globale Methoden-Sammlungen konnten nicht geladen werden: ${e.message || e}`, true);
+            setGlobalStatus(`Globale Seminarkonzepte konnten nicht geladen werden: ${e.message || e}`, true);
         });
     };
 

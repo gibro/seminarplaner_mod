@@ -80,13 +80,15 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h4', 'Globale Methoden-Sammlungen');
-echo html_writer::tag('p', 'Importiere veröffentlichte globale Methoden-Sammlungen komplett in deinen Bestand. Einzelne Methoden findest du auch ohne Import in der Bibliothek (Tab „Seminareinheiten“).');
+echo html_writer::tag('h4', 'Globale Seminarkonzepte');
+echo html_writer::tag('p', 'Hole ein veröffentlichtes globales Seminarkonzept als eigenen Seminarplan in deine Aktivität. '
+    . 'Globale Methoden-Sammlungen musst du nicht importieren – ihre Methoden findest du jederzeit durchsuchbar '
+    . 'in der Bibliothek (Tab „Methodensammlungen“).');
 echo html_writer::start_div('kg-row');
 echo html_writer::start_tag('select', ['id' => 'kg-global-set-select', 'class' => 'kg-input']);
 echo html_writer::tag('option', 'Bitte wählen', ['value' => '']);
 echo html_writer::end_tag('select');
-echo html_writer::tag('button', 'Methoden-Sammlung importieren', ['type' => 'button', 'id' => 'kg-global-set-import', 'class' => 'kg-btn kg-btn-primary']);
+echo html_writer::tag('button', 'Seminarkonzept importieren', ['type' => 'button', 'id' => 'kg-global-set-import', 'class' => 'kg-btn kg-btn-primary']);
 echo html_writer::end_div();
 // D54: Kein Auto-Update-Schalter mehr. Aktualisierungen einer übernommenen
 // Sammlung werden nie automatisch übernommen; ein Hinweis erscheint an der
