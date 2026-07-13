@@ -1,4 +1,36 @@
 /* Moodle plugin UI wrappers */
+
+/* ==========================================================================
+   INHALTSVERZEICHNIS  (nach den Abschnitts-Überschriften im Dateiverlauf;
+   per Suche nach dem Titel anspringbar — bewusst ohne Zeilennummern, die
+   veralten würden)
+   --------------------------------------------------------------------------
+   0. Tab-Leiste + Basis-Wrapper (ab hier, vor dem ersten Abschnitt)
+   1. DESIGN SYSTEM – CSS VARIABLES        (Farb-, Typo-, Abstands-Token, :root)
+   2. ADD TEMPLATE (Eingabeformular)       (Seminareinheit anlegen)
+   3. LIST TEMPLATE (Seminarplaner)        (Filterleiste, Karten-Grid)
+   4. KOGNITIVE DIMENSIONEN – FARBCODIERUNG (Alt-Farbschema, teils Bestand)
+   5. SINGLE TEMPLATE (Seminareinheit)     (Editor-Formular, Modal)
+   6. INFORMATION-FIRST DESIGN             (Methoden-Karte, Stapel-Bearbeitung,
+                                            Baustein, Sequenz-Grundlayout)
+   7. CD-Handoff Stufe 1                   (IG-Metall-Token angewandt: Rot,
+                                            Radius 0, Typografie)
+   8. CD-Handoff Stufe 2                   (Sequenz-Komponenten-Feinschliff)
+   9. Feature-Blöcke: D47 Drag&Drop · D48 Schmiede-Hinweis · D29/D33 Globale
+      Bibliothek · D37 Einreichen-Statusliste · D49 Überblick-Navigation
+  10. CD-Handoff Stufe 3                   (näher an den Screenshots)
+  11. Nachträge am Dateiende (jüngste Änderungen zuerst gepflegt): D50 Picker,
+      D51 Weggabelung + Unterschied-Grafik, D58 Konzeptverantwortliche,
+      Sequenz-Toolbar einreihig, Meta-Font-Token
+
+   HINWEIS für Änderungen: Dieser File nutzt an mehreren Stellen bewusst die
+   Kaskaden-Reihenfolge (spätere Regel überschreibt eine frühere gleicher
+   Spezifität, v. a. in den CD-Handoff-Blöcken). Regeln daher NICHT umsortieren,
+   ohne die betroffenen Komponenten vorher/nachher visuell zu prüfen. Geänderte
+   Eigenschaften explizit auf den Zielwert setzen statt nur zu entfernen (die
+   aggregierte Theme-CSS kann eine ältere Kopie einer Regel weiter erzwingen).
+   ========================================================================== */
+
 /* CD-Handoff: Tabs als Zeile mit 4px-Unterstrich statt Button-Blöcken. */
 .kg-tabs {
   display: flex;
