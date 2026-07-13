@@ -304,6 +304,15 @@ function mod_seminarplaner_user_preferences(): array {
             'default' => true,
             'permissioncallback' => [core_user::class, 'is_current_user'],
         ],
+        // D58: Opt-in einer Konzeptverantwortlichen, in der öffentlichen
+        // Übersichtsliste zu erscheinen (reines Vertrauenssignal, kein
+        // Kontaktweg). Default aus - die Liste ist opt-in.
+        'mod_seminarplaner_konzeptverantwortliche_public' => [
+            'type' => PARAM_BOOL,
+            'null' => NULL_NOT_ALLOWED,
+            'default' => false,
+            'permissioncallback' => [core_user::class, 'is_current_user'],
+        ],
     ];
 }
 

@@ -51,26 +51,80 @@ echo html_writer::tag('h4', 'Wo stehen deine Einreichungen?');
 echo html_writer::tag('div', '', ['id' => 'kg-review-status-list', 'class' => 'kg-review-status-list']);
 echo html_writer::end_div();
 
+// D58: Öffentliche Übersichtsliste der Konzeptverantwortlichen als reines
+// Vertrauens-/Orientierungssignal (nur Name, kein Kontaktweg). Der Opt-in-
+// Schalter erscheint nur für Nutzerinnen mit Konzeptverantwortlichen-Rolle.
 echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h4', 'Geänderte oder neue Seminareinheit bereitstellen');
-echo html_writer::tag('label', 'Bestehende Methoden-Sammlung auswählen', ['for' => 'kg-review-existing-set-select', 'class' => 'kg-label']);
+echo html_writer::tag('h4', 'Das sind unsere Konzeptverantwortlichen');
+echo html_writer::tag('p', 'Diese Personen prüfen die eingereichten Beiträge und stehen hinter den freigegebenen Sammlungen und Konzepten.');
+echo html_writer::tag('div', '', ['id' => 'kg-review-reviewers-list', 'class' => 'kg-review-reviewers']);
+echo html_writer::start_div('kg-review-optin kg-hidden', ['id' => 'kg-review-optin']);
+echo html_writer::start_tag('label', ['class' => 'kg-review-optin__label', 'for' => 'kg-review-optin-check']);
+echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'kg-review-optin-check', 'class' => 'kg-review-optin__check']);
+echo html_writer::tag('span', 'Mich in dieser Liste anzeigen');
+echo html_writer::end_tag('label');
+echo html_writer::tag('small', 'Es erscheint nur dein Name – kein Kontaktweg. Gilt für alle von dir betreuten Konzepte.');
+echo html_writer::end_div();
+echo html_writer::end_div();
+
+// D51: Weggabelung vor den Formularen - erst entscheiden, was eingereicht
+// werden soll, dann erscheint nur der passende Bereich (die anderen bleiben
+// verborgen). Drei Wege: bestehende Sammlung ergänzen, neue Sammlung
+// zusammenstellen, komplettes Seminarkonzept (D32) einreichen.
+$reviewchoices = [
+    [
+        'value' => 'existing',
+        'titel' => 'Eine bestehende Methoden-Sammlung ergänzen oder aktualisieren',
+        'text'  => 'Neue oder geänderte Seminareinheiten an eine Sammlung übergeben, die es schon gibt.',
+    ],
+    [
+        'value' => 'new',
+        'titel' => 'Eine neue Methoden-Sammlung zusammenstellen',
+        'text'  => 'Aus deinen vorhandenen Seminareinheiten eine neue Sammlung ohne Ablauf bündeln.',
+    ],
+    [
+        'value' => 'konzept',
+        'titel' => 'Ein Seminarkonzept einreichen',
+        'text'  => 'Einen kompletten Seminarplan mit Ablauf und den verwendeten Seminareinheiten übergeben.',
+    ],
+];
+echo html_writer::start_div('kg-ie-block kg-review-fork');
+echo html_writer::tag('h4', 'Was möchtest du einreichen?');
+echo html_writer::start_div('kg-review-choices', ['role' => 'radiogroup', 'aria-label' => 'Was möchtest du einreichen?']);
+foreach ($reviewchoices as $choice) {
+    echo html_writer::start_tag('label', ['class' => 'kg-review-choice']);
+    echo html_writer::empty_tag('input', [
+        'type' => 'radio',
+        'name' => 'kg-review-mode',
+        'value' => $choice['value'],
+        'class' => 'kg-review-choice__input',
+    ]);
+    echo html_writer::tag('span', s($choice['titel']), ['class' => 'kg-review-choice__title']);
+    echo html_writer::tag('span', s($choice['text']), ['class' => 'kg-review-choice__desc']);
+    echo html_writer::end_tag('label');
+}
+echo html_writer::end_div();
+echo html_writer::end_div();
+
+// D51: Weg 1 - bestehende Sammlung. Die beiden früher getrennten Kästen
+// (Sammlung wählen / Kandidaten einreichen) sind jetzt ein durchgängiger
+// Ablauf: Sammlung wählen -> Kandidaten prüfen -> Update-Hinweis -> einreichen.
+echo html_writer::start_div('kg-ie-block kg-review-panel kg-hidden', ['id' => 'kg-review-panel-existing']);
+echo html_writer::tag('h4', 'Bestehende Methoden-Sammlung ergänzen oder aktualisieren');
+echo html_writer::tag('label', '1. Sammlung wählen', ['for' => 'kg-review-existing-set-select', 'class' => 'kg-label']);
 echo html_writer::start_tag('select', ['id' => 'kg-review-existing-set-select', 'class' => 'kg-input']);
 echo html_writer::tag('option', 'Bitte wählen', ['value' => '0']);
 echo html_writer::end_tag('select');
-echo html_writer::tag('label', 'Update-Hinweis für Konzeptverantwortliche', ['for' => 'kg-review-existing-changelog', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'kg-review-existing-changelog', 'class' => 'kg-input', 'rows' => 3]);
-echo html_writer::tag('div', '', ['id' => 'kg-review-existing-status', 'class' => 'kg-status']);
-echo html_writer::end_div();
-
-echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h4', 'Geänderte oder neue Seminareinheiten bereitstellen');
-echo html_writer::tag('p', 'Nach Auswahl einer Methoden-Sammlung erscheinen hier neue/geänderte Seminareinheiten für die bestehende Sammlung.');
+echo html_writer::tag('label', '2. Seminareinheiten prüfen und auswählen', ['class' => 'kg-label']);
+echo html_writer::tag('p', 'Nach Auswahl einer Sammlung erscheinen hier neue und geänderte Seminareinheiten zum Übergeben.');
 echo html_writer::start_div('kg-row');
 echo html_writer::tag('button', 'Alle auswählen', ['type' => 'button', 'id' => 'kg-review-existing-select-all', 'class' => 'kg-btn']);
 echo html_writer::tag('button', 'Keine auswählen', ['type' => 'button', 'id' => 'kg-review-existing-select-none', 'class' => 'kg-btn']);
 echo html_writer::tag('button', 'Änderungen neu prüfen', ['type' => 'button', 'id' => 'kg-review-existing-refresh', 'class' => 'kg-btn']);
 echo html_writer::end_div();
 echo html_writer::tag('div', '', ['id' => 'kg-review-existing-candidates', 'class' => 'kg-ie-preview']);
+echo html_writer::tag('label', '3. Update-Hinweis für Konzeptverantwortliche', ['for' => 'kg-review-existing-changelog', 'class' => 'kg-label']);
+echo html_writer::tag('textarea', '', ['id' => 'kg-review-existing-changelog', 'class' => 'kg-input', 'rows' => 3]);
 echo html_writer::start_div('kg-row kg-pdf-actions');
 echo html_writer::tag('button', 'Ausgewählte Seminareinheiten einreichen', [
     'type' => 'button',
@@ -78,10 +132,12 @@ echo html_writer::tag('button', 'Ausgewählte Seminareinheiten einreichen', [
     'class' => 'kg-btn kg-btn-primary',
 ]);
 echo html_writer::end_div();
+echo html_writer::tag('div', '', ['id' => 'kg-review-existing-status', 'class' => 'kg-status']);
 echo html_writer::end_div();
 
-echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h4', 'Neue Methoden-Sammlung einreichen');
+// D51: Weg 2 - neue Methoden-Sammlung.
+echo html_writer::start_div('kg-ie-block kg-review-panel kg-hidden', ['id' => 'kg-review-panel-new']);
+echo html_writer::tag('h4', 'Neue Methoden-Sammlung zusammenstellen');
 echo html_writer::tag('p', 'Wähle aus allen vorhandenen Seminareinheiten aus und bündele sie zu einer neuen Methoden-Sammlung – einer Sammlung ohne Ablauf/Reihenfolge.');
 echo html_writer::start_div('kg-two');
 echo html_writer::start_div();
@@ -114,9 +170,9 @@ echo html_writer::end_div();
 echo html_writer::tag('div', '', ['id' => 'kg-review-new-status', 'class' => 'kg-status']);
 echo html_writer::end_div();
 
-// D32: Seminarkonzept einreichen - kompletter Plan (inkl. Ablauf/Sequenz)
-// über denselben Prüfprozess wie die Methoden-Sammlungen.
-echo html_writer::start_div('kg-ie-block');
+// D32/D51: Weg 3 - Seminarkonzept einreichen. Kompletter Plan (inkl.
+// Ablauf/Sequenz) über denselben Prüfprozess wie die Methoden-Sammlungen.
+echo html_writer::start_div('kg-ie-block kg-review-panel kg-hidden', ['id' => 'kg-review-panel-konzept']);
 echo html_writer::tag('h4', 'Seminarkonzept einreichen');
 echo html_writer::tag('p', 'Reiche einen kompletten Seminarplan mit Ablauf ein – im Unterschied zur '
     . 'Methoden-Sammlung (Sammlung ohne Reihenfolge) wandert hier der ganze Plan samt Sequenz und den '

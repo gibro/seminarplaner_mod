@@ -7057,3 +7057,89 @@ a.kg-btn-primary:focus {
     padding-top: 12px;
     border-top: 1px solid var(--ig-lightgray, #ddd);
 }
+
+/* ---- D51: Weggabelung "Was moechtest du einreichen?" ------------------ */
+.kg-review-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.kg-review-choice {
+    flex: 1 1 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px;
+    border: 2px solid var(--ig-lightgray, #ddd);
+    background: #fff;
+    cursor: pointer;
+}
+
+.kg-review-choice:hover {
+    border-color: var(--color-primary, #e2001a);
+}
+
+.kg-review-choice:has(.kg-review-choice__input:checked) {
+    border-color: var(--color-primary, #e2001a);
+    background: var(--color-primary-bg, #fdeef0);
+}
+
+.kg-review-choice:has(.kg-review-choice__input:focus-visible) {
+    outline: 2px solid var(--color-primary, #e2001a);
+    outline-offset: 2px;
+}
+
+.kg-review-choice__input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.kg-review-choice__title {
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.kg-review-choice__desc {
+    font-size: 0.85em;
+    color: #555;
+    line-height: 1.35;
+}
+
+/* ---- D58: Uebersichtsliste der Konzeptverantwortlichen ---------------- */
+.kg-review-reviewers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.kg-review-reviewer {
+    display: inline-block;
+    padding: 5px 12px;
+    border: 1px solid var(--ig-lightgray, #ddd);
+    background: #fafafa;
+    font-weight: 600;
+}
+
+.kg-review-optin {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--ig-lightgray, #ddd);
+}
+
+.kg-review-optin__label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.kg-review-optin small {
+    display: block;
+    color: #555;
+    margin-top: 4px;
+}

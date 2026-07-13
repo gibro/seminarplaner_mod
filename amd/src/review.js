@@ -1,4 +1,5 @@
-define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
+define(['core/ajax', 'core/notification', 'core_user/repository'], function(Ajax, Notification, UserRepository) {
+    const OPTIN_PREF = 'mod_seminarplaner_konzeptverantwortliche_public';
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
     const escapeHtml = (str) => String(str || '').replace(/[&<>"']/g, (ch) => (
@@ -128,6 +129,46 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                   · Konzeptverantwortliche: ${Number(set.reviewercount) || 0}</span>
               </div>`;
         }).join('');
+    };
+
+    // D58: Öffentliche Übersichtsliste der Konzeptverantwortlichen.
+    const renderPublicReviewers = (reviewers) => {
+        const host = bySel('#kg-review-reviewers-list');
+        if (!host) {
+            return;
+        }
+        if (!Array.isArray(reviewers) || !reviewers.length) {
+            host.innerHTML = '<div class="kg-ie-item">Noch hat sich niemand in dieser Liste sichtbar gemacht.</div>';
+            return;
+        }
+        host.innerHTML = reviewers.map((person) =>
+            `<span class="kg-review-reviewer">${escapeHtml(person.fullname)}</span>`
+        ).join('');
+    };
+
+    const loadPublicReviewers = (cmid) => {
+        const host = bySel('#kg-review-reviewers-list');
+        if (!host) {
+            return Promise.resolve();
+        }
+        return asCall('mod_seminarplaner_list_public_reviewers', {cmid}).then((res) => {
+            if (!res || !res.available) {
+                host.innerHTML = '<div class="kg-ie-item">'
+                    + escapeHtml((res && res.message) || 'Liste nicht verfügbar.') + '</div>';
+                return;
+            }
+            renderPublicReviewers(res.reviewers);
+            const optin = bySel('#kg-review-optin');
+            if (optin) {
+                optin.classList.toggle('kg-hidden', !res.caniopt);
+            }
+            const check = bySel('#kg-review-optin-check');
+            if (check) {
+                check.checked = !!res.optedin;
+            }
+        }).catch(() => {
+            host.innerHTML = '<div class="kg-ie-item">Liste konnte nicht geladen werden.</div>';
+        });
     };
 
     const loadReviewTargets = (cmid) => {
@@ -403,7 +444,32 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         });
     };
 
+    // D51: Weggabelung - genau ein Einreich-Panel sichtbar, gesteuert über die
+    // Radio-Auswahl oben. Vor der ersten Auswahl bleiben alle Panels verborgen.
+    const REVIEW_PANELS = {
+        existing: '#kg-review-panel-existing',
+        new: '#kg-review-panel-new',
+        konzept: '#kg-review-panel-konzept',
+    };
+
+    const showReviewPanel = (mode) => {
+        Object.keys(REVIEW_PANELS).forEach((key) => {
+            const panel = bySel(REVIEW_PANELS[key]);
+            if (panel) {
+                panel.classList.toggle('kg-hidden', key !== mode);
+            }
+        });
+    };
+
     const bind = (cmid) => {
+        document.querySelectorAll('input[name="kg-review-mode"]').forEach((radio) => {
+            radio.addEventListener('change', () => {
+                if (radio.checked) {
+                    showReviewPanel(radio.value);
+                }
+            });
+        });
+
         const setselect = bySel('#kg-review-existing-set-select');
         const refreshExisting = bySel('#kg-review-existing-refresh');
         const submitExisting = bySel('#kg-review-existing-submit');
@@ -458,6 +524,19 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             });
         }
 
+        // D58: Opt-in in die öffentliche Konzeptverantwortlichen-Liste.
+        const optincheck = bySel('#kg-review-optin-check');
+        if (optincheck) {
+            optincheck.addEventListener('change', () => {
+                UserRepository.setUserPreference(OPTIN_PREF, optincheck.checked ? '1' : '0')
+                    .then(() => loadPublicReviewers(cmid))
+                    .catch((e) => {
+                        Notification.exception(e);
+                        optincheck.checked = !optincheck.checked;
+                    });
+            });
+        }
+
         // D32: Seminarkonzept-Block.
         const konzeptplan = bySel('#kg-review-konzept-plan');
         if (konzeptplan) {
@@ -477,7 +556,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         init: function(cmid) {
             Promise.all([
                 loadReviewTargets(cmid),
-                loadKonzeptPlans(cmid)
+                loadKonzeptPlans(cmid),
+                loadPublicReviewers(cmid)
             ]).then(() => loadChangedMethodsForNewSet(cmid)).then(() => {
                 bind(cmid);
                 renderExistingCandidates();

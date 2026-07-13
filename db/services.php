@@ -81,6 +81,13 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
     ],
+    'mod_seminarplaner_list_public_reviewers' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'list_public_reviewers',
+        'description' => 'List opted-in Konzeptverantwortliche as a public trust signal (name only).',
+        'type' => 'read',
+        'ajax' => true,
+    ],
     'mod_seminarplaner_get_review_method_candidates' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'get_review_method_candidates',

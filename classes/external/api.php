@@ -1333,6 +1333,94 @@ class api extends external_api {
         ]);
     }
 
+    public static function list_public_reviewers_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+        ]);
+    }
+
+    /**
+     * D58: Öffentliche Übersichtsliste der Konzeptverantwortlichen.
+     *
+     * Zeigt nur Personen, die sich per Opt-in selbst sichtbar gemacht haben -
+     * reines Vertrauens-/Orientierungssignal (nur Name, kein Kontaktweg).
+     * Anders als list_reviewer_candidates für alle Betrachtenden der Seite
+     * lesbar und nicht an die eigene Einreich-Berechtigung gebunden.
+     */
+    public static function list_public_reviewers(int $cmid): array {
+        global $USER;
+        $params = self::validate_parameters(self::list_public_reviewers_parameters(), ['cmid' => $cmid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:view', $resolved['context']);
+
+        $optinname = 'mod_seminarplaner_konzeptverantwortliche_public';
+        if (!self::global_plugin_available()) {
+            return [
+                'available' => false,
+                'message' => 'local_seminarplaner ist nicht installiert.',
+                'reviewers' => [],
+                'caniopt' => false,
+                'optedin' => false,
+            ];
+        }
+
+        // Konzeptverantwortliche = Nutzer mit Review-Capability im Kategorie-
+        // oder Systemkontext, unabhängig von der eigenen Einreich-Berechtigung.
+        $scopecontexts = [
+            context_coursecat::instance((int)$resolved['course']->category),
+            context_system::instance(),
+        ];
+
+        $users = [];
+        $caniopt = false;
+        foreach ($scopecontexts as $scopectx) {
+            $candidates = get_users_by_capability($scopectx, 'local/seminarplaner:reviewset',
+                'u.id,u.firstname,u.lastname,u.deleted,u.suspended', 'u.lastname ASC, u.firstname ASC');
+            foreach ($candidates as $candidate) {
+                if (!empty($candidate->deleted) || !empty($candidate->suspended)) {
+                    continue;
+                }
+                $uid = (int)$candidate->id;
+                if ($uid === (int)$USER->id) {
+                    $caniopt = true;
+                }
+                if (!get_user_preferences($optinname, 0, $uid)) {
+                    continue;
+                }
+                $users[$uid] = [
+                    'id' => $uid,
+                    'fullname' => fullname($candidate),
+                ];
+            }
+        }
+
+        $reviewers = array_values($users);
+        usort($reviewers, function($a, $b) {
+            return strcasecmp($a['fullname'], $b['fullname']);
+        });
+
+        return [
+            'available' => true,
+            'message' => '',
+            'reviewers' => $reviewers,
+            'caniopt' => $caniopt,
+            'optedin' => (bool)get_user_preferences($optinname, 0, (int)$USER->id),
+        ];
+    }
+
+    public static function list_public_reviewers_returns(): external_single_structure {
+        return new external_single_structure([
+            'available' => new external_value(PARAM_BOOL, 'Local plugin available'),
+            'message' => new external_value(PARAM_TEXT, 'Status message'),
+            'reviewers' => new external_multiple_structure(new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'User id'),
+                'fullname' => new external_value(PARAM_TEXT, 'Display name'),
+            ])),
+            'caniopt' => new external_value(PARAM_BOOL, 'Current user may opt into the list'),
+            'optedin' => new external_value(PARAM_BOOL, 'Current user is currently opted in'),
+        ]);
+    }
+
     public static function get_review_method_candidates_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
