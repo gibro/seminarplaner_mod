@@ -1983,6 +1983,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
         if (parsebtn && fileinput) {
             fileinput.addEventListener('change', () => {
+                const nameEl = bySel('#kg-ie-filename');
+                if (nameEl) {
+                    nameEl.textContent = (fileinput.files && fileinput.files[0])
+                        ? fileinput.files[0].name
+                        : 'Keine Datei ausgewählt';
+                }
                 currentImportPayload = null;
                 previewRows = [];
                 previewUnits = [];

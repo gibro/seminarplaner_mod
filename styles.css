@@ -254,8 +254,9 @@
 
 .kg-ie-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 24px;
+  align-items: start;
 }
 
 .kg-ie-block {
@@ -267,8 +268,8 @@
 
 .kg-ie-steps {
   display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 6px;
+  margin-bottom: 14px;
 }
 
 .kg-step {
@@ -283,6 +284,49 @@
   border-color: var(--ig-blue);
   color: var(--ig-blue);
   background: var(--ig-blue-soft);
+}
+
+/* Wizard-Schrittleiste (Handoff): aktiver Schritt rot mit weisser Ziffernbox,
+   inaktiver Schritt neutral grau. Scoped, damit die Deko nur die Import-Karte
+   betrifft; die Ziffernbox liegt als .kg-step__num im Chip.
+   !important am aktiven Zustand ueberschreibt die globalen .kg-step-active-
+   Regeln (mit gleicher Wichtigkeit, aber geringerer Spezifitaet). */
+.kg-ie-steps .kg-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 0;
+  background: var(--ig-surface-muted);
+  color: var(--ig-gray);
+  font-family: var(--font-head);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  font-size: 11px;
+}
+
+.kg-ie-steps .kg-step__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  background: var(--ig-midgray);
+  color: #fff;
+  font-size: 10px;
+}
+
+.kg-ie-steps .kg-step-active {
+  background: var(--ig-red) !important;
+  color: #fff !important;
+  border: 0 !important;
+}
+
+.kg-ie-steps .kg-step-active .kg-step__num {
+  background: #fff;
+  color: var(--ig-red);
 }
 
 .kg-ie-preview {
@@ -318,6 +362,352 @@
 .kg-ie-meta {
   font-size: .8rem;
   color: var(--ig-gray);
+}
+
+/* =========================================================================
+   IMPORT/EXPORT – Zwei-Zonen-Kartenlayout (Design-Handoff IMPORT-EXPORT.md)
+   Zwei Zonen (Importieren / Exportieren), jede Funktion als eigene Karte mit
+   Kategorie-Farbe (Top-Rule), Icon-Badge und Zweck-Einzeiler.
+   ========================================================================= */
+.kg-ie-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---- Zonen-Kopf ---- */
+.kg-ie-zonehead {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.kg-ie-zonehead__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  background: var(--ig-anthracite);
+  color: #fff;
+}
+
+.kg-ie-zonehead__title {
+  font-family: var(--font-head);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  font-size: 15px;
+  color: var(--ig-anthracite);
+}
+
+.kg-ie-zonehead__sub {
+  font-size: 12px;
+  color: var(--ig-gray);
+}
+
+/* ---- Kategorie-Karte ---- */
+.kg-ie-card {
+  /* Standard-Kategorie: Rot. Modifier setzen --cat / --cat-tint neu. */
+  --cat: var(--ig-red);
+  --cat-tint: #FCE9EB;
+  background: #fff;
+  border: 1px solid var(--ig-lightgray);
+  border-top: 3px solid var(--cat);
+  padding: 20px;
+}
+
+.kg-ie-card--red    { --cat: var(--ig-red);       --cat-tint: #FCE9EB; }
+.kg-ie-card--blue   { --cat: var(--ig-blue);      --cat-tint: #E7F0F5; }
+.kg-ie-card--green  { --cat: var(--ig-green);     --cat-tint: #E7F1E3; }
+.kg-ie-card--darkred{ --cat: var(--ig-darkred);   --cat-tint: #F3E6E7; }
+
+.kg-ie-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-bottom: 14px;
+}
+
+.kg-ie-card__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  background: var(--cat-tint);
+  color: var(--cat);
+}
+
+.kg-ie-card__headtext {
+  flex: 1;
+  min-width: 0;
+}
+
+.kg-ie-card__title {
+  margin: 0 0 2px;
+  font-size: 16px;
+  color: var(--ig-anthracite);
+}
+
+.kg-ie-card__sub {
+  font-size: 12.5px;
+  color: var(--ig-gray);
+  line-height: 1.45;
+}
+
+/* ---- Feldbeschriftung (Meta Head, uppercase) ---- */
+.kg-ie-fieldlabel {
+  display: block;
+  font-family: var(--font-head);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  font-size: 11px;
+  color: var(--ig-gray);
+  margin: 0 0 6px;
+}
+
+.kg-ie-note {
+  font-size: 12.5px;
+  color: var(--ig-gray);
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+
+.kg-ie-footnote {
+  font-size: 11.5px;
+  color: #8A8A8A;
+  margin-top: 10px;
+}
+
+/* ---- Themenschmiede-Hinweis (neutral, kein Fehlerton) ---- */
+.kg-ie-hint {
+  display: flex;
+  gap: 11px;
+  background: #FAFAFA;
+  border: 1px solid #EDEDED;
+  border-left: 3px solid var(--ig-midgray);
+  padding: 12px 13px;
+  margin-bottom: 14px;
+}
+
+.kg-ie-hint__icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--ig-gray);
+}
+
+.kg-ie-hint__text {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ig-gray);
+  line-height: 1.5;
+}
+
+.kg-ie-hint__text strong {
+  color: var(--ig-anthracite);
+}
+
+.kg-ie-hint__btn {
+  margin: 9px 0 0;
+  min-height: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-family: var(--font-head);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  font-size: 11px;
+  text-decoration: none;
+}
+
+/* ---- Datei-Auswahl (Label-Button + verstecktes File-Input) ---- */
+.kg-ie-filepick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.kg-ie-filepick__btn {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--ig-surface-muted);
+  font-family: var(--font-head);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  font-size: 11px;
+}
+
+.kg-ie-filepick__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Sichtbarer Fokusring, wenn das versteckte Input per Tastatur fokussiert wird. */
+.kg-ie-filepick__input:focus-visible + .kg-ie-filepick__btn,
+.kg-ie-filepick__btn:focus-within {
+  outline: 2px solid var(--ig-red);
+  outline-offset: 1px;
+}
+
+.kg-ie-filepick__name {
+  font-size: 12.5px;
+  color: var(--ig-gray);
+}
+
+/* ---- Voll breite Aktionsbuttons in Karten ---- */
+.kg-ie-fullbtn {
+  width: 100%;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.kg-ie-btnstack {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+/* Gruener Primaerknopf (JSON-Austausch). */
+.kg-ie-btn--green {
+  background: var(--ig-green);
+  border-color: var(--ig-green);
+  color: #fff;
+}
+
+.kg-ie-btn--green:hover {
+  background: #4f8b3b;
+  border-color: #4f8b3b;
+}
+
+/* Outline-Roter Sekundaerknopf (Konzeptsammlung-/Materialliste-PDF). */
+.kg-btn--outline-red {
+  border: 1px solid var(--ig-red);
+  background: #fff;
+  color: var(--ig-red);
+}
+
+.kg-btn--outline-red:hover {
+  background: var(--ig-red-soft);
+  border-color: var(--ig-red);
+  color: var(--ig-red);
+}
+
+/* ---- Scope-Chip (Toggle statt nackter Checkbox) ---- */
+.kg-scope-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.kg-scope-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 7px 12px;
+  border: 1px solid var(--ig-midgray);
+  background: #fff;
+  color: var(--ig-gray);
+  font-size: 12.5px;
+  user-select: none;
+}
+
+.kg-scope-chip input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.kg-scope-chip__box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  border: 1.5px solid var(--ig-midgray);
+  background: #fff;
+}
+
+.kg-scope-chip__box svg {
+  opacity: 0;
+}
+
+.kg-scope-chip:has(input:checked) {
+  border-color: var(--ig-red);
+  background: #FCE9EB;
+  color: var(--ig-darkred);
+  font-weight: 700;
+}
+
+.kg-scope-chip:has(input:checked) .kg-scope-chip__box {
+  border-color: var(--ig-red);
+  background: var(--ig-red);
+}
+
+.kg-scope-chip:has(input:checked) .kg-scope-chip__box svg {
+  opacity: 1;
+}
+
+.kg-scope-chip:focus-within {
+  outline: 2px solid var(--ig-red);
+  outline-offset: 1px;
+}
+
+/* ---- PDF-Metadaten-Raster (2x2) ---- */
+.kg-ie-metagrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 11px;
+  margin: 13px 0;
+}
+
+/* Spaltenauswahl nutzt das bestehende .field-card (Dropdown-Container), soll
+   hier aber ohne dessen Rahmen/Linksbalken/Fuellung wie ein normales Feld
+   wirken. */
+.kg-ie-columns.field-card {
+  margin: 0 0 15px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.kg-ie-pdfactions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.kg-ie-pdfactions .kg-btn {
+  flex: 1;
+  min-width: 150px;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .kg-library-layout {
@@ -693,9 +1083,9 @@
     grid-template-columns: 1fr 1fr;
   }
 
-  .kg-ie-layout {
-    grid-template-columns: 1fr;
-  }
+  /* .kg-ie-layout regelt das Umbrechen ueber auto-fit (minmax 360px) selbst;
+     keine harte Ein-Spalten-Erzwingung mehr, damit die zwei Zonen bereits ab
+     ~744px nebeneinander stehen. */
 
   .kg-library-layout {
     grid-template-columns: 1fr;
@@ -938,6 +1328,10 @@
 
 @media (max-width: 640px) {
   .field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .kg-ie-metagrid {
     grid-template-columns: 1fr;
   }
 }
