@@ -14,7 +14,8 @@
  *
  * @module mod_seminarplaner/sequenz
  */
-define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
+define(['core/ajax', 'core_user/repository', 'core/fragment', 'core/templates'],
+function(Ajax, UserRepository, Fragment, Templates) {
     const DEFAULT_BOUNDARY_MIN = 750; // 12:30 fallback, same rule as the PHP converter.
     const ANCHORS = ['vormittag', 'nachmittag'];
     const DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
@@ -2051,6 +2052,32 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             return String(el.value || '').trim();
         }
 
+        // Datei-Anhänge: Filemanager-Formular je Einheit über die Fragment-API
+        // nachladen (leere methodid = Anlegen-Modus, leerer Entwurfsbereich).
+        loadUnitMaterials(methodid) {
+            const host = bySel('#sq-e-materialien-host');
+            if (!host) {
+                return;
+            }
+            host.innerHTML = '<div class="sq-field__hint">Datei-Anhänge werden geladen …</div>';
+            Fragment.loadFragment('mod_seminarplaner', 'unitmaterials', M.cfg.contextid, {methodid: methodid || ''})
+                .done((html, js) => {
+                    Templates.replaceNodeContents(host, html, js);
+                })
+                .fail(() => {
+                    host.innerHTML = '<div class="sq-field__hint">Datei-Anhänge konnten nicht geladen werden – '
+                        + 'du kannst sie weiterhin im Tab „Bibliothek" verwalten.</div>';
+                });
+        }
+
+        unitMaterialDraftItemId() {
+            const el = bySel('#id_sq_materialiendraftitemid');
+            if (!el) {
+                return 0;
+            }
+            return Number.parseInt(String(el.value || '0'), 10) || 0;
+        }
+
         // mode: 'edit' (bestehende Karte) oder 'create' (D50, leer).
         openUnitModal(mode, card) {
             this.unitModalMode = mode;
@@ -2062,6 +2089,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 const raw = UNIT_MULTI_FIELDS.includes(key) ? card[key] : this.fieldValue(card, key);
                 this.setUnitField(key, raw);
             });
+            this.loadUnitMaterials(mode === 'edit' && card && card.id ? String(card.id) : '');
             const title = bySel('#sq-unit-modal-title');
             if (title) {
                 title.textContent = mode === 'create' ? 'Neue Seminareinheit anlegen' : 'Seminareinheit bearbeiten';
@@ -2115,6 +2143,15 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                     card[key] = incoming;
                 }
             });
+            // Datei-Anhänge: Der Entwurfsbereich (Fragment) wird beim Speichern
+            // serverseitig in den Dateibestand der Einheit übernommen.
+            const draftid = this.unitMaterialDraftItemId();
+            if (draftid > 0) {
+                if (!Array.isArray(card.materialien)) {
+                    card.materialien = [];
+                }
+                card.materialiendraftitemid = draftid;
+            }
 
             asCall('mod_seminarplaner_save_method_cards', {
                 cmid: this.cmid,
@@ -2248,6 +2285,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
                 risiken: String(values.risiken || ''),
                 debrief: String(values.debrief || ''),
                 materialien: [],
+                materialiendraftitemid: this.unitMaterialDraftItemId() || 0,
                 materialtechnik: String(values.materialtechnik || ''),
                 ablauf: String(values.ablauf || ''),
                 tags: String(values.tags || '').trim(),

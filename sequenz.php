@@ -318,8 +318,14 @@ echo html_writer::end_tag('details');
 echo html_writer::start_tag('details', ['class' => 'sq-section']);
 echo html_writer::tag('summary', 'Materialien und Technik');
 echo html_writer::start_div('sq-section__inner');
+// Datei-Anhänge wie im Bibliotheks-Editor: das Filemanager-Formular wird
+// beim Öffnen des Modals je Einheit über die Fragment-API nachgeladen
+// (Entwurfsbereich muss serverseitig vorbereitet werden).
+echo html_writer::start_div('sq-field');
+echo html_writer::tag('label', 'Materialien', ['class' => 'kg-label']);
+echo html_writer::tag('div', '', ['id' => 'sq-e-materialien-host']);
+echo html_writer::end_div();
 echo $sqrich('Material/Technik', 'materialtechnik');
-echo html_writer::div('Datei-Anhänge verwaltest du weiterhin im Tab „Bibliothek".', 'sq-field__hint');
 echo html_writer::end_div();
 echo html_writer::end_tag('details');
 echo html_writer::end_div();

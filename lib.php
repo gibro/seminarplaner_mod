@@ -306,3 +306,58 @@ function mod_seminarplaner_user_preferences(): array {
         ],
     ];
 }
+
+/**
+ * Fragment: Materialien-Filemanager für den Einheiten-Editor der Sequenz.
+ *
+ * Der Datei-Upload braucht einen serverseitig vorbereiteten Entwurfsbereich
+ * je Seminareinheit; das Sequenz-Modal lädt dieses Formular deshalb bei
+ * jedem Öffnen über die Fragment-API nach (D17: alle Editor-Einstiege
+ * bieten dieselben Felder wie der Bibliotheks-Editor).
+ *
+ * @param array $args Fragment arguments: context plus 'methodid'
+ *                    (leer = Anlegen-Modus, Entwurfsbereich ohne Dateien).
+ * @return string Rendered form HTML.
+ */
+function mod_seminarplaner_output_fragment_unitmaterials($args) {
+    global $CFG;
+    require_once($CFG->libdir . '/formslib.php');
+
+    $args = (array)$args;
+    $context = $args['context'];
+    if (!($context instanceof context_module)) {
+        throw new invalid_parameter_exception('Module context required');
+    }
+    require_capability('mod/seminarplaner:managemethods', $context);
+
+    $cmid = (int)$context->instanceid;
+    $methodid = clean_param((string)($args['methodid'] ?? ''), PARAM_ALPHANUMEXT);
+    $maxuploadbytes = get_user_max_upload_file_size($context, $CFG->maxbytes);
+
+    if ($methodid !== '') {
+        $service = new \mod_seminarplaner\local\service\method_card_service();
+        $draftitemid = $service->prepare_material_draft_itemid($cmid, (int)$context->id, $methodid, 0, 0);
+    } else {
+        // Anlegen-Modus: leerer Entwurfsbereich (wie methodlibrary.php ohne editmethodid).
+        $draftitemid = file_get_unused_draft_itemid();
+        file_prepare_draft_area($draftitemid, $context->id, 'mod_seminarplaner', 'method_materialien', 0, [
+            'subdirs' => 0,
+            'maxfiles' => 25,
+            'maxbytes' => $maxuploadbytes,
+            'areamaxbytes' => $maxuploadbytes,
+            'accepted_types' => '*',
+        ]);
+    }
+
+    $form = new \mod_seminarplaner\form\material_filemanager_form(null, [
+        'fieldname' => 'sq_materialiendraftitemid',
+        'maxbytes' => $maxuploadbytes,
+        'context' => $context,
+    ]);
+    if (method_exists($form, 'disable_form_change_checker')) {
+        $form->disable_form_change_checker();
+    }
+    $form->set_data((object)['sq_materialiendraftitemid' => $draftitemid]);
+
+    return $form->render();
+}
