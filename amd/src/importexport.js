@@ -16,7 +16,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     let currentImportPayload = null;
     let globalMethodsets = [];
     let globalSyncLinks = [];
-    let pendingAutosyncPrefs = {};
     const PDF_COLUMN_ORDER = ['uhrzeit', 'titel', 'seminarphase', 'kognitive', 'kurzbeschreibung', 'debrief', 'ablauf', 'lernziele', 'risiken', 'materialtechnik', 'sonstiges'];
     const PDF_COLUMN_LABELS = {
         uhrzeit: 'Uhrzeit',
@@ -691,44 +690,42 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return globalSyncLinks.find((link) => Number(link.methodsetid) === setid) || null;
     };
 
+    // D54: kein Auto-Update-Schalter mehr - nur noch der bewusste "Ausstehende
+    // Updates übernehmen"-Button plus ein Info-Text. Der Hinweis auf verfügbare
+    // Aktualisierungen erscheint zusätzlich an der betroffenen Karte in der
+    // Bibliothek (methodlibrary.js).
     const refreshGlobalSyncUi = () => {
-        const autoswitch = bySel('#kg-global-set-autosync');
         const select = bySel('#kg-global-set-select');
         const applybtn = bySel('#kg-global-set-apply');
         const selected = getSelectedSyncLink();
-        if (!autoswitch || !applybtn) {
+        if (!applybtn) {
             return;
         }
         const setid = Number.parseInt(select ? (select.value || '0') : '0', 10) || 0;
         if (!setid) {
-            autoswitch.checked = false;
-            autoswitch.disabled = true;
             applybtn.disabled = true;
             setGlobalSyncInfo('Bitte zuerst eine Methoden-Sammlung auswählen.', false);
             return;
         }
         if (!selected) {
-            autoswitch.disabled = false;
-            autoswitch.checked = !!pendingAutosyncPrefs[setid];
             applybtn.disabled = true;
             setGlobalSyncInfo(
-                'Diese Sammlung ist noch nicht verknüpft. Auto-Update wird nach dem Import angewendet.',
+                'Diese Sammlung ist noch nicht in deinen Bestand übernommen.',
                 false
             );
             return;
         }
-        autoswitch.disabled = false;
-        autoswitch.checked = !!selected.autosyncenabled;
         const hasPending = !!selected.haspending || (Number(selected.currentversionid) > Number(selected.linkedversionid));
         applybtn.disabled = !hasPending;
         if (hasPending) {
             setGlobalSyncInfo(
-                `Update verfügbar (aktuell ${selected.linkedversionid}, global ${selected.currentversionid}). ` +
-                `Mit "Ausstehende Updates übernehmen" lokal anwenden.`,
+                'Eine aktualisierte Version dieser Sammlung ist verfügbar. ' +
+                'Mit "Ausstehende Updates übernehmen" holst du sie in deinen Bestand - ' +
+                'lokal geänderte Einheiten bleiben dabei unangetastet.',
                 false
             );
         } else {
-            setGlobalSyncInfo('Aktivität ist auf dem aktuellen Stand dieser Sammlung.', false);
+            setGlobalSyncInfo('Dein Bestand ist auf dem aktuellen Stand dieser Sammlung.', false);
         }
     };
 
@@ -1809,7 +1806,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const pdfFlowBtn = bySel('#kg-pdf-flow');
         const globalSetSelect = bySel('#kg-global-set-select');
         const globalSetImportBtn = bySel('#kg-global-set-import');
-        const globalSetAutosync = bySel('#kg-global-set-autosync');
         const globalSetApplyBtn = bySel('#kg-global-set-apply');
         bindPdfColumnsDropdown();
 
@@ -2051,16 +2047,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 }
                 asCall('mod_seminarplaner_import_global_methodset', {cmid, methodsetid: setid})
                     .then((res) => {
-                        if (pendingAutosyncPrefs[setid]) {
-                            return asCall('mod_seminarplaner_set_methodset_sync_policy', {
-                                cmid,
-                                methodsetid: setid,
-                                autosyncenabled: true
-                            }).then(() => res).catch(() => res);
-                        }
-                        return res;
-                    })
-                    .then((res) => {
                         return Promise.all([loadMethods(cmid), loadGlobalSyncStatus(cmid)]).then(() => res);
                     })
                     .then((res) => {
@@ -2082,35 +2068,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
         if (globalSetSelect) {
             globalSetSelect.addEventListener('change', refreshGlobalSyncUi);
-        }
-        if (globalSetAutosync) {
-            globalSetAutosync.addEventListener('change', () => {
-                const selected = getSelectedSyncLink();
-                if (!selected) {
-                    const setid = Number.parseInt(globalSetSelect ? (globalSetSelect.value || '0') : '0', 10) || 0;
-                    if (setid > 0) {
-                        pendingAutosyncPrefs[setid] = !!globalSetAutosync.checked;
-                        setGlobalStatus(
-                            globalSetAutosync.checked
-                                ? 'Auto-Update vorgemerkt und wird nach dem Import aktiviert.'
-                                : 'Auto-Update-Vormerkung entfernt.',
-                            false
-                        );
-                    }
-                    return;
-                }
-                asCall('mod_seminarplaner_set_methodset_sync_policy', {
-                    cmid,
-                    methodsetid: Number(selected.methodsetid),
-                    autosyncenabled: !!globalSetAutosync.checked
-                }).then(() => loadGlobalSyncStatus(cmid)).then(() => {
-                    refreshGlobalSyncUi();
-                    setGlobalStatus('Auto-Update-Einstellung gespeichert.', false);
-                }).catch((e) => {
-                    Notification.exception(e);
-                    setGlobalStatus('Auto-Update-Einstellung konnte nicht gespeichert werden.', true);
-                });
-            });
         }
         if (globalSetApplyBtn) {
             globalSetApplyBtn.addEventListener('click', () => {

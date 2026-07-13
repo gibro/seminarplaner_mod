@@ -7250,3 +7250,100 @@ a.kg-btn-primary:focus {
     color: #555;
     margin-top: 4px;
 }
+
+/* =========================================================================
+   D54 - Hinweis "Aktualisierte Version verfügbar" an der Bibliothekskarte.
+   Kein Auto-Update mehr: eine aktualisierte globale Sammlung wird nur
+   angezeigt, das Übernehmen bleibt die bewusste Aktion im Import/Export-Tab.
+   ========================================================================= */
+.ml-card-updatehint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 8px 10px 0;
+    padding: 5px 9px;
+    border-left: 3px solid var(--ig-blue, #2F80AB);
+    background: var(--ig-blue-soft, rgba(47, 128, 171, .12));
+    color: var(--ig-anthracite, #3C3C3C);
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: help;
+}
+
+/* =========================================================================
+   D55 - Bibliothek in drei Unterbereiche als Tabs (lokale Seminareinheiten,
+   Methodensammlungen, globale Seminarkonzepte). Tab-Leiste als 4px-
+   Unterstrich-Zeile analog zur Haupt-Tab-Leiste; Konzeptliste als Karten.
+   ========================================================================= */
+.ml-subtabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 4px 0 16px;
+    border-bottom: 1px solid var(--ig-lightgray, #DADADA);
+}
+.ml-subtab {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 9px 14px;
+    margin-bottom: -1px;
+    border-bottom: 4px solid transparent;
+    font-family: var(--font-head, inherit);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 12.5px;
+    color: var(--ig-gray, #646464);
+    cursor: pointer;
+}
+.ml-subtab:hover {
+    color: var(--ig-anthracite, #3C3C3C);
+}
+.ml-subtab--active {
+    color: var(--ig-red, #E3051B);
+    border-bottom-color: var(--ig-red, #E3051B);
+}
+.ml-subtab:focus-visible {
+    outline: 2px solid var(--ig-blue-mid, rgba(47, 128, 171, .35));
+    outline-offset: 2px;
+}
+
+.ml-konzepte-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+}
+.ml-konzept-card {
+    border: 1px solid var(--ig-lightgray, #DADADA);
+    border-left: 3px solid var(--ig-darkred, #882A30);
+    background: #fff;
+    padding: 12px 14px;
+}
+.ml-konzept-card__head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.ml-konzept-card__title {
+    font-family: var(--font-head, inherit);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .02em;
+}
+.ml-konzept-card__source {
+    font-size: 12px;
+    color: var(--ig-gray, #646464);
+}
+.ml-konzept-card__meta {
+    font-size: 12px;
+    color: var(--ig-gray, #646464);
+    margin: 6px 0 10px;
+}
+.ml-konzept-card__gone {
+    font-size: 12px;
+    color: var(--ig-gray, #646464);
+    font-style: italic;
+}

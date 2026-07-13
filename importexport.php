@@ -88,11 +88,10 @@ echo html_writer::tag('option', 'Bitte wählen', ['value' => '']);
 echo html_writer::end_tag('select');
 echo html_writer::tag('button', 'Methoden-Sammlung importieren', ['type' => 'button', 'id' => 'kg-global-set-import', 'class' => 'kg-btn kg-btn-primary']);
 echo html_writer::end_div();
+// D54: Kein Auto-Update-Schalter mehr. Aktualisierungen einer übernommenen
+// Sammlung werden nie automatisch übernommen; ein Hinweis erscheint an der
+// betroffenen Karte in der Bibliothek. Das bewusste Übernehmen bleibt hier.
 echo html_writer::start_div('kg-row');
-echo '<label class="kg-label" style="display:flex;align-items:center;gap:8px;margin:0">'
-    . '<input type="checkbox" id="kg-global-set-autosync">'
-    . '<span>Auto-Update für diese Sammlung aktivieren</span>'
-    . '</label>';
 echo html_writer::tag('button', 'Ausstehende Updates übernehmen', ['type' => 'button', 'id' => 'kg-global-set-apply', 'class' => 'kg-btn']);
 echo html_writer::end_div();
 echo html_writer::tag('div', '', ['id' => 'kg-global-set-syncinfo', 'class' => 'kg-status']);

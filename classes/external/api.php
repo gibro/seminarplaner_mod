@@ -922,6 +922,19 @@ class api extends external_api {
             trim((string)($plan['description'] ?? '')) !== '' ? (string)$plan['description'] : null);
         $gridservice->save_user_state($newgridid, $actorid, $state);
 
+        // D55: importierte Seminarkonzepte im Bibliothek-Tab "Globale
+        // Seminarkonzepte" auffindbar machen. Es gibt sonst keinen Marker -
+        // die Karten sind bewusst unabhaengige Kopien ohne _kgsync. Deshalb
+        // eine schlanke per-Aktivitaet-Liste in der Plugin-Config fuehren.
+        self::record_imported_konzept((int)$resolved['cm']->id, [
+            'setid' => (int)$set->id,
+            'setname' => (string)$set->displayname,
+            'planname' => $uniquename,
+            'gridid' => (int)$newgridid,
+            'unitcount' => count($imported),
+            'timeimported' => time(),
+        ]);
+
         return [
             'success' => true,
             'importedcount' => count($imported),
@@ -930,6 +943,27 @@ class api extends external_api {
             'plancreated' => true,
             'planname' => $uniquename,
         ];
+    }
+
+    /**
+     * Append one imported-concept marker to the per-activity list (D55).
+     *
+     * @param int $cmid
+     * @param array<string,mixed> $entry
+     * @return void
+     */
+    private static function record_imported_konzept(int $cmid, array $entry): void {
+        if ($cmid <= 0) {
+            return;
+        }
+        $configname = 'imported_konzepte_cmid_' . $cmid;
+        $raw = get_config('mod_seminarplaner', $configname);
+        $list = ($raw !== false && $raw !== null && $raw !== '') ? json_decode((string)$raw, true) : [];
+        if (!is_array($list)) {
+            $list = [];
+        }
+        $list[] = $entry;
+        set_config($configname, json_encode(array_values($list)), 'mod_seminarplaner');
     }
 
     /**
@@ -945,11 +979,21 @@ class api extends external_api {
         $repo = new \local_seminarplaner\local\repository\methodset_repository();
         $syscontext = context_system::instance();
         $catcontext = context_coursecat::instance((int)$course->category);
+        // D55: der "Methodensammlungen"-Bereich zeigt nur Methoden-Sammlungen.
+        // Globale Seminarkonzepte (concepttype 'seminarkonzept') haben ihren
+        // eigenen Bibliothek-Tab und werden hier ausgeblendet - sowohl beim
+        // Durchstöbern als auch bei der Einzel-Übernahme (D33).
         $sets = [];
         foreach ($repo->list_methodsets((int)$syscontext->id, 'published') as $set) {
+            if ((string)($set->concepttype ?? 'sammlung') === 'seminarkonzept') {
+                continue;
+            }
             $sets[(int)$set->id] = $set;
         }
         foreach ($repo->list_methodsets((int)$catcontext->id, 'published') as $set) {
+            if ((string)($set->concepttype ?? 'sammlung') === 'seminarkonzept') {
+                continue;
+            }
             $sets[(int)$set->id] = $set;
         }
         if (!$sets) {
@@ -1047,6 +1091,78 @@ class api extends external_api {
                 'vorbereitung' => new external_value(PARAM_RAW, 'Preparation'),
                 'kurzbeschreibung' => new external_value(PARAM_TEXT, 'Short description (plain text)'),
                 'tags' => new external_multiple_structure(new external_value(PARAM_TEXT, 'Tag')),
+            ])),
+        ]);
+    }
+
+    public static function list_imported_konzepte_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+        ]);
+    }
+
+    /**
+     * D55: list the global seminar concepts already imported into this activity.
+     *
+     * Reads the per-activity marker list written on import
+     * (record_imported_konzept) and enriches each entry with whether its plan
+     * still exists, so the "Globale Seminarkonzepte" library tab can show only
+     * the concepts that were actually pulled into the local stock.
+     */
+    public static function list_imported_konzepte(int $cmid): array {
+        $params = self::validate_parameters(self::list_imported_konzepte_parameters(), ['cmid' => $cmid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:view', $resolved['context']);
+
+        $raw = get_config('mod_seminarplaner', 'imported_konzepte_cmid_' . (int)$resolved['cm']->id);
+        $list = ($raw !== false && $raw !== null && $raw !== '') ? json_decode((string)$raw, true) : [];
+        if (!is_array($list)) {
+            $list = [];
+        }
+
+        $gridservice = new grid_service();
+        $existinggrids = [];
+        foreach ($gridservice->list_grids((int)$resolved['cm']->id) as $grid) {
+            $existinggrids[(int)$grid->id] = trim((string)$grid->name);
+        }
+
+        $out = [];
+        foreach ($list as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $gridid = (int)($entry['gridid'] ?? 0);
+            $planexists = $gridid > 0 && isset($existinggrids[$gridid]);
+            $out[] = [
+                'setid' => (int)($entry['setid'] ?? 0),
+                'setname' => (string)($entry['setname'] ?? ''),
+                // Current plan name if it still exists (user may have renamed it),
+                // otherwise the name recorded at import time.
+                'planname' => $planexists ? $existinggrids[$gridid] : (string)($entry['planname'] ?? ''),
+                'gridid' => $gridid,
+                'planexists' => $planexists,
+                'unitcount' => (int)($entry['unitcount'] ?? 0),
+                'timeimported' => (int)($entry['timeimported'] ?? 0),
+            ];
+        }
+        // Newest import first.
+        usort($out, static function($a, $b) {
+            return $b['timeimported'] <=> $a['timeimported'];
+        });
+
+        return ['konzepte' => array_values($out)];
+    }
+
+    public static function list_imported_konzepte_returns(): external_single_structure {
+        return new external_single_structure([
+            'konzepte' => new external_multiple_structure(new external_single_structure([
+                'setid' => new external_value(PARAM_INT, 'Source global set id'),
+                'setname' => new external_value(PARAM_TEXT, 'Source global set name'),
+                'planname' => new external_value(PARAM_TEXT, 'Local plan name created on import'),
+                'gridid' => new external_value(PARAM_INT, 'Local plan (grid) id'),
+                'planexists' => new external_value(PARAM_BOOL, 'Whether the created plan still exists'),
+                'unitcount' => new external_value(PARAM_INT, 'Number of seminar units imported'),
+                'timeimported' => new external_value(PARAM_INT, 'Import timestamp'),
             ])),
         ]);
     }
@@ -1154,36 +1270,6 @@ class api extends external_api {
                 'autosyncenabled' => new external_value(PARAM_BOOL, 'Auto-update flag'),
                 'haspending' => new external_value(PARAM_BOOL, 'Pending update exists'),
             ])),
-        ]);
-    }
-
-    public static function set_methodset_sync_policy_parameters(): external_function_parameters {
-        return new external_function_parameters([
-            'cmid' => new external_value(PARAM_INT, 'Course module id'),
-            'methodsetid' => new external_value(PARAM_INT, 'Method set id'),
-            'autosyncenabled' => new external_value(PARAM_BOOL, 'Enable auto updates'),
-        ]);
-    }
-
-    public static function set_methodset_sync_policy(int $cmid, int $methodsetid, bool $autosyncenabled): array {
-        $params = self::validate_parameters(self::set_methodset_sync_policy_parameters(), [
-            'cmid' => $cmid,
-            'methodsetid' => $methodsetid,
-            'autosyncenabled' => $autosyncenabled,
-        ]);
-        $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
-        self::enforce_write_rate_limit('set_methodset_sync_policy', 60, 60);
-
-        $syncservice = new \mod_seminarplaner\local\service\methodset_sync_service();
-        $updated = $syncservice->set_autosync((int)$resolved['cm']->id, (int)$params['methodsetid'],
-            !empty($params['autosyncenabled']));
-        return ['updated' => (bool)$updated];
-    }
-
-    public static function set_methodset_sync_policy_returns(): external_single_structure {
-        return new external_single_structure([
-            'updated' => new external_value(PARAM_BOOL, 'Update status'),
         ]);
     }
 

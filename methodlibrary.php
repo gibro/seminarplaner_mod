@@ -61,6 +61,27 @@ echo html_writer::tag('h3', 'Bibliothek');
 echo html_writer::div('Alle Seminareinheiten durchsuchen, bearbeiten und für deine Pläne übernehmen – oder eine neue anlegen.', 'sq-pagehead__sub');
 echo html_writer::end_div();
 
+// D55: Bibliothek in drei Unterbereiche als Tabs - lokale Seminareinheiten
+// (Arbeitsfläche), immer durchsuchbare globale Methodensammlungen und die
+// bereits importierten globalen Seminarkonzepte.
+echo html_writer::start_div('ml-subtabs', ['role' => 'tablist']);
+echo html_writer::tag('button', 'Lokale Seminareinheiten', [
+    'type' => 'button', 'class' => 'ml-subtab ml-subtab--active', 'data-ml-tab' => 'local',
+    'role' => 'tab', 'aria-selected' => 'true',
+]);
+echo html_writer::tag('button', 'Methodensammlungen', [
+    'type' => 'button', 'class' => 'ml-subtab', 'data-ml-tab' => 'collections',
+    'role' => 'tab', 'aria-selected' => 'false',
+]);
+echo html_writer::tag('button', 'Globale Seminarkonzepte', [
+    'type' => 'button', 'class' => 'ml-subtab', 'data-ml-tab' => 'concepts',
+    'role' => 'tab', 'aria-selected' => 'false',
+]);
+echo html_writer::end_div();
+
+// ---- Tab 1: Lokale Seminareinheiten (Standard-Ansicht) ------------------
+echo html_writer::start_div('ml-tabpanel', ['id' => 'ml-tab-local', 'role' => 'tabpanel']);
+
 // D50: Anlegen ist kein eigener Bereich mehr, sondern ein Button in der
 // Bibliothek, der den Editor unten öffnet (leer, im Anlegen-Modus).
 echo html_writer::start_div('kg-row kg-row--action');
@@ -422,19 +443,39 @@ echo html_writer::end_div();
 
 echo html_writer::tag('div', '', ['id' => 'ml-status', 'class' => 'kg-status']);
 
+echo html_writer::end_div(); // Ende Tab 1 (#ml-tab-local).
+
+// ---- Tab 2: Methodensammlungen (globale Bibliothek, immer durchsuchbar) --
 // D29/D33: globale Bibliothek - immer durchsuchbar, kein Vor-Import einer
 // ganzen Methoden-Sammlung noetig; Uebernehmen legt sofort eine lokale Kopie an.
+echo html_writer::start_div('ml-tabpanel kg-hidden', ['id' => 'ml-tab-collections', 'role' => 'tabpanel']);
 echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'gl-section']);
-echo html_writer::tag('h4', 'Globale Bibliothek');
+echo html_writer::tag('h4', 'Methodensammlungen');
 echo html_writer::tag('p', 'Stöbere in den Methoden aller veröffentlichten Methoden-Sammlungen – '
     . 'ohne sie vorher importieren zu müssen. „Übernehmen" legt sofort eine eigene Kopie '
-    . 'in deinem Bestand oben an; das globale Original bleibt unberührt.');
+    . 'in deinem Bestand (Tab „Lokale Seminareinheiten") an; das globale Original bleibt unberührt.');
 echo '<label class="sp-filter"><span class="sp-filter__label">Suche</span>'
     . '<input id="gl-search" class="kg-input" type="search" placeholder="Titel, Beschreibung, Tags, Sammlung"></label>';
 echo html_writer::tag('div', '', ['id' => 'gl-facets', 'class' => 'gl-facets']);
 echo html_writer::tag('div', '', ['id' => 'gl-status', 'class' => 'sp-filter-status']);
 echo html_writer::tag('div', '', ['id' => 'gl-list', 'class' => 'kg-library-list gl-list']);
 echo html_writer::end_div();
+echo html_writer::end_div(); // Ende Tab 2 (#ml-tab-collections).
+
+// ---- Tab 3: Globale Seminarkonzepte (bereits importierte, D55) -----------
+// D55: zeigt nur die Seminarkonzepte, die bereits über den Import (D32,
+// Import/Export-Tab) in den lokalen Bestand geholt wurden - kein Import hier.
+echo html_writer::start_div('ml-tabpanel kg-hidden', ['id' => 'ml-tab-concepts', 'role' => 'tabpanel']);
+echo html_writer::start_div('kg-ie-block kg-library-step');
+echo html_writer::tag('h4', 'Globale Seminarkonzepte');
+echo html_writer::tag('p', 'Diese globalen Seminarkonzepte hast du bereits in deinen Bestand geholt. '
+    . 'Jedes Konzept ist als eigener Seminarplan angelegt; die enthaltenen Seminareinheiten '
+    . 'liegen als eigenständige lokale Kopien im Tab „Lokale Seminareinheiten". '
+    . 'Neue Konzepte holst du über den Tab „Import/Export".');
+echo html_writer::tag('div', '', ['id' => 'ml-konzepte-status', 'class' => 'sp-filter-status']);
+echo html_writer::tag('div', '', ['id' => 'ml-konzepte-list', 'class' => 'ml-konzepte-list']);
+echo html_writer::end_div();
+echo html_writer::end_div(); // Ende Tab 3 (#ml-tab-concepts).
 
 echo html_writer::end_div();
 

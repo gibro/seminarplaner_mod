@@ -145,7 +145,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     // D50: Anlegen läuft über denselben Editor wie Bearbeiten, nur leer.
     let creatingNew = false;
     let runtimeCmid = 0;
-    let autosyncSetIds = new Set();
+    // D54: Sets, für die eine aktualisierte globale Version verfügbar ist (kein
+    // Auto-Update mehr - stattdessen ein Hinweis an der betroffenen Karte).
+    let pendingUpdateSetIds = new Set();
     let methodsetNames = new Map();
     let draggedMethodId = '';
     let selectionMode = false;
@@ -780,12 +782,16 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         updateFilterToggleLabel(key);
     };
 
-    const loadAutosyncSetIds = (cmid) => {
+    const loadMethodsetSyncStatus = (cmid) => {
         return asCall('mod_seminarplaner_get_methodset_sync_status', {cmid}).then((res) => {
             const links = Array.isArray(res && res.links) ? res.links : [];
-            autosyncSetIds = new Set(
+            // D54: ein Set gilt als "aktualisierbar", wenn eine neuere globale
+            // Version vorliegt (haspending oder currentversion > verknüpfte Version).
+            pendingUpdateSetIds = new Set(
                 links
-                    .filter((link) => !!link && !!link.autosyncenabled)
+                    .filter((link) => !!link
+                        && (!!link.haspending
+                            || (Number(link.currentversionid) || 0) > (Number(link.linkedversionid) || 0)))
                     .map((link) => Number(link.methodsetid) || 0)
                     .filter((id) => id > 0)
             );
@@ -795,7 +801,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     .map((link) => [Number(link.methodsetid) || 0, String(link.methodsetname || '').trim()])
             );
         }).catch(() => {
-            autosyncSetIds = new Set();
+            pendingUpdateSetIds = new Set();
             methodsetNames = new Map();
         });
     };
@@ -807,10 +813,18 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return Number(method._kgsync.setid || 0) || 0;
     };
 
-    const shouldShowFreezeLock = (method) => {
+    // D54: Für diese Karte ist eine aktualisierte Version aus ihrer globalen
+    // Sammlung verfügbar. Reiner Hinweis - übernommen wird nur bewusst über
+    // "Ausstehende Updates übernehmen" im Import/Export-Tab.
+    const hasPendingUpdate = (method) => {
         const setid = getSyncMethodsetId(method);
-        return setid > 0 && autosyncSetIds.has(setid);
+        return setid > 0 && pendingUpdateSetIds.has(setid);
     };
+
+    // Die manuelle Voll-Fixierung ("Lokal fixieren") ist genau dann sinnvoll,
+    // wenn eine Aktualisierung ansteht - so lässt sich eine Karte vor dem
+    // Übernehmen gegen Überschreiben schützen (D54: lokale Änderung hat Vorrang).
+    const shouldShowFreezeLock = (method) => hasPendingUpdate(method);
 
     // Blendet den Herkunftsfilter nur ein, wenn mindestens eine Seminareinheit aus einem globalen Konzept importiert wurde.
     // Listet dabei jedes importierte globale Konzept einzeln mit seinem Namen im Dropdown auf.
@@ -946,10 +960,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             card.className = 'kg-library-card sp-card' + (cognitiveLevel ? ` sp-level-${cognitiveLevel}` : '') + phaseClassOf(m.seminarphase);
             card.setAttribute('data-id', String(m.id));
             card.draggable = true;
+            const pendingUpdate = hasPendingUpdate(m);
             const showlock = shouldShowFreezeLock(m);
             const frozen = showlock ? isFrozenState(m._kgsync, true) : false;
             const freezeaction = showlock
-                ? `<button type="button" class="ml-card-menu-btn" data-act="freeze" title="Nur sichtbar bei aktivem Auto-Update für dieses Konzept.">${frozen ? '🔒 Fixierung lösen' : '🔓 Lokal fixieren'}</button>`
+                ? `<button type="button" class="ml-card-menu-btn" data-act="freeze" title="Schützt diese Karte beim Übernehmen von Updates vor dem Überschreiben.">${frozen ? '🔒 Fixierung lösen' : '🔓 Lokal fixieren'}</button>`
+                : '';
+            const updatehint = pendingUpdate
+                ? `<div class="ml-card-updatehint" title="Übernehmen über &bdquo;Ausstehende Updates übernehmen&ldquo; im Tab Import/Export. Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügbar</div>`
                 : '';
             const phaseLabel = Array.isArray(m.seminarphase) ? m.seminarphase.filter(Boolean).join(', ') : String(m.seminarphase || '').trim();
             const tagChips = splitMulti(m.tags)
@@ -982,6 +1000,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                   </details>
                 </div>
               </div>
+              ${updatehint}
               <div class="sp-card-compact">
                 <div class="sp-card-meta">
                   <span class="sp-badge">⏱️ ${escapeHtml(m.zeitbedarf || '-')}</span>
@@ -2173,6 +2192,15 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
     };
 
+    // D55: Statuszeile des "Globale Seminarkonzepte"-Tabs.
+    const setKonzepteStatus = (text, iserror) => {
+        const el = bySel('#ml-konzepte-status');
+        if (el) {
+            el.textContent = text || '';
+            el.classList.toggle('kg-status-error', !!iserror);
+        }
+    };
+
     const matchesGlobalFilter = (m) => {
         for (const tag of globalFilter.tags) {
             if (!m.tags.some((t) => t.toLowerCase() === tag)) {
@@ -2352,6 +2380,89 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         });
     };
 
+    // D55: Bibliothek-Untertabs (lokale Einheiten / Methodensammlungen /
+    // globale Seminarkonzepte). Der Konzept-Tab lädt seine Liste erst beim
+    // ersten Öffnen (lazy).
+    let konzepteLoaded = false;
+
+    const renderKonzepteList = (konzepte) => {
+        const host = bySel('#ml-konzepte-list');
+        if (!host) {
+            return;
+        }
+        if (!konzepte.length) {
+            host.innerHTML = '';
+            setKonzepteStatus('Noch keine globalen Seminarkonzepte importiert. '
+                + 'Konzepte holst du über den Tab „Import/Export".');
+            return;
+        }
+        setKonzepteStatus('');
+        host.innerHTML = konzepte.map((k) => {
+            const meta = `${k.unitcount} ${k.unitcount === 1 ? 'Seminareinheit' : 'Seminareinheiten'}`
+                + ` · übernommen ${escapeHtml(formatRelativeModified(k.timeimported))}`;
+            const action = k.planexists
+                ? `<a class="kg-btn" href="${escapeHtml(sequenzUrlFor(k.gridid))}">Plan öffnen</a>`
+                : `<span class="ml-konzept-card__gone">Zugehöriger Seminarplan wurde gelöscht.</span>`;
+            return `<div class="ml-konzept-card">
+                <div class="ml-konzept-card__head">
+                  <strong class="ml-konzept-card__title">${escapeHtml(k.planname || k.setname || 'Seminarkonzept')}</strong>
+                  ${k.setname ? `<span class="ml-konzept-card__source">aus &bdquo;${escapeHtml(k.setname)}&ldquo;</span>` : ''}
+                </div>
+                <div class="ml-konzept-card__meta">${meta}</div>
+                <div class="ml-konzept-card__actions">${action}</div>
+              </div>`;
+        }).join('');
+    };
+
+    const sequenzUrlFor = (gridid) => {
+        try {
+            const url = new URL('sequenz.php', window.location.href);
+            url.searchParams.set('id', String(runtimeCmid));
+            url.searchParams.set('grid', String(gridid));
+            return url.toString();
+        } catch (e) {
+            return `sequenz.php?id=${runtimeCmid}&grid=${gridid}`;
+        }
+    };
+
+    const loadImportedKonzepte = (cmid) => {
+        setKonzepteStatus('Seminarkonzepte werden geladen …');
+        return asCall('mod_seminarplaner_list_imported_konzepte', {cmid}).then((res) => {
+            renderKonzepteList(Array.isArray(res && res.konzepte) ? res.konzepte : []);
+        }).catch((e) => {
+            Notification.exception(e);
+            setKonzepteStatus('Die importierten Seminarkonzepte konnten nicht geladen werden.', true);
+        });
+    };
+
+    const activateSubtab = (name, cmid) => {
+        const tabs = document.querySelectorAll('.ml-subtab');
+        tabs.forEach((btn) => {
+            const active = btn.getAttribute('data-ml-tab') === name;
+            btn.classList.toggle('ml-subtab--active', active);
+            btn.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        [['local', '#ml-tab-local'], ['collections', '#ml-tab-collections'], ['concepts', '#ml-tab-concepts']]
+            .forEach(([key, sel]) => {
+                const panel = bySel(sel);
+                if (panel) {
+                    panel.classList.toggle('kg-hidden', key !== name);
+                }
+            });
+        if (name === 'concepts' && !konzepteLoaded) {
+            konzepteLoaded = true;
+            loadImportedKonzepte(cmid);
+        }
+    };
+
+    const bindSubtabs = (cmid) => {
+        document.querySelectorAll('.ml-subtab').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                activateSubtab(btn.getAttribute('data-ml-tab') || 'local', cmid);
+            });
+        });
+    };
+
     return {
         init: function(cmid) {
             runtimeCmid = cmid;
@@ -2361,6 +2472,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             bindBulkSelectionUI(cmid);
             refreshEditAlternativeOptions('');
             initGlobalLibrary(cmid);
+            bindSubtabs(cmid);
 
             const addbtn = bySel('#kg-add-method');
             if (addbtn) {
@@ -2435,7 +2547,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 });
             }
 
-            Promise.all([loadMethods(cmid), loadAutosyncSetIds(cmid)]).then(() => {
+            Promise.all([loadMethods(cmid), loadMethodsetSyncStatus(cmid)]).then(() => {
                 renderList();
                 applyRequestedEditFromUrl();
             }).catch((e) => {

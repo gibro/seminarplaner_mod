@@ -39,6 +39,13 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
     ],
+    'mod_seminarplaner_list_imported_konzepte' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'list_imported_konzepte',
+        'description' => 'List global seminar concepts already imported into this activity (D55 library tab).',
+        'type' => 'read',
+        'ajax' => true,
+    ],
     'mod_seminarplaner_adopt_global_method' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'adopt_global_method',
@@ -51,13 +58,6 @@ $functions = [
         'methodname' => 'get_methodset_sync_status',
         'description' => 'Get method-set sync status for the activity.',
         'type' => 'read',
-        'ajax' => true,
-    ],
-    'mod_seminarplaner_set_methodset_sync_policy' => [
-        'classname' => 'mod_seminarplaner\\external\\api',
-        'methodname' => 'set_methodset_sync_policy',
-        'description' => 'Set auto-update policy for one linked method set in the activity.',
-        'type' => 'write',
         'ajax' => true,
     ],
     'mod_seminarplaner_apply_methodset_updates' => [
