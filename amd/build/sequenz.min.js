@@ -153,6 +153,102 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
     const UNIT_FIELD_KEYS = ['titel', 'lernziele', 'kurzbeschreibung', 'zeitbedarf', 'seminarphase',
         'sozialform', 'ablauf', 'raum', 'gruppengroesse', 'risiken', 'debrief', 'tags', 'autor', 'materialtechnik'];
     const UNIT_RICH_FIELDS = ['lernziele', 'kurzbeschreibung', 'ablauf', 'risiken', 'debrief', 'materialtechnik'];
+    // Mehrfach-Auswahlen mit denselben Dropdown-Bedienelementen wie im
+    // Bibliotheks-Editor (D17: ein Editor, drei Einstiege).
+    const UNIT_MULTI_FIELDS = ['seminarphase', 'sozialform', 'raum'];
+
+    const unitMultiDropdown = (selector) => document.querySelector(
+        `[data-kg-form-multi-dropdown="1"][data-kg-field="${selector}"]`);
+
+    const splitMultiValue = (value) => {
+        if (Array.isArray(value)) {
+            return value.map((v) => String(v).trim()).filter(Boolean);
+        }
+        return String(value || '').split(/##|,|;|\r?\n/).map((v) => v.trim()).filter(Boolean);
+    };
+
+    const setMultiDropdownValues = (selector, values) => {
+        const dropdown = unitMultiDropdown(selector);
+        const hidden = bySel(selector);
+        let clean = splitMultiValue(values);
+        if (dropdown) {
+            // Werte case-insensitiv auf die Options-Schreibweise auflösen;
+            // Unbekanntes fällt weg (gleiche Regel wie im Bibliotheks-Editor).
+            const boxes = Array.from(dropdown.querySelectorAll('[data-kg-form-multi-option="1"]'));
+            const bynorm = {};
+            boxes.forEach((cb) => {
+                bynorm[String(cb.value).trim().toLowerCase()] = String(cb.value);
+            });
+            const resolved = [];
+            clean.forEach((value) => {
+                const mapped = bynorm[value.toLowerCase()];
+                if (mapped && !resolved.includes(mapped)) {
+                    resolved.push(mapped);
+                }
+            });
+            clean = resolved;
+            const valueset = new Set(clean);
+            boxes.forEach((cb) => {
+                cb.checked = valueset.has(String(cb.value));
+            });
+            const toggle = dropdown.querySelector('[data-kg-form-multi-toggle="1"]');
+            if (toggle) {
+                const prefix = dropdown.getAttribute('data-kg-label-prefix') || 'Auswahl';
+                const placeholder = dropdown.getAttribute('data-kg-placeholder') || `${prefix} wählen`;
+                toggle.textContent = clean.length ? `${prefix} (${clean.length})` : placeholder;
+            }
+        }
+        if (hidden) {
+            hidden.value = clean.join('##');
+        }
+    };
+
+    const readMultiDropdownValues = (selector) => {
+        const hidden = bySel(selector);
+        if (!hidden) {
+            return [];
+        }
+        return String(hidden.value || '').split('##').map((v) => v.trim()).filter(Boolean);
+    };
+
+    // Auf/Zu-Verhalten und Häkchen → hidden-Feld (einmalig beim Seitenstart).
+    const bindUnitMultiDropdowns = () => {
+        document.querySelectorAll('[data-kg-form-multi-dropdown="1"]').forEach((dropdown) => {
+            const selector = String(dropdown.getAttribute('data-kg-field') || '');
+            const toggle = dropdown.querySelector('[data-kg-form-multi-toggle="1"]');
+            const panel = dropdown.querySelector('[data-kg-form-multi-panel="1"]');
+            if (toggle && panel) {
+                toggle.addEventListener('click', () => {
+                    const opening = panel.classList.contains('kg-hidden');
+                    document.querySelectorAll('[data-kg-form-multi-dropdown="1"]').forEach((other) => {
+                        const otherpanel = other.querySelector('[data-kg-form-multi-panel="1"]');
+                        if (otherpanel) {
+                            otherpanel.classList.add('kg-hidden');
+                        }
+                        other.classList.remove('kg-form-multi-open');
+                    });
+                    if (opening) {
+                        panel.classList.remove('kg-hidden');
+                        dropdown.classList.add('kg-form-multi-open');
+                    }
+                });
+                document.addEventListener('click', (event) => {
+                    if (!dropdown.contains(event.target)) {
+                        panel.classList.add('kg-hidden');
+                        dropdown.classList.remove('kg-form-multi-open');
+                    }
+                });
+            }
+            dropdown.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
+                checkbox.addEventListener('change', () => {
+                    const selected = Array.from(dropdown.querySelectorAll('[data-kg-form-multi-option="1"]:checked'))
+                        .map((cb) => String(cb.value || '').trim())
+                        .filter(Boolean);
+                    setMultiDropdownValues(selector, selected);
+                });
+            });
+        });
+    };
 
     const tinyEditorFor = (el) => {
         if (typeof window === 'undefined' || !window.tinyMCE || !el || !el.id) {
@@ -361,6 +457,7 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             }
             // Statisches Einheiten-Modal (Rich-Text, D17/D50): Speichern,
             // Abbrechen/Schließen und Klick auf den Overlay-Hintergrund.
+            bindUnitMultiDropdowns();
             const unitsave = bySel('#sq-unit-save');
             if (unitsave) {
                 unitsave.addEventListener('click', () => this.saveUnitModal());
@@ -1925,6 +2022,10 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
         // ---- Statisches Einheiten-Modal (sequenz.php, mit Tiny) ------------
 
         setUnitField(key, value) {
+            if (UNIT_MULTI_FIELDS.includes(key)) {
+                setMultiDropdownValues('#sq-e-' + key, value);
+                return;
+            }
             const el = bySel('#sq-e-' + key);
             if (!el) {
                 return;
@@ -1937,6 +2038,9 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
         }
 
         getUnitField(key) {
+            if (UNIT_MULTI_FIELDS.includes(key)) {
+                return readMultiDropdownValues('#sq-e-' + key);
+            }
             const el = bySel('#sq-e-' + key);
             if (!el) {
                 return '';
@@ -1952,7 +2056,12 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             this.unitModalMode = mode;
             // Ein evtl. offenes dynamisches Modal (z. B. der Picker) schließt.
             this.closeModal();
-            UNIT_FIELD_KEYS.forEach((key) => this.setUnitField(key, this.fieldValue(card, key)));
+            UNIT_FIELD_KEYS.forEach((key) => {
+                // Multi-Felder bekommen den Rohwert (Array), sonst würden
+                // Werte mit Komma beim Rück-Splitten zerfallen.
+                const raw = UNIT_MULTI_FIELDS.includes(key) ? card[key] : this.fieldValue(card, key);
+                this.setUnitField(key, raw);
+            });
             const title = bySel('#sq-unit-modal-title');
             if (title) {
                 title.textContent = mode === 'create' ? 'Neue Seminareinheit anlegen' : 'Seminareinheit bearbeiten';
@@ -1997,7 +2106,10 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             const duration = Number.parseInt(String(values.zeitbedarf || '').replace(/\D+/g, ''), 10);
             Object.keys(values).forEach((key) => {
                 const incoming = values[key];
-                if (Array.isArray(card[key])) {
+                if (UNIT_MULTI_FIELDS.includes(key)) {
+                    // Kommt bereits als Liste aus dem Dropdown.
+                    card[key] = Array.isArray(incoming) ? incoming : splitMultiValue(incoming);
+                } else if (Array.isArray(card[key])) {
                     card[key] = String(incoming).split(',').map((part) => part.trim()).filter(Boolean);
                 } else {
                     card[key] = incoming;
@@ -2120,19 +2232,19 @@ define(['core/ajax', 'core_user/repository'], function(Ajax, UserRepository) {
             }
             const duration = Number.parseInt(String(values.zeitbedarf || '').replace(/\D+/g, ''), 10);
             // Feldform wie beim Anlegen in der Bibliothek (methods-Karten):
-            // seminarphase/sozialform/raum sind Arrays, der Rest Strings.
-            const splitList = (raw) => String(raw || '').split(',').map((part) => part.trim()).filter(Boolean);
+            // seminarphase/sozialform/raum sind Arrays (kommen so aus den
+            // Multi-Dropdowns), der Rest Strings.
             const card = {
                 id: `${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
                 titel,
-                seminarphase: splitList(values.seminarphase),
+                seminarphase: splitMultiValue(values.seminarphase),
                 zeitbedarf: String(Number.isFinite(duration) && duration > 0 ? duration : 30),
                 gruppengroesse: String(values.gruppengroesse || '').trim(),
                 kurzbeschreibung: String(values.kurzbeschreibung || ''),
                 autor: String(values.autor || '').trim(),
                 lernziele: String(values.lernziele || ''),
-                raum: splitList(values.raum),
-                sozialform: splitList(values.sozialform),
+                raum: splitMultiValue(values.raum),
+                sozialform: splitMultiValue(values.sozialform),
                 risiken: String(values.risiken || ''),
                 debrief: String(values.debrief || ''),
                 materialien: [],

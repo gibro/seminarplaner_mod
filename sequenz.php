@@ -244,6 +244,26 @@ $sqrich = static function(string $label, string $key, int $rows = 6): string {
     $out .= html_writer::end_div();
     return $out;
 };
+// Gleiche Bedienelemente wie der Bibliotheks-Editor (D17: ein Editor, drei
+// Einstiege): Mehrfach-Auswahlen als Dropdown mit Häkchen statt Komma-Text.
+$sqmulti = static function(string $label, string $key, array $options, string $placeholder, string $labelprefix): string {
+    $out = html_writer::start_div('sq-field');
+    $out .= html_writer::tag('label', s($label), ['class' => 'kg-label', 'for' => 'sq-e-' . $key]);
+    $out .= seminarplaner_render_multi_dropdown('sq-e-' . $key, $options, $placeholder, $labelprefix);
+    $out .= html_writer::end_div();
+    return $out;
+};
+$sqselect = static function(string $label, string $key, array $options): string {
+    $out = html_writer::start_div('sq-field');
+    $out .= html_writer::tag('label', s($label), ['class' => 'kg-label', 'for' => 'sq-e-' . $key]);
+    $out .= html_writer::start_tag('select', ['class' => 'kg-input', 'id' => 'sq-e-' . $key]);
+    foreach ($options as $value => $optionlabel) {
+        $out .= html_writer::tag('option', s((string)$optionlabel), ['value' => (string)$value]);
+    }
+    $out .= html_writer::end_tag('select');
+    $out .= html_writer::end_div();
+    return $out;
+};
 
 echo html_writer::start_div('sq-modal-overlay', ['id' => 'sq-unit-modal']);
 echo html_writer::start_div('sq-modal');
@@ -256,14 +276,39 @@ echo $sqtext('Titel', 'titel');
 echo $sqrich('Lernziele (Ich kann …)', 'lernziele');
 echo $sqrich('Kurzbeschreibung', 'kurzbeschreibung');
 echo $sqtext('Zeitbedarf (Minuten)', 'zeitbedarf');
-echo $sqtext('Seminarphase', 'seminarphase', 'Mehrere Phasen mit Komma trennen');
-echo $sqtext('Sozialform', 'sozialform');
+echo $sqmulti('Seminarphase', 'seminarphase', seminarplaner_phase_options(), 'Seminarphasen wählen', 'Seminarphasen');
+echo $sqmulti('Sozialform', 'sozialform', [
+    'Vortrag' => 'Vortrag',
+    'Diskussion' => 'Diskussion',
+    'Einzelarbeit' => 'Einzelarbeit',
+    'Partnerarbeit' => 'Partnerarbeit',
+    'Kleingruppen' => 'Kleingruppen',
+    'Galeriegang' => 'Galeriegang',
+    'Fishbowl' => 'Fishbowl',
+], 'Sozialformen wählen', 'Sozialformen');
 echo html_writer::start_tag('details', ['class' => 'sq-section']);
 echo html_writer::tag('summary', 'Ablauf und Rahmen');
 echo html_writer::start_div('sq-section__inner');
 echo $sqrich('Ablauf', 'ablauf', 8);
-echo $sqtext('Raumanforderungen', 'raum');
-echo $sqtext('Gruppengröße', 'gruppengroesse');
+echo $sqmulti('Raumanforderungen', 'raum', [
+    'Plenum' => 'Plenum',
+    'Stuhlkreis' => 'Stuhlkreis',
+    'Stehtische' => 'Stehtische',
+    'viel Freifläche' => 'viel Freifläche',
+    'Gruppentische' => 'Gruppentische',
+    'Gruppenräume' => 'Gruppenräume',
+    'akustisch ruhig' => 'akustisch ruhig',
+], 'Raumanforderungen wählen', 'Raumanforderungen');
+echo $sqselect('Gruppengröße', 'gruppengroesse', [
+    '' => '(keine Angabe)',
+    '1' => '1',
+    '2-3' => '2-3',
+    '3–5' => '3–5',
+    '6–12' => '6–12',
+    '13–24' => '13–24',
+    '25+' => '25+',
+    'beliebig' => 'beliebig',
+]);
 echo $sqrich('Risiken/Tipps', 'risiken');
 echo $sqrich('Debrief/Reflexionsfragen', 'debrief');
 echo $sqtext('Tags/Schlüsselworte', 'tags', 'Hilft beim Wiederfinden und bei Vorschlägen');
