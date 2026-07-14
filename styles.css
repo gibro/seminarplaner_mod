@@ -2269,7 +2269,7 @@ body.sp-resizing * {
 
 /* Show delete buttons for all items, including placeholders */
 .sp-item--placeholder .ml-card-menu {
-  display: flex !important;
+  display: flex;
 }
 
 .sp-item-placeholder {
@@ -3596,9 +3596,9 @@ body.sp-resizing * {
 .sp-zoom-btn,
 .kg-tag-dropdown-toggle,
 .sp-modal__close {
-  background: #fff !important;
-  border-color: var(--ig-lightgray) !important;
-  color: var(--ig-anthracite) !important;
+  background: #fff;
+  border-color: var(--ig-lightgray);
+  color: var(--ig-anthracite);
 }
 
 .kg-btn:hover:not(:disabled),
@@ -3606,9 +3606,9 @@ body.sp-resizing * {
 .sp-zoom-btn:hover:not(:disabled),
 .kg-tag-dropdown-toggle:hover:not(:disabled),
 .sp-modal__close:hover:not(:disabled) {
-  background: var(--ig-blue-soft) !important;
-  border-color: var(--ig-blue) !important;
-  color: var(--ig-blue) !important;
+  background: var(--ig-blue-soft);
+  border-color: var(--ig-blue);
+  color: var(--ig-blue);
 }
 
 .kg-btn:focus-visible,
@@ -3616,39 +3616,40 @@ body.sp-resizing * {
 .sp-zoom-btn:focus-visible,
 .kg-tag-dropdown-toggle:focus-visible,
 .sp-modal__close:focus-visible {
-  outline: 2px solid var(--ig-blue-mid) !important;
-  outline-offset: 2px !important;
+  outline: 2px solid var(--ig-blue-mid);
+  outline-offset: 2px;
 }
 
 .kg-btn-primary {
-  background: var(--ig-red) !important;
-  border-color: var(--ig-red) !important;
-  color: #fff !important;
+  background: var(--ig-red);
+  border-color: var(--ig-red);
+  color: #fff;
 }
 
 .kg-btn-primary:hover:not(:disabled) {
-  background: var(--ig-darkred) !important;
-  border-color: var(--ig-darkred) !important;
-  color: #fff !important;
+  background: var(--ig-darkred);
+  border-color: var(--ig-darkred);
+  color: #fff;
 }
 
 .ml-card-menu-btn-delete:not(:disabled),
 .ml-card-menu-btn-delete:not(:disabled):hover {
-  background: #fff !important;
-  border-color: var(--ig-red) !important;
-  color: var(--ig-darkred) !important;
+  background: #fff;
+  border-color: var(--ig-red);
+  color: var(--ig-darkred);
 }
 
-.kg-btn:disabled,
-.sp-btn:disabled,
-.sp-zoom-btn:disabled,
-.kg-tag-dropdown-toggle:disabled,
-.sp-modal__close:disabled {
-  background: #fff !important;
-  border-color: var(--ig-lightgray) !important;
-  color: var(--ig-gray) !important;
-  opacity: 1 !important;
-  cursor: not-allowed !important;
+/* Klasse doppelt (0,3,0): Deaktiviert muss die Varianten am Dateiende schlagen. */
+.kg-btn.kg-btn:disabled,
+.sp-btn.sp-btn:disabled,
+.sp-zoom-btn.sp-zoom-btn:disabled,
+.kg-tag-dropdown-toggle.kg-tag-dropdown-toggle:disabled,
+.sp-modal__close.sp-modal__close:disabled {
+  background: #fff;
+  border-color: var(--ig-lightgray);
+  color: var(--ig-gray);
+  opacity: 1;
+  cursor: not-allowed;
 }
 
 .sp-btn,
@@ -3667,19 +3668,19 @@ body.sp-resizing * {
 }
 
 .ml-card-menu-toggle {
-  border-color: transparent !important;
-  color: var(--ig-anthracite) !important;
-  background: transparent !important;
+  border-color: transparent;
+  color: var(--ig-anthracite);
+  background: transparent;
 }
 
 .ml-card-menu-toggle:hover {
-  border-color: var(--ig-blue) !important;
-  color: var(--ig-blue) !important;
-  background: transparent !important;
+  border-color: var(--ig-blue);
+  color: var(--ig-blue);
+  background: transparent;
 }
 
 .ml-card-menu-toggle:focus-visible {
-  outline: 2px solid rgba(47, 128, 171, .45) !important;
+  outline: 2px solid rgba(47, 128, 171, .45);
 }
 
 .sp-modal__header,
@@ -5466,12 +5467,12 @@ select.kg-input.rf-select {
 }
 
 .ml-card-menu-toggle:hover {
-  border-color: var(--ig-red) !important;
-  color: var(--ig-red) !important;
+  border-color: var(--ig-red);
+  color: var(--ig-red);
 }
 
 .ml-card-menu-toggle:focus-visible {
-  outline: 2px solid var(--ig-red-mid) !important;
+  outline: 2px solid var(--ig-red-mid);
 }
 
 .ml-card-menu-btn:hover {
@@ -5521,9 +5522,9 @@ select.kg-input.rf-select {
 .sp-zoom-btn:hover:not(:disabled),
 .kg-tag-dropdown-toggle:hover:not(:disabled),
 .sp-modal__close:hover:not(:disabled) {
-  background: var(--ig-surface-muted) !important;
-  border-color: var(--ig-gray) !important;
-  color: var(--ig-anthracite) !important;
+  background: var(--ig-surface-muted);
+  border-color: var(--ig-gray);
+  color: var(--ig-anthracite);
 }
 
 .kg-btn:focus-visible,
@@ -5531,8 +5532,8 @@ select.kg-input.rf-select {
 .sp-zoom-btn:focus-visible,
 .kg-tag-dropdown-toggle:focus-visible,
 .sp-modal__close:focus-visible {
-  outline: 2px solid var(--ig-red-mid) !important;
-  outline-offset: 2px !important;
+  outline: 2px solid var(--ig-red-mid);
+  outline-offset: 2px;
 }
 
 .sp-modal__field input:focus,
@@ -6020,7 +6021,7 @@ select.kg-input.rf-select {
 }
 
 .sq-anchor--off .sq-anchor__add .kg-btn:disabled {
-    background: transparent !important;
+    background: transparent;
 }
 
 /* Vorschläge aus der Bibliothek: eingeklappt, aber einladend (details). */
@@ -6300,25 +6301,25 @@ details[open] > .sq-gap__summary .sq-gap__chevron {
     padding: 11px 16px;
 }
 
-/* ---- Sekundär-Aktionen (Handoff: 2px rote Outline, Fill-Invert on hover)
-   !important nötig: die neutrale Button-Regel („Neutral controls + clear IG
-   action hierarchy", ~Z. 3630) arbeitet ebenfalls mit !important. */
+/* ---- Sekundär-Aktionen (Handoff: 2px rote Outline, Fill-Invert on hover).
+   Diese Regeln brauchen kein !important mehr: sie sind spezifischer
+   (Attribut + Klasse) als die neutrale Button-Basis. */
 [data-sq-action="add-unit"].kg-btn,
 [data-sq-action="add-pause"].kg-btn,
 [data-sq-action="picker-create"].kg-btn,
 #sq-new-unit.kg-btn {
-    border: 2px solid var(--ig-red) !important;
-    color: var(--ig-red) !important;
-    background: #fff !important;
+    border: 2px solid var(--ig-red);
+    color: var(--ig-red);
+    background: #fff;
 }
 
 [data-sq-action="add-unit"].kg-btn:hover:not(:disabled),
 [data-sq-action="add-pause"].kg-btn:hover:not(:disabled),
 [data-sq-action="picker-create"].kg-btn:hover:not(:disabled),
 #sq-new-unit.kg-btn:hover:not(:disabled) {
-    background: var(--ig-red) !important;
-    border-color: var(--ig-red) !important;
-    color: #fff !important;
+    background: var(--ig-red);
+    border-color: var(--ig-red);
+    color: #fff;
 }
 
 /* Werkzeugleisten-Button ohne die Standard-Außenabstände der kg-btn. */
@@ -6328,11 +6329,15 @@ details[open] > .sq-gap__summary .sq-gap__chevron {
 }
 
 /* Entfallende Anker (An-/Abreisetag): Hinzufügen bleibt gedämpft. */
+/* Deaktiviert gilt fuer ALLE roten Anker-Buttons — vorher fehlten picker-create und
+   #sq-new-unit in dieser Liste, sie blieben deaktiviert rot (sahen also aktiv aus). */
 [data-sq-action="add-unit"].kg-btn:disabled,
-[data-sq-action="add-pause"].kg-btn:disabled {
-    border-color: var(--ig-lightgray) !important;
-    color: var(--ig-midgray) !important;
-    background: #fff !important;
+[data-sq-action="add-pause"].kg-btn:disabled,
+[data-sq-action="picker-create"].kg-btn:disabled,
+#sq-new-unit.kg-btn:disabled {
+    border-color: var(--ig-lightgray);
+    color: var(--ig-midgray);
+    background: #fff;
 }
 
 /* Primär-Buttons als Link (Hinweisleiste) brauchen Link-Neutralisierung. */
@@ -6488,7 +6493,7 @@ a.kg-btn-primary:focus {
     font-weight: 700;
     letter-spacing: .02em;
     text-transform: uppercase;
-    /* Rote Outline-Optik erzwingen (schlägt die neutrale kg-btn-!important-Regel). */
+    /* Rote Outline-Optik (schlägt die neutrale Basis über die eigene Klasse). */
     background: #fff;
     border-color: var(--ig-red);
     color: var(--ig-red);
@@ -7465,11 +7470,10 @@ a.kg-btn-primary:focus {
 }
 
 /* Bibliothekskarte (Handoff): Phasen-Badge getoent in seiner Phasenfarbe —
-   dieselbe Palette wie Sequenz und Roter Faden.
-   ACHTUNG: Die neutrale Badge-Regel weiter oben ("Badges neutral") setzt
-   background/border/color mit !important. Diese Toenung muss deshalb ebenfalls
-   !important tragen, sonst bleibt das Badge grau — genau daran sind die
-   frueheren .ml-phase--*-Regeln gescheitert (sie sind hier entfallen). */
+   dieselbe Palette wie Sequenz und Roter Faden. Frueher trug die neutrale
+   Badge-Regel ein !important und machte jede Toenung wirkungslos (die alten
+   .ml-phase--*-Regeln waren deshalb toter Code); seit dem Abbau reicht die
+   Spezifitaet. */
 .kg-library-card.sp-card .sp-card-meta .sp-badge--phase-orientierung {
   background: #E7F0F5;
   border-color: var(--ig-blue);
@@ -7502,36 +7506,48 @@ a.kg-btn-primary:focus {
 
 
 /* =========================================================
-   HOVER-KORREKTUR (14. Juli 2026)
-   Befund aus dem Computed-Style-Diff: Der CD-Handoff-Layer definiert den Hover
-   neutral um (Grund #F1F1F1, Rand Grau, Schrift Anthrazit) — seine Selektorliste
-   vergisst aber ".kg-btn", die Hauptklasse unserer Buttons. Sie behielt deshalb den
-   BLAUEN Hover der alten Information-First-Palette, und dessen !important schlug
-   sogar den roten Hover des Outline-Buttons: Jeder neutrale UND jeder outline-rote
-   Button wurde beim Hovern blau.
-
-   Warum hier weiterhin !important steht: Der Diff hat gezeigt, dass die
-   Button-!important tragend sind — ohne sie verliert schon der ruhende
-   Primaer-Button sein Rot, weil eine spaetere .kg-btn-Regel gleicher Spezifitaet
-   ihn ueberschreibt. Die Brechstange bleibt also, aber sie zeigt jetzt in die
-   richtige Richtung.
-
-   Reihenfolge: neutral < primaer < outline-rot (Handoff-Muster "Fill-Invert").
+   BUTTONS – die eine massgebliche Stelle (14. Juli 2026)
+   Vorher stand die neutrale CD-Basis (".kg-btn, .sp-btn, …") HINTER den Varianten und
+   setzte sich mit !important durch. Zwei Fehler waren die Folge, im Produkt sichtbar,
+   aber nie aufgefallen, weil niemand Zustaende screenshottet:
+     1. ".kg-btn--outline-red" war wirkungslos — der Button sah aus wie ein normaler
+        grauer Button. Rot war er nur dort, wo eine spezifischere Regel ihn rettete
+        (Anker-Buttons, PDF-Buttons).
+     2. Jeder neutrale UND jeder outline-rote Button hoverte BLAU (alte
+        Information-First-Palette), weil die CD-Hover-Regel ".kg-btn" in ihrer
+        Selektorliste vergessen hatte.
+   Jetzt tragen die Varianten ihre Klasse doppelt (Spezifitaet 0,2,0) und stehen am
+   Ende: Sie schlagen die Basis (0,1,0) unabhaengig von der Reihenfolge — ohne
+   !important. Neue Button-Varianten gehoeren HIERHER.
+   Handoff-Muster: Primaer = roter Grund; Outline = roter Rahmen, Hover als Fill-Invert;
+   Neutral = weiss mit Hairline.
    ========================================================= */
 .kg-btn:hover:not(:disabled) {
-  background: var(--ig-surface-muted) !important;
-  border-color: var(--ig-gray) !important;
-  color: var(--ig-anthracite) !important;
+  background: var(--ig-surface-muted);
+  border-color: var(--ig-gray);
+  color: var(--ig-anthracite);
+}
+
+.kg-btn.kg-btn-primary {
+  background: var(--ig-red);
+  border-color: var(--ig-red);
+  color: #fff;
 }
 
 .kg-btn.kg-btn-primary:hover:not(:disabled) {
-  background: var(--ig-red-hover) !important;
-  border-color: var(--ig-red-hover) !important;
-  color: #fff !important;
+  background: var(--ig-red-hover);
+  border-color: var(--ig-red-hover);
+  color: #fff;
+}
+
+.kg-btn.kg-btn--outline-red {
+  background: #fff;
+  border-color: var(--ig-red);
+  color: var(--ig-red);
 }
 
 .kg-btn.kg-btn--outline-red:hover:not(:disabled) {
-  background: var(--ig-red) !important;
-  border-color: var(--ig-red) !important;
-  color: #fff !important;
+  background: var(--ig-red);
+  border-color: var(--ig-red);
+  color: #fff;
 }
