@@ -61,6 +61,66 @@ function seminarplaner_get_pdf_logo(context_module $context, stdClass $seminarpl
 }
 
 /**
+ * Canonical list of PDF/ZIM export column keys (D63).
+ *
+ * Single source of truth shared by the persisted column setting and its
+ * validation. Order here is the default export order.
+ *
+ * @return string[]
+ */
+function seminarplaner_pdf_column_keys(): array {
+    return [
+        'uhrzeit', 'titel', 'seminarphase', 'kognitive', 'kurzbeschreibung',
+        'debrief', 'ablauf', 'lernziele', 'risiken', 'materialtechnik', 'sonstiges',
+    ];
+}
+
+/**
+ * Read the persisted ZIM-PDF column selection/order for an activity (D63).
+ *
+ * Stored per activity as plugin config `pdfcolumns_cmid_<cmid>` (JSON), analogous
+ * to the D52 logo setting. Returns null when nothing valid is stored, so the
+ * client falls back to "all columns in default order".
+ *
+ * @param int $cmid Course module id.
+ * @return array|null {all: bool, order: string[]} or null.
+ */
+function seminarplaner_get_pdf_columns(int $cmid): ?array {
+    $raw = get_config('mod_seminarplaner', 'pdfcolumns_cmid_' . $cmid);
+    if ($raw === false || $raw === null || $raw === '') {
+        return null;
+    }
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return null;
+    }
+
+    $allowed = seminarplaner_pdf_column_keys();
+    $order = [];
+    foreach ((array)($decoded['order'] ?? []) as $key) {
+        $key = (string)$key;
+        if (in_array($key, $allowed, true) && !in_array($key, $order, true)) {
+            $order[] = $key;
+        }
+    }
+    // Append any columns missing from the stored order so new columns stay reachable.
+    foreach ($allowed as $key) {
+        if (!in_array($key, $order, true)) {
+            $order[] = $key;
+        }
+    }
+
+    return [
+        'all' => !empty($decoded['all']),
+        'order' => $order,
+        'selected' => array_values(array_filter(
+            (array)($decoded['selected'] ?? []),
+            static fn($key) => in_array((string)$key, $allowed, true)
+        )),
+    ];
+}
+
+/**
  * Install a runtime guard for malformed unserialize() notices in user preferences.
  *
  * The handler targets only the known unserialize offset notice and tries to

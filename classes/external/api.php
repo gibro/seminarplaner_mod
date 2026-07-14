@@ -2794,4 +2794,63 @@ class api extends external_api {
             'expiresat' => new external_value(PARAM_INT, 'Expiry timestamp'),
         ]);
     }
+
+    public static function set_pdf_columns_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'columnsjson' => new external_value(PARAM_RAW, 'PDF column setting as JSON {all, order, selected}'),
+        ]);
+    }
+
+    /**
+     * Persist the ZIM-PDF column selection and order per activity (D63).
+     */
+    public static function set_pdf_columns(int $cmid, string $columnsjson): array {
+        global $CFG;
+        require_once($CFG->dirroot . '/mod/seminarplaner/locallib.php');
+
+        $params = self::validate_parameters(self::set_pdf_columns_parameters(), [
+            'cmid' => $cmid,
+            'columnsjson' => $columnsjson,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('set_pdf_columns', 60, 60);
+
+        $decoded = json_decode((string)$params['columnsjson'], true);
+        if (!is_array($decoded)) {
+            throw new invalid_parameter_exception('columnsjson must decode to an object');
+        }
+
+        $allowed = seminarplaner_pdf_column_keys();
+        $order = [];
+        foreach ((array)($decoded['order'] ?? []) as $key) {
+            $key = (string)$key;
+            if (in_array($key, $allowed, true) && !in_array($key, $order, true)) {
+                $order[] = $key;
+            }
+        }
+        $selected = [];
+        foreach ((array)($decoded['selected'] ?? []) as $key) {
+            $key = (string)$key;
+            if (in_array($key, $allowed, true) && !in_array($key, $selected, true)) {
+                $selected[] = $key;
+            }
+        }
+
+        $payload = json_encode([
+            'all' => !empty($decoded['all']),
+            'order' => $order,
+            'selected' => $selected,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        set_config('pdfcolumns_cmid_' . (int)$resolved['cm']->id, $payload, 'mod_seminarplaner');
+        return ['success' => true];
+    }
+
+    public static function set_pdf_columns_returns(): external_single_structure {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'Save result'),
+        ]);
+    }
 }

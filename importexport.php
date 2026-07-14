@@ -13,7 +13,8 @@ $context = $activity['context'];
 
 seminarplaner_prepare_page('/mod/seminarplaner/importexport.php', $cm, $course, $seminarplaner, null);
 $pdflogo = seminarplaner_get_pdf_logo($context, $seminarplaner);
-$PAGE->requires->js_call_amd('mod_seminarplaner/importexport', 'init', [(int)$cm->id, $pdflogo]);
+$pdfcolumns = seminarplaner_get_pdf_columns((int)$cm->id);
+$PAGE->requires->js_call_amd('mod_seminarplaner/importexport', 'init', [(int)$cm->id, $pdflogo, $pdfcolumns]);
 
 echo $OUTPUT->header();
 
@@ -244,6 +245,9 @@ echo '<div class="kg-tag-dropdown" id="kg-pdf-columns-dropdown">';
 echo '<button type="button" class="kg-input kg-tag-dropdown-toggle" id="kg-pdf-columns-toggle">Spalten wählen</button>';
 echo '<div class="kg-tag-dropdown-panel kg-hidden" id="kg-pdf-columns-panel">';
 echo '<label class="kg-tag-option"><input type="checkbox" id="kg-pdf-columns-all" checked><span>Alle</span></label>';
+// D63: Reihenfolge der gewählten Spalten ist per ◄/► editierbar (horizontal, da im
+// PDF nebeneinander) und wird pro Aktivität dauerhaft gespeichert.
+echo '<p class="kg-pdf-columns-hint sp-filter-status">Reihenfolge mit ◄ ► ändern – so stehen die Spalten im PDF.</p>';
 echo '<div id="kg-pdf-columns-options">';
 foreach ([
     'uhrzeit' => 'Uhrzeit',
@@ -258,7 +262,13 @@ foreach ([
     'materialtechnik' => 'Material/Technik',
     'sonstiges' => 'Sonstiges',
 ] as $key => $label) {
-    echo '<label class="kg-tag-option"><input type="checkbox" value="' . s($key) . '"><span>' . s($label) . '</span></label>';
+    echo '<div class="kg-tag-option kg-pdf-col-row" data-col="' . s($key) . '">'
+        . '<label class="kg-pdf-col-check"><input type="checkbox" value="' . s($key) . '"><span>' . s($label) . '</span></label>'
+        . '<span class="kg-pdf-col-move">'
+        . '<button type="button" class="kg-pdf-col-btn" data-move="left" title="Spalte nach links" aria-label="Spalte nach links">◄</button>'
+        . '<button type="button" class="kg-pdf-col-btn" data-move="right" title="Spalte nach rechts" aria-label="Spalte nach rechts">►</button>'
+        . '</span>'
+        . '</div>';
 }
 echo '</div></div></div>';
 echo '</div>'; // .field-card
@@ -273,6 +283,10 @@ echo html_writer::tag('button', 'Konzeptsammlung-PDF erstellen', [
 // D52: dritte PDF-Variante (Materialliste).
 echo html_writer::tag('button', 'Materialliste-PDF erstellen', [
     'type' => 'button', 'id' => 'kg-pdf-materials', 'class' => 'kg-btn kg-btn--outline-red',
+]);
+// D64: Handout für Teilnehmende (PDF-Export des veröffentlichten Roten Fadens).
+echo html_writer::tag('button', 'Handout-PDF für Teilnehmende', [
+    'type' => 'button', 'id' => 'kg-pdf-handout', 'class' => 'kg-btn kg-btn--outline-red',
 ]);
 echo '</div>';
 echo '</div>'; // kg-ie-card (PDF)

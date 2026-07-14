@@ -84,6 +84,11 @@ echo html_writer::tag('span', get_string('roterfaden_publishlabel', 'mod_seminar
 echo html_writer::end_tag('label');
 echo html_writer::tag('span', '', ['id' => 'kg-publish-roterfaden-status', 'class' => 'sp-filter-status']);
 echo html_writer::end_div();
+// D63: ZIM-PDF direkt aus dem Überblick (löst den bestehenden Export-Flow aus).
+echo html_writer::start_div('kg-row kg-row--action');
+echo html_writer::tag('button', 'ZIM-PDF erstellen',
+    ['type' => 'button', 'id' => 'kg-grid-zim-export', 'class' => 'kg-btn kg-btn--outline-red']);
+echo html_writer::end_div();
 echo html_writer::end_div();
 
 ?>

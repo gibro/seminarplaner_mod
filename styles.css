@@ -7929,3 +7929,48 @@ a.kg-btn-primary:focus {
     font-size: 13px;
     padding: 5px 12px;
 }
+
+/* D63: ZIM-Spaltenauswahl mit editierbarer Reihenfolge (◄/►). */
+.kg-pdf-columns-hint {
+    margin: 4px 2px 6px;
+    font-size: .78rem;
+}
+.kg-pdf-col-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 3px 2px;
+    font-size: .9rem;
+}
+.kg-pdf-col-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    cursor: pointer;
+}
+.kg-pdf-col-move {
+    display: inline-flex;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+.kg-pdf-col-btn {
+    border: 1px solid var(--ig-lightgray, #cbd5e1);
+    background: #fff;
+    color: var(--color-primary, #882a30);
+    width: 24px;
+    height: 24px;
+    line-height: 1;
+    padding: 0;
+    font-size: .8rem;
+    cursor: pointer;
+    border-radius: 0;
+}
+.kg-pdf-col-btn:hover {
+    background: var(--color-primary, #882a30);
+    color: #fff;
+    border-color: var(--color-primary, #882a30);
+}

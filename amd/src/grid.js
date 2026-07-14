@@ -4145,6 +4145,20 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (savebtn) {
                 savebtn.addEventListener('click', () => this.saveGridState({silent: false, manual: true}));
             }
+            // D63: ZIM-PDF direkt aus dem Überblick — löst denselben Export-Flow im
+            // Import/Export-Tab aus (kein zweiter Mechanismus), Plan per Deep-Link.
+            const zimbtn = bySel('#kg-grid-zim-export');
+            if (zimbtn) {
+                zimbtn.addEventListener('click', () => {
+                    const gridid = this.getGridId();
+                    if (!gridid) {
+                        this.setStatus('Bitte zuerst einen Seminarplan auswählen.', true);
+                        return;
+                    }
+                    window.location.href = `${M.cfg.wwwroot}/mod/seminarplaner/importexport.php`
+                        + `?id=${this.cmid}&pdfgrid=${gridid}&pdfaction=zim`;
+                });
+            }
             const publishcheckbox = bySel('#kg-publish-roterfaden');
             if (publishcheckbox) {
                 publishcheckbox.addEventListener('change', () => {

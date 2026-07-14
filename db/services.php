@@ -242,4 +242,11 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
     ],
+    'mod_seminarplaner_set_pdf_columns' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'set_pdf_columns',
+        'description' => 'Persist ZIM-PDF column selection and order per activity (D63).',
+        'type' => 'write',
+        'ajax' => true,
+    ],
 ];

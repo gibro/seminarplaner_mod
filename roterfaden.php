@@ -33,6 +33,17 @@ echo html_writer::tag('option', get_string('roterfaden_theme_modern', 'mod_semin
 echo html_writer::tag('option', get_string('roterfaden_theme_clean', 'mod_seminarplaner'), ['value' => 'clean']);
 echo html_writer::end_tag('select');
 echo html_writer::end_div();
+// D64: Handout-PDF für Teilnehmende — nutzt den bestehenden Export-Flow im
+// Import/Export-Tab (kein zweiter Mechanismus), gleiche Freigabe-Logik.
+if (has_capability('mod/seminarplaner:managegrids', $context)) {
+    echo html_writer::start_div('kg-row kg-row--action');
+    echo html_writer::link(
+        new moodle_url('/mod/seminarplaner/importexport.php', ['id' => (int)$cm->id, 'pdfaction' => 'handout']),
+        'Handout-PDF für Teilnehmende',
+        ['class' => 'kg-btn kg-btn--outline-red']
+    );
+    echo html_writer::end_div();
+}
 echo html_writer::tag('div', '', [
     'id' => 'kg-roterfaden-empty',
     'class' => 'sp-filter-status kg-hidden',

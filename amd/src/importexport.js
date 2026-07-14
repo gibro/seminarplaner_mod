@@ -18,6 +18,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     let globalSyncLinks = [];
     // D52: dauerhaftes Logo für den Seitenkopf aller PDF-Exporte.
     let pdfLogo = null;
+    // D63: pro Aktivität gespeicherte Spaltenauswahl/-reihenfolge des ZIM-Exports.
+    let pdfColumnsSetting = null;
+    let pdfColumnsSaveTimer = null;
     const PDF_COLUMN_ORDER = ['uhrzeit', 'titel', 'seminarphase', 'kognitive', 'kurzbeschreibung', 'debrief', 'ablauf', 'lernziele', 'risiken', 'materialtechnik', 'sonstiges'];
     const PDF_COLUMN_LABELS = {
         uhrzeit: 'Uhrzeit',
@@ -1084,13 +1087,23 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const getSelectedPdfColumns = () => {
         const all = bySel('#kg-pdf-columns-all');
         const host = bySel('#kg-pdf-columns-options');
-        if (!host || (all && all.checked)) {
+        if (!host) {
             return PDF_COLUMN_ORDER.slice();
+        }
+        // D63: Reihenfolge folgt der (per ◄/► editierten) DOM-Reihenfolge der Zeilen.
+        const orderedKeys = Array.from(host.querySelectorAll('.kg-pdf-col-row'))
+            .map((row) => String(row.getAttribute('data-col') || '').trim())
+            .filter((key) => PDF_COLUMN_ORDER.includes(key));
+        const domOrder = orderedKeys.length ? orderedKeys : PDF_COLUMN_ORDER.slice();
+        if (all && all.checked) {
+            return domOrder;
         }
         const selected = Array.from(host.querySelectorAll('input[type="checkbox"]:checked'))
             .map((el) => String(el.value || '').trim())
             .filter((key) => PDF_COLUMN_ORDER.includes(key));
-        return selected.length ? selected : PDF_COLUMN_ORDER.slice();
+        // In editierter Reihenfolge zurückgeben, nicht in Klick-Reihenfolge.
+        const ordered = domOrder.filter((key) => selected.includes(key));
+        return ordered.length ? ordered : domOrder;
     };
 
     const updatePdfColumnsToggleLabel = () => {
@@ -1107,7 +1120,68 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         toggle.textContent = count ? `Spalten (${count})` : 'Spalten wählen';
     };
 
-    const bindPdfColumnsDropdown = () => {
+    // D63: gespeicherte Reihenfolge/Auswahl auf das Panel anwenden.
+    const applyPdfColumnsSetting = () => {
+        const all = bySel('#kg-pdf-columns-all');
+        const options = bySel('#kg-pdf-columns-options');
+        if (!all || !options || !pdfColumnsSetting) {
+            return;
+        }
+        const order = Array.isArray(pdfColumnsSetting.order) ? pdfColumnsSetting.order : [];
+        // Zeilen entlang der gespeicherten Reihenfolge neu einhängen.
+        order.forEach((key) => {
+            const row = options.querySelector(`.kg-pdf-col-row[data-col="${key}"]`);
+            if (row) {
+                options.appendChild(row);
+            }
+        });
+        const useAll = !!pdfColumnsSetting.all;
+        all.checked = useAll;
+        const selected = Array.isArray(pdfColumnsSetting.selected) ? pdfColumnsSetting.selected : [];
+        options.querySelectorAll('.kg-pdf-col-row input[type="checkbox"]').forEach((cb) => {
+            cb.checked = !useAll && selected.includes(String(cb.value || ''));
+        });
+        updatePdfColumnsToggleLabel();
+    };
+
+    const getPdfColumnsState = () => {
+        const all = bySel('#kg-pdf-columns-all');
+        const options = bySel('#kg-pdf-columns-options');
+        const order = [];
+        const selected = [];
+        if (options) {
+            options.querySelectorAll('.kg-pdf-col-row').forEach((row) => {
+                const key = String(row.getAttribute('data-col') || '');
+                if (!key) {
+                    return;
+                }
+                order.push(key);
+                const cb = row.querySelector('input[type="checkbox"]');
+                if (cb && cb.checked) {
+                    selected.push(key);
+                }
+            });
+        }
+        return {all: !!(all && all.checked), order, selected};
+    };
+
+    const savePdfColumns = (cmid) => {
+        if (pdfColumnsSaveTimer) {
+            window.clearTimeout(pdfColumnsSaveTimer);
+        }
+        pdfColumnsSaveTimer = window.setTimeout(() => {
+            const state = getPdfColumnsState();
+            pdfColumnsSetting = state;
+            asCall('mod_seminarplaner_set_pdf_columns', {
+                cmid,
+                columnsjson: JSON.stringify(state)
+            }).catch(() => {
+                // Speichern des Settings darf den Export nie blockieren.
+            });
+        }, 500);
+    };
+
+    const bindPdfColumnsDropdown = (cmid) => {
         const root = bySel('#kg-pdf-columns-dropdown');
         const toggle = bySel('#kg-pdf-columns-toggle');
         const panel = bySel('#kg-pdf-columns-panel');
@@ -1116,6 +1190,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         if (!toggle || !panel || !all || !options) {
             return;
         }
+        applyPdfColumnsSetting();
         toggle.addEventListener('click', () => panel.classList.toggle('kg-hidden'));
         document.addEventListener('click', (event) => {
             if (root && !root.contains(event.target)) {
@@ -1129,6 +1204,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 });
             }
             updatePdfColumnsToggleLabel();
+            savePdfColumns(cmid);
         });
         options.addEventListener('change', (event) => {
             const target = event.target;
@@ -1139,6 +1215,27 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 all.checked = false;
             }
             updatePdfColumnsToggleLabel();
+            savePdfColumns(cmid);
+        });
+        // D63: ◄/► verschieben eine Spalte in der Export-Reihenfolge.
+        options.addEventListener('click', (event) => {
+            const btn = event.target.closest ? event.target.closest('.kg-pdf-col-btn') : null;
+            if (!btn) {
+                return;
+            }
+            const row = btn.closest('.kg-pdf-col-row');
+            if (!row) {
+                return;
+            }
+            const dir = btn.getAttribute('data-move');
+            if (dir === 'left' && row.previousElementSibling) {
+                options.insertBefore(row, row.previousElementSibling);
+            } else if (dir === 'right' && row.nextElementSibling) {
+                options.insertBefore(row.nextElementSibling, row);
+            } else {
+                return;
+            }
+            savePdfColumns(cmid);
         });
         updatePdfColumnsToggleLabel();
     };
@@ -1763,6 +1860,201 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         doc.save(filename);
     };
 
+    // D64: Handout für Teilnehmende — PDF-Export des veröffentlichten Roten Fadens.
+    const HANDOUT_DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+    const HANDOUT_AFTERNOON_START_MIN = (12 * 60) + 30;
+
+    // jsPDF muss geladen sein — anders als beim ZIM-Export braucht das Handout aber
+    // KEINEN im Import/Export-Tab gewählten Plan (es liest den Roten Faden direkt).
+    const ensurePdfLibReady = () => {
+        if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function') {
+            throw new Error('PDF-Library ist nicht geladen');
+        }
+        return window.jspdf.jsPDF;
+    };
+
+    // Unterthemen (D19) eines Bausteins in einzelne Bulletpoints zerlegen — bewusst
+    // NICHT an Kommas trennen (anders als Materialeinträge): ein Unterthema pro Zeile.
+    const splitHandoutTopics = (html) => {
+        const withBreaks = String(html || '')
+            .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+            .replace(/<\/\s*(?:p|div|li|tr|h[1-6])\s*>/gi, '\n')
+            .replace(/<[^>]*>/g, ' ');
+        const decoder = document.createElement('textarea');
+        decoder.innerHTML = withBreaks;
+        return (decoder.value || '')
+            .split(/\r?\n/)
+            .map((line) => line.replace(/^[\s\-–—*·•]+/, '').replace(/\s+/g, ' ').trim())
+            .filter(Boolean);
+    };
+
+    const parseHandoutPlanningUnits = (state) => {
+        const source = (state || {}).planningState || {};
+        const units = Array.isArray(source.units) ? source.units : [];
+        return units.map((unit) => ({
+            id: String(unit.id || ''),
+            slotkey: String(unit.slotkey || '').trim(),
+            title: String(unit.title || 'Baustein').trim(),
+            topics: String(unit.topics || ''),
+            active: unit.active !== false
+        }));
+    };
+
+    const resolveHandoutUnit = (units, entry) => {
+        const slotkey = String(entry.slotkey || '').trim();
+        if (slotkey) {
+            const variants = units.filter((unit) => String(unit.slotkey || '').trim() === slotkey);
+            if (variants.length) {
+                return variants.find((unit) => unit.active) || variants[0];
+            }
+        }
+        const unitid = String(entry.unitid || '');
+        if (unitid) {
+            return units.find((unit) => String(unit.id) === unitid) || null;
+        }
+        return null;
+    };
+
+    // Roter-Faden-State → nach Tag und Vormittag/Nachmittag gruppierte Einträge.
+    // Deckungsgleich mit roterfaden.js (unit = Baustein mit Unterthemen, method = lose Einheit).
+    const buildHandoutGroups = (state) => {
+        const units = parseHandoutPlanningUnits(state);
+        const plandays = ((state || {}).plan || {}).days || {};
+        const days = Array.isArray(((state || {}).config || {}).days) && state.config.days.length
+            ? state.config.days
+            : HANDOUT_DAYS_ALL;
+
+        const grouped = [];
+        days.forEach((day) => {
+            const list = Array.isArray(plandays[day]) ? plandays[day] : [];
+            const morning = [];
+            const afternoon = [];
+            list.slice()
+                .filter((entry) => entry && entry.kind !== 'break')
+                .sort((a, b) => (Number(a.startMin) || 0) - (Number(b.startMin) || 0))
+                .forEach((entry) => {
+                    const startMin = Number(entry.startMin) || 0;
+                    let item;
+                    if (entry.kind === 'unit') {
+                        const unit = resolveHandoutUnit(units, entry);
+                        item = {
+                            title: String((unit && unit.title) || entry.title || 'Baustein'),
+                            topics: splitHandoutTopics(unit && unit.topics ? unit.topics : '')
+                        };
+                    } else if (entry.kind === 'method') {
+                        item = {title: String(entry.title || 'Seminareinheit'), topics: []};
+                    } else {
+                        return;
+                    }
+                    (startMin >= HANDOUT_AFTERNOON_START_MIN ? afternoon : morning).push(item);
+                });
+            if (morning.length || afternoon.length) {
+                grouped.push({day: String(day), morning, afternoon});
+            }
+        });
+        return grouped;
+    };
+
+    const exportPdfHandout = (cmid) => {
+        const jsPDF = ensurePdfLibReady();
+        return asCall('mod_seminarplaner_get_roterfaden_state', {cmid}).then((res) => {
+            if (!res || !res.ispublished) {
+                throw new Error('Es ist noch kein Roter Faden veröffentlicht. Bitte zuerst im Sequenz- oder Überblick-Tab veröffentlichen.');
+            }
+            let state = {};
+            try {
+                state = res.statejson ? JSON.parse(res.statejson) : {};
+            } catch (e) {
+                state = {};
+            }
+            const groups = buildHandoutGroups(state);
+            const stateMeta = (state && state.meta) ? state.meta : {};
+            const domMeta = getPdfMeta();
+            const meta = {
+                title: stateMeta.title || domMeta.title || '',
+                date: stateMeta.date || domMeta.date || '',
+                number: stateMeta.number || domMeta.number || '',
+                contact: stateMeta.contact || domMeta.contact || ''
+            };
+
+            const doc = new jsPDF();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            drawPdfTitlePage(doc, 'Handout', meta, 'Für Teilnehmende');
+
+            const ensureSpace = (y, needed) => {
+                if (y + needed > pageHeight - 16) {
+                    doc.addPage();
+                    stampPdfLogo(doc);
+                    return 24;
+                }
+                return y;
+            };
+
+            if (!groups.length) {
+                doc.addPage();
+                stampPdfLogo(doc);
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(12);
+                doc.text('Für diesen Seminarplan ist noch kein Ablauf veröffentlicht.', 14, 30);
+                doc.save(meta.title ? `Handout-${meta.title}.pdf` : 'Handout.pdf');
+                return;
+            }
+
+            doc.addPage();
+            stampPdfLogo(doc);
+            let y = 24;
+
+            const renderPeriod = (label, items) => {
+                if (!items.length) {
+                    return;
+                }
+                y = ensureSpace(y, 14);
+                doc.setFont(undefined, 'bold');
+                doc.setFontSize(12);
+                doc.setTextColor(136, 42, 48); // Tiefrot (CD-Akzent).
+                doc.text(label, 16, y);
+                doc.setTextColor(0, 0, 0);
+                y += 8;
+                items.forEach((item) => {
+                    const titleLines = doc.splitTextToSize(escapeTextForPdf(item.title), 176);
+                    y = ensureSpace(y, Math.max(8, titleLines.length * 6) + 2);
+                    doc.setFont(undefined, 'bold');
+                    doc.setFontSize(11);
+                    doc.text(titleLines, 18, y);
+                    y += titleLines.length * 6 + 1;
+                    doc.setFont(undefined, 'normal');
+                    doc.setFontSize(10);
+                    item.topics.forEach((topic) => {
+                        const lines = doc.splitTextToSize(escapeTextForPdf(topic), 168);
+                        y = ensureSpace(y, Math.max(6, lines.length * 5.5));
+                        doc.text('•', 22, y);
+                        doc.text(lines, 27, y);
+                        y += lines.length * 5.5;
+                    });
+                    y += 3;
+                });
+                y += 2;
+            };
+
+            groups.forEach((group) => {
+                y = ensureSpace(y, 18);
+                doc.setFont(undefined, 'bold');
+                doc.setFontSize(16);
+                doc.text(escapeTextForPdf(group.day), 14, y);
+                y += 3;
+                doc.setDrawColor(220, 224, 233);
+                doc.setLineWidth(0.3);
+                doc.line(14, y, 196, y);
+                y += 9;
+                renderPeriod('Vormittag', group.morning);
+                renderPeriod('Nachmittag', group.afternoon);
+                y += 2;
+            });
+
+            doc.save(meta.title ? `Handout-${meta.title}.pdf` : 'Handout.pdf');
+        });
+    };
+
     const saveMethods = (cmid, newMethods) => {
         return asCall('mod_seminarplaner_save_method_cards', {
             cmid,
@@ -1976,10 +2268,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const pdfZimBtn = bySel('#kg-pdf-zim');
         const pdfFlowBtn = bySel('#kg-pdf-flow');
         const pdfMaterialsBtn = bySel('#kg-pdf-materials');
+        const pdfHandoutBtn = bySel('#kg-pdf-handout');
         const globalSetSelect = bySel('#kg-global-set-select');
         const globalSetImportBtn = bySel('#kg-global-set-import');
         const globalSetApplyBtn = bySel('#kg-global-set-apply');
-        bindPdfColumnsDropdown();
+        bindPdfColumnsDropdown(cmid);
 
         if (parsebtn && fileinput) {
             fileinput.addEventListener('change', () => {
@@ -2226,6 +2519,15 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 }
             });
         }
+        if (pdfHandoutBtn) {
+            // D64: Handout aus dem veröffentlichten Roten Faden.
+            pdfHandoutBtn.addEventListener('click', () => {
+                setStatus('Handout wird erstellt …', false);
+                exportPdfHandout(cmid)
+                    .then(() => setStatus('Handout-PDF erstellt.', false))
+                    .catch((e) => setStatus(`Handout-Export fehlgeschlagen: ${e.message || e}`, true));
+            });
+        }
         if (globalSetImportBtn) {
             globalSetImportBtn.addEventListener('click', () => {
                 const setid = Number.parseInt(globalSetSelect ? (globalSetSelect.value || '0') : '0', 10) || 0;
@@ -2286,8 +2588,61 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     };
 
+    // D63b/D64: Deep-Link aus dem Überblick (ZIM) bzw. Roten Faden (Handout) —
+    // denselben Export-Flow ohne zweiten Mechanismus auslösen.
+    const runDeepLinkExport = (cmid) => {
+        let params;
+        try {
+            params = new URLSearchParams(window.location.search);
+        } catch (e) {
+            return;
+        }
+        const action = params.get('pdfaction');
+        if (!action) {
+            return;
+        }
+        const pdfCard = bySel('#kg-pdf-grid') ? bySel('#kg-pdf-grid').closest('.kg-ie-card') : null;
+        if (pdfCard && pdfCard.scrollIntoView) {
+            pdfCard.scrollIntoView({behavior: 'smooth', block: 'start'});
+        }
+        if (action === 'handout') {
+            setStatus('Handout wird erstellt …', false);
+            exportPdfHandout(cmid)
+                .then(() => setStatus('Handout-PDF erstellt.', false))
+                .catch((e) => setStatus(`Handout-Export fehlgeschlagen: ${e.message || e}`, true));
+            return;
+        }
+        if (action === 'zim') {
+            const gridid = Number.parseInt(params.get('pdfgrid') || '0', 10) || 0;
+            if (!gridid) {
+                setStatus('Kein Seminarplan für den ZIM-Export übergeben.', true);
+                return;
+            }
+            const select = bySel('#kg-pdf-grid');
+            if (select) {
+                select.value = String(gridid);
+            }
+            setStatus('Seminarplan wird geladen …', false);
+            loadGridState(cmid, gridid).then(() => {
+                if (currentGridState && currentGridState.meta) {
+                    ['title', 'date', 'number', 'contact'].forEach((key) => {
+                        const el = bySel(`#kg-pdf-${key}`);
+                        if (el && !el.value) {
+                            el.value = currentGridState.meta[key] || '';
+                        }
+                    });
+                }
+                exportPdfZim();
+                setStatus('ZIM-PDF erstellt.', false);
+            }).catch((e) => {
+                setStatus(`ZIM-Export fehlgeschlagen: ${e.message || e}`, true);
+            });
+        }
+    };
+
     return {
-        init: function(cmid, logo) {
+        init: function(cmid, logo, columns) {
+            pdfColumnsSetting = columns && typeof columns === 'object' ? columns : null;
             ensureExternalLibraries().then(() => {
                 return Promise.all([
                     loadMethods(cmid),
@@ -2301,6 +2656,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     bind(cmid);
                     step(1);
                     refreshGlobalSyncUi();
+                    runDeepLinkExport(cmid);
                 }).catch((e) => {
                     Notification.exception(e);
                     setStatus('Initialisierung fehlgeschlagen.', true);
