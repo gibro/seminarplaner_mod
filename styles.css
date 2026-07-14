@@ -3666,13 +3666,6 @@ body.sp-resizing * {
   background: rgba(47, 128, 171, .12) !important;
 }
 
-.sp-badge,
-.sp-method-detail__meta-item {
-  background: rgba(47, 128, 171, .12) !important;
-  border-color: rgba(47, 128, 171, .35) !important;
-  color: var(--ig-blue) !important;
-}
-
 .ml-card-menu-toggle {
   border-color: transparent !important;
   color: var(--ig-anthracite) !important;
@@ -5576,9 +5569,9 @@ select.kg-input.rf-select {
 .sp-badge,
 .sp-method-detail__meta-item,
 .sp-allday-chip {
-  background: #F2F2F2 !important;
-  border: 1px solid var(--ig-lightgray) !important;
-  color: var(--ig-gray) !important;
+  background: #F2F2F2;
+  border: 1px solid var(--ig-lightgray);
+  color: var(--ig-gray);
 }
 
 /* Label-Punkte im Formular: einheitlich neutral statt Rot/Blau-Wechsel. */
@@ -7478,31 +7471,31 @@ a.kg-btn-primary:focus {
    !important tragen, sonst bleibt das Badge grau — genau daran sind die
    frueheren .ml-phase--*-Regeln gescheitert (sie sind hier entfallen). */
 .kg-library-card.sp-card .sp-card-meta .sp-badge--phase-orientierung {
-  background: #E7F0F5 !important;
-  border-color: var(--ig-blue) !important;
-  color: #215d7e !important;
+  background: #E7F0F5;
+  border-color: var(--ig-blue);
+  color: #215d7e;
 }
 
 .kg-library-card.sp-card .sp-card-meta .sp-badge--phase-erfahrung {
-  background: #E7F1E3 !important;
-  border-color: var(--ig-green) !important;
-  color: #3f6e2f !important;
+  background: #E7F1E3;
+  border-color: var(--ig-green);
+  color: #3f6e2f;
 }
 
 .kg-library-card.sp-card .sp-card-meta .sp-badge--phase-analyse {
-  background: #FBF1D0 !important;
-  border-color: var(--ig-yellow) !important;
-  color: #8a6d00 !important;
+  background: #FBF1D0;
+  border-color: var(--ig-yellow);
+  color: #8a6d00;
 }
 
 .kg-library-card.sp-card .sp-card-meta .sp-badge--phase-handlung {
-  background: #F3E6E7 !important;
-  border-color: var(--ig-darkred) !important;
-  color: var(--ig-darkred) !important;
+  background: #F3E6E7;
+  border-color: var(--ig-darkred);
+  color: var(--ig-darkred);
 }
 
 .kg-library-card.sp-card .sp-card-meta .sp-badge--phase-transfer {
-  background: #EEEEEE !important;
-  border-color: var(--ig-gray) !important;
-  color: #4a4a4a !important;
+  background: #EEEEEE;
+  border-color: var(--ig-gray);
+  color: #4a4a4a;
 }
