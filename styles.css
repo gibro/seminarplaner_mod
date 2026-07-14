@@ -335,9 +335,9 @@ select.kg-input:-moz-focusring {
 }
 
 .kg-ie-steps .kg-step-active {
-  background: var(--ig-red) !important;
-  color: #fff !important;
-  border: 0 !important;
+  background: var(--ig-red);
+  color: #fff;
+  border: 0;
 }
 
 .kg-ie-steps .kg-step-active .kg-step__num {
@@ -1360,8 +1360,8 @@ select.kg-input:-moz-focusring {
 }
 
 .field-card :is(input[type="text"], input[type="number"], input[type="url"], select, textarea) {
-  width: 100% !important;
-  max-width: 100% !important;
+  width: 100%;
+  max-width: 100%;
 }
 
 .field-card textarea {
@@ -2055,7 +2055,7 @@ select.kg-input:-moz-focusring {
 
 /* Item Variants */
 .sp-item--break {
-  background: var(--ig-surface-muted) !important;
+  background: var(--ig-surface-muted);
   border: 1px dashed var(--ig-gray);
 }
 
@@ -2256,11 +2256,11 @@ select.kg-input:-moz-focusring {
 
 body.sp-resizing,
 body.sp-resizing * {
-  cursor: ns-resize !important;
+  cursor: ns-resize;
 }
 
 .sp-item--placeholder {
-  background: var(--ig-surface-muted) !important;
+  background: var(--ig-surface-muted);
   border: 1px dashed rgba(30, 64, 175, .35);
   padding: var(--spacing-xs) var(--spacing-sm);
   display: flex;
@@ -3584,10 +3584,10 @@ body.sp-resizing * {
 }
 
 .kg-tab-active {
-  background: transparent !important;
-  border-color: transparent !important;
-  border-bottom-color: var(--ig-red) !important;
-  color: var(--ig-red) !important;
+  background: transparent;
+  border-color: transparent;
+  border-bottom-color: var(--ig-red);
+  color: var(--ig-red);
 }
 
 /* Neutral controls + clear IG action hierarchy */
@@ -3661,9 +3661,9 @@ body.sp-resizing * {
 
 /* Strict IG Metall color overrides for grid UI elements. */
 .kg-step-active {
-  border-color: var(--ig-blue) !important;
-  color: var(--ig-blue) !important;
-  background: rgba(47, 128, 171, .12) !important;
+  border-color: var(--ig-blue);
+  color: var(--ig-blue);
+  background: rgba(47, 128, 171, .12);
 }
 
 .ml-card-menu-toggle {
@@ -3685,8 +3685,8 @@ body.sp-resizing * {
 .sp-modal__header,
 .sp-modal__actions,
 .sp-modal__section {
-  border-color: var(--color-border) !important;
-  background: linear-gradient(180deg, #fff, var(--ig-surface-soft)) !important;
+  border-color: var(--color-border);
+  background: linear-gradient(180deg, #fff, var(--ig-surface-soft));
 }
 
 .sp-modal__header h2,
@@ -3703,31 +3703,31 @@ body.sp-resizing * {
 
 .sp-modal__field input:focus,
 .sp-modal__field select:focus {
-  border-color: var(--ig-blue) !important;
-  box-shadow: 0 0 0 3px rgba(47, 128, 171, .2) !important;
+  border-color: var(--ig-blue);
+  box-shadow: 0 0 0 3px rgba(47, 128, 171, .2);
 }
 
 .sp-day-checkbox,
 .sp-break-item,
 .sp-modal__section,
 .sp-day-checkbox:has(input:disabled) {
-  border-color: var(--color-border) !important;
-  background: #fff !important;
+  border-color: var(--color-border);
+  background: #fff;
 }
 
 .sp-day-checkbox:hover {
-  border-color: var(--ig-blue) !important;
-  box-shadow: 0 4px 12px rgba(47, 128, 171, .16) !important;
+  border-color: var(--ig-blue);
+  box-shadow: 0 4px 12px rgba(47, 128, 171, .16);
 }
 
 .sp-day-checkbox:has(input:checked) {
-  border-color: var(--ig-blue) !important;
-  background: var(--ig-blue) !important;
+  border-color: var(--ig-blue);
+  background: var(--ig-blue);
 }
 
 .sp-break-item:hover {
-  border-color: var(--ig-yellow) !important;
-  box-shadow: 0 4px 12px rgba(234, 181, 0, .22) !important;
+  border-color: var(--ig-yellow);
+  box-shadow: 0 4px 12px rgba(234, 181, 0, .22);
 }
 
 .sp-card {
@@ -3984,8 +3984,8 @@ body.sp-resizing * {
 .sp-item.sp-entry--unit,
 .sp-item.sp-item--unit-colored,
 .sp-item.sp-entry--unit.sp-item--unit-colored {
-  background: var(--ig-blue-surface-solid) !important;
-  opacity: 1 !important;
+  background: var(--ig-blue-surface-solid);
+  opacity: 1;
 }
 
 .sp-slot--unitband-start {
@@ -5442,9 +5442,9 @@ select.kg-input.rf-select {
 
 /* ---- Interaktionsakzente: Auswahl/Hover/Fokus in Rot ---- */
 .kg-step-active {
-  border-color: var(--ig-red) !important;
-  color: var(--ig-red) !important;
-  background: var(--ig-red-soft) !important;
+  border-color: var(--ig-red);
+  color: var(--ig-red);
+  background: var(--ig-red-soft);
 }
 
 .kg-library-card--drop-before-y::before,
@@ -5537,8 +5537,8 @@ select.kg-input.rf-select {
 
 .sp-modal__field input:focus,
 .sp-modal__field select:focus {
-  border-color: var(--ig-red) !important;
-  box-shadow: 0 0 0 3px var(--ig-red-soft) !important;
+  border-color: var(--ig-red);
+  box-shadow: 0 0 0 3px var(--ig-red-soft);
 }
 
 .sp-day-checkbox::before {
@@ -5546,15 +5546,15 @@ select.kg-input.rf-select {
 }
 
 .sp-day-checkbox:hover {
-  border-color: var(--ig-red) !important;
+  border-color: var(--ig-red);
   transform: none;
-  box-shadow: none !important;
+  box-shadow: none;
 }
 
 .sp-day-checkbox:has(input:checked) {
-  border-color: var(--ig-red) !important;
-  background: linear-gradient(135deg, var(--ig-red), var(--ig-red)) !important;
-  color: #ffffff !important;
+  border-color: var(--ig-red);
+  background: linear-gradient(135deg, var(--ig-red), var(--ig-red));
+  color: #ffffff;
 }
 
 .sp-slot--over {
@@ -6489,15 +6489,15 @@ a.kg-btn-primary:focus {
     letter-spacing: .02em;
     text-transform: uppercase;
     /* Rote Outline-Optik erzwingen (schlägt die neutrale kg-btn-!important-Regel). */
-    background: #fff !important;
-    border-color: var(--ig-red) !important;
-    color: var(--ig-red) !important;
+    background: #fff;
+    border-color: var(--ig-red);
+    color: var(--ig-red);
 }
 
 .kg-ov-pdfbtn:hover:not(:disabled) {
-    background: var(--ig-red-soft) !important;
-    border-color: var(--ig-red) !important;
-    color: var(--ig-red) !important;
+    background: var(--ig-red-soft);
+    border-color: var(--ig-red);
+    color: var(--ig-red);
 }
 
 .kg-ov-pdfbtn .kg-btn-content {
