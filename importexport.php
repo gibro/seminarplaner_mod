@@ -253,7 +253,6 @@ foreach ([
     'uhrzeit' => 'Uhrzeit',
     'titel' => 'Titel',
     'seminarphase' => 'Seminarphase',
-    'kognitive' => 'Kognitive Dimension',
     'kurzbeschreibung' => 'Kurzbeschreibung',
     'debrief' => 'Debrief-/Reflexionsfragen',
     'ablauf' => 'Ablauf',

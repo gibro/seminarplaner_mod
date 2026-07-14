@@ -21,12 +21,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     // D63: pro Aktivität gespeicherte Spaltenauswahl/-reihenfolge des ZIM-Exports.
     let pdfColumnsSetting = null;
     let pdfColumnsSaveTimer = null;
-    const PDF_COLUMN_ORDER = ['uhrzeit', 'titel', 'seminarphase', 'kognitive', 'kurzbeschreibung', 'debrief', 'ablauf', 'lernziele', 'risiken', 'materialtechnik', 'sonstiges'];
+    const PDF_COLUMN_ORDER = ['uhrzeit', 'titel', 'seminarphase', 'kurzbeschreibung', 'debrief', 'ablauf', 'lernziele', 'risiken', 'materialtechnik', 'sonstiges'];
     const PDF_COLUMN_LABELS = {
         uhrzeit: 'Uhrzeit',
         titel: 'Titel',
         seminarphase: 'Seminarphase',
-        kognitive: 'Kognitive Dimension',
         kurzbeschreibung: 'Kurzbeschreibung',
         debrief: 'Debrief-/Reflexionsfragen',
         ablauf: 'Ablauf',
@@ -1251,8 +1250,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     return escapeTextForPdf(unit.title || item.title || '');
                 case 'seminarphase':
                     return joinUniquePdfValues(unit.methods.map((method) => normalizePhaseText(method.phase || '')));
-                case 'kognitive':
-                    return joinUniquePdfValues(unit.methods.map((method) => getCognitiveLabel(method)));
                 case 'kurzbeschreibung': {
                     const parts = [];
                     const topics = escapeTextForPdf(unit.topics || '');
@@ -1298,8 +1295,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 return escapeTextForPdf(item.title || '');
             case 'seminarphase':
                 return escapeTextForPdf(normalizePhaseText(item.phase || details.phase || ''));
-            case 'kognitive':
-                return escapeTextForPdf(getCognitiveLabel(item));
             case 'kurzbeschreibung':
                 return escapeTextForPdf(details.description || '');
             case 'ablauf':
@@ -1681,7 +1676,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             uhrzeit: 25,
             titel: 35,
             seminarphase: 28,
-            kognitive: 28,
             kurzbeschreibung: 40,
             debrief: 35,
             ablauf: 60,

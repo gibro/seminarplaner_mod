@@ -70,7 +70,7 @@ function seminarplaner_get_pdf_logo(context_module $context, stdClass $seminarpl
  */
 function seminarplaner_pdf_column_keys(): array {
     return [
-        'uhrzeit', 'titel', 'seminarphase', 'kognitive', 'kurzbeschreibung',
+        'uhrzeit', 'titel', 'seminarphase', 'kurzbeschreibung',
         'debrief', 'ablauf', 'lernziele', 'risiken', 'materialtechnik', 'sonstiges',
     ];
 }
