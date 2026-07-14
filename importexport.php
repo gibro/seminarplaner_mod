@@ -11,6 +11,18 @@ $course = $activity['course'];
 $seminarplaner = $activity['seminarplaner'];
 $context = $activity['context'];
 
+// Der Tab ist Lehrenden vorbehalten (dieselbe Bedingung, unter der er in der
+// Tab-Leiste erscheint) — sonst wäre die Seite per URL auch für Teilnehmende
+// erreichbar, obwohl ihre Aktionen serverseitig alle scheitern. Teilnehmende
+// erzeugen ihr Handout im Roter-Faden-Tab.
+$canuseimportexport = has_capability('mod/seminarplaner:managemethods', $context)
+    || has_capability('mod/seminarplaner:managegrids', $context)
+    || has_capability('mod/seminarplaner:importfrommoddata', $context)
+    || has_capability('mod/seminarplaner:exporttomoddata', $context);
+if (!$canuseimportexport) {
+    throw new required_capability_exception($context, 'mod/seminarplaner:managegrids', 'nopermissions', '');
+}
+
 seminarplaner_prepare_page('/mod/seminarplaner/importexport.php', $cm, $course, $seminarplaner, null);
 $pdflogo = seminarplaner_get_pdf_logo($context, $seminarplaner);
 $pdfcolumns = seminarplaner_get_pdf_columns((int)$cm->id);

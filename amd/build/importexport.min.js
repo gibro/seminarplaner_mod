@@ -1,4 +1,4 @@
-define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
+define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function(Ajax, Notification, Handout) {
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
     const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -18,6 +18,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     let globalSyncLinks = [];
     // D52: dauerhaftes Logo für den Seitenkopf aller PDF-Exporte.
     let pdfLogo = null;
+    // Rohform (dataurl/position) wie aus PHP — das Handout-Modul bereitet sie selbst auf.
+    let pdfLogoRaw = null;
     // D63: pro Aktivität gespeicherte Spaltenauswahl/-reihenfolge des ZIM-Exports.
     let pdfColumnsSetting = null;
     let pdfColumnsSaveTimer = null;
@@ -1495,6 +1497,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     // D52: Logo aus PHP übernehmen und die Bildmaße vorab bestimmen, damit das
     // Stempeln beim Export synchron ohne Ladeverzögerung erfolgen kann.
     const preparePdfLogo = (logo) => {
+        pdfLogoRaw = (logo && logo.dataurl) ? logo : null;
         if (!logo || !logo.dataurl) {
             pdfLogo = null;
             return Promise.resolve();
@@ -1982,201 +1985,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     };
 
     // D64: Handout für Teilnehmende — PDF-Export des veröffentlichten Roten Fadens.
-    const HANDOUT_DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
-    const HANDOUT_AFTERNOON_START_MIN = (12 * 60) + 30;
-
-    // jsPDF muss geladen sein — anders als beim ZIM-Export braucht das Handout aber
-    // KEINEN im Import/Export-Tab gewählten Plan (es liest den Roten Faden direkt).
-    const ensurePdfLibReady = () => {
-        if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function') {
-            throw new Error('PDF-Library ist nicht geladen');
-        }
-        return window.jspdf.jsPDF;
-    };
-
-    // Unterthemen (D19) eines Bausteins in einzelne Bulletpoints zerlegen — bewusst
-    // NICHT an Kommas trennen (anders als Materialeinträge): ein Unterthema pro Zeile.
-    const splitHandoutTopics = (html) => {
-        const withBreaks = String(html || '')
-            .replace(/<\s*br\s*\/?\s*>/gi, '\n')
-            .replace(/<\/\s*(?:p|div|li|tr|h[1-6])\s*>/gi, '\n')
-            .replace(/<[^>]*>/g, ' ');
-        const decoder = document.createElement('textarea');
-        decoder.innerHTML = withBreaks;
-        return (decoder.value || '')
-            .split(/\r?\n/)
-            .map((line) => line.replace(/^[\s\-–—*·•]+/, '').replace(/\s+/g, ' ').trim())
-            .filter(Boolean);
-    };
-
-    const parseHandoutPlanningUnits = (state) => {
-        const source = (state || {}).planningState || {};
-        const units = Array.isArray(source.units) ? source.units : [];
-        return units.map((unit) => ({
-            id: String(unit.id || ''),
-            slotkey: String(unit.slotkey || '').trim(),
-            title: String(unit.title || 'Baustein').trim(),
-            topics: String(unit.topics || ''),
-            active: unit.active !== false
-        }));
-    };
-
-    const resolveHandoutUnit = (units, entry) => {
-        const slotkey = String(entry.slotkey || '').trim();
-        if (slotkey) {
-            const variants = units.filter((unit) => String(unit.slotkey || '').trim() === slotkey);
-            if (variants.length) {
-                return variants.find((unit) => unit.active) || variants[0];
-            }
-        }
-        const unitid = String(entry.unitid || '');
-        if (unitid) {
-            return units.find((unit) => String(unit.id) === unitid) || null;
-        }
-        return null;
-    };
-
-    // Roter-Faden-State → nach Tag und Vormittag/Nachmittag gruppierte Einträge.
-    // Deckungsgleich mit roterfaden.js (unit = Baustein mit Unterthemen, method = lose Einheit).
-    const buildHandoutGroups = (state) => {
-        const units = parseHandoutPlanningUnits(state);
-        const plandays = ((state || {}).plan || {}).days || {};
-        const days = Array.isArray(((state || {}).config || {}).days) && state.config.days.length
-            ? state.config.days
-            : HANDOUT_DAYS_ALL;
-
-        const grouped = [];
-        days.forEach((day) => {
-            const list = Array.isArray(plandays[day]) ? plandays[day] : [];
-            const morning = [];
-            const afternoon = [];
-            list.slice()
-                .filter((entry) => entry && entry.kind !== 'break')
-                .sort((a, b) => (Number(a.startMin) || 0) - (Number(b.startMin) || 0))
-                .forEach((entry) => {
-                    const startMin = Number(entry.startMin) || 0;
-                    let item;
-                    if (entry.kind === 'unit') {
-                        const unit = resolveHandoutUnit(units, entry);
-                        item = {
-                            title: String((unit && unit.title) || entry.title || 'Baustein'),
-                            // entry.topics: aus der Sequenz projizierte Snapshots tragen die
-                            // Unterthemen direkt am Eintrag.
-                            topics: splitHandoutTopics((unit && unit.topics) || entry.topics || '')
-                        };
-                    } else if (entry.kind === 'method') {
-                        item = {title: String(entry.title || 'Seminareinheit'), topics: []};
-                    } else {
-                        return;
-                    }
-                    (startMin >= HANDOUT_AFTERNOON_START_MIN ? afternoon : morning).push(item);
-                });
-            if (morning.length || afternoon.length) {
-                grouped.push({day: String(day), morning, afternoon});
-            }
-        });
-        return grouped;
-    };
-
-    const exportPdfHandout = (cmid) => {
-        const jsPDF = ensurePdfLibReady();
-        return asCall('mod_seminarplaner_get_roterfaden_state', {cmid}).then((res) => {
-            if (!res || !res.ispublished) {
-                throw new Error('Es ist noch kein Roter Faden veröffentlicht. Bitte zuerst im Sequenz- oder Überblick-Tab veröffentlichen.');
-            }
-            let state = {};
-            try {
-                state = res.statejson ? JSON.parse(res.statejson) : {};
-            } catch (e) {
-                state = {};
-            }
-            const groups = buildHandoutGroups(state);
-            const stateMeta = (state && state.meta) ? state.meta : {};
-            const domMeta = getPdfMeta();
-            const meta = {
-                title: stateMeta.title || domMeta.title || '',
-                date: stateMeta.date || domMeta.date || '',
-                number: stateMeta.number || domMeta.number || '',
-                contact: stateMeta.contact || domMeta.contact || ''
-            };
-
-            const doc = new jsPDF();
-            const pageHeight = doc.internal.pageSize.getHeight();
-            drawPdfTitlePage(doc, 'Handout', meta, 'Für Teilnehmende');
-
-            const ensureSpace = (y, needed) => {
-                if (y + needed > pageHeight - 16) {
-                    doc.addPage();
-                    stampPdfLogo(doc);
-                    return 24;
-                }
-                return y;
-            };
-
-            if (!groups.length) {
-                doc.addPage();
-                stampPdfLogo(doc);
-                doc.setFont(undefined, 'normal');
-                doc.setFontSize(12);
-                doc.text('Für diesen Seminarplan ist noch kein Ablauf veröffentlicht.', 14, 30);
-                doc.save(meta.title ? `Handout-${meta.title}.pdf` : 'Handout.pdf');
-                return;
-            }
-
-            doc.addPage();
-            stampPdfLogo(doc);
-            let y = 24;
-
-            const renderPeriod = (label, items) => {
-                if (!items.length) {
-                    return;
-                }
-                y = ensureSpace(y, 14);
-                doc.setFont(undefined, 'bold');
-                doc.setFontSize(12);
-                doc.setTextColor(136, 42, 48); // Tiefrot (CD-Akzent).
-                doc.text(label, 16, y);
-                doc.setTextColor(0, 0, 0);
-                y += 8;
-                items.forEach((item) => {
-                    const titleLines = doc.splitTextToSize(escapeTextForPdf(item.title), 176);
-                    y = ensureSpace(y, Math.max(8, titleLines.length * 6) + 2);
-                    doc.setFont(undefined, 'bold');
-                    doc.setFontSize(11);
-                    doc.text(titleLines, 18, y);
-                    y += titleLines.length * 6 + 1;
-                    doc.setFont(undefined, 'normal');
-                    doc.setFontSize(10);
-                    item.topics.forEach((topic) => {
-                        const lines = doc.splitTextToSize(escapeTextForPdf(topic), 168);
-                        y = ensureSpace(y, Math.max(6, lines.length * 5.5));
-                        doc.text('•', 22, y);
-                        doc.text(lines, 27, y);
-                        y += lines.length * 5.5;
-                    });
-                    y += 3;
-                });
-                y += 2;
-            };
-
-            groups.forEach((group) => {
-                y = ensureSpace(y, 18);
-                doc.setFont(undefined, 'bold');
-                doc.setFontSize(16);
-                doc.text(escapeTextForPdf(group.day), 14, y);
-                y += 3;
-                doc.setDrawColor(220, 224, 233);
-                doc.setLineWidth(0.3);
-                doc.line(14, y, 196, y);
-                y += 9;
-                renderPeriod('Vormittag', group.morning);
-                renderPeriod('Nachmittag', group.afternoon);
-                y += 2;
-            });
-
-            doc.save(meta.title ? `Handout-${meta.title}.pdf` : 'Handout.pdf');
-        });
-    };
+    // D64: Das Handout-PDF erzeugt das gemeinsame Modul mod_seminarplaner/handout —
+    // derselbe Generator, den der Roter-Faden-Tab benutzt (Teilnehmende erzeugen es
+    // dort selbst). Hier bleibt nur der Aufruf, damit beide Wege dasselbe Dokument
+    // liefern.
+    const exportPdfHandout = (cmid) => Handout.exportPdf(cmid, pdfLogoRaw);
 
     const saveMethods = (cmid, newMethods) => {
         return asCall('mod_seminarplaner_save_method_cards', {

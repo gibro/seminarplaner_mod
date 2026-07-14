@@ -12,12 +12,20 @@ $seminarplaner = $activity['seminarplaner'];
 $context = $activity['context'];
 
 seminarplaner_prepare_page('/mod/seminarplaner/roterfaden.php', $cm, $course, $seminarplaner, 'roterfaden');
-$PAGE->requires->js_call_amd('mod_seminarplaner/roterfaden', 'init', [(int)$cm->id]);
+$pdflogo = seminarplaner_get_pdf_logo($context, $seminarplaner);
+$PAGE->requires->js_call_amd('mod_seminarplaner/roterfaden', 'init', [(int)$cm->id, $pdflogo]);
 
 echo $OUTPUT->header();
 
 echo $OUTPUT->heading(format_string($seminarplaner->name));
 echo seminarplaner_render_tabs((int)$cm->id, 'roterfaden', $context);
+
+// D64: Das Handout entsteht hier im Browser (jsPDF) — Teilnehmende erzeugen es
+// selbst, ohne den Import/Export-Tab, den sie nicht sehen dürfen.
+$vendorbase = $CFG->wwwroot . '/mod/seminarplaner/thirdparty';
+echo '<script>window.__kg_prev_define = window.define; try { window.define = undefined; } catch (e) {}</script>';
+echo '<script src="' . s($vendorbase . '/jspdf/jspdf.umd.min.js') . '"></script>';
+echo '<script>try { if (window.__kg_prev_define !== undefined) { window.define = window.__kg_prev_define; } else { delete window.define; } } catch (e) {} delete window.__kg_prev_define;</script>';
 
 echo html_writer::start_div('kg-shell kg-rf-shell');
 
@@ -42,20 +50,24 @@ echo html_writer::tag('option', get_string('roterfaden_theme_modern', 'mod_semin
 echo html_writer::tag('option', get_string('roterfaden_theme_kompakt', 'mod_seminarplaner'), ['value' => 'kompakt']);
 echo html_writer::end_tag('select');
 echo html_writer::end_div();
-// D64: Handout-PDF für Teilnehmende — nutzt den bestehenden Export-Flow im
-// Import/Export-Tab (kein zweiter Mechanismus), gleiche Freigabe-Logik.
-if (has_capability('mod/seminarplaner:managegrids', $context)) {
-    // Dokument-Glyphe als Inline-SVG (html_writer kann kein SVG), dekorativ.
-    $icdoc = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-        . 'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
-        . '<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/>'
-        . '<path d="M9 13h6M9 17h4"/></svg>';
-    echo html_writer::link(
-        new moodle_url('/mod/seminarplaner/importexport.php', ['id' => (int)$cm->id, 'pdfaction' => 'handout']),
-        $icdoc . '<span>Handout-PDF für Teilnehmende</span>',
-        ['class' => 'kg-btn kg-btn--outline-red rf-handout']
-    );
-}
+// D64: Handout-PDF für Teilnehmende. Der Button steht allen offen, die den Roten
+// Faden sehen dürfen (also auch Teilnehmenden) — erzeugt wird das PDF im Browser
+// aus dem veröffentlichten Snapshot, denselben Generator nutzt der Import/Export-Tab.
+// Bis ein Ablauf geladen ist, blendet das AMD-Modul den Button aus.
+// Dokument-Glyphe als Inline-SVG (html_writer kann kein SVG), dekorativ.
+$icdoc = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    . 'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
+    . '<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/>'
+    . '<path d="M9 13h6M9 17h4"/></svg>';
+echo html_writer::tag(
+    'button',
+    $icdoc . '<span>Handout-PDF für Teilnehmende</span>',
+    [
+        'type' => 'button',
+        'id' => 'kg-roterfaden-handout',
+        'class' => 'kg-btn kg-btn--outline-red rf-handout kg-hidden',
+    ]
+);
 echo html_writer::end_div();
 
 echo html_writer::tag('div', '', ['id' => 'kg-roterfaden-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
