@@ -68,6 +68,7 @@ foreach ($grids as $grid) {
 echo html_writer::end_tag('select');
 echo html_writer::start_div('kg-row kg-row--action');
 echo html_writer::tag('button', 'Seminarplan laden', ['type' => 'button', 'id' => 'kg-load-grid', 'class' => 'kg-btn kg-btn-primary']);
+echo html_writer::tag('button', 'Seminarplan löschen', ['type' => 'button', 'id' => 'kg-grid-delete', 'class' => 'kg-btn kg-btn--outline-red']);
 echo html_writer::end_div();
 echo html_writer::tag('p',
     'Neue Seminarpläne legst du im Tab „Sequenz" an – dort sitzt auch die Einrichtung (Tage und Seminarzeiten).',

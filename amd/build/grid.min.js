@@ -4145,6 +4145,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (savebtn) {
                 savebtn.addEventListener('click', () => this.saveGridState({silent: false, manual: true}));
             }
+            // Seminarplan löschen aus dem Überblick (nutzt die bestehende Logik;
+            // der frühere #sp-clear-Button liegt in der im Überblick ausgeblendeten
+            // Filterleiste).
+            const deletebtn = bySel('#kg-grid-delete');
+            if (deletebtn) {
+                deletebtn.addEventListener('click', () => this.deleteSelectedGrid());
+            }
             // D63: ZIM-PDF direkt aus dem Überblick — löst denselben Export-Flow im
             // Import/Export-Tab aus (kein zweiter Mechanismus), Plan per Deep-Link.
             const zimbtn = bySel('#kg-grid-zim-export');

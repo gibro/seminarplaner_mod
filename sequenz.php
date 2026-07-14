@@ -42,6 +42,10 @@ echo html_writer::tag('button', 'Einrichtung', [
     'type' => 'button', 'id' => 'sq-edit-setup', 'class' => 'kg-btn',
     'title' => 'Tage und Seminarzeiten dieses Seminarplans anpassen',
 ]);
+echo html_writer::tag('button', 'Seminarplan löschen', [
+    'type' => 'button', 'id' => 'sq-delete-plan', 'class' => 'kg-btn kg-btn--outline-red',
+    'title' => 'Den aktuell gewählten Seminarplan löschen',
+]);
 echo html_writer::end_div();
 
 // Setup panel (create new plan / reconfigure the loaded one).

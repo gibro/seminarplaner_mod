@@ -588,6 +588,7 @@ function(Ajax, UserRepository, Fragment, Templates) {
             this.setupMode = 'create';
             const newbtn = bySel('#sq-new-plan');
             const editbtn = bySel('#sq-edit-setup');
+            const deletebtn = bySel('#sq-delete-plan');
             const cancel = bySel('#sq-setup-cancel');
             const form = bySel('#sq-setup-form');
             const preset = bySel('#sp-config-preset');
@@ -596,6 +597,9 @@ function(Ajax, UserRepository, Fragment, Templates) {
             }
             if (editbtn) {
                 editbtn.addEventListener('click', () => this.openSetup('edit'));
+            }
+            if (deletebtn) {
+                deletebtn.addEventListener('click', () => this.deletePlan());
             }
             if (cancel) {
                 cancel.addEventListener('click', () => this.closeSetup());
@@ -1124,6 +1128,31 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 this.loadState(target);
             }).catch(() => {
                 this.setStatus('Seminarpläne konnten nicht geladen werden.', true);
+            });
+        }
+
+        deletePlan() {
+            const select = bySel('#sq-grid-select');
+            const gridid = this.gridid || (select ? Number(select.value) : 0);
+            if (!gridid) {
+                this.setStatus('Kein Seminarplan ausgewählt.', true);
+                return;
+            }
+            const name = select && select.selectedOptions && select.selectedOptions[0]
+                ? select.selectedOptions[0].textContent
+                : `#${gridid}`;
+            if (!window.confirm(`Soll der Seminarplan „${name}" wirklich gelöscht werden?`)) {
+                return;
+            }
+            // Ungespeicherte Änderungen sind nach dem Löschen gegenstandslos –
+            // dirty zurücksetzen, damit kein „verwerfen?"-Dialog dazwischenfunkt.
+            this.setDirty(false);
+            asCall('mod_seminarplaner_delete_grid', {cmid: this.cmid, gridid}).then(() => {
+                this.gridid = 0;
+                this.setStatus('Seminarplan gelöscht.');
+                return this.loadGrids();
+            }).catch(() => {
+                this.setStatus('Seminarplan löschen fehlgeschlagen.', true);
             });
         }
 
