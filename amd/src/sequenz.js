@@ -370,6 +370,22 @@ function(Ajax, UserRepository, Fragment, Templates) {
         transfer: 'Transfer',
     };
 
+    // Glyphen des ⋮-Menüs: gestrichene Inline-SVGs (24er-Viewbox, currentColor)
+    // wie im Design-Handoff — sie tragen damit auch die rote Farbe des
+    // Entfernen-Eintrags mit.
+    const menuIcon = (paths) => `<svg class="sq-menu__icon" width="15" height="15" viewBox="0 0 24 24" fill="none"`
+        + ` stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"`
+        + ` aria-hidden="true" focusable="false">${paths}</svg>`;
+    const MENU_ICONS = {
+        up: menuIcon('<path d="M12 19V5M5 12l7-7 7 7"/>'),
+        down: menuIcon('<path d="M12 5v14M5 12l7 7 7-7"/>'),
+        // Kette mit Bruch = aus der Klammer lösen; geschlossene Kette = aufnehmen.
+        unlink: menuIcon('<path d="M9 17H7a5 5 0 010-10h2M15 7h2a5 5 0 014 8"/><path d="M3 3l18 18"/>'),
+        link: menuIcon('<path d="M9 17H7a5 5 0 010-10h2M15 7h2a5 5 0 010 10h-2M8 12h8"/>'),
+        heading: menuIcon('<path d="M6 4v16M18 4v16M6 12h12"/>'),
+        remove: menuIcon('<path d="M6 6l12 12M18 6L6 18"/>'),
+    };
+
     // Kompakter Karten-Auszug fuer den veroeffentlichten Roten Faden: nur die
     // aktiven Einheiten der Sequenz, nur Titel und Seminarphase. Deckungsgleich
     // in grid.js — beide Ansichten koennen veroeffentlichen.
@@ -4062,30 +4078,28 @@ function(Ajax, UserRepository, Fragment, Templates) {
             const pid = p.pid;
             const isunit = p.data.typ === 'einheit';
             const open = this.openMenuPid === pid;
+            const item = (action, glyph, label) => `
+                <button type="button" role="menuitem" class="sq-menu__item${action === 'remove' ? ' sq-menu__item--danger' : ''}"
+                  data-sq-action="${action}" data-pid="${escapeHtml(pid)}">${MENU_ICONS[glyph]}<span>${label}</span></button>`;
+
             const items = [];
-            items.push(`<button type="button" role="menuitem" class="sq-menu__item" data-sq-action="move-up"
-                data-pid="${escapeHtml(pid)}">Nach vorne schieben</button>`);
-            items.push(`<button type="button" role="menuitem" class="sq-menu__item" data-sq-action="move-down"
-                data-pid="${escapeHtml(pid)}">Nach hinten schieben</button>`);
+            items.push(item('move-up', 'up', 'Nach vorne schieben'));
+            items.push(item('move-down', 'down', 'Nach hinten schieben'));
 
             if (isunit && inBaustein) {
-                items.push(`<button type="button" role="menuitem" class="sq-menu__item" data-sq-action="leave-baustein"
-                    data-pid="${escapeHtml(pid)}">Aus der Überschrift lösen</button>`);
+                items.push(item('leave-baustein', 'unlink', 'Aus der Überschrift lösen'));
             } else if (isunit) {
                 const bid = this.adjacentBausteinId(pid);
                 if (bid) {
                     const titel = (this.baustein(bid) || {}).titel || 'Baustein';
-                    items.push(`<button type="button" role="menuitem" class="sq-menu__item" data-sq-action="join-baustein"
-                        data-pid="${escapeHtml(pid)}">In „${escapeHtml(titel)}" aufnehmen</button>`);
+                    items.push(item('join-baustein', 'link', `In „${escapeHtml(titel)}" aufnehmen`));
                 }
                 if (!p.data.bausteinid) {
-                    items.push(`<button type="button" role="menuitem" class="sq-menu__item" data-sq-action="heading-open"
-                        data-pid="${escapeHtml(pid)}">Überschrift geben</button>`);
+                    items.push(item('heading-open', 'heading', 'Überschrift geben'));
                 }
             }
 
-            items.push(`<button type="button" role="menuitem" class="sq-menu__item sq-menu__item--danger"
-                data-sq-action="remove" data-pid="${escapeHtml(pid)}">Aus dem Plan entfernen</button>`);
+            items.push(item('remove', 'remove', 'Aus dem Plan entfernen'));
 
             return `
                 <span class="sq-menu">
