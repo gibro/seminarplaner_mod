@@ -7081,21 +7081,73 @@ a.kg-btn-primary:focus {
 /* ---- Überblick: Hinweisleiste (tiefrot getönt, Button rechts) ---- */
 .kg-ov-hint {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 10px;
-    background: #F3E6E7;
-    border: 1px solid #E4D3D5;
-    color: var(--ig-darkred);
-    font-size: 13px;
-    padding: 10px 14px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    background: #F5F5F5;
+    border: 1px solid #E2E2E2;
+    color: var(--ig-anthracite);
+    font-size: 14px;
+    padding: 14px 16px;
     margin-bottom: 12px;
 }
 
-.kg-ov-hint__btn {
-    margin: 0;
+.kg-ov-hint__note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.kg-ov-hint__note > svg {
     flex: 0 0 auto;
+    color: #8a8a8a;
+}
+
+.kg-ov-hint__link {
+    margin-left: 6px;
+    color: var(--ig-red);
+    font-weight: 700;
+    text-decoration: underline;
+    white-space: nowrap;
+}
+
+.kg-ov-hint__link:hover {
+    color: var(--ig-red);
+    text-decoration: underline;
+}
+
+.kg-ov-pdfbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.kg-ov-pdfbar__label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: #7a7a7a;
+    margin-right: 4px;
+}
+
+.kg-ov-pdfbtn {
+    margin: 0;
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+}
+
+.kg-ov-pdfbtn .kg-btn-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
 }
 
 /* ---- Überblick (read-only): Wochenraster nach Handoff ---- */

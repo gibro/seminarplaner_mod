@@ -36,6 +36,23 @@ $renderbuttonlabel = static function(string $text, string $icon) use ($renderico
     return $rendericontext($icon, $text, 'kg-btn-content');
 };
 
+// Inline-SVG-Icons (Meta-Line, dekorativ) für die Überblick-Export-Leiste.
+$icon = static function(string $paths, float $size = 16, float $stroke = 2.0): string {
+    return '<svg width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24" fill="none" '
+        . 'stroke="currentColor" stroke-width="' . $stroke . '" aria-hidden="true" focusable="false">'
+        . $paths . '</svg>';
+};
+$icInfo = $icon('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>', 16, 2);
+$icDownload = $icon('<path d="M12 3v12M8 11l4 4 4-4M5 21h14"/>', 14, 2.2);
+
+// PDF-Export-Buttons für den Überblick: lösen per Deep-Link denselben Export-Flow
+// im Import/Export-Tab aus (kein zweiter Mechanismus).
+$pdfbtn = static function(string $id, string $label) use ($icDownload): string {
+    return html_writer::tag('button',
+        '<span class="kg-btn-content">' . $icDownload . html_writer::tag('span', s($label)) . '</span>',
+        ['type' => 'button', 'id' => $id, 'class' => 'kg-btn kg-btn--outline-red kg-ov-pdfbtn']);
+};
+
 echo $OUTPUT->header();
 
 echo $OUTPUT->heading(format_string($seminarplaner->name));
@@ -48,14 +65,25 @@ echo html_writer::tag('h3', get_string('ueberblickmenu', 'mod_seminarplaner'));
 echo html_writer::div(get_string('ueberblick_subline', 'mod_seminarplaner'), 'sq-pagehead__sub');
 echo html_writer::end_div();
 
-// CD-Handoff: tiefrot getönte Hinweisleiste — bearbeitet wird in der Sequenz.
+// Hinweiszeile + PDF-Export-Leiste (Read-only-Überblick).
 echo html_writer::start_div('kg-ov-hint');
-echo html_writer::tag('span', get_string('ueberblick_readonlynote', 'mod_seminarplaner'));
-echo html_writer::link(
-    new moodle_url('/mod/seminarplaner/sequenz.php', ['id' => (int)$cm->id]),
-    get_string('ueberblick_tosequenz', 'mod_seminarplaner'),
-    ['class' => 'kg-btn kg-btn-primary kg-ov-hint__btn']
-);
+echo html_writer::start_div('kg-ov-hint__note');
+echo $icInfo;
+echo html_writer::tag('span',
+    get_string('ueberblick_readonlynote', 'mod_seminarplaner') . ' '
+    . html_writer::link(
+        new moodle_url('/mod/seminarplaner/sequenz.php', ['id' => (int)$cm->id]),
+        get_string('ueberblick_tosequenz', 'mod_seminarplaner'),
+        ['class' => 'kg-ov-hint__link']
+    ));
+echo html_writer::end_div();
+echo html_writer::start_div('kg-ov-pdfbar');
+echo html_writer::tag('span', 'PDF-Export', ['class' => 'kg-ov-pdfbar__label']);
+echo $pdfbtn('kg-ov-pdf-zim', 'ZIM');
+echo $pdfbtn('kg-ov-pdf-flow', 'Konzeptsammlung');
+echo $pdfbtn('kg-ov-pdf-handout', 'Teilnehmerplan');
+echo $pdfbtn('kg-ov-pdf-materials', 'Material-Checkliste');
+echo html_writer::end_div();
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'kg-grid-step-1']);
@@ -84,11 +112,6 @@ echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'kg-publish-
 echo html_writer::tag('span', get_string('roterfaden_publishlabel', 'mod_seminarplaner'));
 echo html_writer::end_tag('label');
 echo html_writer::tag('span', '', ['id' => 'kg-publish-roterfaden-status', 'class' => 'sp-filter-status']);
-echo html_writer::end_div();
-// D63: ZIM-PDF direkt aus dem Überblick (löst den bestehenden Export-Flow aus).
-echo html_writer::start_div('kg-row kg-row--action');
-echo html_writer::tag('button', 'ZIM-PDF erstellen',
-    ['type' => 'button', 'id' => 'kg-grid-zim-export', 'class' => 'kg-btn kg-btn--outline-red']);
 echo html_writer::end_div();
 echo html_writer::end_div();
 

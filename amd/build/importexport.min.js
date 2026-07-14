@@ -2733,32 +2733,41 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 .catch((e) => setStatus(`Handout-Export fehlgeschlagen: ${e.message || e}`, true));
             return;
         }
-        if (action === 'zim') {
-            const gridid = Number.parseInt(params.get('pdfgrid') || '0', 10) || 0;
-            if (!gridid) {
-                setStatus('Kein Seminarplan für den ZIM-Export übergeben.', true);
-                return;
-            }
-            const select = bySel('#kg-pdf-grid');
-            if (select) {
-                select.value = String(gridid);
-            }
-            setStatus('Seminarplan wird geladen …', false);
-            loadGridState(cmid, gridid).then(() => {
-                if (currentGridState && currentGridState.meta) {
-                    ['title', 'date', 'number', 'contact'].forEach((key) => {
-                        const el = bySel(`#kg-pdf-${key}`);
-                        if (el && !el.value) {
-                            el.value = currentGridState.meta[key] || '';
-                        }
-                    });
-                }
-                exportPdfZim();
-                setStatus('ZIM-PDF erstellt.', false);
-            }).catch((e) => {
-                setStatus(`ZIM-Export fehlgeschlagen: ${e.message || e}`, true);
-            });
+        // Plan-gebundene Exporte (ZIM, Konzeptsammlung, Materialliste): erst den
+        // übergebenen Plan laden, dann denselben Export wie im Tab auslösen.
+        const gridExports = {
+            zim: {fn: exportPdfZim, label: 'ZIM-PDF'},
+            flow: {fn: exportPdfFlow, label: 'Konzeptsammlungs-PDF'},
+            materials: {fn: exportPdfMaterials, label: 'Materiallisten-PDF'}
+        };
+        const target = gridExports[action];
+        if (!target) {
+            return;
         }
+        const gridid = Number.parseInt(params.get('pdfgrid') || '0', 10) || 0;
+        if (!gridid) {
+            setStatus('Kein Seminarplan für den Export übergeben.', true);
+            return;
+        }
+        const select = bySel('#kg-pdf-grid');
+        if (select) {
+            select.value = String(gridid);
+        }
+        setStatus('Seminarplan wird geladen …', false);
+        loadGridState(cmid, gridid).then(() => {
+            if (currentGridState && currentGridState.meta) {
+                ['title', 'date', 'number', 'contact'].forEach((key) => {
+                    const el = bySel(`#kg-pdf-${key}`);
+                    if (el && !el.value) {
+                        el.value = currentGridState.meta[key] || '';
+                    }
+                });
+            }
+            target.fn();
+            setStatus(`${target.label} erstellt.`, false);
+        }).catch((e) => {
+            setStatus(`Export fehlgeschlagen: ${e.message || e}`, true);
+        });
     };
 
     return {

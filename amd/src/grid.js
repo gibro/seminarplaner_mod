@@ -4152,20 +4152,34 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (deletebtn) {
                 deletebtn.addEventListener('click', () => this.deleteSelectedGrid());
             }
-            // D63: ZIM-PDF direkt aus dem Überblick — löst denselben Export-Flow im
-            // Import/Export-Tab aus (kein zweiter Mechanismus), Plan per Deep-Link.
-            const zimbtn = bySel('#kg-grid-zim-export');
-            if (zimbtn) {
-                zimbtn.addEventListener('click', () => {
-                    const gridid = this.getGridId();
-                    if (!gridid) {
-                        this.setStatus('Bitte zuerst einen Seminarplan auswählen.', true);
-                        return;
-                    }
-                    window.location.href = `${M.cfg.wwwroot}/mod/seminarplaner/importexport.php`
-                        + `?id=${this.cmid}&pdfgrid=${gridid}&pdfaction=zim`;
-                });
-            }
+            // PDF-Export-Leiste im Überblick — jeder Button löst per Deep-Link
+            // denselben Export-Flow im Import/Export-Tab aus (kein zweiter
+            // Mechanismus). Der Teilnehmerplan (Handout) nutzt den veröffentlichten
+            // Roten Faden und braucht keinen ausgewählten Plan.
+            const openPdfExport = (action, needsGrid) => {
+                const base = `${M.cfg.wwwroot}/mod/seminarplaner/importexport.php?id=${this.cmid}`;
+                if (!needsGrid) {
+                    window.location.href = `${base}&pdfaction=${action}`;
+                    return;
+                }
+                const gridid = this.getGridId();
+                if (!gridid) {
+                    this.setStatus('Bitte zuerst einen Seminarplan auswählen.', true);
+                    return;
+                }
+                window.location.href = `${base}&pdfgrid=${gridid}&pdfaction=${action}`;
+            };
+            [
+                ['#kg-ov-pdf-zim', 'zim', true],
+                ['#kg-ov-pdf-flow', 'flow', true],
+                ['#kg-ov-pdf-handout', 'handout', false],
+                ['#kg-ov-pdf-materials', 'materials', true],
+            ].forEach(([sel, action, needsGrid]) => {
+                const btn = bySel(sel);
+                if (btn) {
+                    btn.addEventListener('click', () => openPdfExport(action, needsGrid));
+                }
+            });
             const publishcheckbox = bySel('#kg-publish-roterfaden');
             if (publishcheckbox) {
                 publishcheckbox.addEventListener('change', () => {
