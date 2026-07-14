@@ -796,11 +796,138 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         };
     };
 
+    // Anker-Zeiten aus der Config ableiten — deckungsgleich mit grid.js
+    // (deriveAnkerzeiten), damit die Export-Zeiten exakt dem Überblick entsprechen.
+    const pdfParseClock = (value) => {
+        if (!value) {
+            return null;
+        }
+        const parts = String(value).split(':');
+        const hh = Number.parseInt(parts[0], 10);
+        const mm = Number.parseInt(parts[1], 10);
+        return (Number.isFinite(hh) && Number.isFinite(mm)) ? (hh * 60 + mm) : null;
+    };
+    const pdfClockLabel = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+    const pdfDeriveAnkerzeiten = (config) => {
+        const cfg = config || {};
+        const az = cfg.ankerzeiten;
+        if (az && az.vormittag && az.nachmittag
+                && pdfParseClock(az.vormittag.start) !== null && pdfParseClock(az.nachmittag.start) !== null) {
+            return az;
+        }
+        const range = cfg.timeRange || {};
+        const start = pdfParseClock(range.start) === null ? '08:30' : range.start;
+        const end = pdfParseClock(range.end) === null ? '17:30' : range.end;
+        let best = null;
+        (Array.isArray(cfg.breaks) ? cfg.breaks : []).forEach((brk) => {
+            if (!brk || pdfParseClock(brk.start) === null) {
+                return;
+            }
+            const duration = Math.max(0, Number(brk.duration) || 0);
+            if (duration && (!best || duration > best.duration)) {
+                best = {start: brk.start, duration};
+            }
+        });
+        const vmEnd = best ? best.start : '12:30';
+        const nmStart = best ? pdfClockLabel(pdfParseClock(best.start) + best.duration) : '12:30';
+        return {
+            vormittag: {start, end: vmEnd},
+            nachmittag: {start: nmStart, end},
+            ersterTagNurNachmittag: false,
+            letzterTagNurVormittag: false
+        };
+    };
+
+    // Projiziert den Sequenz-Abschnitt (aktuelle Bearbeitungsquelle) in
+    // tagesbasierte Export-Einträge mit vollen Karten-Details. Jede Platzierung
+    // (typ 'einheit') wird zu genau einer Zeile; eine aktive Einheiten-Karte
+    // liefert die Detailfelder, sonst bleibt es Titel + Zeit.
+    const getSequencePlanByDay = (state) => {
+        const seq = state.sequenz || {};
+        const config = state.config || {};
+        const placements = (seq.platzierungen && typeof seq.platzierungen === 'object') ? seq.platzierungen : {};
+        const bausteine = (seq.bausteine && typeof seq.bausteine === 'object') ? seq.bausteine : {};
+        const auswahlen = (seq.einheitenauswahlen && typeof seq.einheitenauswahlen === 'object') ? seq.einheitenauswahlen : {};
+        const methodById = new Map(methods.map((m) => [String(m.id), m]));
+        const az = pdfDeriveAnkerzeiten(config);
+        const vmStart = pdfParseClock(az.vormittag.start);
+        const nmStart = pdfParseClock(az.nachmittag.start);
+        const days = {};
+        const tage = Array.isArray(seq.tage) ? seq.tage : [];
+        tage.forEach((tag, idx) => {
+            const dayname = (tag && tag.bezeichnung && (config.days || []).includes(tag.bezeichnung))
+                ? tag.bezeichnung
+                : (config.days || [])[idx];
+            if (!dayname) {
+                return;
+            }
+            const isFirst = idx === 0;
+            const isLast = idx === (tage.length - 1);
+            const anchorStarts = {
+                vormittag: (isFirst && az.ersterTagNurNachmittag) ? nmStart : vmStart,
+                nachmittag: (isLast && az.letzterTagNurVormittag) ? vmStart : nmStart
+            };
+            const items = [];
+            ['vormittag', 'nachmittag'].forEach((ankername) => {
+                let clock = Number.isFinite(anchorStarts[ankername]) ? anchorStarts[ankername] : 0;
+                const pids = (((tag.anker || {})[ankername] || {}).sequenz) || [];
+                pids.forEach((pid) => {
+                    const p = placements[pid];
+                    if (!p) {
+                        return;
+                    }
+                    const duration = Math.max(0, Number(p.dauer) || 0);
+                    if (p.typ === 'pause') {
+                        items.push({kind: 'break', title: String(p.titel || 'Pause'), startMin: clock, endMin: clock + duration, details: {}});
+                        clock += duration;
+                        return;
+                    }
+                    let card = null;
+                    if (p.einheitenauswahl) {
+                        const auswahl = auswahlen[p.einheitenauswahl];
+                        const aktiv = auswahl && auswahl.aktiv !== null && auswahl.aktiv !== undefined ? String(auswahl.aktiv) : '';
+                        card = aktiv ? methodById.get(aktiv) : null;
+                    }
+                    if (card) {
+                        const normalized = normalizeMethodForPdf(card);
+                        items.push(Object.assign({}, normalized, {
+                            kind: 'method',
+                            title: String(p.titel || '').trim() || normalized.title,
+                            startMin: clock,
+                            endMin: clock + duration
+                        }));
+                    } else {
+                        const baustein = p.bausteinid ? bausteine[p.bausteinid] : null;
+                        const title = String(p.titel || '').trim()
+                            || (baustein && baustein.titel ? String(baustein.titel) : 'Seminareinheit');
+                        items.push({kind: 'method', title, phase: '', startMin: clock, endMin: clock + duration, details: {}});
+                    }
+                    clock += duration;
+                });
+            });
+            days[dayname] = items;
+        });
+        (config.days || []).forEach((day) => {
+            if (!days[day]) {
+                days[day] = [];
+            }
+        });
+        return days;
+    };
+
+    // Aktuelle Bearbeitungsquelle ist die Sequenz; plan.days (Legacy-Grid) wird
+    // beim Sequenz-Editieren NICHT mehr nachgezogen. Der Export muss deshalb aus
+    // der Sequenz projizieren (wie der Überblick), sonst zeigt das PDF Altdaten.
     const getPlanByDay = () => {
-        if (!currentGridState || !currentGridState.plan || !currentGridState.plan.days) {
+        const state = currentGridState;
+        if (!state) {
             return {};
         }
-        return currentGridState.plan.days;
+        const seq = state.sequenz;
+        if (seq && Array.isArray(seq.tage) && seq.tage.length) {
+            return getSequencePlanByDay(state);
+        }
+        return (state.plan && state.plan.days) ? state.plan.days : {};
     };
 
     const getOrderedDays = () => {
