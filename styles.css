@@ -7581,11 +7581,6 @@ a.kg-btn-primary:focus {
     color: var(--ig-gray);
 }
 
-.ml-phase--orientierung .sp-card-meta .sp-badge--phase { background: #E7F0F5; color: #215d7e; border-color: var(--sq-phase-orientierung); }
-.ml-phase--erfahrung .sp-card-meta .sp-badge--phase { background: #E7F1E3; color: #3f6e2f; border-color: var(--sq-phase-erfahrung); }
-.ml-phase--analyse .sp-card-meta .sp-badge--phase { background: #FBF1D0; color: #8a6d00; border-color: var(--sq-phase-analyse); }
-.ml-phase--handlung .sp-card-meta .sp-badge--phase { background: #F3E6E7; color: #882A30; border-color: var(--sq-phase-handlung); }
-.ml-phase--transfer .sp-card-meta .sp-badge--phase { background: #EEEEEE; color: #4a4a4a; border-color: var(--sq-phase-transfer); }
 
 /* Tag-Chips neutral grau statt blau. */
 .ml-card-tag {
@@ -8321,4 +8316,40 @@ a.kg-btn-primary:focus {
 
 .sq-menu__item--danger:hover {
   background: var(--ig-red-soft);
+}
+
+/* Bibliothekskarte (Handoff): Phasen-Badge getoent in seiner Phasenfarbe —
+   dieselbe Palette wie Sequenz und Roter Faden.
+   ACHTUNG: Die neutrale Badge-Regel weiter oben ("Badges neutral") setzt
+   background/border/color mit !important. Diese Toenung muss deshalb ebenfalls
+   !important tragen, sonst bleibt das Badge grau — genau daran sind die
+   frueheren .ml-phase--*-Regeln gescheitert (sie sind hier entfallen). */
+.kg-library-card.sp-card .sp-card-meta .sp-badge--phase-orientierung {
+  background: #E7F0F5 !important;
+  border-color: var(--ig-blue) !important;
+  color: #215d7e !important;
+}
+
+.kg-library-card.sp-card .sp-card-meta .sp-badge--phase-erfahrung {
+  background: #E7F1E3 !important;
+  border-color: var(--ig-green) !important;
+  color: #3f6e2f !important;
+}
+
+.kg-library-card.sp-card .sp-card-meta .sp-badge--phase-analyse {
+  background: #FBF1D0 !important;
+  border-color: var(--ig-yellow) !important;
+  color: #8a6d00 !important;
+}
+
+.kg-library-card.sp-card .sp-card-meta .sp-badge--phase-handlung {
+  background: #F3E6E7 !important;
+  border-color: var(--ig-darkred) !important;
+  color: var(--ig-darkred) !important;
+}
+
+.kg-library-card.sp-card .sp-card-meta .sp-badge--phase-transfer {
+  background: #EEEEEE !important;
+  border-color: var(--ig-gray) !important;
+  color: #4a4a4a !important;
 }

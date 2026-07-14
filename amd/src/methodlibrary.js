@@ -237,14 +237,40 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         {key: 'transfer', match: ['transfer', 'abschluss', 'auswertung']},
     ];
 
-    const phaseClassOf = (phases) => {
+    const phaseKeyOf = (phases) => {
         const raw = Array.isArray(phases) ? phases.filter(Boolean).join(', ') : String(phases || '');
         const clean = normalizePhase(raw.split(',')[0] || '').toLowerCase();
         if (!clean) {
             return '';
         }
         const found = PHASE_CLASS_KEYS.find((candidate) => candidate.match.some((m) => clean.includes(m)));
-        return found ? ` ml-phase--${found.key}` : '';
+        return found ? found.key : '';
+    };
+
+    const phaseClassOf = (phases) => {
+        const key = phaseKeyOf(phases);
+        return key ? ` ml-phase--${key}` : '';
+    };
+
+    // Handoff: neutrale Badges für Dauer und Gruppengröße, das Phasen-Badge
+    // getönt in seiner Phasenfarbe (keine Emojis).
+    const renderCardBadges = (method) => {
+        const phaselabel = Array.isArray(method.seminarphase)
+            ? method.seminarphase.filter(Boolean).join(', ')
+            : String(method.seminarphase || '').trim();
+        const key = phaseKeyOf(method.seminarphase);
+        const badges = [];
+        if (method.zeitbedarf) {
+            badges.push(`<span class="sp-badge">${escapeHtml(method.zeitbedarf)}</span>`);
+        }
+        if (method.gruppengroesse) {
+            badges.push(`<span class="sp-badge">${escapeHtml(method.gruppengroesse)}</span>`);
+        }
+        if (phaselabel) {
+            badges.push(`<span class="sp-badge sp-badge--phase${key ? ` sp-badge--phase-${key}` : ''}">`
+                + `${escapeHtml(phaselabel)}</span>`);
+        }
+        return badges.join('');
     };
 
     const readMulti = (selector) => {
@@ -969,7 +995,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const updatehint = pendingUpdate
                 ? `<div class="ml-card-updatehint" title="Übernehmen über &bdquo;Ausstehende Updates übernehmen&ldquo; im Tab Import/Export. Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügbar</div>`
                 : '';
-            const phaseLabel = Array.isArray(m.seminarphase) ? m.seminarphase.filter(Boolean).join(', ') : String(m.seminarphase || '').trim();
             const tagChips = splitMulti(m.tags)
                 .map((tag) => `<span class="ml-card-tag">${escapeHtml(tag)}</span>`)
                 .join('');
@@ -1003,9 +1028,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
               ${updatehint}
               <div class="sp-card-compact">
                 <div class="sp-card-meta">
-                  <span class="sp-badge">⏱️ ${escapeHtml(m.zeitbedarf || '-')}</span>
-                  <span class="sp-badge">👥 ${escapeHtml(m.gruppengroesse || '-')}</span>
-                  ${phaseLabel ? `<span class="sp-badge sp-badge--phase">🚩 ${escapeHtml(phaseLabel)}</span>` : ''}
+                  ${renderCardBadges(m)}
                 </div>
                 ${tagChips ? `<div class="ml-card-tags">${tagChips}</div>` : ''}
                 <div class="sp-card-description">${sanitizeCardHtml(m.kurzbeschreibung || '')}</div>
@@ -2254,7 +2277,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
         setGlobalStatus(`${visible.length} von ${globalMethods.length} Methoden`);
         host.innerHTML = visible.map((m) => {
-            const phaseLabel = m.seminarphase.filter(Boolean).join(', ');
             const tagChips = m.tags.map((tag) => `<span class="ml-card-tag">${escapeHtml(tag)}</span>`).join('');
             return `
               <div class="kg-library-card sp-card gl-card${phaseClassOf(m.seminarphase)}" data-gl-methodid="${m.methodid}">
@@ -2263,10 +2285,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 </div>
                 <div class="sp-card-compact">
                   <div class="sp-card-meta">
-                    ${m.zeitbedarf ? `<span class="sp-badge">⏱️ ${escapeHtml(m.zeitbedarf)}</span>` : ''}
-                    ${m.gruppengroesse ? `<span class="sp-badge">👥 ${escapeHtml(m.gruppengroesse)}</span>` : ''}
-                    ${phaseLabel ? `<span class="sp-badge sp-badge--phase">🚩 ${escapeHtml(phaseLabel)}</span>` : ''}
-                    ${m.vorbereitung ? `<span class="sp-badge">🧰 Vorbereitung: ${escapeHtml(m.vorbereitung)}</span>` : ''}
+                    ${renderCardBadges(m)}
+                    ${m.vorbereitung ? `<span class="sp-badge">Vorbereitung: ${escapeHtml(m.vorbereitung)}</span>` : ''}
                   </div>
                   ${tagChips ? `<div class="ml-card-tags">${tagChips}</div>` : ''}
                   ${m.kurzbeschreibung ? `<div class="sp-card-description">${escapeHtml(m.kurzbeschreibung)}</div>` : ''}
