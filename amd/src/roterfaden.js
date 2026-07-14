@@ -1,80 +1,144 @@
+// This file is part of Moodle - http://moodle.org/
+//
+// Roter Faden: der Seminarablauf als eine durchgehende Timeline.
+//
+// Datenquelle ist der veroeffentlichte Snapshot (mod_seminarplaner_get_roterfaden_state).
+// Seit D20 ist die Sequenz die massgebliche Struktur; der Snapshot traegt sie als
+// `sequenz` samt kompaktem Karten-Auszug (`methodcards`) fuer Phase und Titel.
+// Aeltere Snapshots ohne Sequenz fallen auf `plan.days` (Legacy-Grid) zurueck und
+// zeigen dann keine Phasen-Badges — ein erneutes Veroeffentlichen behebt das.
+//
+// Design: docs/design_handoff_seminarplaner/ROTER-FADEN.md
+//
+// @module mod_seminarplaner/roterfaden
+
 define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
-    const MORNING_START_MIN = 8 * 60;
-    const AFTERNOON_START_MIN = (12 * 60) + 30;
-    const AFTERNOON_END_MIN = 18 * 60;
-    const DEFAULT_AXIS_THEME = 'modern'; // 'modern' | 'clean'
-    const THEME_STORAGE_KEY = 'kg_roterfaden_axis_theme';
+    const ANCHORS = ['vormittag', 'nachmittag'];
+    const ANCHOR_LABELS = {vormittag: 'Vormittag', nachmittag: 'Nachmittag'};
+    const DEFAULT_STYLE = 'modern'; // 'modern' | 'kompakt'
+    const STYLE_STORAGE_KEY = 'kg_roterfaden_axis_theme';
+
+    // Seminarphasen wie in sequenz.js/grid.js (gleiche Zuordnung, gleiche Palette).
+    const PHASE_KEYS = [
+        {key: 'orientierung', match: ['orientierung', 'warm-up', 'einstieg']},
+        {key: 'erfahrung', match: ['erfahrung', 'erwartungsabfrage', 'vorwissen']},
+        {key: 'analyse', match: ['analyse']},
+        {key: 'handlung', match: ['handlung', 'aktion', 'praxis']},
+        {key: 'transfer', match: ['transfer', 'abschluss', 'auswertung']},
+    ];
+    const PHASE_LABELS = {
+        orientierung: 'Orientierung',
+        erfahrung: 'Erfahrungserhebung',
+        analyse: 'Analyse',
+        handlung: 'Handlungsteil',
+        transfer: 'Transfer',
+    };
 
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
 
-    const parseTimeToMinutes = (value) => {
+    const phaseKey = (phase) => {
+        const raw = Array.isArray(phase) ? phase.filter(Boolean).join(', ') : phase;
+        const clean = String(raw || '').trim().toLowerCase();
+        if (!clean) {
+            return '';
+        }
+        const found = PHASE_KEYS.find((candidate) => candidate.match.some((m) => clean.includes(m)));
+        return found ? found.key : '';
+    };
+
+    const parseClock = (value) => {
         if (!value) {
-            return 0;
+            return null;
         }
         const parts = String(value).split(':');
         const hh = Number.parseInt(parts[0], 10);
         const mm = Number.parseInt(parts[1], 10);
-        if (!Number.isFinite(hh) || !Number.isFinite(mm)) {
-            return 0;
-        }
-        return (hh * 60) + mm;
+        return (Number.isFinite(hh) && Number.isFinite(mm)) ? ((hh * 60) + mm) : null;
     };
-    const minutesToLabel = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+    const clockLabel = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+
+    // "20 Min" / "2 Std" / "1 Std 30 Min".
+    const durationLabel = (minutes) => {
+        const total = Math.max(0, Number(minutes) || 0);
+        const h = Math.floor(total / 60);
+        const m = total % 60;
+        if (!h) {
+            return `${m} Min`;
+        }
+        return m ? `${h} Std ${m} Min` : `${h} Std`;
+    };
+
+    // Deckungsgleich mit grid.js (deriveAnkerzeiten) und importexport.js: ohne
+    // konfigurierte Ankerzeiten schneidet die laengste Pause den Tag.
+    const deriveAnkerzeiten = (config) => {
+        const cfg = config || {};
+        const az = cfg.ankerzeiten;
+        if (az && az.vormittag && az.nachmittag
+                && parseClock(az.vormittag.start) !== null && parseClock(az.nachmittag.start) !== null) {
+            return az;
+        }
+        const range = cfg.timeRange || {};
+        const start = parseClock(range.start) === null ? '08:30' : range.start;
+        const end = parseClock(range.end) === null ? '17:30' : range.end;
+        let best = null;
+        (Array.isArray(cfg.breaks) ? cfg.breaks : []).forEach((brk) => {
+            if (!brk || parseClock(brk.start) === null) {
+                return;
+            }
+            const duration = Math.max(0, Number(brk.duration) || 0);
+            if (duration && (!best || duration > best.duration)) {
+                best = {start: brk.start, duration};
+            }
+        });
+        return {
+            vormittag: {start: start, end: best ? best.start : '12:30'},
+            nachmittag: {start: best ? clockLabel(parseClock(best.start) + best.duration) : '12:30', end: end},
+            ersterTagNurNachmittag: false,
+            letzterTagNurVormittag: false,
+        };
+    };
+
     const getTodayDayName = () => {
-        const jsDay = new Date().getDay();
-        const mondayBased = (jsDay + 6) % 7;
+        const mondayBased = (new Date().getDay() + 6) % 7;
         return DAYS_ALL[mondayBased] || 'Montag';
     };
-    const escapeHtml = (str) => String(str || '').replace(/[&<>"']/g, (ch) => {
+
+    const escapeHtml = (str) => String(str === null || str === undefined ? '' : str).replace(/[&<>"']/g, (ch) => {
         return ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[ch] || ch;
     });
-    const sanitizeHtml = (html) => {
-        const tpl = document.createElement('template');
-        tpl.innerHTML = String(html || '');
-        tpl.content.querySelectorAll('script,style,iframe,object,embed,link,meta').forEach((el) => el.remove());
-        tpl.content.querySelectorAll('*').forEach((el) => {
-            Array.from(el.attributes).forEach((attr) => {
-                const name = String(attr.name || '').toLowerCase();
-                const value = String(attr.value || '').trim().toLowerCase();
-                if (name.startsWith('on')) {
-                    el.removeAttribute(attr.name);
-                    return;
-                }
-                if ((name === 'href' || name === 'src') && value.startsWith('javascript:')) {
-                    el.removeAttribute(attr.name);
-                }
-            });
-        });
-        return tpl.innerHTML;
+
+    // Rich-Text-Unterthemen (Legacy-Bausteine) in einzelne Themen-Zeilen zerlegen.
+    const splitTopics = (html) => {
+        const withBreaks = String(html || '')
+            .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+            .replace(/<\/\s*(?:p|div|li|tr|h[1-6])\s*>/gi, '\n')
+            .replace(/<[^>]*>/g, ' ');
+        const decoder = document.createElement('textarea');
+        decoder.innerHTML = withBreaks;
+        return (decoder.value || '')
+            .split(/\r?\n/)
+            .map((line) => line.replace(/^[\s\-–—*·•]+/, '').replace(/\s+/g, ' ').trim())
+            .filter(Boolean);
     };
-    const decodeHtmlEntities = (value) => {
-        const textarea = document.createElement('textarea');
-        textarea.innerHTML = String(value || '');
-        return String(textarea.value || '');
+
+    // Handoff: alle Glyphen sind gestrichene Inline-SVGs (24er-Viewbox,
+    // stroke:currentColor) — so tragen sie die Farbe ihres Kontexts.
+    const icon = (paths, size = 16, stroke = 1.8) => {
+        return `<svg class="rf-icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"`
+            + ` stroke="currentColor" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round"`
+            + ` aria-hidden="true" focusable="false">${paths}</svg>`;
     };
-    const getMoodleRoot = () => {
-        if (typeof window === 'undefined' || !window.M || !window.M.cfg || !window.M.cfg.wwwroot) {
-            return '';
-        }
-        return String(window.M.cfg.wwwroot).replace(/\/+$/, '');
-    };
-    const formatRichText = (value) => {
-        const raw = String(value || '').trim();
-        if (!raw) {
-            return '';
-        }
-        const decoded = decodeHtmlEntities(raw).trim();
-        const hasRawHtmlTags = /<[a-z][\s\S]*>/i.test(raw);
-        const hasDecodedHtmlTags = /<[a-z][\s\S]*>/i.test(decoded);
-        if (hasRawHtmlTags) {
-            return sanitizeHtml(raw);
-        }
-        if (hasDecodedHtmlTags) {
-            return sanitizeHtml(decoded);
-        }
-        return escapeHtml(raw).replace(/\r?\n/g, '<br>');
+    const ICONS = {
+        calendar: () => icon('<rect x="3" y="4.5" width="18" height="16.5"/><path d="M8 2.5v4M16 2.5v4M3 10h18"/>', 15),
+        sun: () => icon('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4'
+            + 'M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>', 16),
+        sunrise: () => icon('<path d="M12 9V2M4.9 11.9l1.4-1.4M2 19h20M17.7 10.5l1.4 1.4M22 15h-3M5 15H2'
+            + 'M16 19a4 4 0 00-8 0"/>', 16),
+        clock: () => icon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', 14),
+        list: () => icon('<path d="M4 6h16M4 12h16M4 18h16"/>', 14, 2),
+        chevron: () => icon('<path d="M6 9l6 6 6-6"/>', 14, 2.2),
     };
 
     class RoterFadenView {
@@ -83,37 +147,36 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.status = bySel('#kg-roterfaden-status');
             this.list = bySel('#kg-roterfaden-list');
             this.empty = bySel('#kg-roterfaden-empty');
-            this.themeSelect = bySel('#kg-roterfaden-theme');
-            this.planningState = {units: []};
-            this.lastEntries = [];
+            this.styleSelect = bySel('#kg-roterfaden-theme');
+            this.days = [];
             this.emptyMessage = '';
-            this.axisTheme = DEFAULT_AXIS_THEME;
-            this.iconBaseUrl = `${getMoodleRoot()}/mod/seminarplaner/pix/lucide`;
-            if (typeof window !== 'undefined' && window.localStorage) {
-                const stored = String(window.localStorage.getItem(THEME_STORAGE_KEY) || '').toLowerCase().trim();
-                if (stored === 'clean' || stored === 'modern') {
-                    this.axisTheme = stored;
-                }
-            }
-            if (typeof window !== 'undefined' && window.KG_ROTERFADEN_AXIS_THEME) {
-                const requested = String(window.KG_ROTERFADEN_AXIS_THEME || '').toLowerCase().trim();
-                if (requested === 'clean' || requested === 'modern') {
-                    this.axisTheme = requested;
-                }
+            // Ansichtsdichte (Handoff): Modern = phasengetoente Kopfzeilen und
+            // offene Themen, Kompakt = neutrale Kopfzeilen und zugeklappte Themen.
+            this.rfStyle = DEFAULT_STYLE;
+            // Pro Block gemerkte Abweichung vom Stil-Standard (Block-ID -> offen?).
+            this.rfOpen = {};
+            const stored = this.readStoredStyle();
+            if (stored) {
+                this.rfStyle = stored;
             }
             if (!this.list || !this.empty) {
                 return;
             }
-            this.bindThemeControl();
+            this.bindStyleControl();
+            this.bindToggles();
             this.init();
         }
 
-        renderIcon(name, extraClass = '') {
-            if (!name || !this.iconBaseUrl) {
+        readStoredStyle() {
+            if (typeof window === 'undefined' || !window.localStorage) {
                 return '';
             }
-            const classes = `kg-roterfaden-icon${extraClass ? ` ${extraClass}` : ''}`;
-            return `<img class="${classes}" src="${this.iconBaseUrl}/${name}.svg" alt="" aria-hidden="true" loading="lazy" decoding="async">`;
+            const stored = String(window.localStorage.getItem(STYLE_STORAGE_KEY) || '').toLowerCase().trim();
+            // 'clean' war der frueher gespeicherte Name der kompakten Ansicht.
+            if (stored === 'clean' || stored === 'kompakt') {
+                return 'kompakt';
+            }
+            return stored === 'modern' ? 'modern' : '';
         }
 
         setStatus(text, isError = false) {
@@ -124,202 +187,338 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.status.style.color = isError ? '#b91c1c' : '#166534';
         }
 
-        parsePlanningState(raw) {
-            const source = (raw || {}).planningState || raw || {};
-            const units = Array.isArray(source.units) ? source.units : [];
-            return {
-                units: units.map((unit) => ({
-                    id: String(unit.id || ''),
-                    slotkey: String(unit.slotkey || '').trim(),
-                    title: String(unit.title || 'Baustein').trim(),
-                    topics: String(unit.topics || ''),
-                    active: unit.active !== false
-                }))
+        // ---- Ableitung: Snapshot -> Tage/Anker/Bloecke -----------------------
+
+        // Eine Platzierungs-Gruppe (aufeinanderfolgende Platzierungen desselben
+        // Bausteins) ist ein Block — genau wie in der Sequenzansicht.
+        buildFromSequence(state) {
+            const seq = state.sequenz || {};
+            const config = state.config || {};
+            const placements = (seq.platzierungen && typeof seq.platzierungen === 'object') ? seq.platzierungen : {};
+            const bausteine = (seq.bausteine && typeof seq.bausteine === 'object') ? seq.bausteine : {};
+            const auswahlen = (seq.einheitenauswahlen && typeof seq.einheitenauswahlen === 'object')
+                ? seq.einheitenauswahlen : {};
+            const cards = new Map((Array.isArray(state.methodcards) ? state.methodcards : [])
+                .map((card) => [String(card.id), card]));
+
+            const az = deriveAnkerzeiten(config);
+            const anchorFrame = {
+                vormittag: {start: parseClock(az.vormittag.start), end: parseClock(az.vormittag.end)},
+                nachmittag: {start: parseClock(az.nachmittag.start), end: parseClock(az.nachmittag.end)},
             };
-        }
+            const tage = Array.isArray(seq.tage) ? seq.tage : [];
+            const seenBausteine = {};
+            const days = [];
+            let num = 0;
 
-        getActiveUnit(entry) {
-            const slotkey = String(entry.slotkey || '').trim();
-            if (slotkey) {
-                const variants = this.planningState.units.filter((unit) => String(unit.slotkey || '').trim() === slotkey);
-                if (variants.length) {
-                    return variants.find((unit) => unit.active) || variants[0];
+            tage.forEach((tag, idx) => {
+                const dayname = (tag && tag.bezeichnung && (config.days || []).includes(tag.bezeichnung))
+                    ? tag.bezeichnung
+                    : (config.days || [])[idx];
+                if (!dayname) {
+                    return;
                 }
-            }
-            const unitid = String(entry.unitid || '');
-            if (unitid) {
-                return this.planningState.units.find((unit) => String(unit.id) === unitid) || null;
-            }
-            return null;
-        }
+                // D45: An Anreise-/Abreisetagen entfaellt ein Anker vollstaendig.
+                const off = {
+                    vormittag: idx === 0 && !!az.ersterTagNurNachmittag,
+                    nachmittag: idx === (tage.length - 1) && !!az.letzterTagNurVormittag,
+                };
+                const anchors = [];
 
-        normalizeEntries(state) {
-            const plan = (state || {}).plan || {};
-            const plandays = plan.days || {};
-            const days = Array.isArray(((state || {}).config || {}).days) && state.config.days.length
-                ? state.config.days
-                : DAYS_ALL;
-            const dayorder = {};
-            days.forEach((day, idx) => {
-                dayorder[String(day)] = idx;
-            });
-
-            const entries = [];
-            days.forEach((day) => {
-                const list = Array.isArray(plandays[day]) ? plandays[day] : [];
-                list.forEach((entry) => {
-                    if (!entry || entry.kind === 'break') {
+                ANCHORS.forEach((ankername) => {
+                    if (off[ankername]) {
                         return;
                     }
-                    const startMin = Number(entry.startMin || 0);
-                    const normalizedStart = Number.isFinite(startMin) ? startMin : 0;
-                    const period = normalizedStart >= AFTERNOON_START_MIN ? 'afternoon' : 'morning';
-                    const base = {
-                        day: String(day),
-                        startMin: normalizedStart,
-                        period: period
-                    };
-                    if (entry.kind === 'unit') {
-                        const unit = this.getActiveUnit(entry);
-                        entries.push(Object.assign(base, {
-                            kind: 'unit',
-                            title: String((unit && unit.title) || entry.title || 'Baustein'),
-                            // entry.topics: aus der Sequenz projizierte Snapshots tragen die
-                            // Unterthemen direkt am Eintrag (kein planningState-Lookup nötig).
-                            topicsHtml: formatRichText((unit && unit.topics) || entry.topics || '')
-                        }));
-                        return;
-                    }
-                    if (entry.kind === 'method') {
-                        entries.push(Object.assign(base, {
-                            kind: 'method',
-                            title: String(entry.title || 'Seminareinheit'),
-                            topicsHtml: ''
-                        }));
+                    const frame = anchorFrame[ankername];
+                    const pids = (((tag.anker || {})[ankername] || {}).sequenz) || [];
+                    const items = pids
+                        .map((pid) => ({pid: String(pid), data: placements[pid]}))
+                        .filter((entry) => entry.data);
+
+                    // Aufeinanderfolgende Platzierungen desselben Bausteins buendeln.
+                    const groups = [];
+                    items.forEach((entry) => {
+                        const bid = entry.data.typ === 'einheit' ? (entry.data.bausteinid || null) : null;
+                        const previous = groups.length ? groups[groups.length - 1] : null;
+                        if (previous && bid && previous.bausteinid === bid) {
+                            previous.items.push(entry);
+                            return;
+                        }
+                        groups.push({bausteinid: bid, items: [entry]});
+                    });
+
+                    let clock = Number.isFinite(frame.start) ? frame.start : 0;
+                    const blocks = [];
+                    groups.forEach((group) => {
+                        const groupminutes = group.items.reduce((sum, entry) => {
+                            return sum + Math.max(0, Number(entry.data.dauer) || 0);
+                        }, 0);
+                        // Pausen sind keine Programmpunkte — sie ruecken die Uhr
+                        // weiter, erscheinen aber nicht als Block.
+                        if (group.items[0].data.typ === 'pause') {
+                            clock += groupminutes;
+                            return;
+                        }
+
+                        const baustein = group.bausteinid ? (bausteine[group.bausteinid] || null) : null;
+                        const themen = group.items.map((entry) => {
+                            const placement = entry.data;
+                            const auswahl = placement.einheitenauswahl
+                                ? (auswahlen[placement.einheitenauswahl] || null)
+                                : null;
+                            const aktiv = (auswahl && auswahl.aktiv !== null && auswahl.aktiv !== undefined)
+                                ? String(auswahl.aktiv) : '';
+                            const card = aktiv ? (cards.get(aktiv) || null) : null;
+                            const title = String(placement.titel || '').trim()
+                                || String((card && card.titel) || '').trim()
+                                || String((baustein && baustein.titel) || '').trim()
+                                || 'Seminareinheit';
+                            return {
+                                title: title,
+                                phase: phaseKey(card ? card.seminarphase : ''),
+                                minutes: Math.max(0, Number(placement.dauer) || 0),
+                            };
+                        });
+
+                        const continuation = !!(group.bausteinid && seenBausteine[group.bausteinid]);
+                        if (group.bausteinid) {
+                            seenBausteine[group.bausteinid] = true;
+                        }
+                        num += 1;
+                        blocks.push({
+                            id: `${dayname}-${ankername}-${group.items[0].pid}`,
+                            num: num,
+                            title: (baustein && baustein.titel) ? String(baustein.titel) : themen[0].title,
+                            continuation: continuation,
+                            startMin: clock,
+                            minutes: groupminutes,
+                            phase: themen.find((theme) => theme.phase) ? themen[0].phase : '',
+                            themen: themen,
+                        });
+                        clock += groupminutes;
+                    });
+
+                    if (blocks.length) {
+                        anchors.push({
+                            key: ankername,
+                            name: ANCHOR_LABELS[ankername],
+                            start: frame.start,
+                            end: frame.end,
+                            blocks: blocks,
+                        });
                     }
                 });
-            });
 
-            entries.sort((a, b) => {
-                const daydiff = (dayorder[a.day] ?? 999) - (dayorder[b.day] ?? 999);
-                if (daydiff !== 0) {
-                    return daydiff;
+                if (anchors.length) {
+                    days.push({
+                        name: String(dayname),
+                        anchors: anchors,
+                        count: anchors.reduce((sum, anchor) => sum + anchor.blocks.length, 0),
+                    });
                 }
-                return a.startMin - b.startMin;
             });
 
-            return entries;
+            return days;
         }
 
-        groupEntries(entries) {
-            const grouped = {};
-            entries.forEach((entry) => {
-                if (!grouped[entry.day]) {
-                    grouped[entry.day] = {morning: [], afternoon: []};
+        // Fallback fuer Snapshots aus der Zeit vor der Sequenz: jeder Grid-Eintrag
+        // ist ein Block, seine Unterthemen werden zu Themen-Zeilen.
+        buildFromPlan(state) {
+            const plandays = ((state || {}).plan || {}).days || {};
+            const config = (state || {}).config || {};
+            const units = Array.isArray(((state || {}).planningState || {}).units)
+                ? state.planningState.units : [];
+            const daynames = Array.isArray(config.days) && config.days.length ? config.days : DAYS_ALL;
+            const az = deriveAnkerzeiten(config);
+            const middayCut = parseClock(az.nachmittag.start);
+            const frames = {
+                vormittag: {start: parseClock(az.vormittag.start), end: parseClock(az.vormittag.end)},
+                nachmittag: {start: parseClock(az.nachmittag.start), end: parseClock(az.nachmittag.end)},
+            };
+
+            const resolveUnit = (entry) => {
+                const slotkey = String(entry.slotkey || '').trim();
+                if (slotkey) {
+                    const variants = units.filter((unit) => String(unit.slotkey || '').trim() === slotkey);
+                    if (variants.length) {
+                        return variants.find((unit) => unit.active !== false) || variants[0];
+                    }
                 }
-                if (entry.period === 'afternoon') {
-                    grouped[entry.day].afternoon.push(entry);
-                } else {
-                    grouped[entry.day].morning.push(entry);
+                const unitid = String(entry.unitid || '');
+                return unitid ? (units.find((unit) => String(unit.id) === unitid) || null) : null;
+            };
+
+            const days = [];
+            let num = 0;
+            daynames.forEach((dayname) => {
+                const list = (Array.isArray(plandays[dayname]) ? plandays[dayname] : [])
+                    .filter((entry) => entry && entry.kind !== 'break')
+                    .slice()
+                    .sort((a, b) => (Number(a.startMin) || 0) - (Number(b.startMin) || 0));
+                const buckets = {vormittag: [], nachmittag: []};
+
+                list.forEach((entry) => {
+                    const startMin = Number(entry.startMin) || 0;
+                    const endMin = Number(entry.endMin) || startMin;
+                    const unit = entry.kind === 'unit' ? resolveUnit(entry) : null;
+                    const title = String((unit && unit.title) || entry.title || 'Seminareinheit');
+                    const phase = phaseKey(entry.sqPhase || entry.phase || '');
+                    const minutes = Math.max(0, endMin - startMin);
+                    const topics = splitTopics((unit && unit.topics) || entry.topics || '');
+                    const themen = topics.length
+                        ? topics.map((topic) => ({title: topic, phase: phase, minutes: 0}))
+                        : [{title: title, phase: phase, minutes: minutes}];
+                    num += 1;
+                    const anchorkey = (middayCut !== null && startMin >= middayCut) ? 'nachmittag' : 'vormittag';
+                    buckets[anchorkey].push({
+                        id: `${dayname}-${anchorkey}-${entry.uid || num}`,
+                        num: num,
+                        title: title,
+                        continuation: false,
+                        startMin: startMin,
+                        minutes: minutes,
+                        phase: phase,
+                        themen: themen,
+                    });
+                });
+
+                const anchors = ANCHORS
+                    .filter((ankername) => buckets[ankername].length)
+                    .map((ankername) => ({
+                        key: ankername,
+                        name: ANCHOR_LABELS[ankername],
+                        start: frames[ankername].start,
+                        end: frames[ankername].end,
+                        blocks: buckets[ankername],
+                    }));
+                if (anchors.length) {
+                    days.push({
+                        name: String(dayname),
+                        anchors: anchors,
+                        count: anchors.reduce((sum, anchor) => sum + anchor.blocks.length, 0),
+                    });
                 }
             });
-            return grouped;
+
+            return days;
         }
 
-        renderPeriodBlock(period, title, entries) {
-            const periodicon = period === 'afternoon'
-                ? this.renderIcon('sunset', 'kg-roterfaden-icon--period')
-                : this.renderIcon('sun', 'kg-roterfaden-icon--period');
-            const itemsHtml = entries.map((entry) => {
-                const isUnit = entry.kind === 'unit';
-                const timeLabel = minutesToLabel(entry.startMin);
-                const topics = isUnit && entry.topicsHtml ? entry.topicsHtml : '';
-                const contentHtml = isUnit
-                    ? `<details class="kg-roterfaden-topics-toggle">
-                        <summary>${this.renderIcon('list-checks', 'kg-roterfaden-icon--inline')}<span>Themen</span></summary>
-                        <div class="kg-roterfaden-topics">${topics || '<p class="sp-filter-status">Keine Themen hinterlegt.</p>'}</div>
-                    </details>`
-                    : `<div class="kg-roterfaden-method-note">Start: ${escapeHtml(timeLabel)} Uhr</div>`;
-                return `
-                    <article class="kg-roterfaden-entry">
-                        <div class="kg-roterfaden-entry-header">
-                            <h5 class="kg-roterfaden-title">${escapeHtml(entry.title)}</h5>
-                        </div>
-                        <div class="kg-roterfaden-entry-content">
-                            <div class="kg-roterfaden-meta">${this.renderIcon('clock-3', 'kg-roterfaden-icon--meta')}<span>Uhrzeit: ${escapeHtml(timeLabel)}</span></div>
-                            ${contentHtml}
-                        </div>
-                    </article>
-                `;
-            }).join('');
+        buildDays(state) {
+            const seq = (state || {}).sequenz;
+            if (seq && Array.isArray(seq.tage) && seq.tage.length) {
+                return this.buildFromSequence(state);
+            }
+            return this.buildFromPlan(state);
+        }
 
+        // ---- Rendering -------------------------------------------------------
+
+        isBlockOpen(block) {
+            if (Object.prototype.hasOwnProperty.call(this.rfOpen, block.id)) {
+                return !!this.rfOpen[block.id];
+            }
+            return this.rfStyle === 'modern';
+        }
+
+        renderTheme(theme) {
+            const phase = theme.phase || '';
+            const badge = phase
+                ? `<span class="rf-badge rf-phase--${phase}">${escapeHtml(PHASE_LABELS[phase])}</span>`
+                : '';
+            const dauer = theme.minutes
+                ? `<span class="rf-theme__dur">${escapeHtml(durationLabel(theme.minutes))}</span>`
+                : '<span class="rf-theme__dur"></span>';
             return `
-                <section class="kg-roterfaden-period">
-                    <h4 class="kg-roterfaden-period-title">${periodicon}<span>${escapeHtml(title)}</span></h4>
-                    <div class="kg-roterfaden-period-list">${itemsHtml}</div>
-                </section>
-            `;
+                <li class="rf-theme">
+                    <span class="rf-dot${phase ? ` rf-phase--${phase}` : ''}" aria-hidden="true"></span>
+                    <span class="rf-theme__title">${escapeHtml(theme.title)}</span>
+                    ${badge}
+                    ${dauer}
+                </li>`;
         }
 
-        render(entries, emptymessage) {
-            this.lastEntries = Array.isArray(entries) ? entries : [];
-            if (!entries.length) {
+        renderBlock(block) {
+            const open = this.isBlockOpen(block);
+            const phaseclass = block.phase ? ` rf-phase--${block.phase}` : '';
+            const continuation = block.continuation
+                ? '<span class="rf-block__cont">Fortsetzung</span>'
+                : '';
+            return `
+                <article class="rf-block${phaseclass}${open ? ' is-open' : ''}" data-rf-block="${escapeHtml(block.id)}">
+                    <header class="rf-block__head">
+                        <span class="rf-block__num">${block.num}.</span>
+                        <h4 class="rf-block__title">${escapeHtml(block.title)}</h4>
+                        ${continuation}
+                    </header>
+                    <div class="rf-block__body">
+                        <div class="rf-block__meta">
+                            <span class="rf-pill">${ICONS.clock()}<span>Uhrzeit: ${escapeHtml(clockLabel(block.startMin))}</span></span>
+                            <span class="rf-dur">${escapeHtml(durationLabel(block.minutes))}</span>
+                            <button type="button" class="rf-toggle" data-rf-toggle="${escapeHtml(block.id)}"
+                                aria-expanded="${open ? 'true' : 'false'}" aria-controls="rf-themen-${escapeHtml(block.id)}">
+                                ${ICONS.list()}<span>Themen (${block.themen.length})</span>${ICONS.chevron()}
+                            </button>
+                        </div>
+                        <ul class="rf-themen" id="rf-themen-${escapeHtml(block.id)}">
+                            ${block.themen.map((theme) => this.renderTheme(theme)).join('')}
+                        </ul>
+                    </div>
+                </article>`;
+        }
+
+        renderAnchor(anchor) {
+            const glyph = anchor.key === 'nachmittag' ? ICONS.sunrise() : ICONS.sun();
+            const timespan = (anchor.start !== null && anchor.end !== null)
+                ? `${clockLabel(anchor.start)}–${clockLabel(anchor.end)}`
+                : '';
+            return `
+                <section class="rf-anchor">
+                    <div class="rf-anchor__head">
+                        <span class="rf-anchor__icon">${glyph}</span>
+                        <span class="rf-anchor__name">${escapeHtml(anchor.name)}</span>
+                        <span class="rf-anchor__time">${escapeHtml(timespan)}</span>
+                    </div>
+                    <div class="rf-blocks">
+                        ${anchor.blocks.map((block) => this.renderBlock(block)).join('')}
+                    </div>
+                </section>`;
+        }
+
+        renderDay(day, isToday) {
+            const countlabel = `${day.count} ${day.count === 1 ? 'Programmpunkt' : 'Programmpunkte'}`;
+            return `
+                <section class="rf-day${isToday ? ' is-today' : ''}">
+                    <div class="rf-rail" aria-hidden="true"><span class="rf-node"></span></div>
+                    <div class="rf-day__body">
+                        <div class="rf-day__chiprow">
+                            <span class="rf-daychip">${ICONS.calendar()}<span>${escapeHtml(day.name)}</span></span>
+                            ${isToday ? '<span class="rf-today">Heute</span>' : ''}
+                            <span class="rf-daycount">${escapeHtml(countlabel)}</span>
+                        </div>
+                        <div class="rf-daycard">
+                            <span class="rf-dreieck" aria-hidden="true"></span>
+                            ${day.anchors.map((anchor) => this.renderAnchor(anchor)).join('')}
+                        </div>
+                    </div>
+                </section>`;
+        }
+
+        render() {
+            if (!this.days.length) {
                 this.list.innerHTML = '';
-                this.empty.textContent = emptymessage;
+                this.empty.textContent = this.emptyMessage;
                 this.empty.classList.remove('kg-hidden');
                 return;
             }
-
             this.empty.classList.add('kg-hidden');
             this.empty.textContent = '';
-            const grouped = this.groupEntries(entries);
-            const todayName = getTodayDayName();
-            const orderedDays = Object.keys(grouped).sort((a, b) => DAYS_ALL.indexOf(a) - DAYS_ALL.indexOf(b));
-            const mobileRows = [];
 
-            orderedDays.forEach((day) => {
-                const morning = grouped[day].morning.filter((entry) => entry.startMin >= MORNING_START_MIN
-                    && entry.startMin < AFTERNOON_START_MIN);
-                const afternoon = grouped[day].afternoon.filter((entry) => entry.startMin >= AFTERNOON_START_MIN
-                    && entry.startMin <= AFTERNOON_END_MIN);
-                const isToday = String(day) === String(todayName);
-                const periodBlocks = [];
-                if (morning.length) {
-                    periodBlocks.push(this.renderPeriodBlock('morning', 'Vormittag', morning));
-                }
-                if (afternoon.length) {
-                    periodBlocks.push(this.renderPeriodBlock('afternoon', 'Nachmittag', afternoon));
-                }
-                if (!periodBlocks.length) {
-                    return;
-                }
-                const isCompact = periodBlocks.length === 1;
-                mobileRows.push(`
-                    <section class="kg-roterfaden-mobile-row${isToday ? ' is-today' : ''}">
-                        <div class="kg-roterfaden-mobile-marker" aria-hidden="true">
-                            <span class="kg-roterfaden-node-dot"></span>
-                        </div>
-                        <div class="kg-roterfaden-mobile-content">
-                            <div class="kg-roterfaden-mobile-day">${this.renderIcon('calendar-days', 'kg-roterfaden-icon--day')}<span>${escapeHtml(day)}</span>${isToday ? ' <span class="kg-roterfaden-today">heute</span>' : ''}</div>
-                            <div class="kg-roterfaden-mobile-card${isToday ? ' is-today' : ''}">
-                                <div class="kg-roterfaden-node-content">
-                                    <div class="kg-roterfaden-period-columns${isCompact ? ' kg-roterfaden-period-columns--single' : ''}">
-                                        ${periodBlocks.join('')}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-                `);
-            });
-
+            const today = getTodayDayName();
             this.list.innerHTML = `
-                <div class="kg-roterfaden-timeline-wrap kg-roterfaden-theme-${this.axisTheme}">
-                    <div class="kg-roterfaden-timeline-mobile" style="display:grid;gap:18px;padding:6px 0 4px;">
-                        ${mobileRows.join('')}
-                    </div>
-                </div>
-            `;
+                <div class="rf-timeline rf-timeline--${this.rfStyle}">
+                    <span class="rf-thread" aria-hidden="true"></span>
+                    ${this.days.map((day) => this.renderDay(day, day.name === today)).join('')}
+                </div>`;
         }
 
         scrollToToday() {
@@ -327,12 +526,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 return;
             }
             const run = () => {
-                const todayRow = this.list.querySelector('.kg-roterfaden-mobile-row.is-today');
+                const todayRow = this.list.querySelector('.rf-day.is-today');
                 if (todayRow && typeof todayRow.scrollIntoView === 'function') {
                     todayRow.scrollIntoView({behavior: 'smooth', block: 'center', inline: 'nearest'});
                 }
             };
-
             if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
                 window.requestAnimationFrame(() => window.requestAnimationFrame(run));
                 return;
@@ -340,27 +538,46 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             setTimeout(run, 0);
         }
 
-        bindThemeControl() {
-            if (!this.themeSelect) {
+        bindStyleControl() {
+            if (!this.styleSelect) {
                 return;
             }
-            this.themeSelect.value = this.axisTheme;
-            this.themeSelect.addEventListener('change', () => {
-                const nextTheme = String(this.themeSelect.value || '').toLowerCase().trim();
-                if (nextTheme !== 'clean' && nextTheme !== 'modern') {
+            this.styleSelect.value = this.rfStyle;
+            this.styleSelect.addEventListener('change', () => {
+                const next = String(this.styleSelect.value || '').toLowerCase().trim();
+                if (next !== 'kompakt' && next !== 'modern') {
                     return;
                 }
-                this.axisTheme = nextTheme;
+                this.rfStyle = next;
+                // Stilwechsel setzt die Abweichungen einzelner Bloecke zurueck.
+                this.rfOpen = {};
                 if (typeof window !== 'undefined' && window.localStorage) {
-                    window.localStorage.setItem(THEME_STORAGE_KEY, this.axisTheme);
+                    window.localStorage.setItem(STYLE_STORAGE_KEY, this.rfStyle);
                 }
-                this.render(this.lastEntries || [], this.emptyMessage || '');
+                this.render();
+            });
+        }
+
+        bindToggles() {
+            this.list.addEventListener('click', (event) => {
+                const button = event.target.closest('[data-rf-toggle]');
+                if (!button || !this.list.contains(button)) {
+                    return;
+                }
+                const id = button.getAttribute('data-rf-toggle');
+                const block = this.list.querySelector(`[data-rf-block="${CSS.escape(id)}"]`);
+                if (!block) {
+                    return;
+                }
+                const open = !block.classList.contains('is-open');
+                block.classList.toggle('is-open', open);
+                button.setAttribute('aria-expanded', open ? 'true' : 'false');
+                this.rfOpen[id] = open;
             });
         }
 
         init() {
-            const emptymessage = this.empty.getAttribute('data-empty-message') || '';
-            this.emptyMessage = emptymessage;
+            this.emptyMessage = this.empty.getAttribute('data-empty-message') || '';
             asCall('mod_seminarplaner_get_roterfaden_state', {cmid: this.cmid}).then((roterfaden) => {
                 let publishedstate = {};
                 try {
@@ -368,19 +585,20 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 } catch (e) {
                     publishedstate = {};
                 }
-                this.planningState = this.parsePlanningState(publishedstate);
-
                 if (!roterfaden.ispublished) {
-                    this.render([], emptymessage);
+                    this.days = [];
+                    this.render();
                     return;
                 }
-                const entries = this.normalizeEntries(publishedstate);
-                this.render(entries, emptymessage);
+                this.days = this.buildDays(publishedstate);
+                this.render();
                 this.scrollToToday();
-                this.setStatus(`Roter Faden geladen (${entries.length} Einträge).`, false);
+                const blocks = this.days.reduce((sum, day) => sum + day.count, 0);
+                this.setStatus(`Roter Faden geladen (${blocks} Programmpunkte).`, false);
             }).catch((error) => {
                 Notification.exception(error);
-                this.render([], emptymessage);
+                this.days = [];
+                this.render();
                 this.setStatus('Roter Faden konnte nicht geladen werden.', true);
             });
         }

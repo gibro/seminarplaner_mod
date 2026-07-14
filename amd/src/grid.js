@@ -39,6 +39,31 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const found = PHASE_KEYS.find((candidate) => candidate.match.some((m) => clean.includes(m)));
         return found ? found.key : '';
     };
+
+    // Kompakter Karten-Auszug fuer den veroeffentlichten Roten Faden: nur die
+    // aktiven Einheiten der Sequenz, nur Titel und Seminarphase. Deckungsgleich
+    // in sequenz.js — beide Ansichten koennen veroeffentlichen.
+    const activeMethodCardSnapshot = (sequenz, cards) => {
+        const auswahlen = (sequenz && sequenz.einheitenauswahlen && typeof sequenz.einheitenauswahlen === 'object')
+            ? sequenz.einheitenauswahlen : {};
+        const active = new Set();
+        Object.keys(auswahlen).forEach((key) => {
+            const auswahl = auswahlen[key] || {};
+            if (auswahl.aktiv !== null && auswahl.aktiv !== undefined && String(auswahl.aktiv) !== '') {
+                active.add(String(auswahl.aktiv));
+            }
+        });
+        if (!active.size) {
+            return [];
+        }
+        return (Array.isArray(cards) ? cards : [])
+            .filter((card) => card && active.has(String(card.id)))
+            .map((card) => ({
+                id: String(card.id),
+                titel: String(card.titel || ''),
+                seminarphase: Array.isArray(card.seminarphase) ? card.seminarphase : String(card.seminarphase || '')
+            }));
+    };
     const FILTER_DROPDOWNS = {
         tags: {
             root: '#sp-filter-tags-dropdown',
@@ -414,7 +439,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 units: Array.isArray(this.planningState.units) ? this.planningState.units : [],
                 slotorder: Array.isArray(this.planningState.slotorder) ? this.planningState.slotorder : [],
                 zoomIndex: this.zoomIndex,
-                sourceMode: this.state.sourceMode || 'methods'
+                sourceMode: this.state.sourceMode || 'methods',
+                // Der Roter-Faden-Snapshot braucht die Sequenz (Bloecke, Dauern)
+                // und zu den aktiven Einheiten Titel + Seminarphase; die
+                // Methoden-Bibliothek selbst steht Lesenden dort nicht offen.
+                sequenz: this.sequenzSection || null,
+                methodcards: activeMethodCardSnapshot(this.sequenzSection, this.methods)
             };
         }
 

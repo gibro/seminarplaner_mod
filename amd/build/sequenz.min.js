@@ -370,6 +370,31 @@ function(Ajax, UserRepository, Fragment, Templates) {
         transfer: 'Transfer',
     };
 
+    // Kompakter Karten-Auszug fuer den veroeffentlichten Roten Faden: nur die
+    // aktiven Einheiten der Sequenz, nur Titel und Seminarphase. Deckungsgleich
+    // in grid.js — beide Ansichten koennen veroeffentlichen.
+    const activeMethodCardSnapshot = (sequenz, cards) => {
+        const auswahlen = (sequenz && sequenz.einheitenauswahlen && typeof sequenz.einheitenauswahlen === 'object')
+            ? sequenz.einheitenauswahlen : {};
+        const active = new Set();
+        Object.keys(auswahlen).forEach((key) => {
+            const auswahl = auswahlen[key] || {};
+            if (auswahl.aktiv !== null && auswahl.aktiv !== undefined && String(auswahl.aktiv) !== '') {
+                active.add(String(auswahl.aktiv));
+            }
+        });
+        if (!active.size) {
+            return [];
+        }
+        return (Array.isArray(cards) ? cards : [])
+            .filter((card) => card && active.has(String(card.id)))
+            .map((card) => ({
+                id: String(card.id),
+                titel: String(card.titel || ''),
+                seminarphase: Array.isArray(card.seminarphase) ? card.seminarphase : String(card.seminarphase || ''),
+            }));
+    };
+
     // D41: Bloom verb stems mapped to the seminar phase (Erfahrungserhebung
     // deliberately excluded - it is only found via keyword matching).
     const BLOOM_PHASES = [
@@ -1022,6 +1047,11 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 slotorder: Array.isArray(planningstate.slotorder) ? planningstate.slotorder : [],
                 zoomIndex: this.state.zoomIndex || 0,
                 sourceMode: this.state.sourceMode || 'methods',
+                // Der Roter-Faden-Snapshot braucht die Sequenz (Bloecke, Dauern)
+                // und zu den aktiven Einheiten Titel + Seminarphase; die
+                // Methoden-Bibliothek selbst steht Lesenden dort nicht offen.
+                sequenz: this.sequenz || null,
+                methodcards: activeMethodCardSnapshot(this.sequenz, this.methodCardList),
             };
             return asCall('mod_seminarplaner_publish_roterfaden', {
                 cmid: this.cmid,

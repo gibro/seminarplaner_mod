@@ -4845,376 +4845,448 @@ body.sp-resizing * {
   margin-bottom: 0;
 }
 
-.kg-roterfaden-list {
-  overflow-x: visible;
-  padding-bottom: 8px;
+/* =========================================================
+   ROTER FADEN  (Design-Handoff: docs/design_handoff_seminarplaner/ROTER-FADEN.md)
+   Der Seminarablauf als eine durchgehende Linie: grauer Grund, weisse Karten
+   mit Haarlinien-Rand, scharfe Ecken, keine Schatten. Die einzigen Rundformen
+   sind die kleinen Phasen-Punkte, die einzige Bewegung ist der drehende
+   Chevron am Themen-Schalter.
+   ========================================================= */
+
+/* Grauer Grund: nur so wirken die weissen Tageskarten und der Halo des
+   Meilenstein-Knotens (box-shadow in Seitenfarbe) wie im Handoff. */
+.kg-rf-shell {
+  max-width: 1180px;
+  padding: 16px;
+  background: var(--ig-surface-muted);
 }
 
-.kg-roterfaden-theme-clean .kg-roterfaden-node-dot {
-  background: var(--ig-red);
-  box-shadow: 0 0 0 4px rgba(227, 5, 27, .2);
-}
-
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-node-content {
-  background: #ffffff;
-  border: 2px solid var(--ig-anthracite);
-  box-shadow: none;
-}
-
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-entry {
-  border: 1px solid var(--ig-gray);
-  border-radius: 0;
-  background: #ffffff;
-}
-
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-entry-header {
-  background: #f7f7f7;
-  border-bottom: 1px solid var(--ig-gray);
-}
-
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-entry-content {
-  background: #ffffff;
-  color: var(--ig-anthracite);
-}
-
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-title,
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-period-title,
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-meta,
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-topics,
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-method-note {
-  color: var(--ig-anthracite);
-}
-
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-topics-toggle > summary {
-  color: var(--ig-anthracite);
-  font-weight: 700;
-}
-
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card.is-today .kg-roterfaden-node-content {
-  border-color: var(--ig-red);
-  box-shadow: 0 0 0 3px rgba(227, 5, 27, .18);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-node-dot {
-  background: radial-gradient(circle at 35% 35%, rgba(227, 5, 27, .62) 0%, var(--ig-red) 60%, var(--ig-darkred) 100%);
-  box-shadow: 0 0 0 6px rgba(227, 5, 27, .18), 0 0 14px rgba(136, 42, 48, .34);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-node-content {
-  position: relative;
-  background: linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--ig-yellow) 16%, #ffffff) 100%);
-  border: 1px solid rgba(227, 5, 27, .35);
-  border-radius: 0;
-  box-shadow: 0 12px 24px rgba(136, 42, 48, .18), 0 2px 0 rgba(255, 255, 255, .7) inset;
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-node-content::before {
-  content: "";
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 0;
-  height: 0;
-  border-top: 18px solid rgba(227, 5, 27, .22);
-  border-left: 18px solid transparent;
-  pointer-events: none;
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-entry {
-  border: 1px solid rgba(136, 42, 48, .24);
-  border-radius: 0;
-  box-shadow: 0 3px 10px rgba(60, 60, 60, .12);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-entry-header {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--ig-yellow) 16%, #ffffff) 0%, color-mix(in srgb, var(--ig-yellow) 30%, #ffffff) 100%);
-  border-bottom: 1px solid rgba(136, 42, 48, .24);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-entry-content {
-  background: linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--ig-yellow) 8%, #ffffff) 100%);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-title {
-  color: var(--ig-darkred);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-period-title {
-  color: var(--ig-red);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-topics-toggle > summary {
-  color: var(--ig-darkred);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card.is-today .kg-roterfaden-node-content {
-  border-color: var(--ig-red);
-  box-shadow: 0 0 0 3px rgba(227, 5, 27, .2), 0 12px 28px rgba(136, 42, 48, .2);
-}
-
-.kg-roterfaden-node-content {
-  width: 100%;
-  height: 100%;
-  border: 1px solid var(--ig-lightgray);
-  border-radius: 0;
+/* ---- Werkzeugleiste (Ansichtsdichte links, Handout rechts) ---- */
+.rf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 11px 16px;
+  margin-bottom: 16px;
   background: #fff;
-  padding: 12px;
-  box-shadow: 0 3px 10px rgba(60, 60, 60, .1);
-  max-height: 100%;
-  overflow: auto;
+  border: 1px solid var(--ig-lightgray);
 }
 
-.kg-roterfaden-today {
-  display: inline-block;
-  margin-left: 6px;
-  font-size: 12px;
-  font-weight: 700;
+.rf-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rf-toolbar__label {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 11px;
+  letter-spacing: .03em;
   text-transform: uppercase;
-  letter-spacing: .04em;
-  color: var(--ig-red);
-  background: var(--ig-red-soft);
-  border-radius: 0;
-  padding: 2px 8px;
-  vertical-align: middle;
+  color: var(--ig-gray);
 }
 
-.kg-roterfaden-node-dot {
+select.kg-input.rf-select {
+  width: auto;
+  min-height: 34px;
+  height: 34px;
+  padding: 7px 30px 7px 11px;
+  border-color: var(--ig-midgray);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+
+.rf-handout {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 15px;
+  border-width: 2px;
+  font-family: var(--font-head);
+  font-size: 12px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.rf-handout:hover {
+  text-decoration: none;
+}
+
+.rf-icon {
+  flex: none;
+}
+
+/* ---- Timeline: ein durchgehender roter Faden hinter allen Tagen ---- */
+.kg-roterfaden-list {
+  padding-bottom: 4px;
+}
+
+.rf-timeline {
   position: relative;
-  width: 14px;
-  height: 14px;
-  border-radius: 0;
+}
+
+.rf-thread {
+  position: absolute;
+  left: 11px;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
   background: var(--ig-red);
-  box-shadow: 0 0 0 4px rgba(227, 5, 27, .15);
-  z-index: 3;
 }
 
-.kg-roterfaden-mobile-card.is-today .kg-roterfaden-node-content {
+/* ---- Tag: Schiene mit Meilenstein-Knoten + Inhalt ---- */
+.rf-day {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.rf-rail {
+  flex: 0 0 25px;
+  display: flex;
+  justify-content: center;
+  padding-top: 7px;
+}
+
+.rf-node {
+  position: relative;
+  z-index: 1;
+  width: 19px;
+  height: 19px;
+  background: var(--ig-darkred);
+  /* Halo in Seitenfarbe: der Faden laeuft optisch hinter dem Knoten durch. */
+  box-shadow: 0 0 0 4px var(--ig-surface-muted);
+}
+
+.rf-day.is-today .rf-node {
+  background: var(--ig-red);
+}
+
+.rf-day__body {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 22px;
+}
+
+.rf-day__chiprow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.rf-daychip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  background: #fff;
+  border: 1px solid var(--ig-lightgray);
+  font-family: var(--font-head);
+  font-size: 15px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--ig-anthracite);
+}
+
+.rf-day.is-today .rf-daychip {
   border-color: var(--ig-red);
-  box-shadow: 0 0 0 2px rgba(227, 5, 27, .14);
+  color: var(--ig-red);
 }
 
-.kg-roterfaden-mobile-row.is-today .kg-roterfaden-node-dot {
-  background: var(--ig-yellow);
-  box-shadow: 0 0 0 7px rgba(234, 181, 0, .25);
+.rf-today {
+  padding: 3px 9px;
+  background: var(--ig-red);
+  color: #fff;
+  font-family: var(--font-head);
+  font-size: 10px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
 }
 
-.kg-roterfaden-period {
-  margin-top: 0;
+.rf-daycount {
+  font-size: 12.5px;
+  color: var(--ig-gray);
 }
 
-.kg-roterfaden-period + .kg-roterfaden-period {
-  margin-top: 2px;
+/* ---- Tageskarte mit Dreieck (die eine Heldenform des CD) ---- */
+.rf-daycard {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid var(--ig-lightgray);
 }
 
-.kg-roterfaden-period-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--kg-inner-gap);
-  align-items: start;
+.rf-dreieck {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 46px;
+  height: 46px;
+  clip-path: polygon(100% 0, 0 0, 100% 100%);
+  background: var(--ig-sunrise);
 }
 
-.kg-roterfaden-period-columns--single {
-  grid-template-columns: 1fr;
+/* ---- Anker: Vormittag / Nachmittag ---- */
+.rf-anchor__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 11px;
 }
 
-.kg-roterfaden-period-title {
-  margin: 0 0 10px 0;
+.rf-anchor__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--ig-lightgray);
+  color: var(--ig-red);
+}
+
+.rf-anchor__name {
+  font-family: var(--font-head);
+  font-size: 13px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--ig-red);
+}
+
+.rf-anchor__time {
+  font-size: 12px;
+  color: var(--ig-gray);
+}
+
+.rf-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ---- Programmblock (eine Einheit oder ein Baustein mit mehreren Themen) ---- */
+.rf-block {
+  background: #fff;
+  border: 1px solid var(--ig-lightgray);
+}
+
+.rf-block__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 13px;
+  background: #fafafa;
+  border-bottom: 1px solid var(--ig-lightgray);
+  color: var(--ig-anthracite);
+}
+
+/* "Modern": die Kopfzeile traegt die Phasenfarbe des Blocks (Kompakt bleibt
+   neutral). Die Phasen-Token stehen auf .rf-block (siehe .rf-phase--*). */
+.rf-timeline--modern .rf-block .rf-block__head {
+  background: var(--rf-tint, #fafafa);
+  border-bottom-color: var(--rf-color, var(--ig-lightgray));
+  color: var(--rf-text, var(--ig-anthracite));
+}
+
+.rf-block__num,
+.rf-block__title {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 13px;
+  line-height: 1.25;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: inherit;
+}
+
+/* Derselbe Baustein an spaeterer Stelle: als Fortsetzung kenntlich (D20). */
+.rf-block__cont {
+  margin-left: auto;
+  padding: 2px 7px;
+  border: 1px solid currentcolor;
+  font-family: var(--font-head);
+  font-size: 10px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.rf-block__body {
+  padding: 11px 13px;
+}
+
+.rf-block__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.rf-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border-radius: 0;
-  background: rgba(255, 255, 255, .78);
+  background: var(--ig-surface-soft);
   border: 1px solid var(--ig-lightgray);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ig-anthracite);
-}
-
-.kg-roterfaden-period-list {
-  display: grid;
-  gap: 10px;
-}
-
-.kg-roterfaden-entry {
-  border: 1px solid var(--ig-lightgray);
-  border-radius: 0;
-  background: #fff;
-  overflow: hidden;
-}
-
-.kg-roterfaden-entry-header {
-  padding: 10px 12px;
-  background: #f7f7f7;
-  border-bottom: 1px solid var(--ig-lightgray);
-}
-
-.kg-roterfaden-entry-content {
-  padding: 10px 12px;
-}
-
-.kg-roterfaden-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #f8f8f8;
-  border: 1px solid var(--ig-lightgray);
-  border-radius: 0;
-  padding: 2px 8px;
   font-size: 12px;
   color: var(--ig-gray);
-  margin-bottom: 8px;
 }
 
-.kg-roterfaden-title {
-  margin: 0;
-  font-size: 15px;
-  color: var(--ig-anthracite);
+.rf-dur {
+  font-size: 12px;
+  color: var(--ig-gray);
 }
 
-.kg-roterfaden-topics {
-  margin-top: 6px;
-  color: var(--ig-anthracite);
-}
-
-.kg-roterfaden-topics-toggle {
-  margin-top: 6px;
-}
-
-.kg-roterfaden-topics-toggle > summary {
+.rf-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  margin-left: auto;
+  padding: 4px 2px;
+  background: none;
+  border: 0;
   cursor: pointer;
-  font-weight: 600;
-  color: var(--ig-anthracite);
+  white-space: nowrap;
+  font-family: var(--font-head);
+  font-size: 12px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--ig-red);
 }
 
-.kg-roterfaden-method-note {
-  color: var(--ig-anthracite);
+.rf-toggle:hover {
+  color: var(--ig-red-hover);
 }
 
-.kg-roterfaden-timeline-wrap {
-  width: 100%;
-  --kg-inner-gap: 12px;
+.rf-toggle:focus-visible {
+  outline: 2px solid var(--ig-red);
+  outline-offset: 2px;
 }
 
-.kg-roterfaden-timeline-mobile {
-  display: grid;
-  gap: 18px;
-  padding: 6px 0 4px;
+/* Einzige Bewegung im Roten Faden. */
+.rf-toggle .rf-icon:last-child {
+  transition: transform .15s;
 }
 
-.kg-roterfaden-mobile-row {
-  position: relative;
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
-  column-gap: 10px;
-  align-items: start;
+.rf-block.is-open .rf-toggle .rf-icon:last-child {
+  transform: rotate(180deg);
 }
 
-.kg-roterfaden-mobile-row::before {
-  content: "";
-  position: absolute;
-  left: 14px;
-  top: 10px;
-  bottom: -22px;
-  width: 2px;
-  background: var(--ig-gray);
-  z-index: 0;
-}
-
-.kg-roterfaden-mobile-row:last-child::before {
+/* ---- Themen eines Blocks ---- */
+.rf-themen {
   display: none;
+  margin: 11px 0 0;
+  padding: 11px 0 0;
+  border-top: 1px solid #ededed;
+  list-style: none;
 }
 
-.kg-roterfaden-mobile-marker {
-  position: relative;
-  z-index: 2;
-  width: 30px;
-  padding-top: 2px;
+.rf-block.is-open .rf-themen {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.kg-roterfaden-mobile-content {
-  min-width: 0;
-}
-
-.kg-roterfaden-mobile-day {
-  display: inline-flex;
+.rf-theme {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-  font-weight: 700;
-  font-size: 15px;
-  color: var(--ig-anthracite);
-  background: rgba(255, 255, 255, .92);
-  border: 1px solid var(--ig-lightgray);
-  border-radius: 0;
-  padding: 2px 10px;
-}
-
-.kg-roterfaden-mobile-row.is-today .kg-roterfaden-mobile-day {
-  border-color: var(--ig-red);
-  box-shadow: 0 0 0 2px rgba(227, 5, 27, .12);
-}
-
-.kg-roterfaden-mobile-card {
-  position: relative;
-  z-index: 1;
-}
-
-.kg-roterfaden-mobile-card .kg-roterfaden-node-content {
-  overflow: visible;
-}
-
-.kg-roterfaden-mobile-card .kg-roterfaden-period-columns {
-  grid-template-columns: 1fr;
   gap: 10px;
+  margin: 0;
 }
 
-.kg-roterfaden-icon {
-  width: 16px;
-  height: 16px;
-  display: inline-block;
-  flex: 0 0 auto;
-  opacity: .86;
+.rf-dot {
+  flex: 0 0 11px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--rf-color, var(--ig-lightgray));
 }
 
-.kg-roterfaden-icon--day {
-  width: 17px;
-  height: 17px;
+.rf-theme__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ig-anthracite);
 }
 
-.kg-roterfaden-icon--period {
-  width: 15px;
-  height: 15px;
+.rf-badge {
+  padding: 3px 8px;
+  background: var(--rf-tint, var(--ig-surface-muted));
+  border: 1px solid var(--rf-color, var(--ig-lightgray));
+  font-family: var(--font-head);
+  font-size: 11px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--rf-text, var(--ig-gray));
 }
 
-.kg-roterfaden-icon--meta,
-.kg-roterfaden-icon--inline {
-  width: 14px;
-  height: 14px;
+.rf-theme__dur {
+  min-width: 52px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--ig-gray);
 }
 
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-row::before {
-  background: var(--ig-anthracite);
+/* ---- Seminarphasen: Volltonfarbe, heller Grund, dunkle Schrift ---- */
+.rf-phase--orientierung {
+  --rf-color: var(--ig-blue);
+  --rf-tint: #e7f0f5;
+  --rf-text: #215d7e;
 }
 
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-day {
-  background: #ffffff;
-  border-color: var(--ig-anthracite);
+.rf-phase--erfahrung {
+  --rf-color: var(--ig-green);
+  --rf-tint: #e7f1e3;
+  --rf-text: #3f6e2f;
 }
 
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-row::before {
-  background: var(--ig-sunrise);
+.rf-phase--analyse {
+  --rf-color: var(--ig-yellow);
+  --rf-tint: #fbf1d0;
+  --rf-text: #8a6d00;
 }
 
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-day {
-  background: linear-gradient(180deg, rgba(255, 255, 255, .98), rgba(255, 247, 233, .95));
-  border-color: rgba(227, 5, 27, .35);
-  box-shadow: 0 4px 10px rgba(60, 60, 60, .14);
+.rf-phase--handlung {
+  --rf-color: var(--ig-darkred);
+  --rf-tint: #f3e6e7;
+  --rf-text: var(--ig-darkred);
+}
+
+.rf-phase--transfer {
+  --rf-color: var(--ig-gray);
+  --rf-tint: #eee;
+  --rf-text: #4a4a4a;
+}
+
+@media (max-width: 640px) {
+  .kg-rf-shell {
+    padding: 12px 10px;
+  }
+
+  .rf-day {
+    gap: 10px;
+  }
+
+  .rf-daycard {
+    padding: 12px 12px;
+  }
+
+  .rf-block__meta {
+    gap: 8px;
+  }
+
+  .rf-toggle {
+    margin-left: 0;
+  }
 }
 
 /* =========================================================
