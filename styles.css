@@ -5641,7 +5641,11 @@ select.kg-input.rf-select {
 }
 
 /* === Sequenzansicht (Block 2, D3/D10/D11/D20) – Chrome-Variante "Vertraut" === */
-.sq-shell {
+/* Die Token gelten auch im Modal-Overlay: das haengt an document.body, also
+   AUSSERHALB von .sq-shell — ohne diese Zeile blieben dort z. B. Budget-Balken
+   farblos (var(--sq-accent) waere nicht aufgeloest). */
+.sq-shell,
+.sq-modal-overlay {
     --sq-border: #d7dce2;
     --sq-border-strong: #b9c1cb;
     --sq-text: #26313d;
@@ -5999,46 +6003,94 @@ select.kg-input.rf-select {
 .sq-anchor__add { margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; }
 .sq-membership { font-size: 11.5px; padding: 3px 8px; }
 
-/* === Sequenzansicht: Uebersetzungs-Anzeige (D35) === */
-.sq-modal--intro { max-width: 760px; }
+/* === Sequenzansicht: Uebersetzungs-Anzeige (D35) ===
+   Beide Spalten zeigen die ECHTEN Ansichten, nicht mehr vereinfachte Skizzen:
+   links die Ueberblick-Optik (dauerechte Bloecke in Phasenfarbe an der
+   Zeitachse), rechts die Sequenz-Bausteine (Anker mit Budget, Einheiten-Zeilen
+   mit Phasen-Streifen und Badges, Baustein-Klammer) — nur verkleinert und ohne
+   Bedienelemente. */
+.sq-modal--intro { max-width: 1040px; }
 .sq-intro__lead { font-size: 13px; }
-.sq-intro__columns { display: flex; gap: 14px; flex-wrap: wrap; }
-.sq-intro__col { flex: 1; min-width: 260px; border: 1px solid #d7dce2; border-radius: 0; padding: 10px 12px; }
-.sq-intro__col--new { background: var(--ig-red-soft); border-color: var(--ig-red-mid); }
-.sq-intro__col h4 { font-size: 12.5px; margin: 0 0 8px; }
-.sq-intro__row { display: flex; gap: 8px; font-size: 12px; padding: 3px 0; }
-.sq-intro__row--empty { color: #5b6b79; }
-.sq-intro__time { color: #5b6b79; min-width: 82px; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
-.sq-intro__anchor { font-weight: 600; font-size: 11.5px; margin: 6px 0 2px; color: var(--ig-anthracite); }
-.sq-intro__divider { text-align: center; color: #5b6b79; font-size: 11px; border-top: 1px dashed #b9c1cb; margin: 8px 0 2px; padding-top: 4px; }
-.sq-intro__note { font-size: 12px; color: #5b6b79; margin-top: 10px; }
+.sq-intro__columns { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+.sq-intro__col {
+    flex: 1;
+    min-width: 300px;
+    border: 1px solid var(--ig-lightgray);
+    border-radius: 0;
+    background: #fff;
+    padding: 10px 12px;
+}
+.sq-intro__col--new { background: var(--ig-surface-muted); border-color: var(--ig-red-mid); }
+.sq-intro__col h4 {
+    margin: 0 0 8px;
+    font-family: var(--font-head);
+    font-size: 12.5px;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    color: var(--ig-anthracite);
+}
+.sq-intro__note { font-size: 12px; color: var(--ig-gray); margin-top: 10px; }
 
-/* === D35-Intro: Mini-Grid "So war es" === */
+/* --- Linke Spalte: "So war es" in der Optik des Ueberblicks --- */
 .sq-intro__grid {
     position: relative;
-    background: repeating-linear-gradient(to bottom, #f3f5f7 0, #f3f5f7 1px, transparent 1px, transparent 66px);
-    border-radius: 0;
     margin-top: 4px;
 }
-.sq-intro__hour { position: absolute; left: 0; right: 0; border-top: 1px solid #e6eaee; }
-.sq-intro__hour span { position: absolute; top: -7px; left: 0; font-size: 10px; color: #8a97a3; background: #fff; padding-right: 4px; }
+.sq-intro__hour { position: absolute; left: 0; right: 0; border-top: 1px solid var(--ig-lightgray); }
+.sq-intro__hour span {
+    position: absolute;
+    top: -7px;
+    left: 0;
+    padding-right: 4px;
+    background: #fff;
+    font-size: 10px;
+    color: var(--ig-gray);
+    font-variant-numeric: tabular-nums;
+}
 .sq-intro__block {
     position: absolute;
     left: 44px;
     right: 4px;
-    background: #F2F2F2;
-    border: 1px solid var(--ig-lightgray);
-    border-radius: 0;
-    padding: 2px 6px;
-    font-size: 11px;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    justify-content: center;
+    gap: 0;
+    overflow: hidden;
+    padding: 2px 7px;
+    border-radius: 0;
+    background: var(--ig-lightgray);
+    color: #fff;
+    font-size: 10.5px;
+    line-height: 1.2;
 }
-.sq-intro__block--break { background: #f4f4f4; border-style: dashed; border-color: #c3cad1; color: #5b6b79; }
-.sq-intro__blocktime { color: #5b6b79; font-size: 10px; font-variant-numeric: tabular-nums; }
+/* Volle Phasenfarbe wie die Bloecke im Ueberblick. */
+.sq-intro__block--orientierung { background: var(--sq-phase-orientierung, #2F80AB); }
+.sq-intro__block--erfahrung { background: var(--sq-phase-erfahrung, #5B9945); }
+.sq-intro__block--analyse { background: var(--sq-phase-analyse, #EAB500); color: var(--ig-anthracite); }
+.sq-intro__block--handlung { background: var(--sq-phase-handlung, #882A30); }
+.sq-intro__block--transfer { background: var(--sq-phase-transfer, #646464); }
+.sq-intro__block--analyse .sq-intro__blocktime { color: var(--ig-anthracite); }
+
+/* Pausen: 45°-Schraffur wie im Ueberblick. */
+.sq-intro__block--break {
+    background: repeating-linear-gradient(45deg, #ededed 0, #ededed 5px, #f7f7f7 5px, #f7f7f7 10px);
+    border: 1px dashed var(--ig-midgray);
+    color: var(--ig-gray);
+}
+.sq-intro__block--break .sq-intro__blocktime { color: var(--ig-gray); }
+.sq-intro__blocktime { color: rgba(255, 255, 255, .85); font-size: 10px; font-variant-numeric: tabular-nums; }
 .sq-intro__blocktitle { font-weight: 600; line-height: 1.25; }
+
+/* --- Rechte Spalte: "So ist es jetzt" = echte Sequenz-Bausteine, verkleinert --- */
+.sq-intro__preview {
+    zoom: .85;
+    /* Reine Vorschau: hier wird nichts bedient. */
+    pointer-events: none;
+}
+
+.sq-intro__preview .sq-anchor { margin-bottom: 8px; }
+
+.sq-intro__preview .sq-anchor__body { padding: 8px; gap: 8px; }
 
 /* === Sequenzansicht: Entfernen + Pause (Block 2d) === */
 .sq-move__btn--remove { color: #a02f2f; }

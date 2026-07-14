@@ -1435,7 +1435,7 @@ function(Ajax, UserRepository, Fragment, Templates) {
         renderIntroGrid(legacyentries, frame) {
             const daystart = frame.start;
             const dayend = Math.max(frame.end, daystart + 60);
-            const scale = 1.1; // Pixels per minute.
+            const scale = 1.35; // Pixels per minute (kurze Bloecke bleiben lesbar).
             const height = (dayend - daystart) * scale;
 
             const hours = [];
@@ -1446,6 +1446,8 @@ function(Ajax, UserRepository, Fragment, Templates) {
                     </div>`);
             }
 
+            // Optik des Überblicks: dauerechte Blöcke in voller Phasenfarbe,
+            // Pausen schraffiert — so erkennt man den alten Plan wieder.
             const blocks = legacyentries.map((entry) => {
                 const start = Math.max(daystart, Number(entry.startMin) || 0);
                 const end = Math.min(dayend, Number(entry.endMin) || 0);
@@ -1454,10 +1456,23 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 }
                 const isbreak = String(entry.kind || '') === 'break';
                 const title = String(entry.title || (isbreak ? 'Pause' : 'Einheit'));
+                const phase = isbreak ? '' : phaseKey(entry.phase);
+                const classes = ['sq-intro__block'];
+                if (isbreak) {
+                    classes.push('sq-intro__block--break');
+                } else if (phase) {
+                    classes.push(`sq-intro__block--${phase}`);
+                }
+                const height = Math.max(16, ((end - start) * scale) - 2);
+                // Sehr flache Blöcke tragen nur den Titel — sonst schneidet die
+                // zweite Zeile ab.
+                const timeline = height >= 28
+                    ? `<span class="sq-intro__blocktime">${minutesToLabel(start)}–${minutesToLabel(end)}</span>`
+                    : '';
                 return `
-                    <div class="sq-intro__block${isbreak ? ' sq-intro__block--break' : ''}"
-                      style="top:${(start - daystart) * scale}px; height:${Math.max(16, (end - start) * scale - 2)}px">
-                      <span class="sq-intro__blocktime">${minutesToLabel(start)}–${minutesToLabel(end)}</span>
+                    <div class="${classes.join(' ')}" title="${escapeHtml(`${minutesToLabel(start)}–${minutesToLabel(end)} ${title}`)}"
+                      style="top:${(start - daystart) * scale}px; height:${height}px">
+                      ${timeline}
                       <span class="sq-intro__blocktitle">${escapeHtml(title)}</span>
                     </div>`;
             }).join('');
@@ -1465,29 +1480,126 @@ function(Ajax, UserRepository, Fragment, Templates) {
             return `<div class="sq-intro__grid" style="height:${height}px">${hours.join('')}${blocks}</div>`;
         }
 
+        // Rechte Spalte der Übersetzungs-Anzeige (D35): dieselben Bausteine wie
+        // die echte Sequenzansicht — Anker-Karte mit Budget, Einheiten-Zeilen mit
+        // Phasen-Streifen und Badges, Baustein-Klammer, Mittagspausen-Trenner.
+        // Nur die Bedienelemente fehlen (Vorschau, nichts ist hier bedienbar).
+        renderIntroSequence(day, frame) {
+            const anchors = ANCHORS.map((ankername) => {
+                const isMorning = ankername === 'vormittag';
+                const anchorStart = isMorning ? frame.start : Math.max(frame.midday.end, frame.start);
+                const anchorEnd = isMorning ? Math.min(frame.midday.start, frame.end) : frame.end;
+                const budget = Math.max(0, anchorEnd - anchorStart);
+                const placements = (day.anker[ankername].sequenz || [])
+                    .map((pid) => ({pid, data: this.placement(pid)}))
+                    .filter((p) => p.data);
+                const used = placements.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
+                const over = used - budget;
+                const fillpct = budget > 0 ? Math.min(100, Math.round((used / budget) * 100)) : (used > 0 ? 100 : 0);
+                const body = this.renderIntroPlacements(placements, anchorStart)
+                    || '<div class="sq-empty">Keine Einheiten in diesem Abschnitt.</div>';
+
+                return `
+                    <div class="sq-anchor">
+                      <div class="sq-anchor__head">
+                        <div class="sq-anchor__title">${isMorning ? 'Vormittag' : 'Nachmittag'}
+                          <span class="sq-anchor__time">${minutesToLabel(anchorStart)}–${minutesToLabel(anchorEnd)}</span>
+                        </div>
+                        <div class="sq-budget">
+                          <div class="sq-budget__bar">
+                            <div class="sq-budget__fill${over > 0 ? ' sq-budget__fill--over' : ''}" style="width:${fillpct}%"></div>
+                          </div>
+                          <div class="sq-budget__label">${used} von ${budget} Min. belegt</div>
+                        </div>
+                      </div>
+                      <div class="sq-anchor__body">${body}</div>
+                    </div>`;
+            });
+
+            const middaytimes = frame.midday.end > frame.midday.start
+                ? ` · ${minutesToLabel(frame.midday.start)}–${minutesToLabel(frame.midday.end)}`
+                : '';
+            const divider = `<div class="sq-break-divider"><span>🕐 Mittagspause${middaytimes}</span></div>`;
+            return `<div class="sq-intro__preview">${anchors[0]}${divider}${anchors[1]}</div>`;
+        }
+
+        renderIntroPlacements(placements, anchorStart) {
+            // Bündelung wie in der Sequenz: aufeinanderfolgende Platzierungen
+            // desselben Bausteins bilden eine Klammer.
+            const groups = [];
+            placements.forEach((p) => {
+                const bid = p.data.typ === 'einheit' ? (p.data.bausteinid || null) : null;
+                const previous = groups.length ? groups[groups.length - 1] : null;
+                if (previous && bid && previous.bausteinid === bid) {
+                    previous.items.push(p);
+                    return;
+                }
+                groups.push({bausteinid: bid, items: [p]});
+            });
+
+            let clock = anchorStart;
+            return groups.map((group) => {
+                const start = clock;
+                const duration = group.items.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
+                clock += duration;
+                const rows = group.items.map((p, index) => {
+                    const itemstart = start + group.items.slice(0, index)
+                        .reduce((sum, prev) => sum + Math.max(0, Number(prev.data.dauer) || 0), 0);
+                    return this.renderIntroRow(p, itemstart);
+                }).join('');
+
+                if (!group.bausteinid) {
+                    return rows;
+                }
+                const baustein = this.baustein(group.bausteinid) || {};
+                return `
+                    <div class="sq-baustein">
+                      <div class="sq-baustein__head">
+                        <div class="sq-baustein__title">${escapeHtml(baustein.titel || 'Baustein')}
+                          <span class="sq-badge">${duration} Min.</span>
+                        </div>
+                      </div>
+                      <div class="sq-baustein__body">${rows}</div>
+                    </div>`;
+            }).join('');
+        }
+
+        renderIntroRow(p, startMin) {
+            const data = p.data;
+            const duration = Math.max(0, Number(data.dauer) || 0);
+            const timelabel = `${minutesToLabel(startMin)}–${minutesToLabel(startMin + duration)}`;
+
+            if (data.typ === 'pause') {
+                return `
+                    <div class="sq-pause">
+                      <span class="sq-pause__label">${escapeHtml(data.titel || 'Pause')}</span>
+                      <span class="sq-badge">${duration} Min.</span>
+                      <span class="sq-unit__time">${timelabel}</span>
+                    </div>`;
+            }
+
+            const phase = this.placementPhase(data);
+            const phasetext = this.placementRawPhase(data);
+            const title = String(data.titel || '').trim() || 'Noch offen';
+            return `
+                <div class="sq-unit">
+                  <div class="sq-unit__phase${phase ? ' sq-phase-bg--' + phase : ''}"></div>
+                  <div class="sq-unit__main">
+                    <div class="sq-unit__title">${escapeHtml(title)}</div>
+                    <div class="sq-unit__meta">
+                      <span class="sq-badge">${duration} Min.</span>
+                      ${phasetext ? `<span class="sq-badge${phase ? ' sq-badge--phase-' + phase : ''}">${escapeHtml(phasetext)}</span>` : ''}
+                      <span class="sq-unit__time">${timelabel}</span>
+                    </div>
+                  </div>
+                </div>`;
+        }
+
         showIntro(day, legacyentries) {
             const root = this.modalRoot();
             const frame = this.dayFrame(0);
             const leftrows = this.renderIntroGrid(legacyentries, frame);
-            const rightrows = ANCHORS.map((ankername) => {
-                const isMorning = ankername === 'vormittag';
-                let clock = isMorning ? frame.start : Math.max(frame.midday.end, frame.start);
-                const rows = day.anker[ankername].sequenz.map((pid) => {
-                    const placement = this.placement(pid);
-                    if (!placement) {
-                        return '';
-                    }
-                    const duration = Math.max(0, Number(placement.dauer) || 0);
-                    const row = `
-                        <div class="sq-intro__row">
-                          <span class="sq-intro__time">${minutesToLabel(clock)}</span>
-                          <span>${escapeHtml(placement.titel || 'Einheit')}</span>
-                        </div>`;
-                    clock += duration;
-                    return row;
-                }).join('');
-                return `<div class="sq-intro__anchor">${isMorning ? 'Vormittag' : 'Nachmittag'}</div>${rows || '<div class="sq-intro__row sq-intro__row--empty">–</div>'}`;
-            }).join('<div class="sq-intro__divider">Mittagspause</div>');
+            const rightrows = this.renderIntroSequence(day, frame);
 
             root.innerHTML = `
                 <div class="sq-modal sq-modal--intro">
