@@ -2060,7 +2060,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         const unit = resolveHandoutUnit(units, entry);
                         item = {
                             title: String((unit && unit.title) || entry.title || 'Baustein'),
-                            topics: splitHandoutTopics(unit && unit.topics ? unit.topics : '')
+                            // entry.topics: aus der Sequenz projizierte Snapshots tragen die
+                            // Unterthemen direkt am Eintrag.
+                            topics: splitHandoutTopics((unit && unit.topics) || entry.topics || '')
                         };
                     } else if (entry.kind === 'method') {
                         item = {title: String(entry.title || 'Seminareinheit'), topics: []};

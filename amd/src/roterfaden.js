@@ -184,7 +184,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         entries.push(Object.assign(base, {
                             kind: 'unit',
                             title: String((unit && unit.title) || entry.title || 'Baustein'),
-                            topicsHtml: formatRichText((unit && unit.topics) || '')
+                            // entry.topics: aus der Sequenz projizierte Snapshots tragen die
+                            // Unterthemen direkt am Eintrag (kein planningState-Lookup nötig).
+                            topicsHtml: formatRichText((unit && unit.topics) || entry.topics || '')
                         }));
                         return;
                     }
