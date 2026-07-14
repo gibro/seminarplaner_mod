@@ -445,6 +445,7 @@ function(Ajax, UserRepository, Fragment, Templates) {
             // lokale Kopie an (adopt_global_method).
             this.globalMethods = [];
             this.openSwapPid = '';
+            this.openMenuPid = '';
             this.headingPid = '';
             this.idCounter = 0;
             this.planningStateRaw = {};
@@ -588,8 +589,15 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 }, true);
             }
             document.addEventListener('click', (event) => {
-                if (!event.target.closest('.sq-swap') && this.openSwapPid) {
-                    this.openSwapPid = '';
+                const outsideSwap = !event.target.closest('.sq-swap') && this.openSwapPid;
+                const outsideMenu = !event.target.closest('.sq-menu') && this.openMenuPid;
+                if (outsideSwap || outsideMenu) {
+                    if (outsideSwap) {
+                        this.openSwapPid = '';
+                    }
+                    if (outsideMenu) {
+                        this.openMenuPid = '';
+                    }
                     this.render();
                 }
             });
@@ -1551,6 +1559,7 @@ function(Ajax, UserRepository, Fragment, Templates) {
             }
             this.dayIndex = (this.dayIndex + delta + total) % total;
             this.openSwapPid = '';
+            this.openMenuPid = '';
             this.headingPid = '';
             this.render();
         }
@@ -2708,6 +2717,12 @@ function(Ajax, UserRepository, Fragment, Templates) {
             return card ? this.fieldValue(card, 'sozialform') : '';
         }
 
+        // Handoff-SeqUnit: die Zeile trägt Dauer, Phase und Gruppengröße als Badges.
+        placementGroupSize(placement) {
+            const card = this.activeCardForPlacement(placement);
+            return card ? this.fieldValue(card, 'gruppengroesse').trim() : '';
+        }
+
         dayPlacements(day) {
             const list = [];
             ANCHORS.forEach((ankername) => {
@@ -3648,7 +3663,14 @@ function(Ajax, UserRepository, Fragment, Templates) {
             }
             const type = action.getAttribute('data-sq-action');
             const pid = action.getAttribute('data-pid') || '';
-            if (type === 'move-up') {
+            // Jede Auswahl im ⋮-Menü schließt es (die Aktionen rendern ohnehin neu).
+            if (type !== 'menu-toggle' && this.openMenuPid) {
+                this.openMenuPid = '';
+            }
+            if (type === 'menu-toggle') {
+                this.openMenuPid = this.openMenuPid === pid ? '' : pid;
+                this.render();
+            } else if (type === 'move-up') {
                 this.movePlacement(pid, -1);
             } else if (type === 'move-down') {
                 this.movePlacement(pid, 1);
@@ -3911,7 +3933,7 @@ function(Ajax, UserRepository, Fragment, Templates) {
                           ${this.renderVariantPills(group.bausteinid, baustein)}
                           <button type="button" class="kg-btn sq-membership" data-sq-action="edit-baustein"
                             data-bid="${escapeHtml(group.bausteinid)}">Bearbeiten</button>
-                          ${unfilled ? this.renderMoveButtons(group.items[0].pid) : ''}
+                          ${unfilled ? this.renderRowMenu(group.items[0], false) : ''}
                         </div>
                       </div>
                       ${this.renderBausteinContent(group, units, unfilled, baustein)}
@@ -4032,15 +4054,45 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="2.5" cy="3" r="1.4"/><circle cx="7.5" cy="3" r="1.4"/><circle cx="2.5" cy="8" r="1.4"/><circle cx="7.5" cy="8" r="1.4"/><circle cx="2.5" cy="13" r="1.4"/><circle cx="7.5" cy="13" r="1.4"/></svg></span>`;
         }
 
-        renderMoveButtons(pid) {
+        // Handoff: sichtbar bleiben nur „⇄ Alternative" und „Bearbeiten". Alle
+        // Nebenaktionen (Reihenfolge, Zugehörigkeit, Entfernen) stecken im ⋮-Menü
+        // am Zeilenende — Drag & Drop (D47) bleibt der schnelle Weg, das Menü der
+        // erklärte.
+        renderRowMenu(p, inBaustein) {
+            const pid = p.pid;
+            const isunit = p.data.typ === 'einheit';
+            const open = this.openMenuPid === pid;
+            const items = [];
+            items.push(`<button type="button" role="menuitem" class="sq-menu__item" data-sq-action="move-up"
+                data-pid="${escapeHtml(pid)}">Nach vorne schieben</button>`);
+            items.push(`<button type="button" role="menuitem" class="sq-menu__item" data-sq-action="move-down"
+                data-pid="${escapeHtml(pid)}">Nach hinten schieben</button>`);
+
+            if (isunit && inBaustein) {
+                items.push(`<button type="button" role="menuitem" class="sq-menu__item" data-sq-action="leave-baustein"
+                    data-pid="${escapeHtml(pid)}">Aus der Überschrift lösen</button>`);
+            } else if (isunit) {
+                const bid = this.adjacentBausteinId(pid);
+                if (bid) {
+                    const titel = (this.baustein(bid) || {}).titel || 'Baustein';
+                    items.push(`<button type="button" role="menuitem" class="sq-menu__item" data-sq-action="join-baustein"
+                        data-pid="${escapeHtml(pid)}">In „${escapeHtml(titel)}" aufnehmen</button>`);
+                }
+                if (!p.data.bausteinid) {
+                    items.push(`<button type="button" role="menuitem" class="sq-menu__item" data-sq-action="heading-open"
+                        data-pid="${escapeHtml(pid)}">Überschrift geben</button>`);
+                }
+            }
+
+            items.push(`<button type="button" role="menuitem" class="sq-menu__item sq-menu__item--danger"
+                data-sq-action="remove" data-pid="${escapeHtml(pid)}">Aus dem Plan entfernen</button>`);
+
             return `
-                <span class="sq-move">
-                  <button type="button" class="kg-btn sq-move__btn" data-sq-action="move-up" data-pid="${escapeHtml(pid)}"
-                    title="Nach vorne schieben" aria-label="Nach vorne schieben">↑</button>
-                  <button type="button" class="kg-btn sq-move__btn" data-sq-action="move-down" data-pid="${escapeHtml(pid)}"
-                    title="Nach hinten schieben" aria-label="Nach hinten schieben">↓</button>
-                  <button type="button" class="kg-btn sq-move__btn sq-move__btn--remove" data-sq-action="remove" data-pid="${escapeHtml(pid)}"
-                    title="Aus dem Plan entfernen" aria-label="Aus dem Plan entfernen">✕</button>
+                <span class="sq-menu">
+                  <button type="button" class="sq-menu__btn" data-sq-action="menu-toggle" data-pid="${escapeHtml(pid)}"
+                    aria-haspopup="true" aria-expanded="${open ? 'true' : 'false'}"
+                    title="Weitere Aktionen" aria-label="Weitere Aktionen">⋮</button>
+                  <div class="sq-menu__panel${open ? ' open' : ''}" role="menu">${items.join('')}</div>
                 </span>`;
         }
 
@@ -4063,21 +4115,17 @@ function(Ajax, UserRepository, Fragment, Templates) {
                 </span>`;
         }
 
+        // Nur noch das Eingabefeld: „Überschrift geben" ruft man jetzt im ⋮-Menü
+        // der Zeile auf, damit unter jeder Einheit kein Dauer-Link mehr steht.
         renderHeadingAffordance(p) {
-            if (p.data.typ !== 'einheit' || p.data.bausteinid) {
+            if (p.data.typ !== 'einheit' || p.data.bausteinid || this.headingPid !== p.pid) {
                 return '';
             }
-            if (this.headingPid === p.pid) {
-                return `
-                    <div class="sq-heading-inline">
-                      <input type="text" id="sq-heading-input" class="kg-input" placeholder="z. B. Ankommen und Einstieg">
-                      <button type="button" class="kg-btn kg-btn-primary" data-sq-action="heading-save" data-pid="${escapeHtml(p.pid)}">Baustein anlegen</button>
-                      <button type="button" class="kg-btn" data-sq-action="heading-cancel">Abbrechen</button>
-                    </div>`;
-            }
             return `
-                <div class="sq-heading-affordance">
-                  <button type="button" class="sq-heading-link" data-sq-action="heading-open" data-pid="${escapeHtml(p.pid)}">＋ Überschrift geben</button>
+                <div class="sq-heading-inline">
+                  <input type="text" id="sq-heading-input" class="kg-input" placeholder="z. B. Ankommen und Einstieg">
+                  <button type="button" class="kg-btn kg-btn-primary" data-sq-action="heading-save" data-pid="${escapeHtml(p.pid)}">Baustein anlegen</button>
+                  <button type="button" class="kg-btn" data-sq-action="heading-cancel">Abbrechen</button>
                 </div>`;
         }
 
@@ -4095,7 +4143,7 @@ function(Ajax, UserRepository, Fragment, Templates) {
                       <span class="sq-unit__time">${timelabel}</span>
                       <span class="sq-pause__spacer"></span>
                       <button type="button" class="kg-btn sq-membership" data-sq-action="edit" data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
-                      ${this.renderMoveButtons(p.pid)}
+                      ${this.renderRowMenu(p, false)}
                     </div>`;
             }
 
@@ -4114,7 +4162,7 @@ function(Ajax, UserRepository, Fragment, Templates) {
                           <span class="sq-unit__time">${timelabel}</span>
                         </div>
                       </div>
-                      <div class="sq-unit__actions">${this.renderMoveButtons(p.pid)}</div>
+                      <div class="sq-unit__actions">${this.renderRowMenu(p, true)}</div>
                     </div>`;
             }
 
@@ -4125,6 +4173,7 @@ function(Ajax, UserRepository, Fragment, Templates) {
             // Eintrag, sodass in der Sequenz neu ergänzte Einheiten farbig, aber
             // ohne Label blieben.
             const phasetext = this.placementRawPhase(data);
+            const groupsize = this.placementGroupSize(data);
 
             return `
                 <div class="sq-unit${inBaustein ? '' : ' sq-unit--standalone'}"${inBaustein ? '' : ` draggable="true" data-sq-drag="${escapeHtml(p.pid)}"`}>
@@ -4135,33 +4184,16 @@ function(Ajax, UserRepository, Fragment, Templates) {
                     <div class="sq-unit__meta">
                       <span class="sq-badge">${duration} Min.</span>
                       ${phasetext ? `<span class="sq-badge${phase ? ' sq-badge--phase-' + phase : ''}">${escapeHtml(phasetext)}</span>` : ''}
+                      ${groupsize ? `<span class="sq-badge">${escapeHtml(groupsize)}</span>` : ''}
                       <span class="sq-unit__time">${timelabel}</span>
                     </div>
                   </div>
                   <div class="sq-unit__actions">
                     ${this.renderSwap(p)}
-                    ${this.renderMembership(p, inBaustein)}
                     <button type="button" class="kg-btn" data-sq-action="edit" data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
-                    ${this.renderMoveButtons(p.pid)}
+                    ${this.renderRowMenu(p, inBaustein)}
                   </div>
                 </div>`;
-        }
-
-        renderMembership(p, inBaustein) {
-            if (p.data.typ !== 'einheit') {
-                return '';
-            }
-            if (inBaustein) {
-                return `<button type="button" class="kg-btn sq-membership" data-sq-action="leave-baustein"
-                    data-pid="${escapeHtml(p.pid)}" title="Aus dem Baustein lösen">Lösen</button>`;
-            }
-            const bid = this.adjacentBausteinId(p.pid);
-            if (!bid) {
-                return '';
-            }
-            const titel = (this.baustein(bid) || {}).titel || 'Baustein';
-            return `<button type="button" class="kg-btn sq-membership" data-sq-action="join-baustein"
-                data-pid="${escapeHtml(p.pid)}" title="In „${escapeHtml(titel)}" aufnehmen">→ In „${escapeHtml(titel)}"</button>`;
         }
     }
 
