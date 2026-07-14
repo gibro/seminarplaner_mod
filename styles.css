@@ -7142,6 +7142,16 @@ a.kg-btn-primary:focus {
     font-weight: 700;
     letter-spacing: .02em;
     text-transform: uppercase;
+    /* Rote Outline-Optik erzwingen (schlägt die neutrale kg-btn-!important-Regel). */
+    background: #fff !important;
+    border-color: var(--ig-red) !important;
+    color: var(--ig-red) !important;
+}
+
+.kg-ov-pdfbtn:hover:not(:disabled) {
+    background: var(--ig-red-soft) !important;
+    border-color: var(--ig-red) !important;
+    color: var(--ig-red) !important;
 }
 
 .kg-ov-pdfbtn .kg-btn-content {
