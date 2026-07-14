@@ -1,6 +1,6 @@
 # Einstiegs-Briefing für Claude Code: Seminarplaner-Umbau
 
-Dieses Briefing ist für den Start einer Claude-Code-Session gedacht – als Ergänzung zu (nicht Ersatz für) `seminarplaner-umbau-konzept.md`, das vollständig ins Repository kopiert werden sollte (siehe Abschnitt „Repo-Setup" unten).
+Dieses Briefing ist für den Start einer Claude-Code-Session gedacht – als Ergänzung zu (nicht Ersatz für) `seminarplaner-umbau-konzept.md`, das im Projektordner liegt und bewusst NICHT ins Repository kopiert wird (siehe Abschnitt „Repo-Setup" unten).
 
 ## 1. Kontext in Kürze
 
@@ -56,13 +56,15 @@ Referenz-Fixture: `TP_2026_ki.docx` (im Projektwissen). Für Unit-Tests zusätzl
 
 ```bash
 git checkout umbau-sequenzansicht   # oder den tatsächlichen Feature-Branch-Namen
-mkdir -p docs
-cp /pfad/zu/seminarplaner-umbau-konzept.md docs/
 mkdir -p .claude/skills/git-branch-guard-seminarplaner
 cp /pfad/zu/SKILL.md .claude/skills/git-branch-guard-seminarplaner/
 ```
 
-Nach jeder größeren Konzept-Session im Claude.ai-Projekt: aktualisierte Version von `seminarplaner-umbau-konzept.md` erneut nach `docs/` kopieren und mit den zugehörigen Code-Änderungen committen (normaler Commit auf den Feature-Branch, siehe Skill-Regeln – kein GitLab-Push, kein Merge nach `main` ohne explizite Freigabe).
+**Das Konzeptdokument wird NICHT ins Repo kopiert.** Frühere Fassungen dieses Briefings haben genau das empfohlen — mit der Folge, dass zwei Kopien entstanden, aus zwei Richtungen fortgeschrieben wurden und auseinanderliefen (dieselbe Nummer D63 bezeichnete in beiden Fassungen verschiedene Entscheidungen). Stattdessen gilt die Arbeitsteilung:
+
+- **Entscheidungen (D1–D65):** ausschließlich `seminarplaner-umbau-konzept.md` im Projektordner, gepflegt im Claude.ai-Projekt. Nur lesen, nie aus einer Code-Session heraus fortschreiben.
+- **Was gebaut wurde:** `mod/seminarplaner/docs/umsetzungsprotokoll.md` im Repo — dorthin schreiben die Code-Sessions (Datum, Plugin-Version, betroffene Dateien, wie verifiziert).
+- **Technische Detailfestlegungen** zum Datenmodell: `mod/seminarplaner/docs/datenmodell-sequenz.md`.
 
 ## 7. Was NICHT in Claude Code entschieden werden sollte
 
