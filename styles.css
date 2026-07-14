@@ -7499,3 +7499,39 @@ a.kg-btn-primary:focus {
   border-color: var(--ig-gray);
   color: #4a4a4a;
 }
+
+
+/* =========================================================
+   HOVER-KORREKTUR (14. Juli 2026)
+   Befund aus dem Computed-Style-Diff: Der CD-Handoff-Layer definiert den Hover
+   neutral um (Grund #F1F1F1, Rand Grau, Schrift Anthrazit) — seine Selektorliste
+   vergisst aber ".kg-btn", die Hauptklasse unserer Buttons. Sie behielt deshalb den
+   BLAUEN Hover der alten Information-First-Palette, und dessen !important schlug
+   sogar den roten Hover des Outline-Buttons: Jeder neutrale UND jeder outline-rote
+   Button wurde beim Hovern blau.
+
+   Warum hier weiterhin !important steht: Der Diff hat gezeigt, dass die
+   Button-!important tragend sind — ohne sie verliert schon der ruhende
+   Primaer-Button sein Rot, weil eine spaetere .kg-btn-Regel gleicher Spezifitaet
+   ihn ueberschreibt. Die Brechstange bleibt also, aber sie zeigt jetzt in die
+   richtige Richtung.
+
+   Reihenfolge: neutral < primaer < outline-rot (Handoff-Muster "Fill-Invert").
+   ========================================================= */
+.kg-btn:hover:not(:disabled) {
+  background: var(--ig-surface-muted) !important;
+  border-color: var(--ig-gray) !important;
+  color: var(--ig-anthracite) !important;
+}
+
+.kg-btn.kg-btn-primary:hover:not(:disabled) {
+  background: var(--ig-red-hover) !important;
+  border-color: var(--ig-red-hover) !important;
+  color: #fff !important;
+}
+
+.kg-btn.kg-btn--outline-red:hover:not(:disabled) {
+  background: var(--ig-red) !important;
+  border-color: var(--ig-red) !important;
+  color: #fff !important;
+}
