@@ -535,6 +535,7 @@ class grid_service {
             foreach (['vormittag', 'nachmittag'] as $anker) {
                 $clock = (int)($anchorstarts[$anker] ?? 0);
                 $currentbaustein = null;
+                $currentbausteinindex = null;
                 $pids = $tag['anker'][$anker]['sequenz'] ?? [];
                 foreach ((array)$pids as $pid) {
                     $p = $placements[$pid] ?? null;
@@ -545,12 +546,15 @@ class grid_service {
                     if (($p['typ'] ?? '') === 'pause') {
                         $clock += $duration;
                         $currentbaustein = null;
+                        $currentbausteinindex = null;
                         continue;
                     }
                     $bid = (string)($p['bausteinid'] ?? '');
                     if ($bid !== '' && isset($bausteine[$bid])) {
                         // Aufeinanderfolgende Einheiten desselben Bausteins zu EINER
-                        // Überschrift zusammenfassen.
+                        // Überschrift zusammenfassen: die erste öffnet den Block, jede
+                        // weitere verlängert ihn (sonst trüge der Block nur die Dauer
+                        // seiner ersten Einheit).
                         if ($currentbaustein !== $bid) {
                             $b = $bausteine[$bid];
                             $items[] = [
@@ -561,6 +565,9 @@ class grid_service {
                                 'topics' => (string)($b['unterthemen'] ?? ''),
                             ];
                             $currentbaustein = $bid;
+                            $currentbausteinindex = array_key_last($items);
+                        } else {
+                            $items[$currentbausteinindex]['endMin'] += $duration;
                         }
                     } else {
                         $items[] = [
@@ -570,6 +577,7 @@ class grid_service {
                             'title' => (string)($p['titel'] ?? 'Seminareinheit'),
                         ];
                         $currentbaustein = null;
+                        $currentbausteinindex = null;
                     }
                     $clock += $duration;
                 }
