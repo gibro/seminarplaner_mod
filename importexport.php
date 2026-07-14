@@ -277,15 +277,15 @@ echo html_writer::tag('button', 'ZIM-PDF erstellen', [
     'type' => 'button', 'id' => 'kg-pdf-zim', 'class' => 'kg-btn kg-btn-primary',
 ]);
 echo html_writer::tag('button', 'Konzeptsammlung-PDF erstellen', [
-    'type' => 'button', 'id' => 'kg-pdf-flow', 'class' => 'kg-btn kg-btn--outline-red',
+    'type' => 'button', 'id' => 'kg-pdf-flow', 'class' => 'kg-btn kg-btn-primary',
 ]);
 // D52: dritte PDF-Variante (Materialliste).
 echo html_writer::tag('button', 'Materialliste-PDF erstellen', [
-    'type' => 'button', 'id' => 'kg-pdf-materials', 'class' => 'kg-btn kg-btn--outline-red',
+    'type' => 'button', 'id' => 'kg-pdf-materials', 'class' => 'kg-btn kg-btn-primary',
 ]);
 // D64: Handout für Teilnehmende (PDF-Export des veröffentlichten Roten Fadens).
 echo html_writer::tag('button', 'Handout-PDF für Teilnehmende', [
-    'type' => 'button', 'id' => 'kg-pdf-handout', 'class' => 'kg-btn kg-btn--outline-red',
+    'type' => 'button', 'id' => 'kg-pdf-handout', 'class' => 'kg-btn kg-btn-primary',
 ]);
 echo '</div>';
 echo '</div>'; // kg-ie-card (PDF)
