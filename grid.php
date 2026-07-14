@@ -65,17 +65,48 @@ echo html_writer::tag('h3', get_string('ueberblickmenu', 'mod_seminarplaner'));
 echo html_writer::div(get_string('ueberblick_subline', 'mod_seminarplaner'), 'sq-pagehead__sub');
 echo html_writer::end_div();
 
-// Hinweiszeile + PDF-Export-Leiste (Read-only-Überblick).
+// Hinweiszeile (Handoff: tiefrot getönt, mit Primär-Button in die Sequenz).
 echo html_writer::start_div('kg-ov-hint');
 echo html_writer::start_div('kg-ov-hint__note');
 echo $icInfo;
+echo html_writer::tag('span', get_string('ueberblick_readonlynote', 'mod_seminarplaner'));
+echo html_writer::end_div();
+echo html_writer::link(
+    new moodle_url('/mod/seminarplaner/sequenz.php', ['id' => (int)$cm->id]),
+    get_string('ueberblick_tosequenz', 'mod_seminarplaner'),
+    ['class' => 'kg-btn kg-btn-primary kg-ov-hint__btn']
+);
+echo html_writer::end_div();
+
+// Werkzeugleiste (Handoff): eine schmale weiße Karte statt zweier Kästen.
+// Erste Zeile: Plan-Auswahl links, „Nur Ansicht"-Badge rechts. Zweite Zeile
+// (erst mit geladenem Plan, id kg-grid-step-2 bleibt — grid.js schaltet sie):
+// Veröffentlichen-Schalter und PDF-Export.
+echo html_writer::start_div('kg-ov-toolbar');
+echo html_writer::start_div('kg-ov-toolbar__row');
+echo html_writer::start_div('kg-ov-toolbar__group');
+echo html_writer::tag('label', 'Seminarplan', ['for' => 'kg-grid-select', 'class' => 'kg-ov-toolbar__label']);
+echo html_writer::start_tag('select', ['id' => 'kg-grid-select', 'class' => 'kg-input kg-grid-select']);
+foreach ($grids as $grid) {
+    echo html_writer::tag('option', format_string($grid->name) . ' (#' . $grid->id . ')', ['value' => $grid->id]);
+}
+echo html_writer::end_tag('select');
+echo html_writer::tag('button', 'Laden', ['type' => 'button', 'id' => 'kg-load-grid', 'class' => 'kg-btn kg-btn-primary']);
+echo html_writer::tag('button', 'Löschen', ['type' => 'button', 'id' => 'kg-grid-delete', 'class' => 'kg-btn kg-btn--outline-red']);
+echo html_writer::end_div();
 echo html_writer::tag('span',
-    get_string('ueberblick_readonlynote', 'mod_seminarplaner') . ' '
-    . html_writer::link(
-        new moodle_url('/mod/seminarplaner/sequenz.php', ['id' => (int)$cm->id]),
-        get_string('ueberblick_tosequenz', 'mod_seminarplaner'),
-        ['class' => 'kg-ov-hint__link']
-    ));
+    $icon('<rect x="5" y="11" width="14" height="9"/><path d="M8 11V8a4 4 0 018 0v3"/>', 14, 2)
+    . html_writer::tag('span', 'Nur Ansicht'),
+    ['class' => 'kg-ov-badge']);
+echo html_writer::end_div();
+
+echo html_writer::start_div('kg-ov-toolbar__row kg-ov-toolbar__row--second kg-hidden', ['id' => 'kg-grid-step-2']);
+echo html_writer::start_div('kg-ov-toolbar__group');
+echo html_writer::start_tag('label', ['class' => 'kg-ov-toolbar__label kg-inline-checkbox', 'for' => 'kg-publish-roterfaden']);
+echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'kg-publish-roterfaden']);
+echo html_writer::tag('span', get_string('roterfaden_publishlabel', 'mod_seminarplaner'));
+echo html_writer::end_tag('label');
+echo html_writer::tag('span', '', ['id' => 'kg-publish-roterfaden-status', 'class' => 'kg-ov-toolbar__status']);
 echo html_writer::end_div();
 echo html_writer::start_div('kg-ov-pdfbar');
 echo html_writer::tag('span', 'PDF-Export', ['class' => 'kg-ov-pdfbar__label']);
@@ -85,35 +116,11 @@ echo $pdfbtn('kg-ov-pdf-handout', 'Teilnehmerplan');
 echo $pdfbtn('kg-ov-pdf-materials', 'Material-Checkliste');
 echo html_writer::end_div();
 echo html_writer::end_div();
-
-echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'kg-grid-step-1']);
-echo html_writer::tag('h4', 'Seminarplan laden');
-echo html_writer::tag('label', 'Vorhandene Seminarpläne', ['for' => 'kg-grid-select', 'class' => 'kg-label']);
-echo html_writer::start_tag('select', ['id' => 'kg-grid-select', 'class' => 'kg-input kg-grid-select']);
-foreach ($grids as $grid) {
-    echo html_writer::tag('option', format_string($grid->name) . ' (#' . $grid->id . ')', ['value' => $grid->id]);
-}
-echo html_writer::end_tag('select');
-echo html_writer::start_div('kg-row kg-row--action');
-echo html_writer::tag('button', 'Seminarplan laden', ['type' => 'button', 'id' => 'kg-load-grid', 'class' => 'kg-btn kg-btn-primary']);
-echo html_writer::tag('button', 'Seminarplan löschen', ['type' => 'button', 'id' => 'kg-grid-delete', 'class' => 'kg-btn kg-btn--outline-red']);
 echo html_writer::end_div();
+
 echo html_writer::tag('p',
     'Neue Seminarpläne legst du im Tab „Sequenz" an – dort sitzt auch die Einrichtung (Tage und Seminarzeiten).',
-    ['class' => 'sp-filter-status']);
-echo html_writer::end_div();
-
-echo html_writer::start_div('kg-ie-block kg-library-step kg-hidden', ['id' => 'kg-grid-step-2']);
-echo html_writer::tag('h4', 'Seminarplan anzeigen');
-echo html_writer::start_div('field-card');
-echo html_writer::start_div('kg-row');
-echo html_writer::start_tag('label', ['class' => 'kg-label kg-inline-checkbox']);
-echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'kg-publish-roterfaden']);
-echo html_writer::tag('span', get_string('roterfaden_publishlabel', 'mod_seminarplaner'));
-echo html_writer::end_tag('label');
-echo html_writer::tag('span', '', ['id' => 'kg-publish-roterfaden-status', 'class' => 'sp-filter-status']);
-echo html_writer::end_div();
-echo html_writer::end_div();
+    ['class' => 'kg-ov-toolbar__hint']);
 
 ?>
 <div class="sp-wrapper">
