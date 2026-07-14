@@ -4089,8 +4089,12 @@ function(Ajax, UserRepository, Fragment, Templates) {
             }
 
             const phase = this.placementPhase(data);
-            const legacy = this.legacyEntryFor(data);
-            const phasetext = legacy && legacy.phase ? String(legacy.phase) : '';
+            // Phasen-Label aus derselben Quelle wie die Farbe (aktive Karte, sonst
+            // Legacy), damit die Farbe der Einheit erklärt wird – wie bei den noch
+            // nicht geplanten Einheiten. Vorher kam der Text nur aus dem Legacy-
+            // Eintrag, sodass in der Sequenz neu ergänzte Einheiten farbig, aber
+            // ohne Label blieben.
+            const phasetext = this.placementRawPhase(data);
 
             return `
                 <div class="sq-unit${inBaustein ? '' : ' sq-unit--standalone'}"${inBaustein ? '' : ` draggable="true" data-sq-drag="${escapeHtml(p.pid)}"`}>
