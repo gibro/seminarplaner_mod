@@ -7288,48 +7288,210 @@ a.kg-btn-primary:focus {
 }
 
 /* =========================================================================
-   D62 - Geführter Lernziel-Editor: Phase → Verb → Inhalt → Satz. Modaler
-   Baukasten, aufgerufen am Lernziele-Feld (Einheiten-Modal) und an den
-   Seminarzielen (D61). Liegt über dem Einheiten-Modal.
+   D62 - „Der Differenzierer": geführter Lernziel-Generator. Modaler Baukasten
+   aus fünf Spalten (Denkoperation, Inhalt, Quelle, Produkt, Arbeitsform), der
+   einen „Ich kann …"-Satz zusammensetzt. Aufgerufen am Lernziele-Feld
+   (Einheiten-Modal) und an den Seminarzielen (D61). Liegt über dem
+   Einheiten-Modal. Nach dem Vorbild von „The Differentiator" (Ian Byrd).
    ========================================================================= */
 .sq-lz-overlay {
     z-index: 2100;
 }
 .sq-lz-modal {
-    max-width: 560px;
+    max-width: 1080px;
+    width: 100%;
+    /* Fünf Kategoriefarben – tragen die Spalten und die farbigen Satzbausteine. */
+    --lz-denken: #5457E6;
+    --lz-inhalt: #0E8880;
+    --lz-quelle: #B07D1E;
+    --lz-produkt: #C8497B;
+    --lz-form: #6B8B2E;
+    --lz-denken-bg: #EDEDFC;
+    --lz-inhalt-bg: #E3F3F1;
+    --lz-quelle-bg: #F7EFDD;
+    --lz-produkt-bg: #FBEAF1;
+    --lz-form-bg: #EEF3E0;
 }
+
+/* Einführungstext oben im Modal. */
+.sq-lz-lede {
+    margin: 0 0 14px;
+    color: var(--ig-darkgray, #4A4B58);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+/* Thema-Feld mit Würfel-Knopf. */
+.sq-lz-thema-field {
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--ig-lightgray, #E3E3EC);
+}
+.sq-lz-thema-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+/* Satz-Vorschau mit farbigen Bausteinen. */
+.sq-lz-sentence {
+    margin: 0;
+    padding: 14px 16px;
+    background: var(--ig-offwhite, #FAFAFA);
+    border-left: 3px solid var(--color-primary, #E2001A);
+    font-size: 18px;
+    line-height: 1.5;
+    font-weight: 600;
+    min-height: 24px;
+}
+.sq-lz-slot {
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin: 0 -1px;
+}
+.sq-lz-slot.empty {
+    color: var(--ig-gray, #8A8B99);
+    font-weight: 500;
+    border-bottom: 2px dashed var(--ig-lightgray, #DADADA);
+    border-radius: 0;
+    padding: 0 3px;
+}
+.sq-lz-slot[data-cat="denken"].filled  { color: var(--lz-denken);  background: var(--lz-denken-bg); }
+.sq-lz-slot[data-cat="inhalt"].filled  { color: var(--lz-inhalt);  background: var(--lz-inhalt-bg); }
+.sq-lz-slot[data-cat="quelle"].filled  { color: var(--lz-quelle);  background: var(--lz-quelle-bg); }
+.sq-lz-slot[data-cat="produkt"].filled { color: var(--lz-produkt); background: var(--lz-produkt-bg); }
+.sq-lz-slot[data-cat="form"].filled    { color: var(--lz-form);    background: var(--lz-form-bg); }
+.sq-lz-slot[data-cat="thema"] { cursor: pointer; }
+.sq-lz-slot[data-cat="thema"].filled { color: var(--ig-black, #16171F); background: var(--ig-lightgray, #EFEFF4); }
+.sq-lz-punct {
+    margin-left: -4px;
+}
+
+/* Werkzeugleiste über den Spalten. */
+.sq-lz-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 14px 0 16px;
+}
+
+/* Spalten-Raster. */
+.sq-lz-columns {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+.sq-lz-col {
+    border: 1px solid var(--ig-lightgray, #E3E3EC);
+    border-top: 3px solid var(--lz-accent, #999);
+    border-radius: 8px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+.sq-lz-col[data-cat="denken"]  { --lz-accent: var(--lz-denken); }
+.sq-lz-col[data-cat="inhalt"]  { --lz-accent: var(--lz-inhalt); }
+.sq-lz-col[data-cat="quelle"]  { --lz-accent: var(--lz-quelle); }
+.sq-lz-col[data-cat="produkt"] { --lz-accent: var(--lz-produkt); }
+.sq-lz-col[data-cat="form"]    { --lz-accent: var(--lz-form); }
+.sq-lz-col__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 10px 8px;
+    border-bottom: 1px solid var(--ig-offwhite, #EFEFF4);
+}
+.sq-lz-col__title {
+    font-size: 12px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--lz-accent, #333);
+}
+.sq-lz-col__hint {
+    margin: 0;
+    padding: 8px 10px 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ig-gray, #8A8B99);
+}
+.sq-lz-options {
+    padding: 8px 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 360px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.sq-lz-group__label {
+    font-size: 10px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ig-gray, #8A8B99);
+    margin-bottom: 5px;
+}
+
+/* Würfel-Knopf in Spaltenkopf und Thema-Zeile. */
+.sq-lz-dice {
+    border: 1px solid var(--ig-lightgray, #DADADA);
+    background: #fff;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: var(--ig-darkgray, #4A4B58);
+    cursor: pointer;
+}
+.sq-lz-dice:hover {
+    border-color: var(--lz-accent, var(--color-primary, #E2001A));
+    color: var(--lz-accent, var(--color-primary, #E2001A));
+}
+
+/* Auswahl-Chips (Spalten). */
 .sq-lz-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 5px;
 }
 .sq-lz-chip {
     border: 1px solid var(--ig-lightgray, #DADADA);
     background: #fff;
-    padding: 5px 12px;
-    font-size: 14px;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 13px;
+    color: var(--ig-darkgray, #4A4B58);
     cursor: pointer;
 }
-.sq-lz-chip:hover {
-    border-color: var(--color-primary, #E2001A);
+.sq-lz-col .sq-lz-chip:hover {
+    border-color: var(--lz-accent, var(--color-primary, #E2001A));
+    color: var(--lz-accent, var(--color-primary, #E2001A));
 }
-.sq-lz-chip.active {
-    background: var(--color-primary, #E2001A);
-    border-color: var(--color-primary, #E2001A);
+.sq-lz-col .sq-lz-chip[aria-pressed="true"] {
+    background: var(--lz-accent, var(--color-primary, #E2001A));
+    border-color: var(--lz-accent, var(--color-primary, #E2001A));
     color: #fff;
-}
-.sq-lz-preview {
-    margin-top: 6px;
-    padding: 12px 14px;
-    background: var(--ig-offwhite, #FAFAFA);
-    border-left: 3px solid var(--color-primary, #E2001A);
-    font-size: 15px;
-    min-height: 20px;
+    font-weight: 600;
 }
 .sq-lz-trigger {
     margin: -4px 0 10px;
     font-size: 13px;
     padding: 5px 12px;
+}
+
+@media (max-width: 900px) {
+    .sq-lz-columns {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .sq-lz-options {
+        max-height: none;
+    }
+}
+@media (max-width: 560px) {
+    .sq-lz-columns {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* D63: ZIM-Spaltenauswahl mit editierbarer Reihenfolge (◄/►). */
