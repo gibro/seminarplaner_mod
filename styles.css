@@ -5136,6 +5136,12 @@ select.kg-input.rf-select {
 .sq-swap__option.active { font-weight: 600; color: var(--sq-accent-dark); }
 .sq-swap__dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--sq-border-strong); flex: 0 0 auto; }
 .sq-swap__option.active .sq-swap__dot { background: var(--sq-accent); border-color: var(--sq-accent); }
+/* Der Baustein-⇄-Chip sitzt links im Kopf – Popover linksbündig öffnen,
+   lange Baustein-Titel umbrechen und über den Einheiten liegen, damit es
+   nicht über den Rand läuft und keine Klicks der Einheiten abfängt. */
+.sq-swap--baustein .sq-swap__panel { left: 0; right: auto; max-width: min(420px, 72vw); z-index: 30; }
+.sq-swap--baustein .sq-swap__option { align-items: flex-start; white-space: normal; }
+.sq-swap--baustein .sq-swap__dot { margin-top: 5px; }
 .sq-heading-affordance { display: flex; align-items: center; gap: 8px; margin: -2px 0 2px 2px; }
 .sq-heading-link {
     background: none;

@@ -4335,7 +4335,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     <span class="sq-swap__dot"></span>${escapeHtml(varianten[vid].titel || vid)}</div>`;
             }).join('');
             return `
-                <span class="sq-swap">
+                <span class="sq-swap sq-swap--baustein">
                   <button type="button" class="sq-swap__chip" data-sq-action="bswap-toggle" data-bid="${escapeHtml(bid)}">⇄ Alternative</button>
                   <div class="sq-swap__panel${open ? ' open' : ''}">${options}</div>
                 </span>`;
