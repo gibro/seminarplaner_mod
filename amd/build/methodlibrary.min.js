@@ -1,4 +1,5 @@
-define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
+define(['core/ajax', 'core/notification', 'mod_seminarplaner/lernzieleditor'],
+function(Ajax, Notification, LernzielEditor) {
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
     const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -349,6 +350,27 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const prefix = String(dropdown.getAttribute('data-kg-label-prefix') || 'Auswahl');
         const placeholder = String(dropdown.getAttribute('data-kg-placeholder') || `${prefix} wählen`);
         toggle.textContent = cleanvalues.length ? `${prefix} (${cleanvalues.length})` : placeholder;
+    };
+
+    // D62/D41: der Lernziel-Editor liefert eine Seminarphase (aus der
+    // Bloom-Gruppe des Verbs). Sie wird im Editor-Formular vorbelegt, ohne
+    // bereits Gewähltes zu entfernen.
+    const LZ_PHASE_LABELS = {
+        orientierung: 'Orientierung',
+        erfahrung: 'Erfahrungserhebung',
+        analyse: 'Analyse',
+        handlung: 'Handlungsteil',
+        transfer: 'Transfer',
+    };
+    const suggestEditorPhase = (phasekey) => {
+        const label = LZ_PHASE_LABELS[phasekey];
+        if (!label) {
+            return;
+        }
+        const current = readMulti('#ml-e-seminarphase');
+        if (current.indexOf(label) === -1) {
+            setFormMultiDropdownValues('#ml-e-seminarphase', current.concat([label]));
+        }
     };
 
     const bindFormMultiDropdowns = () => {
@@ -2525,6 +2547,19 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     saveEditor(cmid).catch((e) => {
                         Notification.exception(e);
                         setStatus('Speichern fehlgeschlagen.', true);
+                    });
+                });
+            }
+            // D62: geführter Lernziel-Editor am Lernziele-Feld des Editors –
+            // Satz anhängen und die abgeleitete Seminarphase vorbelegen.
+            const lzopen = bySel('#ml-lz-open-lernziele');
+            if (lzopen) {
+                lzopen.addEventListener('click', () => {
+                    LernzielEditor.open((sentence, phase) => {
+                        const current = getFieldValue('#ml-e-lernziele');
+                        const addition = `<p>${escapeHtml(sentence)}</p>`;
+                        setFieldValue('#ml-e-lernziele', current ? current + addition : addition);
+                        suggestEditorPhase(phase);
                     });
                 });
             }

@@ -295,6 +295,13 @@ echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Lernziele (Ich-kann ...)', ['for' => 'ml-e-lernziele', 'class' => 'kg-label']);
 echo html_writer::tag('textarea', '', ['id' => 'ml-e-lernziele', 'class' => 'kg-input', 'rows' => '10', 'autocomplete' => 'off']);
+// D62: geführter Lernziel-Editor („Der Differenzierer") – Satz per Helfer bauen
+// oder das Feld selbst ausfüllen.
+echo html_writer::tag('button', '✎ Lernziel formulieren', [
+    'type' => 'button',
+    'class' => 'kg-btn sq-lz-trigger',
+    'id' => 'ml-lz-open-lernziele',
+]);
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
