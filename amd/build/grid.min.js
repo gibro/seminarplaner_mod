@@ -2306,7 +2306,28 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     nachmittag: (isLast && az && az.letzterTagNurVormittag) ? vmStart : nmStart,
                 };
                 const items = [];
+                let vmContentEnd = anchorStarts.vormittag;
                 ['vormittag', 'nachmittag'].forEach((ankername) => {
+                    if (ankername === 'nachmittag') {
+                        // D11: Mittagspause im Überblick sichtbar machen. Die
+                        // Einheit/der Baustein hat Vorrang - läuft der Vormittag in
+                        // die Pause hinein, beginnt sie erst am Ende der Einheit
+                        // (Pause verkürzt sich), statt überlagert zu werden.
+                        const vmEndCfg = parseTimeToMinutes(az && az.vormittag ? az.vormittag.end : '');
+                        const pauseStart = Math.max(Number.isFinite(vmEndCfg) ? vmEndCfg : vmContentEnd, vmContentEnd);
+                        const pauseEnd = anchorStarts.nachmittag;
+                        if (Number.isFinite(pauseStart) && pauseEnd > pauseStart) {
+                            items.push({
+                                uid: `sq-mittag-${idx}`,
+                                kind: 'break',
+                                title: 'Mittagspause',
+                                startMin: pauseStart,
+                                endMin: pauseEnd,
+                                details: {},
+                                sqTag: idx + 1,
+                            });
+                        }
+                    }
                     let clock = anchorStarts[ankername];
                     const pids = (((tag.anker || {})[ankername] || {}).sequenz) || [];
                     pids.forEach((pid) => {
@@ -2362,6 +2383,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         items.push(item);
                         clock += duration;
                     });
+                    if (ankername === 'vormittag') {
+                        vmContentEnd = clock;
+                    }
                 });
                 days[dayname] = items;
             });

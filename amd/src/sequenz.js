@@ -2103,14 +2103,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             this.render();
         }
 
-        // Split rule (didaktische Festlegung): keep the part that still fits,
-        // continue the rest - but only when both pieces stay >= a third of the
-        // unit and never below 15 min. Length-dependent, so a 60-min unit
-        // splits into e.g. 30/30 but never leaves a 10-min stub.
+        // Split rule (didaktische Festlegung des Auftraggebers): keep the part
+        // that still fits, continue the rest - as long as BOTH pieces stay at
+        // least 15 minutes. A fixed minimum (no fraction of the total), so a
+        // 90-min unit overhanging by 25 splits into 65/25, but a 10-min stub
+        // before the break is still refused (then the whole unit moves).
         canSplit(dur, over) {
             const part1 = dur - over;
             const part2 = over;
-            const minpiece = Math.max(15, Math.ceil(dur / 3));
+            const minpiece = 15;
             return part1 >= minpiece && part2 >= minpiece;
         }
 
@@ -2204,12 +2205,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (!baustein || !variante || baustein.aktivevariante === vid) {
                 return;
             }
-            const run = this.locateBausteinRun(bid);
-            if (!run) {
+            // Mehr-Anker-sicher: ALLE Läufe des Bausteins herausnehmen (nicht nur
+            // den ersten), den abgehenden Stand als Variante sichern und die neue
+            // Variante als einen Block an der Stelle des ersten Laufs einsetzen.
+            const removed = this.collectAndRemoveRuns(bid);
+            if (!removed) {
                 return;
             }
             if (baustein.aktivevariante && baustein.varianten[baustein.aktivevariante]) {
-                baustein.varianten[baustein.aktivevariante].platzierungen = run.pids.slice();
+                baustein.varianten[baustein.aktivevariante].platzierungen = removed.pids.slice();
             }
             const replacement = Array.isArray(variante.platzierungen) ? variante.platzierungen.slice() : [];
             replacement.forEach((pid) => {
@@ -2218,7 +2222,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     p.bausteinid = bid;
                 }
             });
-            run.seq.splice(run.start, run.length, ...replacement);
+            removed.seq.splice(removed.start, 0, ...replacement);
             baustein.aktivevariante = vid;
             this.openBausteinSwapBid = '';
             this.setDirty(true);
@@ -2279,6 +2283,28 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             return this.bausteinRuns(bid).length === 1;
         }
 
+        // Alle Läufe eines Bausteins aus der Zeitleiste nehmen und die pids (in
+        // Reihenfolge) plus die Einfügestelle des ersten Laufs zurückgeben.
+        // Grundlage für den Mehr-Anker-sicheren Varianten-Tausch: eine Alternative
+        // kommt als ein zusammenhängender Block an der Stelle des ersten Laufs
+        // zurück; läuft sie über den Anker, greift die normale Überlauf-Aktion.
+        collectAndRemoveRuns(bid) {
+            const runs = this.bausteinRuns(bid);
+            if (!runs.length) {
+                return null;
+            }
+            const seq = runs[0].seq;
+            const start = runs[0].start;
+            const pids = [];
+            runs.forEach((r) => r.pids.forEach((pid) => pids.push(pid)));
+            // Von hinten entfernen, damit die Indizes gültig bleiben (auch bei
+            // mehreren Läufen im selben Anker).
+            for (let i = runs.length - 1; i >= 0; i--) {
+                runs[i].seq.splice(runs[i].start, runs[i].length);
+            }
+            return {pids, seq, start};
+        }
+
         // Titel für den Baustein-Kopf: bei Alternativen der Titel der aktiven
         // Variante, sonst der Baustein-Titel.
         bausteinTitle(bid, baustein) {
@@ -2300,18 +2326,16 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (!baustein.varianten || typeof baustein.varianten !== 'object') {
                 baustein.varianten = {};
             }
-            const run = this.locateBausteinRun(bid);
+            const allpids = this.bausteinRuns(bid).reduce((acc, r) => acc.concat(r.pids), []);
             const activevid = baustein.aktivevariante;
             if (Object.keys(baustein.varianten).length && activevid && baustein.varianten[activevid]) {
-                if (run) {
-                    baustein.varianten[activevid].platzierungen = run.pids.slice();
-                }
+                baustein.varianten[activevid].platzierungen = allpids.slice();
                 return activevid;
             }
             const vid = this.uniqueId('vr', baustein.varianten);
             baustein.varianten[vid] = {
                 titel: baustein.titel || 'Baustein',
-                platzierungen: run ? run.pids.slice() : [],
+                platzierungen: allpids.slice(),
             };
             baustein.aktivevariante = vid;
             return vid;
@@ -2328,27 +2352,24 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (!host || !other || hostbid === otherbid) {
                 return false;
             }
-            // Schutz: Bausteine über die Mittagspause (mehrere Läufe) würden beim
-            // Parken ihre Fortsetzung verlieren.
-            if (!this.isSingleRunBaustein(hostbid) || !this.isSingleRunBaustein(otherbid)) {
-                return false;
-            }
             this.ensureVariant(hostbid);
-            const otherRun = this.locateBausteinRun(otherbid);
-            if (!otherRun) {
+            // Mehr-Anker-sicher: alle Läufe des anderen Bausteins parken (nicht nur
+            // den ersten), damit über die Mittagspause laufende Bausteine als
+            // Alternative nutzbar sind, ohne ihre Fortsetzung zu verlieren.
+            const removed = this.collectAndRemoveRuns(otherbid);
+            if (!removed) {
                 return false;
             }
-            otherRun.pids.forEach((pid) => {
+            removed.pids.forEach((pid) => {
                 const p = this.placement(pid);
                 if (p) {
                     p.bausteinid = hostbid;
                 }
             });
-            otherRun.seq.splice(otherRun.start, otherRun.length);
             const vid = this.uniqueId('vr', host.varianten);
             host.varianten[vid] = {
                 titel: other.titel || 'Alternative',
-                platzierungen: otherRun.pids.slice(),
+                platzierungen: removed.pids.slice(),
             };
             delete this.sequenz.bausteine[otherbid];
             return true;
@@ -2407,7 +2428,6 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 .filter((bid) => bid !== hostbid)
                 .map((bid) => this.baustein(bid) ? {bid, baustein: this.baustein(bid)} : null)
                 .filter((c) => c
-                    && this.isSingleRunBaustein(c.bid)
                     && Object.keys(c.baustein.varianten || {}).length === 0);
         }
 
@@ -2537,6 +2557,53 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             }
         }
 
+        // Zwei direkt aufeinanderfolgende Teile derselben zerteilten Einheit
+        // (gleiche splitgroup, gleicher Anker) gehören wieder zusammen - z. B.
+        // wenn zwischen ihnen nichts (mehr) liegt oder eine weitere Teilung sie
+        // benachbart gemacht hat. Sie werden zu einer Platzierung verschmolzen
+        // (Dauern summiert); bleibt danach nur ein Teil der Gruppe, fällt die
+        // Split-Markierung weg (wieder eine ganze Einheit). Rückgabe: true, wenn
+        // etwas verschmolzen wurde. Über die Mittagspause getrennte Teile liegen
+        // in verschiedenen Ankern und bleiben dadurch getrennt.
+        mergeAdjacentSplitParts() {
+            let changed = false;
+            this.anchorList().forEach((anchor) => {
+                const seq = anchor.seq;
+                for (let i = 0; i < seq.length - 1; i++) {
+                    const a = this.placement(seq[i]);
+                    const b = this.placement(seq[i + 1]);
+                    if (a && b && a.typ === 'einheit' && b.typ === 'einheit'
+                            && a.splitgroup && String(a.splitgroup) === String(b.splitgroup)) {
+                        a.dauer = (Number(a.dauer) || 0) + (Number(b.dauer) || 0);
+                        const bpid = seq[i + 1];
+                        const bauswahl = b.einheitenauswahl;
+                        seq.splice(i + 1, 1);
+                        delete this.sequenz.platzierungen[bpid];
+                        if (bauswahl && !this.auswahlInUse(bauswahl)) {
+                            delete this.sequenz.einheitenauswahlen[bauswahl];
+                        }
+                        changed = true;
+                        i--; // dieselbe Stelle erneut prüfen (weitere Teile).
+                    }
+                }
+            });
+            if (changed) {
+                const groups = {};
+                Object.keys(this.sequenz.platzierungen).forEach((pid) => {
+                    const sg = this.sequenz.platzierungen[pid].splitgroup;
+                    if (sg) {
+                        groups[sg] = (groups[sg] || 0) + 1;
+                    }
+                });
+                Object.keys(groups).forEach((sg) => {
+                    if (groups[sg] <= 1) {
+                        this.cleanupSplitGroup(sg);
+                    }
+                });
+            }
+            return changed;
+        }
+
         auswahlInUse(auswahlid) {
             return Object.keys(this.sequenz.platzierungen).some((pid) => {
                 return String(this.sequenz.platzierungen[pid].einheitenauswahl || '') === String(auswahlid);
@@ -2626,10 +2693,23 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                         this.closeModal();
                     } else if (type === 'editor-save') {
                         this.saveEditor();
+                    } else if (type === 'picker-tab') {
+                        this.pickerTab = action.getAttribute('data-tab') || 'lokal';
+                        root.querySelectorAll('.sq-picker__tab').forEach((t) => {
+                            t.classList.toggle('active', t.getAttribute('data-tab') === this.pickerTab);
+                        });
+                        const s = bySel('#sq-picker-search');
+                        this.renderPickerList(s ? s.value : '');
                     } else if (type === 'picker-add') {
                         const target = this.pickerTarget || {anker: this.pickerAnker || 'vormittag'};
-                        this.applySuggestTarget(action.getAttribute('data-cardid') || '', target);
+                        const globalid = Number.parseInt(action.getAttribute('data-global-methodid') || '0', 10);
                         this.closeModal();
+                        if (globalid > 0) {
+                            // Methodensammlung: erst lokale Kopie übernehmen (D33), dann platzieren.
+                            this.adoptAndPlace(globalid, target);
+                        } else {
+                            this.applySuggestTarget(action.getAttribute('data-cardid') || '', target);
+                        }
                     } else if (type === 'intro-done') {
                         this.finishIntro();
                     } else if (type === 'baustein-save') {
@@ -3005,16 +3085,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         // ---- Module master data editor (owns the former Bausteine tab data) --
 
         // Feld „Alternative Bausteine" (Multi-Dropdown, wie „Alternative
-        // Seminareinheiten" beim Einheiten-Editor). Für Fortsetzungs-Bausteine
-        // (mehrere Läufe) statt des Dropdowns ein erklärender Hinweis.
+        // Seminareinheiten" beim Einheiten-Editor). Gilt für alle Bausteine -
+        // auch für über die Mittagspause laufende (Mehr-Anker-sicherer Tausch).
         renderBausteinAltField(hostbid, baustein) {
-            if (!this.isSingleRunBaustein(hostbid)) {
-                return `
-                    <div class="sq-field">
-                      <label class="kg-label">Alternative Bausteine</label>
-                      <div class="sq-field__hint">Dieser Baustein läuft über die Mittagspause oder auf einen weiteren Tag (Fortsetzung) – dafür lassen sich keine Alternativen wählen.</div>
-                    </div>`;
-            }
             const varianten = baustein.varianten || {};
             const active = baustein.aktivevariante;
             const options = [];
@@ -3180,6 +3253,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             // Ziel: entweder ein Anker (freistehende Einheit) oder ein Baustein-
             // Platzhalter (Einheit landet im Baustein, addCardToBaustein).
             this.pickerTarget = targetPid ? {pid: targetPid} : {anker: ankername};
+            this.pickerTab = 'lokal';
+            // Dritter Tab nur, wenn ein Seminarkonzept in diese Aktivität
+            // importiert wurde - dessen Einheiten tragen das ID-Präfix "konzept-".
+            const hasKonzept = this.methodCardList.some((c) => String((c && c.id) || '').indexOf('konzept-') === 0);
+            const tab = (id, label) => `<button type="button" class="sq-picker__tab${this.pickerTab === id ? ' active' : ''}" data-sq-action="picker-tab" data-tab="${id}">${label}</button>`;
             const root = this.modalRoot();
             root.innerHTML = `
                 <div class="sq-modal">
@@ -3188,9 +3266,18 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
                   </div>
                   <div class="sq-modal__body">
+                    <div class="sq-picker__tabs" role="tablist">
+                      ${tab('lokal', 'Lokale Bibliothek')}
+                      ${tab('global', 'Methodensammlung')}
+                      ${hasKonzept ? tab('konzept', 'Importiertes Konzept') : ''}
+                    </div>
                     <div class="sq-field">
                       <input type="text" class="kg-input" id="sq-picker-search" placeholder="Suchen …">
                     </div>
+                    <label class="sq-picker__filter">
+                      <input type="checkbox" id="sq-picker-unused"${this.pickerUnusedOnly ? ' checked' : ''}>
+                      <span>Nur noch nicht verwendete Einheiten anzeigen</span>
+                    </label>
                     <div id="sq-picker-list" class="sq-picker"></div>
                     <div class="sq-picker__createrow">
                       <button type="button" class="kg-btn" data-sq-action="picker-create">＋ Neue Einheit anlegen</button>
@@ -3203,6 +3290,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 search.addEventListener('input', () => this.renderPickerList(search.value));
                 search.focus();
             }
+            const unusedCb = bySel('#sq-picker-unused');
+            if (unusedCb) {
+                unusedCb.addEventListener('change', () => {
+                    this.pickerUnusedOnly = unusedCb.checked;
+                    this.renderPickerList(search ? search.value : '');
+                });
+            }
             this.renderPickerList('');
         }
 
@@ -3212,27 +3306,53 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 return;
             }
             const needle = String(filter || '').trim().toLowerCase();
-            const cards = this.methodCardList.filter((card) => {
+            const tab = this.pickerTab || 'lokal';
+            const isKonzept = (c) => String((c && c.id) || '').indexOf('konzept-') === 0;
+            let source;
+            if (tab === 'global') {
+                source = this.globalMethods || [];
+            } else if (tab === 'konzept') {
+                source = this.methodCardList.filter(isKonzept);
+            } else {
+                // Lokale Bibliothek ohne die Konzept-Import-Karten (eigener Tab).
+                source = this.methodCardList.filter((c) => !isKonzept(c));
+            }
+            const placedRefs = this.placedCardRefs();
+            const unusedOnly = !!this.pickerUnusedOnly;
+            const cards = source.filter((card) => {
+                if (unusedOnly && placedRefs.has(String(card.id))) {
+                    return false;
+                }
                 return !needle || cardTitle(card).toLowerCase().includes(needle);
-            }).slice(0, 40);
+            }).slice(0, 60);
             if (!cards.length) {
-                list.innerHTML = '<div class="sq-empty">Keine passende Einheit gefunden.</div>';
+                const empty = unusedOnly
+                    ? 'Keine noch nicht verwendete Einheit gefunden.'
+                    : (tab === 'global'
+                        ? 'Keine globale Methode gefunden (oder Methodensammlung nicht verfügbar).'
+                        : 'Keine passende Einheit gefunden.');
+                list.innerHTML = `<div class="sq-empty">${empty}</div>`;
                 return;
             }
             list.innerHTML = cards.map((card) => {
                 const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
                 const phase = this.fieldValue(card, 'seminarphase');
+                const used = placedRefs.has(String(card.id));
+                const globalid = card._isglobal ? (Number(card._globalid) || 0) : 0;
+                const setname = card._isglobal ? String(card._setname || '') : '';
                 return `
-                    <div class="sq-picker__row">
+                    <div class="sq-picker__row${used ? ' sq-picker__row--used' : ''}">
                       <div class="sq-unit__main">
                         <div class="sq-unit__title">${escapeHtml(cardTitle(card))}</div>
                         <div class="sq-unit__meta">
                           ${Number.isFinite(duration) && duration > 0 ? `<span class="sq-badge">${duration} Min.</span>` : ''}
                           ${phase ? `<span class="sq-badge">${escapeHtml(phase)}</span>` : ''}
+                          ${setname ? `<span class="sq-badge">${escapeHtml(setname)}</span>` : ''}
+                          ${used ? '<span class="sq-badge sq-badge--used">bereits verwendet</span>' : ''}
                         </div>
                       </div>
                       <button type="button" class="kg-btn kg-btn-primary" data-sq-action="picker-add"
-                        data-cardid="${escapeHtml(String(card.id))}">Übernehmen</button>
+                        data-cardid="${escapeHtml(String(card.id))}"${globalid ? ` data-global-methodid="${globalid}"` : ''}>Übernehmen</button>
                     </div>`;
             }).join('');
         }
@@ -3772,6 +3892,36 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             ])];
         }
 
+        // Stichwörter allein aus Unterthemen + Themenplan-Referenz - Treffer
+        // hierauf zählen im Score zusätzlich (Kontext stärker gewichten).
+        topicKeywords(baustein) {
+            if (!baustein) {
+                return [];
+            }
+            return [...new Set([
+                ...tokenize(baustein.unterthemen),
+                ...tokenize(baustein.themenplanreferenz),
+            ])];
+        }
+
+        // IDs aller im ganzen Plan aktuell platzierten (aktiven) Einheiten-
+        // Karten - für „schon verwendet"-Kennzeichnung und -Abwertung.
+        placedCardRefs() {
+            const refs = new Set();
+            const placements = (this.sequenz && this.sequenz.platzierungen) || {};
+            Object.keys(placements).forEach((pid) => {
+                const p = placements[pid];
+                if (!p || p.typ !== 'einheit') {
+                    return;
+                }
+                const auswahl = this.auswahl(p);
+                if (auswahl && auswahl.aktiv !== null && auswahl.aktiv !== undefined && auswahl.aktiv !== '') {
+                    refs.add(String(auswahl.aktiv));
+                }
+            });
+            return refs;
+        }
+
         bloomPhasesFor(text) {
             const clean = String(text || '').toLowerCase();
             const phases = [];
@@ -3789,7 +3939,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         }
 
         // Hard filter: duration fits. Soft ranking: keywords + Bloom phase.
-        suggestFor(gapminutes, keywords, bloomphases, excluderefs) {
+        suggestFor(gapminutes, keywords, topicwords, bloomphases, excluderefs) {
+            const placedRefs = this.placedCardRefs();
             const scored = [];
             this.suggestionPool().forEach((card) => {
                 const duration = this.cardDuration(card);
@@ -3802,8 +3953,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 const haystack = (cardTitle(card) + ' ' + this.fieldValue(card, 'kurzbeschreibung') + ' '
                     + this.fieldValue(card, 'tags')).toLowerCase();
                 const hits = keywords.filter((word) => haystack.includes(word));
+                const topichits = (topicwords || []).filter((word) => haystack.includes(word));
                 const cardphase = phaseKey(this.fieldValue(card, 'seminarphase'));
                 const phasematch = cardphase && bloomphases.includes(cardphase);
+                const used = placedRefs.has(String(card.id));
                 const reasons = [`${duration} Min.`];
                 if (this.fieldValue(card, 'seminarphase')) {
                     reasons.push(this.fieldValue(card, 'seminarphase'));
@@ -3817,14 +3970,24 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 if (card._isglobal) {
                     reasons.push('aus globaler Sammlung');
                 }
+                if (used) {
+                    reasons.push('bereits im Plan');
+                }
                 scored.push({
                     card,
                     duration,
-                    score: hits.length * 2 + (phasematch ? 3 : 0),
+                    used,
+                    // Themen-Treffer (Unterthemen/Themenplan) zählen zusätzlich zu
+                    // den allgemeinen Stichwort-Treffern - Kontext stärker gewichtet.
+                    score: hits.length * 2 + topichits.length * 3 + (phasematch ? 3 : 0),
                     reason: reasons.join(' · '),
                 });
             });
             scored.sort((a, b) => {
+                // Schon verwendete Einheiten nach unten (bleiben wählbar, nur abgewertet).
+                if (a.used !== b.used) {
+                    return a.used ? 1 : -1;
+                }
                 if (a.score !== b.score) {
                     return b.score - a.score;
                 }
@@ -3833,7 +3996,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 }
                 return cardTitle(a.card).localeCompare(cardTitle(b.card));
             });
-            return scored.slice(0, 4);
+            return scored.slice(0, 6);
         }
 
         // Übernehmen-Button für einen Vorschlag/Treffer. Globale Methoden tragen
@@ -3861,13 +4024,14 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
 
         renderSuggestions(gapminutes, baustein, targetattrs) {
             const keywords = this.contextKeywords(baustein);
+            const topicwords = this.topicKeywords(baustein);
             const bloomphases = baustein ? this.bloomPhasesFor(baustein.themenplanreferenz) : [];
-            const suggestions = this.suggestFor(gapminutes, keywords, bloomphases, this.plannedRefsForBaustein(baustein));
+            const suggestions = this.suggestFor(gapminutes, keywords, topicwords, bloomphases, this.plannedRefsForBaustein(baustein));
 
             const cards = suggestions.map((entry) => {
                 const pkey = phaseKey(entry.card.seminarphase);
                 return `
-                <div class="sq-suggest__card${pkey ? ' sq-suggest__card--' + pkey : ''}">
+                <div class="sq-suggest__card${pkey ? ' sq-suggest__card--' + pkey : ''}${entry.used ? ' sq-suggest__card--used' : ''}">
                   <div class="sq-unit__title">${escapeHtml(cardTitle(entry.card))}</div>
                   <div class="sq-suggest__why">${escapeHtml(entry.reason)}</div>
                   ${this.suggestButton(entry.card, targetattrs)}
@@ -4215,6 +4379,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     this.setStatus('Für diesen Seminarplan gibt es noch keine Sequenzdaten.');
                 }
                 return;
+            }
+
+            // Aufeinanderfolgende Teile derselben zerteilten Einheit vor dem
+            // Rendern wieder zusammenführen (heilt auch bestehende Pläne).
+            if (this.mergeAdjacentSplitParts()) {
+                this.setDirty(true);
             }
 
             const day = this.sequenz.tage[this.dayIndex];
