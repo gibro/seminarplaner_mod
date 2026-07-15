@@ -2147,6 +2147,42 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             return null;
         }
 
+        // Alle zusammenhängenden Läufe eines Bausteins über alle Anker-Abschnitte.
+        // Ein über die Mittagspause laufender Baustein (D3-Fortsetzung) hat mehr
+        // als einen Lauf – die Alternativen-Mechanik (ein Block, ein Tausch)
+        // deckt bewusst nur Bausteine mit genau einem Lauf ab.
+        bausteinRuns(bid) {
+            const runs = [];
+            this.anchorList().forEach((anchor) => {
+                const seq = anchor.seq;
+                let i = 0;
+                while (i < seq.length) {
+                    const p = this.placement(seq[i]);
+                    if (p && p.bausteinid === bid) {
+                        const start = i;
+                        while (i < seq.length) {
+                            const q = this.placement(seq[i]);
+                            if (q && q.bausteinid === bid) {
+                                i++;
+                            } else {
+                                break;
+                            }
+                        }
+                        runs.push({seq, start, length: i - start, pids: seq.slice(start, i)});
+                    } else {
+                        i++;
+                    }
+                }
+            });
+            return runs;
+        }
+
+        // Ein Baustein taugt für Alternativen nur, wenn er genau einen
+        // zusammenhängenden Lauf hat (nicht über die Mittagspause/mehrere Tage).
+        isSingleRunBaustein(bid) {
+            return this.bausteinRuns(bid).length === 1;
+        }
+
         // Titel für den Baustein-Kopf: bei Alternativen der Titel der aktiven
         // Variante, sonst der Baustein-Titel.
         bausteinTitle(bid, baustein) {
@@ -2192,6 +2228,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             const host = this.baustein(hostbid);
             const other = this.baustein(otherbid);
             if (!host || !other || hostbid === otherbid) {
+                return;
+            }
+            // Schutz: Bausteine, die über die Mittagspause laufen (mehrere Läufe),
+            // würden beim Parken/Tauschen ihre Fortsetzung verlieren.
+            if (!this.isSingleRunBaustein(hostbid) || !this.isSingleRunBaustein(otherbid)) {
+                this.toast('Bausteine, die über die Mittagspause oder auf einen anderen Tag laufen, lassen sich nicht als Alternative wählen.');
                 return;
             }
             this.ensureVariant(hostbid);
@@ -2271,11 +2313,31 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (!host) {
                 return;
             }
+            const root = this.modalRoot();
+            // Schutz: ein Host, der über die Mittagspause läuft, kann keine
+            // Alternativen führen (der Tausch fasst nur einen Lauf).
+            if (!this.isSingleRunBaustein(hostbid)) {
+                root.innerHTML = `
+                <div class="sq-modal">
+                  <div class="sq-modal__head">
+                    <h3>Alternative wählen</h3>
+                    <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
+                  </div>
+                  <div class="sq-modal__body">
+                    <p class="sq-field__hint">Dieser Baustein läuft über die Mittagspause oder auf einen weiteren Tag (Fortsetzung). Alternativen lassen sich nur für Bausteine wählen, die vollständig in einem Abschnitt liegen.</p>
+                  </div>
+                  <div class="sq-modal__footer">
+                    <button type="button" class="kg-btn" data-sq-action="modal-close">Schließen</button>
+                  </div>
+                </div>`;
+                root.classList.add('open');
+                return;
+            }
+            // Nur Bausteine mit genau einem Lauf sind als Alternative geeignet.
             const candidates = Object.keys(this.sequenz.bausteine)
                 .filter((bid) => bid !== hostbid)
                 .map((bid) => ({bid, baustein: this.baustein(bid), run: this.locateBausteinRun(bid)}))
-                .filter((c) => c.baustein && c.run && c.run.length);
-            const root = this.modalRoot();
+                .filter((c) => c.baustein && c.run && c.run.length && this.isSingleRunBaustein(c.bid));
             const rows = candidates.map((c) => {
                 const duration = c.run.pids.reduce((sum, pid) => {
                     const p = this.placement(pid);
