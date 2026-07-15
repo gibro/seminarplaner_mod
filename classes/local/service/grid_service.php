@@ -5,6 +5,7 @@ namespace mod_seminarplaner\local\service;
 
 use coding_exception;
 use mod_seminarplaner\local\repository\grid_repository;
+use mod_seminarplaner\local\sequence\grid_to_sequence_converter;
 use mod_seminarplaner\local\sequence\sequence_state;
 
 defined('MOODLE_INTERNAL') || die();
@@ -123,6 +124,18 @@ class grid_service {
             if (is_array($existingstate) && isset($existingstate[sequence_state::STATE_KEY])) {
                 $state[sequence_state::STATE_KEY] = $existingstate[sequence_state::STATE_KEY];
             }
+        }
+
+        // A state that still carries no sequence section here comes from a
+        // path the D43 upgrade never touched: importing an old-version
+        // export, or a save from a pre-D20 client. Without a sequence the
+        // sequence view stays empty (the client only scaffolds empty days
+        // and otherwise relies on the server having derived the section).
+        // Deriving it once at this single save choke point keeps every path
+        // compatible, not just the plugin upgrade. Idempotent: has_sequence
+        // stops it re-running once the section exists.
+        if (!sequence_state::has_sequence($state)) {
+            $state[sequence_state::STATE_KEY] = (new grid_to_sequence_converter())->convert($state);
         }
 
         $overlaps = $this->find_time_overlaps($state);
@@ -368,6 +381,15 @@ class grid_service {
         $decoded = json_decode((string)$record->statejson, true);
         if (!is_array($decoded)) {
             $decoded = [];
+        }
+
+        // Self-heal legacy states that reached the DB without a sequence
+        // section - an import of an old-version export predates the D43
+        // upgrade conversion, so the sequence view would stay empty. Derive
+        // it on read (not persisted here; save_user_state stores it on the
+        // next save) so existing broken imports recover on their next open.
+        if ($decoded && !sequence_state::has_sequence($decoded)) {
+            $decoded[sequence_state::STATE_KEY] = (new grid_to_sequence_converter())->convert($decoded);
         }
 
         // The read path re-encodes the decoded state for the client; keep

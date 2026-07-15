@@ -2044,30 +2044,116 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             this.render();
         }
 
-        // C1: move trailing placements into the next anchor until the budget fits.
+        // C1: resolve an anchor overflow. Trailing placements move into the
+        // next anchor until the budget fits. A single filled unit straddling
+        // the boundary is split when both parts stay didactically sensible
+        // (see canSplit); the part that still fits stays, the remainder
+        // continues in the next anchor as "Fortsetzung". Otherwise the unit
+        // moves as a whole (the old behaviour) - starting a tiny stub before
+        // the break or day end is not worth it.
         resolveOverflow(ankername) {
             const frame = this.dayFrame(this.dayIndex);
             const anchors = this.anchorList();
             const anchorIdx = this.dayIndex * 2 + (ankername === 'vormittag' ? 0 : 1);
-            const seq = anchors[anchorIdx].seq;
             if (anchorIdx + 1 >= anchors.length) {
                 return;
             }
+            const seq = anchors[anchorIdx].seq;
+            const nextSeq = anchors[anchorIdx + 1].seq;
             const budget = this.anchorBudget(frame, ankername);
-            const moved = [];
-            while (seq.length && this.usedMinutes(seq) > budget) {
-                moved.unshift(seq.pop());
+
+            let movedwhole = 0;
+            let didsplit = false;
+            let safety = seq.length + 2;
+            while (seq.length && this.usedMinutes(seq) > budget && safety-- > 0) {
+                const lastpid = seq[seq.length - 1];
+                const last = this.placement(lastpid);
+                const dur = last ? Math.max(0, Number(last.dauer) || 0) : 0;
+                const over = this.usedMinutes(seq) - budget;
+                // A filled unit sitting across the boundary: split it when both
+                // parts remain sensible, then the anchor fits exactly.
+                if (last && last.typ === 'einheit' && !this.isUnfilled(last)
+                        && over > 0 && over < dur && this.canSplit(dur, over)) {
+                    this.splitPlacement(lastpid, dur - over, over, nextSeq);
+                    didsplit = true;
+                    break;
+                }
+                // Otherwise move the whole trailing placement (pause, reserved
+                // placeholder, short unit, or a unit past the boundary as a whole).
+                seq.pop();
+                nextSeq.unshift(lastpid);
+                movedwhole++;
             }
-            if (!moved.length) {
+
+            if (!movedwhole && !didsplit) {
                 return;
             }
-            const nextSeq = anchors[anchorIdx + 1].seq;
-            nextSeq.unshift(...moved);
             const targetname = anchors[anchorIdx + 1].ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag';
             const targetday = this.sequenz.tage[anchors[anchorIdx + 1].dayIdx];
-            this.setStatus(`${moved.length === 1 ? 'Eine Einheit' : moved.length + ' Einheiten'} verschoben – läuft jetzt am ${targetname} von Tag ${targetday.tag} weiter.`);
+            let msg;
+            if (didsplit && !movedwhole) {
+                msg = `Einheit geteilt – der Rest läuft am ${targetname} von Tag ${targetday.tag} als Fortsetzung weiter.`;
+            } else if (didsplit) {
+                msg = `${movedwhole === 1 ? 'Eine Einheit' : movedwhole + ' Einheiten'} verschoben und eine geteilt – Fortsetzung am ${targetname} von Tag ${targetday.tag}.`;
+            } else {
+                msg = `${movedwhole === 1 ? 'Eine Einheit' : movedwhole + ' Einheiten'} verschoben – läuft jetzt am ${targetname} von Tag ${targetday.tag} weiter.`;
+            }
+            this.setStatus(msg);
             this.setDirty(true);
             this.render();
+        }
+
+        // Split rule (didaktische Festlegung): keep the part that still fits,
+        // continue the rest - but only when both pieces stay >= a third of the
+        // unit and never below 15 min. Length-dependent, so a 60-min unit
+        // splits into e.g. 30/30 but never leaves a 10-min stub.
+        canSplit(dur, over) {
+            const part1 = dur - over;
+            const part2 = over;
+            const minpiece = Math.max(15, Math.ceil(dur / 3));
+            return part1 >= minpiece && part2 >= minpiece;
+        }
+
+        // Turn placement `pid` into its staying part (dauer = keepmin) and add
+        // a continuation placement (dauer = contmin) at the front of `nextSeq`.
+        // Both parts carry the same splitgroup marker; the continuation is
+        // flagged so the view labels it "Fortsetzung" and locks the alternative
+        // swap on both parts (as for a Baustein that runs across the break).
+        splitPlacement(pid, keepmin, contmin, nextSeq) {
+            const origin = this.placement(pid);
+            if (!origin) {
+                return;
+            }
+            const contpid = this.uniqueId('px', this.sequenz.platzierungen);
+            const splitid = contpid;
+            origin.dauer = keepmin;
+            origin.splitgroup = splitid;
+
+            const cont = {
+                typ: 'einheit',
+                titel: origin.titel,
+                dauer: contmin,
+                bausteinid: origin.bausteinid || null,
+                splitgroup: splitid,
+                fortsetzung: true,
+            };
+            // The continuation gets its own copy of the unit selection so the
+            // two parts clean up independently; alternatives are locked on both
+            // parts, so the copy never diverges from the origin.
+            const auswahl = this.auswahl(origin);
+            if (auswahl) {
+                const copyid = this.uniqueId('ea', this.sequenz.einheitenauswahlen);
+                this.sequenz.einheitenauswahlen[copyid] = {
+                    kandidaten: Array.isArray(auswahl.kandidaten) ? auswahl.kandidaten.slice() : [],
+                    aktiv: auswahl.aktiv !== undefined ? auswahl.aktiv : null,
+                };
+                cont.einheitenauswahl = copyid;
+            }
+            if (origin.quelle) {
+                cont.quelle = origin.quelle;
+            }
+            this.sequenz.platzierungen[contpid] = cont;
+            nextSeq.unshift(contpid);
         }
 
         anchorBudget(frame, ankername) {
@@ -2368,6 +2454,46 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             this.toast(`Überschrift „${clean}" angelegt.`);
         }
 
+        // Leeren Baustein am Ende eines Ankers anlegen: nur Überschrift, keine
+        // reservierte Dauer. Damit er im Sequenzmodell eine Position hat, trägt
+        // er einen ungefüllten Platzhalter (leere Auswahl, Dauer 0, wie ein
+        // migrierter Reservierungs-Platzhalter, D1). Beim Platzieren der ersten
+        // Einheit verbraucht addCardToBaustein den Platzhalter automatisch.
+        createEmptyBaustein(ankername) {
+            const day = this.sequenz.tage[this.dayIndex];
+            if (!day || !day.anker[ankername]) {
+                return;
+            }
+            let counter = 1;
+            while (this.sequenz.bausteine['bn' + counter]) {
+                counter++;
+            }
+            const bid = 'bn' + counter;
+            this.sequenz.bausteine[bid] = {
+                titel: 'Neuer Baustein',
+                unterthemen: '',
+                themenplanreferenz: '',
+                archiv: null,
+                varianten: {},
+                aktivevariante: null,
+                quelle: {unitid: '', slotkey: ''},
+            };
+            const eaid = this.uniqueId('eax', this.sequenz.einheitenauswahlen);
+            this.sequenz.einheitenauswahlen[eaid] = {kandidaten: [], aktiv: null};
+            const pid = this.uniqueId('px', this.sequenz.platzierungen);
+            this.sequenz.platzierungen[pid] = {
+                typ: 'einheit',
+                bausteinid: bid,
+                einheitenauswahl: eaid,
+                titel: '',
+                dauer: 0,
+            };
+            day.anker[ankername].sequenz.push(pid);
+            this.setDirty(true);
+            this.render();
+            this.toast('Leerer Baustein angelegt – Titel über „Bearbeiten", Einheiten über „＋ Einheit hinzufügen".');
+        }
+
         // ---- Removing and breaks --------------------------------------------
 
         removePlacement(pid) {
@@ -2388,9 +2514,27 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (auswahlid && !this.auswahlInUse(auswahlid)) {
                 delete this.sequenz.einheitenauswahlen[auswahlid];
             }
+            // If this was one half of a split unit, drop the split marker from
+            // the lone survivor so it becomes an ordinary unit again (no stray
+            // "Fortsetzung" badge, alternative swap re-enabled).
+            if (placement.splitgroup) {
+                this.cleanupSplitGroup(placement.splitgroup);
+            }
             this.setDirty(true);
             this.render();
             this.toast('Entfernt – die Zeiten sind nachgerückt.');
+        }
+
+        cleanupSplitGroup(splitid) {
+            const members = Object.keys(this.sequenz.platzierungen).filter((pid) => {
+                return String(this.sequenz.platzierungen[pid].splitgroup || '') === String(splitid);
+            });
+            if (members.length <= 1) {
+                members.forEach((pid) => {
+                    delete this.sequenz.platzierungen[pid].splitgroup;
+                    delete this.sequenz.platzierungen[pid].fortsetzung;
+                });
+            }
         }
 
         auswahlInUse(auswahlid) {
@@ -2483,7 +2627,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     } else if (type === 'editor-save') {
                         this.saveEditor();
                     } else if (type === 'picker-add') {
-                        this.addUnitFromCard(action.getAttribute('data-cardid') || '');
+                        const target = this.pickerTarget || {anker: this.pickerAnker || 'vormittag'};
+                        this.applySuggestTarget(action.getAttribute('data-cardid') || '', target);
+                        this.closeModal();
                     } else if (type === 'intro-done') {
                         this.finishIntro();
                     } else if (type === 'baustein-save') {
@@ -2493,8 +2639,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     } else if (type === 'quick-save') {
                         this.saveQuickCreate();
                     } else if (type === 'picker-create') {
-                        // D50: aus dem Picker in den vollen Editor wechseln.
-                        this.openCreateEditor({anker: this.pickerAnker || 'vormittag'});
+                        // D50: aus dem Picker in den vollen Editor wechseln -
+                        // dabei das Picker-Ziel (Anker oder Baustein) übernehmen.
+                        this.openCreateEditor(this.pickerTarget || {anker: this.pickerAnker || 'vormittag'});
                     }
                 });
             }
@@ -3028,8 +3175,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
 
         // ---- Add unit from the library ---------------------------------------
 
-        openPicker(ankername) {
+        openPicker(ankername, targetPid) {
             this.pickerAnker = ankername;
+            // Ziel: entweder ein Anker (freistehende Einheit) oder ein Baustein-
+            // Platzhalter (Einheit landet im Baustein, addCardToBaustein).
+            this.pickerTarget = targetPid ? {pid: targetPid} : {anker: ankername};
             const root = this.modalRoot();
             root.innerHTML = `
                 <div class="sq-modal">
@@ -3986,6 +4136,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 this.openEditor(pid);
             } else if (type === 'add-unit') {
                 this.openPicker(action.getAttribute('data-anker') || 'vormittag');
+            } else if (type === 'add-baustein') {
+                this.createEmptyBaustein(action.getAttribute('data-anker') || 'vormittag');
+            } else if (type === 'baustein-add-unit') {
+                const target = action.getAttribute('data-pid') || '';
+                const loc = this.locate(target);
+                const anker = loc ? loc.anchors[loc.anchorIdx].ankername : 'vormittag';
+                this.openPicker(anker, target);
             } else if (type === 'join-baustein') {
                 this.joinBaustein(pid);
             } else if (type === 'leave-baustein') {
@@ -4133,7 +4290,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             const overrun = over > 0
                 ? `<div class="sq-overrun">
                      <span><strong>+${over} Min. über ${overtarget}.</strong>
-                       Die letzte Einheit könnte ${movetarget} verschoben werden.</span>
+                       Die letzte Einheit wird ${movetarget} verschoben – oder geteilt und als Fortsetzung weitergeführt, wenn beide Teile sinnvoll bleiben.</span>
                      ${hasNext ? `<button type="button" class="kg-btn kg-btn-primary" data-sq-action="overflow" data-anker="${ankername}">
                        ${isMorning ? 'Auf den Nachmittag verschieben' : 'Auf den nächsten Tag verschieben'}</button>` : ''}
                    </div>`
@@ -4154,6 +4311,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 : '';
             const addbutton = `
                 <div class="sq-anchor__add">
+                  <button type="button" class="kg-btn" data-sq-action="add-baustein" data-anker="${ankername}"${offattrs}>＋ Baustein</button>
                   <button type="button" class="kg-btn" data-sq-action="add-unit" data-anker="${ankername}"${offattrs}>＋ Einheit hinzufügen</button>
                   <button type="button" class="kg-btn" data-sq-action="add-pause" data-anker="${ankername}"${offattrs}>＋ Pause</button>
                 </div>`;
@@ -4213,7 +4371,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                       <div class="sq-baustein__head">
                         <div class="sq-baustein__title">${this.renderGrip()}${escapeHtml(this.bausteinTitle(group.bausteinid, baustein))}
                           ${continuation ? '<span class="sq-badge sq-badge--variant">Fortsetzung</span>' : ''}
-                          <span class="sq-badge">${unfilled ? `${duration} Min. reserviert` : `${duration} Min.`}</span>
+                          ${(unfilled && duration <= 0) ? '' : `<span class="sq-badge">${unfilled ? `${duration} Min. reserviert` : `${duration} Min.`}</span>`}
                         </div>
                         <div class="sq-baustein__tools">
                           ${this.renderBausteinSwap(group.bausteinid, baustein)}
@@ -4299,6 +4457,18 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             // D14: the reserved duration is the classic suggestion gap - with
             // keywords and Bloom mapping from the module master data.
             const gapminutes = group.items.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
+            // Frisch angelegter leerer Baustein (keine reservierte Zeit, kein
+            // Pool/Themen): direkte Einladung, die erste Einheit hinzuzufügen.
+            if (gapminutes <= 0) {
+                const target = placeholderpid || group.items[0].pid;
+                return `
+                    <div class="sq-baustein__units">
+                      <div class="sq-baustein__empty">
+                        <span class="sq-baustein__emptyhint">Noch keine Einheit in diesem Baustein.</span>
+                        <button type="button" class="kg-btn kg-btn-primary" data-sq-action="baustein-add-unit" data-pid="${escapeHtml(target)}">＋ Einheit hinzufügen</button>
+                      </div>
+                    </div>`;
+            }
             const suggestions = (gapminutes >= 10 && this.methodCardList.length)
                 ? this.renderSuggestions(gapminutes, baustein, `data-pid="${escapeHtml(placeholderpid || group.items[0].pid)}"`)
                 : '';
@@ -4389,6 +4559,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         }
 
         renderSwap(p) {
+            // A split part must not swap its candidate: the two pieces share
+            // one unit identity but keep manual durations, so a swap would
+            // desync them (same reasoning as a Baustein continuation).
+            if (p.data && p.data.splitgroup) {
+                return '';
+            }
             const auswahl = this.auswahl(p.data);
             if (!auswahl || !Array.isArray(auswahl.kandidaten) || auswahl.kandidaten.length < 2) {
                 return '';
@@ -4474,6 +4650,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                   <div class="sq-unit__main">
                     <div class="sq-unit__title">${escapeHtml(data.titel || 'Seminareinheit')}</div>
                     <div class="sq-unit__meta">
+                      ${(!inBaustein && data.fortsetzung) ? '<span class="sq-badge sq-badge--variant">Fortsetzung</span>' : ''}
                       <span class="sq-badge">${duration} Min.</span>
                       ${phasetext ? `<span class="sq-badge${phase ? ' sq-badge--phase-' + phase : ''}">${escapeHtml(phasetext)}</span>` : ''}
                       ${groupsize ? `<span class="sq-badge">${escapeHtml(groupsize)}</span>` : ''}

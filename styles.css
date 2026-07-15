@@ -4960,6 +4960,14 @@ select.kg-input.rf-select {
     box-shadow: var(--sq-shadow);
     overflow: hidden;
 }
+/* The row menu (⋮) opens downward as an absolutely positioned panel. The
+   anchor's overflow:hidden (it clips the header to the rounded corners)
+   otherwise cuts off the lower entries of a tall menu on rows near the
+   anchor's bottom edge. Lift the clip only while a menu is open, so the
+   corner clipping stays intact the rest of the time. */
+.sq-anchor:has(.sq-menu__panel.open) {
+    overflow: visible;
+}
 .sq-anchor__head {
     display: flex;
     align-items: center;
@@ -5156,6 +5164,9 @@ select.kg-input.rf-select {
 .sq-heading-inline { display: flex; align-items: center; gap: 6px; margin: 2px 0 2px 2px; }
 .sq-heading-inline input { max-width: 260px; }
 .sq-baustein__topics { font-size: 12px; color: var(--sq-text-muted); padding: 2px 4px 4px; white-space: pre-line; }
+/* Frisch angelegter leerer Baustein: Hinweis + Einladung zum Hinzufügen. */
+.sq-baustein__empty { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 2px; }
+.sq-baustein__emptyhint { font-size: 12px; color: var(--sq-text-muted); }
 .sq-unit--planned { opacity: .85; border-style: dashed; }
 .sq-badge--planned { background: #fff; border: 1px dashed var(--sq-border-strong); }
 .sq-toast {
