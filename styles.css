@@ -5858,6 +5858,51 @@ select.kg-input.rf-select {
     color: #fff;
 }
 
+/* Baustein-Alternative: Pille + „lösen"-✕ als eine Einheit. */
+.sq-pill-wrap {
+    display: inline-flex;
+    align-items: stretch;
+}
+
+.sq-pill__x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    margin-left: -1px;
+    border: 1px solid #C9A9AD;
+    background: #fff;
+    color: var(--ig-darkred);
+    font-size: 10px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.sq-pill__x:hover {
+    background: var(--ig-darkred);
+    border-color: var(--ig-darkred);
+    color: #fff;
+}
+
+/* ---- Alternative-Picker (andere Bausteine als Alternative wählen) ---- */
+.sq-altpick__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid #E6E6E6;
+}
+
+.sq-altpick__title {
+    font-weight: 700;
+}
+
+.sq-altpick__meta {
+    font-size: 12px;
+    color: #666;
+}
+
 /* ---- Alternative-Chip + Popover ---- */
 .sq-swap__chip {
     font-family: var(--font-head);

@@ -1336,6 +1336,21 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 const baustein = seq.bausteine[bid];
                 if (baustein && typeof baustein === 'object') {
                     baustein.varianten = toMap(baustein.varianten);
+                    // Varianten-Form vereinheitlichen (übersteht den {}→[]-Roundtrip
+                    // des Servers wie die übrigen Map-Strukturen).
+                    Object.keys(baustein.varianten).forEach((vid) => {
+                        const v = baustein.varianten[vid];
+                        baustein.varianten[vid] = {
+                            titel: String((v && v.titel) || ''),
+                            platzierungen: Array.isArray(v && v.platzierungen) ? v.platzierungen.map(String) : [],
+                        };
+                    });
+                    const vkeys = Object.keys(baustein.varianten);
+                    if (!vkeys.length) {
+                        baustein.aktivevariante = null;
+                    } else if (!baustein.varianten[baustein.aktivevariante]) {
+                        baustein.aktivevariante = vkeys[0];
+                    }
                 }
             });
             const seen = {};
@@ -2084,26 +2099,215 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             this.toast('Alternative übernommen – Zeiten sind angepasst.');
         }
 
-        // C2: activate a module variant and swap the contiguous run.
+        // C2/D8: eine Baustein-Variante aktivieren und den zusammenhängenden
+        // Lauf tauschen. Vor dem Tausch wird der aktuelle Live-Stand in die
+        // abgehende Variante zurückgeschrieben, damit Bearbeitungen an der
+        // gerade aktiven Variante nicht verloren gehen.
         chooseVariant(bid, vid) {
             const baustein = this.baustein(bid);
             const variante = baustein && baustein.varianten ? baustein.varianten[vid] : null;
             if (!baustein || !variante || baustein.aktivevariante === vid) {
                 return;
             }
+            const run = this.locateBausteinRun(bid);
+            if (!run) {
+                return;
+            }
+            if (baustein.aktivevariante && baustein.varianten[baustein.aktivevariante]) {
+                baustein.varianten[baustein.aktivevariante].platzierungen = run.pids.slice();
+            }
             const replacement = Array.isArray(variante.platzierungen) ? variante.platzierungen.slice() : [];
+            replacement.forEach((pid) => {
+                const p = this.placement(pid);
+                if (p) {
+                    p.bausteinid = bid;
+                }
+            });
+            run.seq.splice(run.start, run.length, ...replacement);
+            baustein.aktivevariante = vid;
+            this.setDirty(true);
+            this.render();
+            this.toast(`Variante „${variante.titel || vid}" ist jetzt aktiv.`);
+        }
+
+        // Der zusammenhängende Lauf eines Bausteins in der Zeitleiste (ein Anker).
+        locateBausteinRun(bid) {
             const anchors = this.anchorList();
             for (const anchor of anchors) {
                 const run = this.findRun(anchor.seq, bid);
                 if (run) {
-                    anchor.seq.splice(run.start, run.length, ...replacement);
-                    baustein.aktivevariante = vid;
-                    this.setDirty(true);
-                    this.render();
-                    this.toast(`Variante „${variante.titel || vid}" ist jetzt aktiv.`);
-                    return;
+                    return {
+                        seq: anchor.seq,
+                        start: run.start,
+                        length: run.length,
+                        pids: anchor.seq.slice(run.start, run.start + run.length),
+                    };
                 }
             }
+            return null;
+        }
+
+        // Titel für den Baustein-Kopf: bei Alternativen der Titel der aktiven
+        // Variante, sonst der Baustein-Titel.
+        bausteinTitle(bid, baustein) {
+            baustein = baustein || this.baustein(bid);
+            const vid = baustein && baustein.aktivevariante;
+            if (vid && baustein.varianten && baustein.varianten[vid]) {
+                return baustein.varianten[vid].titel || baustein.titel || 'Baustein';
+            }
+            return (baustein && baustein.titel) || 'Baustein';
+        }
+
+        // Stellt sicher, dass der Baustein seinen aktuellen Lauf als (aktive)
+        // Variante führt – Grundlage, bevor eine zweite Alternative dazukommt.
+        ensureVariant(bid) {
+            const baustein = this.baustein(bid);
+            if (!baustein) {
+                return null;
+            }
+            if (!baustein.varianten || typeof baustein.varianten !== 'object') {
+                baustein.varianten = {};
+            }
+            const run = this.locateBausteinRun(bid);
+            const activevid = baustein.aktivevariante;
+            if (Object.keys(baustein.varianten).length && activevid && baustein.varianten[activevid]) {
+                if (run) {
+                    baustein.varianten[activevid].platzierungen = run.pids.slice();
+                }
+                return activevid;
+            }
+            const vid = this.uniqueId('vr', baustein.varianten);
+            baustein.varianten[vid] = {
+                titel: baustein.titel || 'Baustein',
+                platzierungen: run ? run.pids.slice() : [],
+            };
+            baustein.aktivevariante = vid;
+            return vid;
+        }
+
+        // C2/D8: einen anderen Baustein des Plans als Alternative anhängen.
+        // Der gewählte Baustein wird aus der Zeitleiste geparkt und als weitere
+        // Variante geführt; der Host-Baustein bleibt sichtbar/aktiv.
+        linkAlternative(hostbid, otherbid) {
+            const host = this.baustein(hostbid);
+            const other = this.baustein(otherbid);
+            if (!host || !other || hostbid === otherbid) {
+                return;
+            }
+            this.ensureVariant(hostbid);
+            const otherRun = this.locateBausteinRun(otherbid);
+            if (!otherRun) {
+                this.toast('Der gewählte Baustein hat keine Einheiten im Plan.');
+                return;
+            }
+            otherRun.pids.forEach((pid) => {
+                const p = this.placement(pid);
+                if (p) {
+                    p.bausteinid = hostbid;
+                }
+            });
+            otherRun.seq.splice(otherRun.start, otherRun.length);
+            const vid = this.uniqueId('vr', host.varianten);
+            host.varianten[vid] = {
+                titel: other.titel || 'Alternative',
+                platzierungen: otherRun.pids.slice(),
+            };
+            delete this.sequenz.bausteine[otherbid];
+            this.setDirty(true);
+            this.render();
+            this.toast(`„${other.titel || 'Baustein'}" ist jetzt eine Alternative – über die Pillen umschalten.`);
+        }
+
+        // Eine Alternative wieder lösen: die Variante kehrt als eigenständiger
+        // Baustein in den Plan zurück, direkt hinter dem Host-Lauf. Die gerade
+        // aktive Variante lässt sich nicht lösen (vorher umschalten).
+        unlinkAlternative(hostbid, vid) {
+            const host = this.baustein(hostbid);
+            if (!host || !host.varianten || !host.varianten[vid] || host.aktivevariante === vid) {
+                return;
+            }
+            const variante = host.varianten[vid];
+            const pids = Array.isArray(variante.platzierungen) ? variante.platzierungen.slice() : [];
+            const newbid = this.uniqueId('ba', this.sequenz.bausteine);
+            this.sequenz.bausteine[newbid] = {
+                titel: variante.titel || 'Baustein',
+                unterthemen: '',
+                themenplanreferenz: '',
+                archiv: null,
+                varianten: {},
+                aktivevariante: null,
+                quelle: {unitid: '', slotkey: ''},
+            };
+            pids.forEach((pid) => {
+                const p = this.placement(pid);
+                if (p) {
+                    p.bausteinid = newbid;
+                }
+            });
+            const run = this.locateBausteinRun(hostbid);
+            if (run) {
+                run.seq.splice(run.start + run.length, 0, ...pids);
+            } else if (this.anchorList().length) {
+                this.anchorList()[0].seq.push(...pids);
+            }
+            delete host.varianten[vid];
+            // Bleibt nur noch eine Variante übrig, den Baustein wieder als
+            // schlichten Baustein ohne Pillen führen.
+            const rest = Object.keys(host.varianten);
+            if (rest.length === 1) {
+                const only = host.varianten[rest[0]];
+                host.titel = only.titel || host.titel;
+                host.varianten = {};
+                host.aktivevariante = null;
+            }
+            this.setDirty(true);
+            this.render();
+            this.toast(`„${variante.titel || 'Alternative'}" ist wieder ein eigener Baustein im Plan.`);
+        }
+
+        // Picker: andere Bausteine des Plans, die als Alternative in Frage kommen.
+        openAlternativePicker(hostbid) {
+            const host = this.baustein(hostbid);
+            if (!host) {
+                return;
+            }
+            const candidates = Object.keys(this.sequenz.bausteine)
+                .filter((bid) => bid !== hostbid)
+                .map((bid) => ({bid, baustein: this.baustein(bid), run: this.locateBausteinRun(bid)}))
+                .filter((c) => c.baustein && c.run && c.run.length);
+            const root = this.modalRoot();
+            const rows = candidates.map((c) => {
+                const duration = c.run.pids.reduce((sum, pid) => {
+                    const p = this.placement(pid);
+                    return sum + Math.max(0, Number(p && p.dauer) || 0);
+                }, 0);
+                const count = c.run.length;
+                return `
+                    <div class="sq-altpick__row">
+                      <div class="sq-altpick__info">
+                        <div class="sq-altpick__title">${escapeHtml(this.bausteinTitle(c.bid, c.baustein))}</div>
+                        <div class="sq-altpick__meta">${count} Einheit${count === 1 ? '' : 'en'} · ${duration} Min.</div>
+                      </div>
+                      <button type="button" class="kg-btn kg-btn-primary" data-sq-action="variant-pick"
+                        data-hostbid="${escapeHtml(hostbid)}" data-otherbid="${escapeHtml(c.bid)}">Als Alternative wählen</button>
+                    </div>`;
+            }).join('');
+            root.innerHTML = `
+                <div class="sq-modal">
+                  <div class="sq-modal__head">
+                    <h3>Alternative zu „${escapeHtml(this.bausteinTitle(hostbid, host))}" wählen</h3>
+                    <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
+                  </div>
+                  <div class="sq-modal__body">
+                    ${candidates.length
+                        ? `<p class="sq-field__hint">Der gewählte Baustein wird aus der Zeitleiste geparkt und über die Pillen austauschbar.</p>${rows}`
+                        : '<p class="sq-field__hint">Es gibt keinen weiteren Baustein in diesem Plan. Lege zuerst einen zweiten Baustein mit seinen Einheiten an.</p>'}
+                  </div>
+                  <div class="sq-modal__footer">
+                    <button type="button" class="kg-btn" data-sq-action="modal-close">Schließen</button>
+                  </div>
+                </div>`;
+            root.classList.add('open');
         }
 
         findRun(seq, bid) {
@@ -2276,6 +2480,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     } else if (type === 'picker-create') {
                         // D50: aus dem Picker in den vollen Editor wechseln.
                         this.openCreateEditor({anker: this.pickerAnker || 'vormittag'});
+                    } else if (type === 'variant-pick') {
+                        this.linkAlternative(
+                            action.getAttribute('data-hostbid') || '',
+                            action.getAttribute('data-otherbid') || ''
+                        );
+                        this.closeModal();
                     }
                 });
             }
@@ -3657,6 +3867,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 this.chooseCandidate(pid, action.getAttribute('data-ref') || '');
             } else if (type === 'variant') {
                 this.chooseVariant(action.getAttribute('data-bid') || '', action.getAttribute('data-vid') || '');
+            } else if (type === 'variant-add') {
+                this.openAlternativePicker(action.getAttribute('data-bid') || '');
+            } else if (type === 'variant-unlink') {
+                this.unlinkAlternative(action.getAttribute('data-bid') || '', action.getAttribute('data-vid') || '');
             } else if (type === 'heading-open') {
                 this.headingPid = pid;
                 this.render();
@@ -3899,12 +4113,14 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     <div class="sq-baustein${unfilled ? ' sq-baustein--empty' : ''}" draggable="true"
                       data-sq-drag="${escapeHtml(group.items[0].pid)}" data-sq-group="${escapeHtml(group.bausteinid)}">
                       <div class="sq-baustein__head">
-                        <div class="sq-baustein__title">${this.renderGrip()}${escapeHtml(baustein.titel || 'Baustein')}
+                        <div class="sq-baustein__title">${this.renderGrip()}${escapeHtml(this.bausteinTitle(group.bausteinid, baustein))}
                           ${continuation ? '<span class="sq-badge sq-badge--variant">Fortsetzung</span>' : ''}
                           <span class="sq-badge">${unfilled ? `${duration} Min. reserviert` : `${duration} Min.`}</span>
                         </div>
                         <div class="sq-baustein__tools">
                           ${this.renderVariantPills(group.bausteinid, baustein)}
+                          <button type="button" class="kg-btn sq-membership" data-sq-action="variant-add"
+                            data-bid="${escapeHtml(group.bausteinid)}" title="Einen anderen Baustein als Alternative anhängen">⇄ Alternative</button>
                           <button type="button" class="kg-btn sq-membership" data-sq-action="edit-baustein"
                             data-bid="${escapeHtml(group.bausteinid)}">Bearbeiten</button>
                           ${unfilled ? this.renderRowMenu(group.items[0], false) : ''}
@@ -4009,16 +4225,22 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         renderVariantPills(bid, baustein) {
             const varianten = baustein && baustein.varianten ? baustein.varianten : {};
             const keys = Object.keys(varianten);
-            if (!keys.length) {
+            // Pillen erst ab zwei Varianten (eine einzelne wäre ein schlichter Baustein).
+            if (keys.length < 2) {
                 return '';
             }
             const pills = keys.map((vid) => {
                 const active = baustein.aktivevariante === vid;
-                return `<button type="button" class="sq-pill${active ? ' active' : ''}"
-                    data-sq-action="variant" data-bid="${escapeHtml(bid)}" data-vid="${escapeHtml(vid)}">
-                    ${escapeHtml(varianten[vid].titel || vid)}</button>`;
+                // Die aktive Variante lässt sich nicht lösen – nur die geparkten.
+                const unlink = active ? '' : `<button type="button" class="sq-pill__x"
+                    data-sq-action="variant-unlink" data-bid="${escapeHtml(bid)}" data-vid="${escapeHtml(vid)}"
+                    title="Diese Alternative wieder als eigenen Baustein lösen" aria-label="Alternative lösen">✕</button>`;
+                return `<span class="sq-pill-wrap">
+                    <button type="button" class="sq-pill${active ? ' active' : ''}"
+                      data-sq-action="variant" data-bid="${escapeHtml(bid)}" data-vid="${escapeHtml(vid)}">
+                      ${escapeHtml(varianten[vid].titel || vid)}</button>${unlink}</span>`;
             }).join('');
-            return `<div class="sq-pills" role="group" aria-label="Baustein-Variante wählen">${pills}</div>`;
+            return `<div class="sq-pills" role="group" aria-label="Baustein-Alternative wählen">${pills}</div>`;
         }
 
         // D47: six-dot grip as drag affordance (visual handle from the

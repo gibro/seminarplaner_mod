@@ -1568,7 +1568,8 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
 
         doc.setDrawColor(220, 224, 233);
         doc.setLineWidth(0.3);
-        doc.line(14, y, 196, y);
+        // Trennlinie über die volle Seitenbreite ziehen (zieht im Querformat mit).
+        doc.line(14, y, doc.internal.pageSize.getWidth() - 14, y);
         y += 10;
 
         doc.setFontSize(11);
@@ -1765,7 +1766,8 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
         const days = getOrderedDays();
         const plan = getPlanByDay();
         const selectedcols = getSelectedPdfColumns();
-        const doc = new jsPDF();
+        // ZIM-Papier im Querformat: mehr Platz für die nebeneinander stehenden ZIM-Spalten.
+        const doc = new jsPDF({orientation: 'landscape'});
         if (typeof doc.autoTable !== 'function') {
             throw new Error('PDF-Tabellenbibliothek nicht geladen');
         }
