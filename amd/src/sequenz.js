@@ -213,58 +213,61 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
     };
 
     // Auf/Zu-Verhalten und Häkchen → hidden-Feld (einmalig beim Seitenstart).
-    const bindUnitMultiDropdowns = () => {
-        document.querySelectorAll('[data-kg-form-multi-dropdown="1"]').forEach((dropdown) => {
-            const selector = String(dropdown.getAttribute('data-kg-field') || '');
-            const toggle = dropdown.querySelector('[data-kg-form-multi-toggle="1"]');
-            const panel = dropdown.querySelector('[data-kg-form-multi-panel="1"]');
-            if (toggle && panel) {
-                toggle.addEventListener('click', () => {
-                    const opening = panel.classList.contains('kg-hidden');
-                    document.querySelectorAll('[data-kg-form-multi-dropdown="1"]').forEach((other) => {
-                        const otherpanel = other.querySelector('[data-kg-form-multi-panel="1"]');
-                        if (otherpanel) {
-                            otherpanel.classList.add('kg-hidden');
-                        }
-                        other.classList.remove('kg-form-multi-open');
-                    });
-                    if (opening) {
-                        panel.classList.remove('kg-hidden');
-                        dropdown.classList.add('kg-form-multi-open');
+    // Bindet ein einzelnes Multi-Dropdown (Auf/Zu, Häkchen → hidden, Suche).
+    const bindMultiDropdown = (dropdown) => {
+        const selector = String(dropdown.getAttribute('data-kg-field') || '');
+        const toggle = dropdown.querySelector('[data-kg-form-multi-toggle="1"]');
+        const panel = dropdown.querySelector('[data-kg-form-multi-panel="1"]');
+        if (toggle && panel) {
+            toggle.addEventListener('click', () => {
+                const opening = panel.classList.contains('kg-hidden');
+                document.querySelectorAll('[data-kg-form-multi-dropdown="1"]').forEach((other) => {
+                    const otherpanel = other.querySelector('[data-kg-form-multi-panel="1"]');
+                    if (otherpanel) {
+                        otherpanel.classList.add('kg-hidden');
                     }
+                    other.classList.remove('kg-form-multi-open');
                 });
-                document.addEventListener('click', (event) => {
-                    if (!dropdown.contains(event.target)) {
-                        panel.classList.add('kg-hidden');
-                        dropdown.classList.remove('kg-form-multi-open');
+                if (opening) {
+                    panel.classList.remove('kg-hidden');
+                    dropdown.classList.add('kg-form-multi-open');
+                }
+            });
+            document.addEventListener('click', (event) => {
+                if (!dropdown.contains(event.target)) {
+                    panel.classList.add('kg-hidden');
+                    dropdown.classList.remove('kg-form-multi-open');
+                }
+            });
+        }
+        dropdown.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
+            checkbox.addEventListener('change', () => {
+                const selected = Array.from(dropdown.querySelectorAll('[data-kg-form-multi-option="1"]:checked'))
+                    .map((cb) => String(cb.value || '').trim())
+                    .filter(Boolean);
+                setMultiDropdownValues(selector, selected);
+            });
+        });
+        // Suchfeld (nur beim Alternativen-Dropdown): filtert die Optionen
+        // live – greift auch für später dynamisch ergänzte Optionen.
+        const searchinput = dropdown.querySelector('[data-kg-form-multi-search="1"]');
+        if (searchinput) {
+            searchinput.addEventListener('input', () => {
+                const term = String(searchinput.value || '').trim().toLowerCase();
+                dropdown.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
+                    const row = checkbox.closest('.kg-tag-option');
+                    if (!row) {
+                        return;
                     }
-                });
-            }
-            dropdown.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
-                checkbox.addEventListener('change', () => {
-                    const selected = Array.from(dropdown.querySelectorAll('[data-kg-form-multi-option="1"]:checked'))
-                        .map((cb) => String(cb.value || '').trim())
-                        .filter(Boolean);
-                    setMultiDropdownValues(selector, selected);
+                    const label = String(row.textContent || '').toLowerCase();
+                    row.style.display = !term || label.includes(term) ? '' : 'none';
                 });
             });
-            // Suchfeld (nur beim Alternativen-Dropdown): filtert die Optionen
-            // live – greift auch für später dynamisch ergänzte Optionen.
-            const searchinput = dropdown.querySelector('[data-kg-form-multi-search="1"]');
-            if (searchinput) {
-                searchinput.addEventListener('input', () => {
-                    const term = String(searchinput.value || '').trim().toLowerCase();
-                    dropdown.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
-                        const row = checkbox.closest('.kg-tag-option');
-                        if (!row) {
-                            return;
-                        }
-                        const label = String(row.textContent || '').toLowerCase();
-                        row.style.display = !term || label.includes(term) ? '' : 'none';
-                    });
-                });
-            }
-        });
+        }
+    };
+
+    const bindUnitMultiDropdowns = () => {
+        document.querySelectorAll('[data-kg-form-multi-dropdown="1"]').forEach(bindMultiDropdown);
     };
 
     const tinyEditorFor = (el) => {
@@ -450,6 +453,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             // lokale Kopie an (adopt_global_method).
             this.globalMethods = [];
             this.openSwapPid = '';
+            this.openBausteinSwapBid = '';
             this.openMenuPid = '';
             this.headingPid = '';
             this.idCounter = 0;
@@ -594,11 +598,16 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 }, true);
             }
             document.addEventListener('click', (event) => {
-                const outsideSwap = !event.target.closest('.sq-swap') && this.openSwapPid;
+                const insideSwap = !!event.target.closest('.sq-swap');
+                const outsideSwap = !insideSwap && this.openSwapPid;
+                const outsideBausteinSwap = !insideSwap && this.openBausteinSwapBid;
                 const outsideMenu = !event.target.closest('.sq-menu') && this.openMenuPid;
-                if (outsideSwap || outsideMenu) {
+                if (outsideSwap || outsideBausteinSwap || outsideMenu) {
                     if (outsideSwap) {
                         this.openSwapPid = '';
+                    }
+                    if (outsideBausteinSwap) {
+                        this.openBausteinSwapBid = '';
                     }
                     if (outsideMenu) {
                         this.openMenuPid = '';
@@ -2125,6 +2134,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             });
             run.seq.splice(run.start, run.length, ...replacement);
             baustein.aktivevariante = vid;
+            this.openBausteinSwapBid = '';
             this.setDirty(true);
             this.render();
             this.toast(`Variante „${variante.titel || vid}" ist jetzt aktiv.`);
@@ -2223,24 +2233,24 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
 
         // C2/D8: einen anderen Baustein des Plans als Alternative anhängen.
         // Der gewählte Baustein wird aus der Zeitleiste geparkt und als weitere
-        // Variante geführt; der Host-Baustein bleibt sichtbar/aktiv.
+        // Variante geführt; der Host-Baustein bleibt sichtbar/aktiv. Kein
+        // Rendern/Toast – wird gebündelt aus saveBausteinEditor aufgerufen.
+        // Rückgabe: true, wenn verknüpft.
         linkAlternative(hostbid, otherbid) {
             const host = this.baustein(hostbid);
             const other = this.baustein(otherbid);
             if (!host || !other || hostbid === otherbid) {
-                return;
+                return false;
             }
-            // Schutz: Bausteine, die über die Mittagspause laufen (mehrere Läufe),
-            // würden beim Parken/Tauschen ihre Fortsetzung verlieren.
+            // Schutz: Bausteine über die Mittagspause (mehrere Läufe) würden beim
+            // Parken ihre Fortsetzung verlieren.
             if (!this.isSingleRunBaustein(hostbid) || !this.isSingleRunBaustein(otherbid)) {
-                this.toast('Bausteine, die über die Mittagspause oder auf einen anderen Tag laufen, lassen sich nicht als Alternative wählen.');
-                return;
+                return false;
             }
             this.ensureVariant(hostbid);
             const otherRun = this.locateBausteinRun(otherbid);
             if (!otherRun) {
-                this.toast('Der gewählte Baustein hat keine Einheiten im Plan.');
-                return;
+                return false;
             }
             otherRun.pids.forEach((pid) => {
                 const p = this.placement(pid);
@@ -2255,18 +2265,17 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 platzierungen: otherRun.pids.slice(),
             };
             delete this.sequenz.bausteine[otherbid];
-            this.setDirty(true);
-            this.render();
-            this.toast(`„${other.titel || 'Baustein'}" ist jetzt eine Alternative – über die Pillen umschalten.`);
+            return true;
         }
 
         // Eine Alternative wieder lösen: die Variante kehrt als eigenständiger
-        // Baustein in den Plan zurück, direkt hinter dem Host-Lauf. Die gerade
-        // aktive Variante lässt sich nicht lösen (vorher umschalten).
+        // Baustein in den Plan zurück, direkt hinter dem Host-Lauf. Die aktive
+        // Variante lässt sich nicht lösen. Kein Rendern/Toast (siehe oben).
+        // Rückgabe: true, wenn gelöst.
         unlinkAlternative(hostbid, vid) {
             const host = this.baustein(hostbid);
             if (!host || !host.varianten || !host.varianten[vid] || host.aktivevariante === vid) {
-                return;
+                return false;
             }
             const variante = host.varianten[vid];
             const pids = Array.isArray(variante.platzierungen) ? variante.platzierungen.slice() : [];
@@ -2302,74 +2311,18 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 host.varianten = {};
                 host.aktivevariante = null;
             }
-            this.setDirty(true);
-            this.render();
-            this.toast(`„${variante.titel || 'Alternative'}" ist wieder ein eigener Baustein im Plan.`);
+            return true;
         }
 
-        // Picker: andere Bausteine des Plans, die als Alternative in Frage kommen.
-        openAlternativePicker(hostbid) {
-            const host = this.baustein(hostbid);
-            if (!host) {
-                return;
-            }
-            const root = this.modalRoot();
-            // Schutz: ein Host, der über die Mittagspause läuft, kann keine
-            // Alternativen führen (der Tausch fasst nur einen Lauf).
-            if (!this.isSingleRunBaustein(hostbid)) {
-                root.innerHTML = `
-                <div class="sq-modal">
-                  <div class="sq-modal__head">
-                    <h3>Alternative wählen</h3>
-                    <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
-                  </div>
-                  <div class="sq-modal__body">
-                    <p class="sq-field__hint">Dieser Baustein läuft über die Mittagspause oder auf einen weiteren Tag (Fortsetzung). Alternativen lassen sich nur für Bausteine wählen, die vollständig in einem Abschnitt liegen.</p>
-                  </div>
-                  <div class="sq-modal__footer">
-                    <button type="button" class="kg-btn" data-sq-action="modal-close">Schließen</button>
-                  </div>
-                </div>`;
-                root.classList.add('open');
-                return;
-            }
-            // Nur Bausteine mit genau einem Lauf sind als Alternative geeignet.
-            const candidates = Object.keys(this.sequenz.bausteine)
+        // Kandidaten-Bausteine, die als Alternative eines Hosts taugen: andere
+        // Bausteine des Plans mit genau einem Lauf und ohne eigene Varianten.
+        alternativeCandidateBausteine(hostbid) {
+            return Object.keys(this.sequenz.bausteine)
                 .filter((bid) => bid !== hostbid)
-                .map((bid) => ({bid, baustein: this.baustein(bid), run: this.locateBausteinRun(bid)}))
-                .filter((c) => c.baustein && c.run && c.run.length && this.isSingleRunBaustein(c.bid));
-            const rows = candidates.map((c) => {
-                const duration = c.run.pids.reduce((sum, pid) => {
-                    const p = this.placement(pid);
-                    return sum + Math.max(0, Number(p && p.dauer) || 0);
-                }, 0);
-                const count = c.run.length;
-                return `
-                    <div class="sq-altpick__row">
-                      <div class="sq-altpick__info">
-                        <div class="sq-altpick__title">${escapeHtml(this.bausteinTitle(c.bid, c.baustein))}</div>
-                        <div class="sq-altpick__meta">${count} Einheit${count === 1 ? '' : 'en'} · ${duration} Min.</div>
-                      </div>
-                      <button type="button" class="kg-btn kg-btn-primary" data-sq-action="variant-pick"
-                        data-hostbid="${escapeHtml(hostbid)}" data-otherbid="${escapeHtml(c.bid)}">Als Alternative wählen</button>
-                    </div>`;
-            }).join('');
-            root.innerHTML = `
-                <div class="sq-modal">
-                  <div class="sq-modal__head">
-                    <h3>Alternative zu „${escapeHtml(this.bausteinTitle(hostbid, host))}" wählen</h3>
-                    <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
-                  </div>
-                  <div class="sq-modal__body">
-                    ${candidates.length
-                        ? `<p class="sq-field__hint">Der gewählte Baustein wird aus der Zeitleiste geparkt und über die Pillen austauschbar.</p>${rows}`
-                        : '<p class="sq-field__hint">Es gibt keinen weiteren Baustein in diesem Plan. Lege zuerst einen zweiten Baustein mit seinen Einheiten an.</p>'}
-                  </div>
-                  <div class="sq-modal__footer">
-                    <button type="button" class="kg-btn" data-sq-action="modal-close">Schließen</button>
-                  </div>
-                </div>`;
-            root.classList.add('open');
+                .map((bid) => this.baustein(bid) ? {bid, baustein: this.baustein(bid)} : null)
+                .filter((c) => c
+                    && this.isSingleRunBaustein(c.bid)
+                    && Object.keys(c.baustein.varianten || {}).length === 0);
         }
 
         findRun(seq, bid) {
@@ -2542,12 +2495,6 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     } else if (type === 'picker-create') {
                         // D50: aus dem Picker in den vollen Editor wechseln.
                         this.openCreateEditor({anker: this.pickerAnker || 'vormittag'});
-                    } else if (type === 'variant-pick') {
-                        this.linkAlternative(
-                            action.getAttribute('data-hostbid') || '',
-                            action.getAttribute('data-otherbid') || ''
-                        );
-                        this.closeModal();
                     }
                 });
             }
@@ -2910,6 +2857,55 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
 
         // ---- Module master data editor (owns the former Bausteine tab data) --
 
+        // Feld „Alternative Bausteine" (Multi-Dropdown, wie „Alternative
+        // Seminareinheiten" beim Einheiten-Editor). Für Fortsetzungs-Bausteine
+        // (mehrere Läufe) statt des Dropdowns ein erklärender Hinweis.
+        renderBausteinAltField(hostbid, baustein) {
+            if (!this.isSingleRunBaustein(hostbid)) {
+                return `
+                    <div class="sq-field">
+                      <label class="kg-label">Alternative Bausteine</label>
+                      <div class="sq-field__hint">Dieser Baustein läuft über die Mittagspause oder auf einen weiteren Tag (Fortsetzung) – dafür lassen sich keine Alternativen wählen.</div>
+                    </div>`;
+            }
+            const varianten = baustein.varianten || {};
+            const active = baustein.aktivevariante;
+            const options = [];
+            // Bereits verknüpfte Alternativen (nicht-aktive Varianten) – kommen
+            // beim Öffnen vorausgewählt zurück.
+            Object.keys(varianten).forEach((vid) => {
+                if (vid === active) {
+                    return;
+                }
+                options.push({value: 'v:' + vid, label: varianten[vid].titel || 'Alternative'});
+            });
+            // Andere, geeignete Bausteine des Plans.
+            this.alternativeCandidateBausteine(hostbid).forEach((c) => {
+                options.push({value: 'b:' + c.bid, label: this.bausteinTitle(c.bid, c.baustein)});
+            });
+            if (!options.length) {
+                return `
+                    <div class="sq-field">
+                      <label class="kg-label">Alternative Bausteine</label>
+                      <div class="sq-field__hint">Es gibt keinen weiteren geeigneten Baustein in diesem Plan.</div>
+                    </div>`;
+            }
+            const opts = options.map((o) =>
+                `<label class="kg-tag-option"><input type="checkbox" value="${escapeHtml(o.value)}" data-kg-form-multi-option="1"><span>${escapeHtml(o.label)}</span></label>`
+            ).join('');
+            return `
+                <div class="sq-field">
+                  <label class="kg-label" for="sq-b-alternativen">Alternative Bausteine</label>
+                  <div class="kg-tag-dropdown" id="sq-b-alternativen-dropdown" data-kg-form-multi-dropdown="1"
+                    data-kg-field="#sq-b-alternativen" data-kg-label-prefix="Alternativen" data-kg-placeholder="Alternative Bausteine wählen">
+                    <button type="button" class="kg-input kg-tag-dropdown-toggle" id="sq-b-alternativen-toggle" data-kg-form-multi-toggle="1">Alternative Bausteine wählen</button>
+                    <div class="kg-tag-dropdown-panel kg-hidden" id="sq-b-alternativen-panel" data-kg-form-multi-panel="1">${opts}</div>
+                  </div>
+                  <input type="hidden" id="sq-b-alternativen" value="">
+                  <div class="sq-field__hint">Gewählte Bausteine werden geparkt und über den „⇄ Alternative"-Schalter am Baustein umgeschaltet.</div>
+                </div>`;
+        }
+
         openBausteinEditor(bid) {
             const baustein = this.baustein(bid);
             if (!baustein) {
@@ -2927,13 +2923,14 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                   <div class="sq-modal__body">
                     <div class="sq-field">
                       <label class="kg-label">Überschrift</label>
-                      <input type="text" class="kg-input" data-sq-field="titel" value="${escapeHtml(baustein.titel || '')}">
+                      <input type="text" class="kg-input" data-sq-field="titel" value="${escapeHtml(this.bausteinTitle(bid, baustein))}">
                     </div>
                     <div class="sq-field">
                       <label class="kg-label">Unterthemen</label>
                       <textarea class="kg-input" rows="5" data-sq-field="unterthemen">${escapeHtml(htmlToLines(baustein.unterthemen))}</textarea>
                       <div class="sq-field__hint">Eine Zeile je Unterthema.</div>
                     </div>
+                    ${this.renderBausteinAltField(bid, baustein)}
                     ${referenz ? `
                     <div class="sq-field">
                       <label class="kg-label">Themenplan-Referenz (aus dem Import, nicht änderbar)</label>
@@ -2948,26 +2945,65 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                   </div>
                 </div>`;
             root.classList.add('open');
+            // Multi-Dropdown binden + bereits verknüpfte Alternativen vorbelegen.
+            const dd = root.querySelector('#sq-b-alternativen-dropdown');
+            if (dd) {
+                bindMultiDropdown(dd);
+                const preselected = Object.keys(baustein.varianten || {})
+                    .filter((vid) => vid !== baustein.aktivevariante)
+                    .map((vid) => 'v:' + vid);
+                setMultiDropdownValues('#sq-b-alternativen', preselected);
+            }
         }
 
         saveBausteinEditor() {
             const root = bySel('#sq-modal');
-            const baustein = this.baustein(this.editorBid);
-            if (!root || !baustein) {
+            const host = this.baustein(this.editorBid);
+            if (!root || !host) {
                 return;
             }
+            const hostbid = this.editorBid;
             const titel = root.querySelector('[data-sq-field="titel"]');
             const unterthemen = root.querySelector('[data-sq-field="unterthemen"]');
-            if (titel && titel.value.trim()) {
-                baustein.titel = titel.value.trim();
+            const newtitel = titel && titel.value.trim() ? titel.value.trim() : '';
+            if (newtitel) {
+                // Der Titel gilt für die aktuell gezeigte (aktive) Variante,
+                // sonst für den schlichten Baustein.
+                const active = host.aktivevariante;
+                if (active && host.varianten && host.varianten[active]) {
+                    host.varianten[active].titel = newtitel;
+                } else {
+                    host.titel = newtitel;
+                }
             }
             if (unterthemen) {
-                baustein.unterthemen = unterthemen.value.trim();
+                host.unterthemen = unterthemen.value.trim();
+            }
+            // Alternativen abgleichen (nur wenn das Dropdown vorhanden war = Ein-Lauf-Host).
+            let changedAlt = false;
+            if (root.querySelector('#sq-b-alternativen')) {
+                const selected = readMultiDropdownValues('#sq-b-alternativen');
+                const keepVariants = new Set(selected.filter((v) => v.indexOf('v:') === 0).map((v) => v.slice(2)));
+                const addBausteine = selected.filter((v) => v.indexOf('b:') === 0).map((v) => v.slice(2));
+                // Abgewählte bestehende Alternativen lösen (aktive nie).
+                Object.keys(host.varianten || {}).forEach((vid) => {
+                    if (vid !== host.aktivevariante && !keepVariants.has(vid)) {
+                        if (this.unlinkAlternative(hostbid, vid)) {
+                            changedAlt = true;
+                        }
+                    }
+                });
+                // Neu gewählte Bausteine verknüpfen.
+                addBausteine.forEach((bid) => {
+                    if (this.linkAlternative(hostbid, bid)) {
+                        changedAlt = true;
+                    }
+                });
             }
             this.closeModal();
             this.setDirty(true);
             this.render();
-            this.toast('Baustein aktualisiert.');
+            this.toast(changedAlt ? 'Baustein aktualisiert – Alternativen angepasst.' : 'Baustein aktualisiert.');
         }
 
         dissolveBaustein(bid) {
@@ -3929,10 +3965,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 this.chooseCandidate(pid, action.getAttribute('data-ref') || '');
             } else if (type === 'variant') {
                 this.chooseVariant(action.getAttribute('data-bid') || '', action.getAttribute('data-vid') || '');
-            } else if (type === 'variant-add') {
-                this.openAlternativePicker(action.getAttribute('data-bid') || '');
-            } else if (type === 'variant-unlink') {
-                this.unlinkAlternative(action.getAttribute('data-bid') || '', action.getAttribute('data-vid') || '');
+            } else if (type === 'bswap-toggle') {
+                const bid = action.getAttribute('data-bid') || '';
+                this.openBausteinSwapBid = this.openBausteinSwapBid === bid ? '' : bid;
+                this.render();
             } else if (type === 'heading-open') {
                 this.headingPid = pid;
                 this.render();
@@ -4180,9 +4216,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                           <span class="sq-badge">${unfilled ? `${duration} Min. reserviert` : `${duration} Min.`}</span>
                         </div>
                         <div class="sq-baustein__tools">
-                          ${this.renderVariantPills(group.bausteinid, baustein)}
-                          <button type="button" class="kg-btn sq-membership" data-sq-action="variant-add"
-                            data-bid="${escapeHtml(group.bausteinid)}" title="Einen anderen Baustein als Alternative anhängen">⇄ Alternative</button>
+                          ${this.renderBausteinSwap(group.bausteinid, baustein)}
                           <button type="button" class="kg-btn sq-membership" data-sq-action="edit-baustein"
                             data-bid="${escapeHtml(group.bausteinid)}">Bearbeiten</button>
                           ${unfilled ? this.renderRowMenu(group.items[0], false) : ''}
@@ -4284,25 +4318,27 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 </div>`;
         }
 
-        renderVariantPills(bid, baustein) {
+        // ⇄-Alternative-Chip am Baustein – gleiche Darstellung wie bei den
+        // Seminareinheiten (renderSwap). Erscheint nur, wenn Alternativen
+        // vorhanden sind (≥ 2 Varianten); das Popover listet die Titel.
+        renderBausteinSwap(bid, baustein) {
             const varianten = baustein && baustein.varianten ? baustein.varianten : {};
             const keys = Object.keys(varianten);
-            // Pillen erst ab zwei Varianten (eine einzelne wäre ein schlichter Baustein).
             if (keys.length < 2) {
                 return '';
             }
-            const pills = keys.map((vid) => {
+            const open = this.openBausteinSwapBid === bid;
+            const options = keys.map((vid) => {
                 const active = baustein.aktivevariante === vid;
-                // Die aktive Variante lässt sich nicht lösen – nur die geparkten.
-                const unlink = active ? '' : `<button type="button" class="sq-pill__x"
-                    data-sq-action="variant-unlink" data-bid="${escapeHtml(bid)}" data-vid="${escapeHtml(vid)}"
-                    title="Diese Alternative wieder als eigenen Baustein lösen" aria-label="Alternative lösen">✕</button>`;
-                return `<span class="sq-pill-wrap">
-                    <button type="button" class="sq-pill${active ? ' active' : ''}"
-                      data-sq-action="variant" data-bid="${escapeHtml(bid)}" data-vid="${escapeHtml(vid)}">
-                      ${escapeHtml(varianten[vid].titel || vid)}</button>${unlink}</span>`;
+                return `<div class="sq-swap__option${active ? ' active' : ''}"
+                    data-sq-action="variant" data-bid="${escapeHtml(bid)}" data-vid="${escapeHtml(vid)}">
+                    <span class="sq-swap__dot"></span>${escapeHtml(varianten[vid].titel || vid)}</div>`;
             }).join('');
-            return `<div class="sq-pills" role="group" aria-label="Baustein-Alternative wählen">${pills}</div>`;
+            return `
+                <span class="sq-swap">
+                  <button type="button" class="sq-swap__chip" data-sq-action="bswap-toggle" data-bid="${escapeHtml(bid)}">⇄ Alternative</button>
+                  <div class="sq-swap__panel${open ? ' open' : ''}">${options}</div>
+                </span>`;
         }
 
         // D47: six-dot grip as drag affordance (visual handle from the
