@@ -4894,6 +4894,40 @@ select.kg-input.rf-select {
     --sq-phase-handlung: #882A30;
     --sq-phase-transfer: #646464;
 }
+/* ---- Klapp-Indikator: EIN Muster fuer alle Aufklapp-Elemente ----
+   Vorher gab es drei: den nativen <details>-Marker (Seminarziele, Ziel-
+   Verknuepfungen, Modal-Abschnitte), ein rotes ▸ (Luecken-Vorschlaege) und ein
+   Inline-SVG (Kopf). Der native Marker sieht zudem je nach Browser anders aus,
+   war also nicht mal mit sich selbst einheitlich. Jetzt tragen alle dieselbe
+   Form, Groesse, Farbe und Drehung — genau ein Ort, an dem das definiert ist.
+   Rotation deckt beide Bauarten ab: <details>/<summary> und den Button-Kopf. */
+.sq-tri {
+    display: inline-block;
+    flex: 0 0 auto;
+    color: var(--sq-text);
+    font-size: .9em;
+    line-height: 1;
+    transition: transform .15s;
+}
+details[open] > summary .sq-tri,
+.sq-head[data-open="1"] .sq-tri {
+    transform: rotate(90deg);
+}
+/* Nativen Marker abschalten, wo der eigene Indikator steht — sonst stehen zwei
+   Pfeile nebeneinander. */
+.sq-goals__summary,
+.sq-goal-links > summary,
+.sq-section > summary,
+.sq-gap__summary {
+    list-style: none;
+}
+.sq-goals__summary::-webkit-details-marker,
+.sq-goal-links > summary::-webkit-details-marker,
+.sq-section > summary::-webkit-details-marker,
+.sq-gap__summary::-webkit-details-marker {
+    display: none;
+}
+
 /* ---- Einklappbarer Kopf „Seminarplan & Tag" (Handoff-SEQUENZ 1) ---- */
 .sq-head {
     background: #fff;
@@ -4913,12 +4947,6 @@ select.kg-input.rf-select {
     text-align: left;
 }
 .sq-head[data-open="0"] .sq-head__toggle { border-bottom: 0; }
-.sq-head__tri {
-    display: inline-flex;
-    color: #3C3C3C;
-    transition: transform .15s;
-}
-.sq-head[data-open="1"] .sq-head__tri { transform: rotate(90deg); }
 .sq-head__title {
     font-family: var(--font-head, inherit);
     font-weight: 900;
@@ -6323,16 +6351,8 @@ select.kg-input.rf-select {
     display: none;
 }
 
-.sq-gap__chevron {
-    display: inline-block;
-    color: var(--ig-red);
-    transition: transform .15s;
-    flex: 0 0 auto;
-}
-
-details[open] > .sq-gap__summary .sq-gap__chevron {
-    transform: rotate(90deg);
-}
+/* Der frueher eigene .sq-gap__chevron ist entfallen: die Luecken-Box nutzt jetzt
+   denselben .sq-tri wie alle anderen Aufklapp-Elemente. */
 
 .sq-gap__label {
     font-family: var(--font-head);

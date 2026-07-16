@@ -3869,7 +3869,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     <button type="button" class="kg-btn sq-goal__del" data-sq-goal="delete" data-goalid="${escapeHtml(ziel.id)}" title="Ziel löschen">✕</button>
                   </div>
                   <details class="sq-goal-links" data-goalid="${escapeHtml(ziel.id)}"${linksopen}>
-                    <summary>Verknüpfte Einheiten (${linkedcount}${units.length ? '/' + units.length : ''})</summary>
+                    <summary><span class="sq-tri" aria-hidden="true">▸</span> Verknüpfte Einheiten (${linkedcount}${units.length ? '/' + units.length : ''})</summary>
                     <div class="sq-goal-links__list">${options || emptyunits}</div>
                   </details>
                 </div>`;
@@ -3890,7 +3890,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             const open = this.goalsOpen ? ' open' : '';
             host.innerHTML = `
                 <details class="sq-goals__box"${open}>
-                  <summary class="sq-goals__summary">🎯 Seminarziele${ziele.length ? ` (${ziele.length})` : ''}</summary>
+                  <summary class="sq-goals__summary"><span class="sq-tri" aria-hidden="true">▸</span> 🎯 Seminarziele${ziele.length ? ` (${ziele.length})` : ''}</summary>
                   <div class="sq-goals__body">
                     <p class="sq-goals__hint">Formuliere die übergeordneten Ziele des Seminars und hake je Ziel ab, welche Einheiten es adressieren.</p>
                     <div class="sq-goals__list">${rows}</div>
@@ -4174,7 +4174,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             return `
                 <details class="sq-gap" data-suggest-key="${escapeHtml(key)}"${open ? ' open' : ''}>
                   <summary class="sq-gap__summary">
-                    <span class="sq-gap__chevron" aria-hidden="true">▸</span>
+                    <span class="sq-tri" aria-hidden="true">▸</span>
                     <span class="sq-gap__label">💡 Vorschläge aus deiner Bibliothek${counter}</span>
                     <span class="sq-gap__free">– hier ist noch Platz für ca. ${gapminutes} Min.</span>
                   </summary>

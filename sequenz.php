@@ -36,10 +36,7 @@ echo html_writer::end_div();
 // sich sequenz.js pro Aktivität.
 echo html_writer::start_div('sq-head', ['id' => 'sq-head']);
 echo html_writer::tag('button',
-    html_writer::tag('span',
-        '<svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">'
-        . '<path d="M3 1l7 5-7 5z"/></svg>',
-        ['class' => 'sq-head__tri'])
+    html_writer::tag('span', '▸', ['class' => 'sq-tri', 'aria-hidden' => 'true'])
     . html_writer::tag('span', 'Seminarplan &amp; Tag', ['class' => 'sq-head__title'])
     . html_writer::tag('span', '', ['class' => 'sq-head__info', 'id' => 'sq-head-info']),
     [
@@ -361,8 +358,13 @@ echo $sqmulti('Sozialform', 'sozialform', [
     'Galeriegang' => 'Galeriegang',
     'Fishbowl' => 'Fishbowl',
 ], 'Sozialformen wählen', 'Sozialformen');
+// Klapp-Indikator wie in der ganzen Ansicht (.sq-tri), nicht der native Marker.
+$sqsummary = static function (string $label): string {
+    return html_writer::tag('summary',
+        html_writer::tag('span', '▸', ['class' => 'sq-tri', 'aria-hidden' => 'true']) . ' ' . s($label));
+};
 echo html_writer::start_tag('details', ['class' => 'sq-section']);
-echo html_writer::tag('summary', 'Ablauf und Rahmen');
+echo $sqsummary('Ablauf und Rahmen');
 echo html_writer::start_div('sq-section__inner');
 echo $sqrich('Ablauf', 'ablauf', 8);
 echo $sqmulti('Raumanforderungen', 'raum', [
@@ -382,7 +384,7 @@ echo $sqtext('Autor*in / Kontakt', 'autor');
 echo html_writer::end_div();
 echo html_writer::end_tag('details');
 echo html_writer::start_tag('details', ['class' => 'sq-section']);
-echo html_writer::tag('summary', 'Materialien und Technik');
+echo $sqsummary('Materialien und Technik');
 echo html_writer::start_div('sq-section__inner');
 // Datei-Anhänge wie im Bibliotheks-Editor: das Filemanager-Formular wird
 // beim Öffnen des Modals je Einheit über die Fragment-API nachgeladen
