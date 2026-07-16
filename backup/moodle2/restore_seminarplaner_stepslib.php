@@ -262,6 +262,9 @@ class restore_seminarplaner_activity_structure_step extends restore_activity_str
      */
     protected function after_execute(): void {
         $this->add_related_files('mod_seminarplaner', 'intro', null);
+        // D52: Gegenstelle zur annotate_files('logo') im Backup — ohne sie
+        // liegt die Datei zwar im Backup, wird aber nie zurueckgespielt.
+        $this->add_related_files('mod_seminarplaner', 'logo', null);
         $this->add_related_files('mod_seminarplaner', 'method_materialien', 'seminarplaner_method_itemid');
         $this->add_related_files('mod_seminarplaner', 'method_h5p', 'seminarplaner_method_itemid');
     }
