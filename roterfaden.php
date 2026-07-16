@@ -11,7 +11,12 @@ $course = $activity['course'];
 $seminarplaner = $activity['seminarplaner'];
 $context = $activity['context'];
 
-seminarplaner_prepare_page('/mod/seminarplaner/roterfaden.php', $cm, $course, $seminarplaner, 'roterfaden');
+// Kein AMD-Modul an prepare_page uebergeben: die Seite startet roterfaden
+// gleich selbst, weil sie das Logo mitgeben muss. Beides zusammen wuerde das
+// Modul zweimal instanziieren – und weil jede Instanz ihren eigenen
+// Klick-Listener anhaengt, klappte ein Klick auf „Themen" den Block zu und
+// sofort wieder auf. Gleiche Bauart wie importexport.php.
+seminarplaner_prepare_page('/mod/seminarplaner/roterfaden.php', $cm, $course, $seminarplaner, null);
 $pdflogo = seminarplaner_get_pdf_logo($context, $seminarplaner);
 $PAGE->requires->js_call_amd('mod_seminarplaner/roterfaden', 'init', [(int)$cm->id, $pdflogo]);
 
