@@ -4901,11 +4901,19 @@ select.kg-input.rf-select {
    war also nicht mal mit sich selbst einheitlich. Jetzt tragen alle dieselbe
    Form, Groesse, Farbe und Drehung — genau ein Ort, an dem das definiert ist.
    Rotation deckt beide Bauarten ab: <details>/<summary> und den Button-Kopf. */
+/* Groesse und Farbe bewusst FEST, nicht relativ/token-abhaengig:
+   - `em` waere die Schriftgroesse der jeweiligen Kopfzeile gefolgt, der Pfeil
+     also in jedem Menue verschieden gross (11,25px bis 14,4px gemessen);
+   - var(--sq-text) loest im Modal zu einem anderen Wert auf als in der Shell
+     (dort wurde --sq-text beim CD-Update auf --ig-anthracite gezogen, im
+     Modal-Overlay nicht) — der Pfeil waere dort blaustichig.
+   Ein Indikator, der ueberall gleich aussehen soll, darf an keinem der beiden
+   haengen. 12px entspricht dem Play-Dreieck aus dem Handoff. */
 .sq-tri {
     display: inline-block;
     flex: 0 0 auto;
-    color: var(--sq-text);
-    font-size: .9em;
+    color: var(--ig-anthracite, #3C3C3C);
+    font-size: 12px;
     line-height: 1;
     transition: transform .15s;
 }
