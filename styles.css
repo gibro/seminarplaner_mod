@@ -4930,8 +4930,9 @@ select.kg-input.rf-select {
 .sq-head__info { font-size: 12.5px; color: #646464; }
 .sq-head__body { padding: 14px 16px; }
 .sq-head[data-open="0"] .sq-head__body { display: none; }
-/* Im Kopf tragen Planbar und Toolbar keine eigene Kartenkante mehr — die
-   Kante des Kopfes genuegt, sonst stapeln sich drei Rahmen ineinander. */
+/* Planbar und Toolbar bleiben eigene weisse Cards — der Handoff sieht im Kopf
+   genau diese zwei Unter-Panels vor. Nur der Aussenabstand der letzten faellt
+   weg, sonst entstuende unter ihr eine Luecke zur Kopf-Kante. */
 .sq-head .sq-toolbar { margin-bottom: 0; }
 
 .sq-planbar {
@@ -5867,26 +5868,11 @@ select.kg-input.rf-select {
 }
 
 /* ---- Anker ---- */
-.sq-anchor__head {
-    background: #FAFAFA;
-    padding: 11px 16px;
-}
-
-.sq-anchor__title {
-    font-size: 15px;
-}
-
-.sq-anchor__time {
-    font-family: var(--font-body);
-    font-weight: 400;
-    font-size: 13px;
-    text-transform: none;
-    letter-spacing: normal;
-}
-
-.sq-anchor__body {
-    gap: 10px;
-}
+/* Die frueheren Nachzieh-Regeln fuer __head/__title/__time/__body sind hier
+   entfallen: seit dem Handoff-Redesign traegt der Basis-Block (Abschnitt
+   „Sequenzansicht") die gueltigen Werte. Stehengeblieben haetten sie ihn
+   ueberschrieben — das graue #FAFAFA und padding:11px 16px haetten den
+   Kasten um den Abschnitt zurueckgeholt, den das Redesign gerade entfernt. */
 
 .sq-budget__bar {
     width: 130px;
@@ -5958,21 +5944,25 @@ select.kg-input.rf-select {
 }
 
 /* ---- Baustein: Tiefrot-Familie ---- */
+/* Handoff-SEQUENZ 3 „Gruppe/Baustein": durchgehend gestrichelte Klammer statt
+   Karte mit roter Oberkante. Der Baustein klammert Einheiten, er steht nicht
+   als eigene Karte neben ihnen — die Strichelung sagt „Zusammenfassung", die
+   fehlende Kopf-Fuellung nimmt ihm das Kartengewicht. */
 .sq-baustein {
-    border: 1px solid #E4D3D5;
-    border-top: 3px solid var(--ig-darkred);
+    border: 1.5px dashed #C9A9AD;
+    border-top: 1.5px dashed #C9A9AD;
     background: #FCFAFA;
 }
 
 .sq-baustein--empty {
     border-style: dashed;
-    border-top: 3px solid var(--ig-darkred);
+    border-top: 1.5px dashed #C9A9AD;
     background: #fff;
 }
 
 .sq-baustein__head {
-    background: #F5EDEE;
-    border-bottom: 1px solid #E4D3D5;
+    background: transparent;
+    border-bottom: 0;
     padding: 9px 12px;
 }
 
@@ -5985,7 +5975,7 @@ select.kg-input.rf-select {
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: .03em;
-    font-size: 13px;
+    font-size: 15px;
     color: var(--ig-darkred);
 }
 
@@ -6098,10 +6088,10 @@ select.kg-input.rf-select {
 }
 
 /* ---- Mittagspausen-Trenner ---- */
-.sq-break-divider span {
-    border-color: var(--ig-midgray);
-    padding: 4px 14px;
-}
+/* Die frueheren Regeln fuer `.sq-break-divider span` (Rahmen + Polsterung des
+   weissen Chips) sind entfallen: seit dem Handoff-Redesign ist die Pause eine
+   dunkle Voll-Leiste, kein Chip auf einer gestrichelten Linie. Die Basisregel
+   traegt die gueltigen Werte. */
 
 /* ---- Dramaturgie-Blick-Panel ---- */
 .sq-drama--visible {
@@ -6185,8 +6175,13 @@ select.kg-input.rf-select {
 }
 
 /* Entfallender Anker (An-/Abreisetag): gedämpft, Bedienung deaktiviert. */
+/* D45-Sonderfall An-/Abreisetag: der entfallende Abschnitt bleibt als getoente
+   Flaeche erkennbar. Seit der Anker keine Karte mehr ist, traegt der Body
+   padding:0 — die Toenung braucht hier wieder etwas Luft, sonst klebt sie
+   ohne Rand an den Zeilen. */
 .sq-anchor--off .sq-anchor__body {
     background: var(--ig-surface-muted);
+    padding: 10px 12px;
 }
 
 .sq-anchor--off .sq-anchor__head {
