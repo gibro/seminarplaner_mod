@@ -35,7 +35,13 @@ final class mod_seminarplaner_backup_restore_test extends advanced_testcase {
         $service->publish_roterfaden($sourcecmid, $gridid, ['units' => [['uid' => 'u1']]], (int)$USER->id);
         $this->assertTrue($service->get_roterfaden_state($sourcecmid)['ispublished']);
 
-        // Backup the single activity, including user data (grids count as user data).
+        // Backup the single activity.
+        //
+        // Frueher setzte dieser Test hier das 'users'-Setting auf true. In
+        // MODE_IMPORT ist es aber per Berechtigung gesperrt, das Setzen warf
+        // eine base_setting_exception und der Test war rot. Wirkungslos war es
+        // ohnehin: backup_seminarplaner_stepslib sichert Grids und Roten Faden
+        // ohne userinfo-Bedingung, also unabhaengig von diesem Setting.
         $bc = new backup_controller(
             backup::TYPE_1ACTIVITY,
             $sourcecmid,
@@ -44,10 +50,6 @@ final class mod_seminarplaner_backup_restore_test extends advanced_testcase {
             backup::MODE_IMPORT,
             (int)$USER->id
         );
-        $plan = $bc->get_plan();
-        if ($plan->setting_exists('users')) {
-            $plan->get_setting('users')->set_value(true);
-        }
         $backupid = $bc->get_backupid();
         $bc->execute_plan();
         $bc->destroy();

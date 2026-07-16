@@ -31,7 +31,13 @@ final class mod_seminarplaner_grid_service_test extends advanced_testcase {
         $this->assertNotEmpty($hash);
 
         $state = $service->get_user_state($gridid, 3);
-        $this->assertSame(['x' => 1], $state['state']);
+        // Die gespeicherten Nutzerdaten kommen unveraendert zurueck.
+        $this->assertSame(1, $state['state']['x']);
+        // D43: der Lesepfad ergaenzt einen fehlenden Sequenz-Abschnitt (Self-Heal
+        // fuer Zustaende aus Alt-Importen, die die Sequenzansicht sonst leer
+        // liessen). Der Zustand traegt deshalb zusaetzlich 'sequenz' - frueher
+        // erwartete dieser Test exakt ['x' => 1] und schlug seitdem fehl.
+        $this->assertArrayHasKey('sequenz', $state['state']);
         $this->assertNotEmpty($state['versionhash']);
     }
 

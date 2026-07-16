@@ -16,7 +16,6 @@ use core_privacy\local\metadata\collection;
 use core_privacy\local\request\approved_contextlist;
 use core_privacy\local\request\approved_userlist;
 use core_privacy\local\request\contextlist;
-use core_privacy\local\request\helper;
 use core_privacy\local\request\plugin\provider as request_provider;
 use core_privacy\local\request\core_userlist_provider;
 use core_privacy\local\request\userlist;
@@ -137,7 +136,12 @@ final class provider implements
 
         $contextids = array_values(array_unique(array_map('intval', $contextids)));
         if (!empty($contextids)) {
-            $contextlist->add_contextids($contextids);
+            // contextlist::add_contextids() gibt es in Moodle nicht - der
+            // Aufruf endete in einem Fatal Error, sobald eine DSGVO-Anfrage
+            // diesen Provider erreichte. Oeffentlich ist nur add_from_sql();
+            // set_contextids() der Basisklasse ist protected.
+            [$insql, $params] = $DB->get_in_or_equal($contextids, SQL_PARAMS_NAMED);
+            $contextlist->add_from_sql("SELECT id FROM {context} WHERE id {$insql}", $params);
         }
         return $contextlist;
     }
@@ -204,15 +208,32 @@ final class provider implements
             $filemaps = $DB->get_records('kgen_method_filemap', ['cmid' => $cmid, 'userid' => $userid]);
             if (!empty($filemaps)) {
                 writer::with_context($context)->export_data(['method_filemap'], array_values($filemaps));
+
+                // Zu den oben exportierten Zuordnungen auch die Dateien selbst.
+                // Frueher stand hier helper::export_context_files($context,
+                // $userid, $component, $filearea) - diese Signatur gibt es in
+                // Moodle nicht (der Helfer nimmt nur Kontext + User-Objekt und
+                // exportiert ausschliesslich die intro-Dateien). Der Aufruf
+                // brach den ganzen Export mit einem TypeError ab.
+                //
+                // Exportiert wird bewusst nur, was ueber kgen_method_filemap an
+                // DIESEN Nutzer gebunden ist (cmid + userid, siehe get_metadata)
+                // - nicht der gesamte Dateibereich der Aktivitaet, in dem auch
+                // geteilte Materialien anderer liegen.
+                foreach ($filemaps as $map) {
+                    $itemid = (int)$map->itemid;
+                    $uid = (string)$map->methoduid;
+                    writer::with_context($context)
+                        ->export_area_files(['method_materialien', $uid], 'mod_seminarplaner', 'method_materialien', $itemid);
+                    writer::with_context($context)
+                        ->export_area_files(['method_h5p', $uid], 'mod_seminarplaner', 'method_h5p', $itemid);
+                }
             }
 
             $logs = $DB->get_records('kgen_import_export_log', ['cmid' => $cmid, 'actorid' => $userid]);
             if (!empty($logs)) {
                 writer::with_context($context)->export_data(['import_export_log'], array_values($logs));
             }
-
-            helper::export_context_files($context, $userid, 'mod_seminarplaner', 'method_materialien');
-            helper::export_context_files($context, $userid, 'mod_seminarplaner', 'method_h5p');
         }
     }
 
