@@ -389,6 +389,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         remove: menuIcon('<path d="M6 6l12 12M18 6L6 18"/>'),
     };
 
+    // Handoff-SEQUENZ 4: Uhr-Glyph der Mittagspausen-Leiste. Ersetzt das
+    // frühere 🕐-Emoji — als Line-SVG folgt es der Textfarbe und bleibt im
+    // PDF-Export scharf.
+    const CLOCK_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+        + ' stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
+        + '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+
     // Kompakter Karten-Auszug fuer den veroeffentlichten Roten Faden: nur die
     // aktiven Einheiten der Sequenz, nur Titel und Seminarphase. Deckungsgleich
     // in grid.js — beide Ansichten koennen veroeffentlichen.
@@ -469,6 +476,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             // Verknüpfungs-Checklisten (je Ziel), über Re-Renders gemerkt.
             this.goalsOpen = false;
             this.openGoalLinks = {};
+            // Handoff-SEQUENZ 1: Auf-/Zu-Zustand des Kopfes „Seminarplan & Tag".
+            // Default offen — wer die Ansicht das erste Mal sieht, soll Planwahl
+            // und Tagesnavigation finden, ohne sie erst aufklappen zu muessen.
+            this.headOpen = true;
             // D47: active drag (pid + optional module id) and the element
             // currently marked as drop target.
             this.drag = null;
@@ -495,6 +506,14 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (next) {
                 next.addEventListener('click', () => this.stepDay(1));
             }
+            const headtoggle = bySel('#sq-head-toggle');
+            if (headtoggle) {
+                headtoggle.addEventListener('click', () => {
+                    this.headOpen = !this.headOpen;
+                    this.renderHead();
+                });
+            }
+            this.renderHead();
             // ⓘ-Popover in der Werkzeugleiste: Klick auf den Knopf öffnet die
             // Erklärung, jeder Klick woanders schließt alle offenen Popover.
             document.addEventListener('click', (event) => {
@@ -1532,7 +1551,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             const middaytimes = frame.midday.end > frame.midday.start
                 ? ` · ${minutesToLabel(frame.midday.start)}–${minutesToLabel(frame.midday.end)}`
                 : '';
-            const divider = `<div class="sq-break-divider"><span>🕐 Mittagspause${middaytimes}</span></div>`;
+            const divider = `
+                <div class="sq-break-divider">
+                  ${CLOCK_ICON}
+                  <span>Mittagspause</span>
+                  ${middaytimes ? `<span class="sq-break-divider__time">${minutesToLabel(frame.midday.start)}–${minutesToLabel(frame.midday.end)}</span>` : ''}
+                </div>`;
             return `<div class="sq-intro__preview">${anchors[0]}${divider}${anchors[1]}</div>`;
         }
 
@@ -4338,6 +4362,29 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
 
         // ---- Rendering ----------------------------------------------------
 
+        // Handoff-SEQUENZ 1: Klapp-Zustand des Kopfes plus die Kurzinfo, die im
+        // zugeklappten Zustand die einzige Auskunft darueber ist, welcher Plan
+        // gerade bearbeitet wird — deshalb steht sie in der Kopfzeile und nicht
+        // nur im Panel darunter.
+        renderHead() {
+            const head = bySel('#sq-head');
+            const toggle = bySel('#sq-head-toggle');
+            const info = bySel('#sq-head-info');
+            if (head) {
+                head.setAttribute('data-open', this.headOpen ? '1' : '0');
+            }
+            if (toggle) {
+                toggle.setAttribute('aria-expanded', this.headOpen ? 'true' : 'false');
+            }
+            if (info) {
+                const select = bySel('#sq-grid-select');
+                const title = select && select.selectedOptions.length
+                    ? String(select.selectedOptions[0].textContent || '').trim()
+                    : '';
+                info.textContent = title ? `· ${title}` : '';
+            }
+        }
+
         // Werkzeugleisten-Fußzeile: welche Vorlage der geladene Plan nutzt,
         // plus D45-Hinweise zu An-/Abreisetag.
         renderPlanInfo() {
@@ -4368,6 +4415,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (!container) {
                 return;
             }
+            this.renderHead();
             this.renderPlanInfo();
             this.renderGoals();
             if (!this.sequenz || !this.dayCount()) {
@@ -4398,8 +4446,14 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             const middaytimes = frame.midday.end > frame.midday.start
                 ? ` · ${minutesToLabel(frame.midday.start)}–${minutesToLabel(frame.midday.end)}`
                 : '';
+            const breakminutes = Math.max(0, frame.midday.end - frame.midday.start);
             const divider = `
-                <div class="sq-break-divider"><span>🕐 Mittagspause${middaytimes}</span></div>`;
+                <div class="sq-break-divider">
+                  ${CLOCK_ICON}
+                  <span>Mittagspause</span>
+                  ${middaytimes ? `<span class="sq-break-divider__time">${minutesToLabel(frame.midday.start)}–${minutesToLabel(frame.midday.end)} · ${breakminutes} Min.</span>` : ''}
+                  <span class="sq-break-divider__next">Nachmittag ↓</span>
+                </div>`;
             const afternoon = this.renderAnchor(day, 'nachmittag', frame, seenBausteine);
             container.innerHTML = morning + divider + afternoon;
             this.renderDrama();
@@ -4535,22 +4589,29 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     return this.renderPlacement(p, itemstart, true);
                 }).join('');
 
+                // Der Baustein traegt seine Gesamtdauer in der Zeit-Spalte —
+                // anders als bei der Einheit als Text, denn sie ist die Summe
+                // der enthaltenen Einheiten und nur ueber diese aenderbar. Ein
+                // leerer Baustein zeigt stattdessen seine Reservierung.
                 return `
-                    <div class="sq-baustein${unfilled ? ' sq-baustein--empty' : ''}" draggable="true"
+                    <div class="sq-row sq-row--baustein" draggable="true"
                       data-sq-drag="${escapeHtml(group.items[0].pid)}" data-sq-group="${escapeHtml(group.bausteinid)}">
-                      <div class="sq-baustein__head">
-                        <div class="sq-baustein__title">${this.renderGrip()}${escapeHtml(this.bausteinTitle(group.bausteinid, baustein))}
-                          ${continuation ? '<span class="sq-badge sq-badge--variant">Fortsetzung</span>' : ''}
-                          ${(unfilled && duration <= 0) ? '' : `<span class="sq-badge">${unfilled ? `${duration} Min. reserviert` : `${duration} Min.`}</span>`}
+                      ${this.renderTimeColumn(start, duration)}
+                      <div class="sq-baustein${unfilled ? ' sq-baustein--empty' : ''}">
+                        <div class="sq-baustein__head">
+                          <div class="sq-baustein__title">${this.renderGrip()}${escapeHtml(this.bausteinTitle(group.bausteinid, baustein))}
+                            ${continuation ? '<span class="sq-badge sq-badge--variant">Fortsetzung</span>' : ''}
+                            ${(unfilled && duration > 0) ? '<span class="sq-badge">reserviert</span>' : ''}
+                          </div>
+                          <div class="sq-baustein__tools">
+                            ${this.renderBausteinSwap(group.bausteinid, baustein)}
+                            <button type="button" class="kg-btn sq-membership" data-sq-action="edit-baustein"
+                              data-bid="${escapeHtml(group.bausteinid)}">Bearbeiten</button>
+                            ${unfilled ? this.renderRowMenu(group.items[0], false) : ''}
+                          </div>
                         </div>
-                        <div class="sq-baustein__tools">
-                          ${this.renderBausteinSwap(group.bausteinid, baustein)}
-                          <button type="button" class="kg-btn sq-membership" data-sq-action="edit-baustein"
-                            data-bid="${escapeHtml(group.bausteinid)}">Bearbeiten</button>
-                          ${unfilled ? this.renderRowMenu(group.items[0], false) : ''}
-                        </div>
+                        ${this.renderBausteinContent(group, units, unfilled, baustein)}
                       </div>
-                      ${this.renderBausteinContent(group, units, unfilled, baustein)}
                     </div>`;
             }).join('');
         }
@@ -4593,18 +4654,23 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 const placebtn = placeholderpid
                     ? `<button type="button" class="kg-btn kg-btn-primary sq-unit__place" data-sq-action="suggest-add" data-cardid="${escapeHtml(String(card.id))}" data-pid="${escapeHtml(placeholderpid)}">＋ Platzieren</button>`
                     : '';
+                // Noch nicht platziert, also gibt es keine Startzeit: die
+                // Zeit-Spalte bleibt leer und haelt nur die gemeinsame Kante.
                 return `
-                    <div class="sq-unit sq-unit--planned">
-                      <div class="sq-unit__phase${pkey ? ' sq-phase-bg--' + pkey : ''}"></div>
-                      <div class="sq-unit__main">
-                        <div class="sq-unit__title">${escapeHtml(cardTitle(card))}</div>
-                        <div class="sq-unit__meta">
-                          ${Number.isFinite(duration) && duration > 0 ? `<span class="sq-badge">${duration} Min.</span>` : ''}
-                          ${card.seminarphase ? `<span class="sq-badge${pkey ? ' sq-badge--phase-' + pkey : ''}">${escapeHtml(String(card.seminarphase))}</span>` : ''}
-                          <span class="sq-badge sq-badge--planned">geplant, noch nicht platziert</span>
+                    <div class="sq-row">
+                      <div class="sq-time" aria-hidden="true"></div>
+                      <div class="sq-unit sq-unit--planned">
+                        <div class="sq-unit__phase${pkey ? ' sq-phase-bg--' + pkey : ''}"></div>
+                        <div class="sq-unit__main">
+                          <div class="sq-unit__title">${escapeHtml(cardTitle(card))}</div>
+                          <div class="sq-unit__meta">
+                            ${Number.isFinite(duration) && duration > 0 ? `<span class="sq-badge">${duration} Min.</span>` : ''}
+                            ${card.seminarphase ? `<span class="sq-badge${pkey ? ' sq-badge--phase-' + pkey : ''}">${escapeHtml(String(card.seminarphase))}</span>` : ''}
+                            <span class="sq-badge sq-badge--planned">geplant, noch nicht platziert</span>
+                          </div>
                         </div>
+                        <div class="sq-unit__actions">${placebtn}</div>
                       </div>
-                      <div class="sq-unit__actions">${placebtn}</div>
                     </div>`;
             }).join('');
         }
@@ -4767,6 +4833,17 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 </div>`;
         }
 
+        // Handoff-SEQUENZ 3: die Zeit-Spalte vor jeder Zeile. `dur` ist in
+        // Durchgang 1 noch Text; Durchgang 2 setzt hier das Eingabefeld ein.
+        renderTimeColumn(startMin, duration) {
+            return `
+                <div class="sq-time">
+                  <div class="sq-time__start">${minutesToLabel(startMin)}</div>
+                  <div class="sq-time__dur">${duration}</div>
+                  <div class="sq-time__unit">Min.</div>
+                </div>`;
+        }
+
         renderPlacement(p, startMin, inBaustein) {
             const data = p.data;
             const duration = Math.max(0, Number(data.dauer) || 0);
@@ -4774,14 +4851,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
 
             if (data.typ === 'pause') {
                 return `
-                    <div class="sq-pause" draggable="true" data-sq-drag="${escapeHtml(p.pid)}">
-                      ${this.renderGrip()}
-                      <span class="sq-pause__label">${escapeHtml(data.titel || 'Pause')}</span>
-                      <span class="sq-badge">${duration} Min.</span>
-                      <span class="sq-unit__time">${timelabel}</span>
-                      <span class="sq-pause__spacer"></span>
-                      <button type="button" class="kg-btn sq-membership" data-sq-action="edit" data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
-                      ${this.renderRowMenu(p, false)}
+                    <div class="sq-row" draggable="true" data-sq-drag="${escapeHtml(p.pid)}">
+                      ${this.renderTimeColumn(startMin, duration)}
+                      <div class="sq-pause" title="${escapeHtml(timelabel)}">
+                        ${this.renderGrip()}
+                        <span class="sq-pause__label">${escapeHtml(data.titel || 'Pause')}</span>
+                        <span class="sq-pause__spacer"></span>
+                        <button type="button" class="kg-btn sq-membership" data-sq-action="edit" data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
+                        ${this.renderRowMenu(p, false)}
+                      </div>
                     </div>`;
             }
 
@@ -4791,16 +4869,18 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 }
                 // Residual reservation inside a partly filled module.
                 return `
-                    <div class="sq-unit sq-unit--planned">
-                      <div class="sq-unit__phase"></div>
-                      <div class="sq-unit__main">
-                        <div class="sq-unit__title">Noch offen</div>
-                        <div class="sq-unit__meta">
-                          <span class="sq-badge">${duration} Min. reserviert</span>
-                          <span class="sq-unit__time">${timelabel}</span>
+                    <div class="sq-row">
+                      ${this.renderTimeColumn(startMin, duration)}
+                      <div class="sq-unit sq-unit--planned" title="${escapeHtml(timelabel)}">
+                        <div class="sq-unit__phase"></div>
+                        <div class="sq-unit__main">
+                          <div class="sq-unit__title">Noch offen</div>
+                          <div class="sq-unit__meta">
+                            <span class="sq-badge">reserviert</span>
+                          </div>
                         </div>
+                        <div class="sq-unit__actions">${this.renderRowMenu(p, true)}</div>
                       </div>
-                      <div class="sq-unit__actions">${this.renderRowMenu(p, true)}</div>
                     </div>`;
             }
 
@@ -4813,24 +4893,30 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             const phasetext = this.placementRawPhase(data);
             const groupsize = this.placementGroupSize(data);
 
+            // Dauer und Startzeit stehen jetzt in der Zeit-Spalte links, nicht
+            // mehr als Badges hinter dem Titel. Zurueck bleibt in der Meta-Zeile
+            // nur, was die Einheit inhaltlich beschreibt.
+            const meta = [
+                (!inBaustein && data.fortsetzung) ? '<span class="sq-badge sq-badge--variant">Fortsetzung</span>' : '',
+                groupsize ? `<span class="sq-badge">${escapeHtml(groupsize)}</span>` : '',
+            ].filter((m) => m).join('');
+
             return `
-                <div class="sq-unit${inBaustein ? '' : ' sq-unit--standalone'}"${inBaustein ? '' : ` draggable="true" data-sq-drag="${escapeHtml(p.pid)}"`}>
-                  <div class="sq-unit__phase${phase ? ' sq-phase-bg--' + phase : ''}"></div>
-                  ${inBaustein ? '' : this.renderGrip()}
-                  <div class="sq-unit__main">
-                    <div class="sq-unit__title">${escapeHtml(data.titel || 'Seminareinheit')}</div>
-                    <div class="sq-unit__meta">
-                      ${(!inBaustein && data.fortsetzung) ? '<span class="sq-badge sq-badge--variant">Fortsetzung</span>' : ''}
-                      <span class="sq-badge">${duration} Min.</span>
-                      ${phasetext ? `<span class="sq-badge${phase ? ' sq-badge--phase-' + phase : ''}">${escapeHtml(phasetext)}</span>` : ''}
-                      ${groupsize ? `<span class="sq-badge">${escapeHtml(groupsize)}</span>` : ''}
-                      <span class="sq-unit__time">${timelabel}</span>
+                <div class="sq-row"${inBaustein ? '' : ` draggable="true" data-sq-drag="${escapeHtml(p.pid)}"`}>
+                  ${this.renderTimeColumn(startMin, duration)}
+                  <div class="sq-unit${inBaustein ? '' : ' sq-unit--standalone'}" title="${escapeHtml(timelabel)}">
+                    <div class="sq-unit__phase${phase ? ' sq-phase-bg--' + phase : ''}"></div>
+                    ${inBaustein ? '' : this.renderGrip()}
+                    <div class="sq-unit__main">
+                      <div class="sq-unit__title">${escapeHtml(data.titel || 'Seminareinheit')}</div>
+                      ${meta ? `<div class="sq-unit__meta">${meta}</div>` : ''}
                     </div>
-                  </div>
-                  <div class="sq-unit__actions">
-                    ${this.renderSwap(p)}
-                    <button type="button" class="kg-btn" data-sq-action="edit" data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
-                    ${this.renderRowMenu(p, inBaustein)}
+                    <div class="sq-unit__actions">
+                      ${this.renderSwap(p)}
+                      ${phasetext ? `<span class="sq-badge${phase ? ' sq-badge--phase-' + phase : ''}">${escapeHtml(phasetext)}</span>` : ''}
+                      <button type="button" class="kg-btn" data-sq-action="edit" data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
+                      ${this.renderRowMenu(p, inBaustein)}
+                    </div>
                   </div>
                 </div>`;
         }
