@@ -243,7 +243,66 @@ final class provider implements
                 writer::with_context($context)->export_data(['import_export_log'],
                     (object)['entries' => array_values($logs)]);
             }
+
+            // Urheberschaft: was der Nutzer angelegt oder zuletzt geaendert hat.
+            //
+            // Ohne diesen Block widersprach sich der Provider: get_contexts_for_userid
+            // meldet einen Kontext bereits, wenn dort ein Plan von diesem Nutzer
+            // stammt, und delete_data_for_user anonymisiert genau diese Felder —
+            // die Auskunft lieferte dazu aber nichts. Der Nutzer bekam also eine
+            // leere Auskunft zu einem Kurs, zu dem das Plugin sehr wohl etwas
+            // ueber ihn weiss. Seit der Zustand geteilt unter
+            // grid_service::SHARED_STATE_USERID (0) liegt statt pro Nutzer, ist
+            // die Urheberschaft fuer die meisten sogar das EINZIGE, was es gibt.
+            //
+            // Exportiert wird nur, was get_metadata deklariert und was die
+            // Loeschung anfasst — dieselben Tabellen, dieselben Felder.
+            foreach (self::authorship_fields() as $table => $fields) {
+                [$where, $params] = self::authorship_where($table, $fields, $cmid, (int)$userid);
+                $records = $DB->get_records_select($table, $where, $params);
+                if (!empty($records)) {
+                    writer::with_context($context)->export_data([$table],
+                        (object)['records' => array_values($records)]);
+                }
+            }
         }
+    }
+
+    /**
+     * Tables and fields that record who authored something, per context.
+     *
+     * Deckungsgleich mit dem, was get_contexts_for_userid abfragt und
+     * delete_user_from_context anonymisiert bzw. loescht.
+     *
+     * @return array<string, string[]> Tabelle => Urheber-Felder.
+     */
+    private static function authorship_fields(): array {
+        return [
+            'kgen_grid' => ['createdby', 'modifiedby'],
+            'kgen_planning_state' => ['createdby', 'modifiedby'],
+            'kgen_roterfaden_state' => ['publishedby'],
+            'kgen_activity_setlink' => ['createdby'],
+            'kgen_activity_methodovr' => ['createdby', 'modifiedby'],
+        ];
+    }
+
+    /**
+     * Build the "this user authored it in this activity" condition.
+     *
+     * @param string $table Table name (unused, kept for call-site clarity).
+     * @param string[] $fields Author fields to match.
+     * @param int $cmid Course module id.
+     * @param int $userid User id.
+     * @return array [where, params]
+     */
+    private static function authorship_where(string $table, array $fields, int $cmid, int $userid): array {
+        $clauses = [];
+        $params = [$cmid];
+        foreach ($fields as $field) {
+            $clauses[] = "{$field} = ?";
+            $params[] = $userid;
+        }
+        return ['cmid = ? AND (' . implode(' OR ', $clauses) . ')', $params];
     }
 
     /**
