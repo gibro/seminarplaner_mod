@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>Sonstige-Gruppe: Zustände</title>
+<link rel="stylesheet" href="fx_theme_prefix.css">
+<link rel="stylesheet" id="plugincss" href="fx_base.css">
+<link rel="stylesheet" href="fx_theme_suffix.css">
+<script src="cssdiff.js"></script>
+<style>body{padding:16px;background:#F1F1F1;font-family:system-ui}</style>
+</head><body>
+<div class="kg-shell sq-shell kg-grid-readonly">
+
+  <!-- Tabs + Schritt-Marker -->
+  <div class="kg-tabs">
+    <a class="kg-tab kg-tab-active" href="#">Aktiver Tab</a>
+    <a class="kg-tab" href="#">Inaktiv</a>
+  </div>
+  <div class="kg-ie-steps">
+    <span class="kg-step kg-step-active">Schritt aktiv</span>
+    <span class="kg-step">Schritt inaktiv</span>
+  </div>
+
+  <!-- Modal-Struktur + Formularfelder (Fokus!) -->
+  <div class="sp-modal__dialog">
+    <div class="sp-modal__header">Kopf</div>
+    <div class="sp-modal__section">
+      <div class="sp-modal__field"><input type="text" value="ruhend"></div>
+      <div class="sp-modal__field"><input type="text" class="force-focus" value="fokussiert"></div>
+      <div class="sp-modal__field"><select><option>ruhend</option></select></div>
+      <div class="sp-modal__field"><select class="force-focus"><option>fokussiert</option></select></div>
+    </div>
+    <div class="sp-modal__actions">Aktionen</div>
+  </div>
+
+  <!-- Einrichtung: Tages-Checkboxen und Pausen (hover/checked/disabled) -->
+  <label class="sp-day-checkbox"><input type="checkbox"><span>ruhend</span></label>
+  <label class="sp-day-checkbox force-hover"><input type="checkbox"><span>hover</span></label>
+  <label class="sp-day-checkbox"><input type="checkbox" checked><span>angehakt</span></label>
+  <label class="sp-day-checkbox"><input type="checkbox" disabled><span>deaktiviert</span></label>
+  <div class="sp-break-item">Pause ruhend</div>
+  <div class="sp-break-item force-hover">Pause hover</div>
+
+  <!-- Felder in field-card (Breitenregel) -->
+  <div class="field-card">
+    <input type="text" value="Text"><input type="number" value="3"><select><option>x</option></select><textarea>t</textarea>
+  </div>
+
+  <!-- Rastereinträge des Überblicks -->
+  <div class="sp-wrapper">
+    <div class="sp-item sp-entry--unit">Einheit</div>
+    <div class="sp-item sp-item--unit-colored">Eingefärbt</div>
+    <div class="sp-item sp-item--break">Pause</div>
+    <div class="sp-item sp-item--placeholder">Platzhalter</div>
+  </div>
+
+  <!-- PDF-Buttons der Überblick-Werkzeugleiste -->
+  <button type="button" class="kg-btn kg-btn--outline-red kg-ov-pdfbtn">PDF ruhend</button>
+  <button type="button" class="kg-btn kg-btn--outline-red kg-ov-pdfbtn force-hover">PDF hover</button>
+
+  <!-- Multi-Dropdown offen (z-index bleibt !important) -->
+  <div class="kg-tag-dropdown kg-form-multi-open"><button class="kg-input kg-tag-dropdown-toggle">Tags</button></div>
+</div>
+</body></html>
