@@ -197,17 +197,25 @@ final class provider implements
                 [$insql, $params] = $DB->get_in_or_equal($gridids, SQL_PARAMS_QM);
                 $state = $DB->get_records_select('kgen_grid_user_state', "gridid {$insql} AND userid = ?", array_merge($params, [$userid]));
                 if (!empty($state)) {
-                    writer::with_context($context)->export_data(['grid_user_state'], array_values($state));
+                    // export_data() verlangt ein \stdClass, kein Array (siehe
+                    // moodle_content_writer::export_data). Alle vier Aufrufe in
+                    // dieser Methode uebergaben frueher direkt das Ergebnis von
+                    // array_values() und liefen damit in einen TypeError - der
+                    // Export war also nie funktionsfaehig.
+                    writer::with_context($context)->export_data(['grid_user_state'],
+                        (object)['states' => array_values($state)]);
                 }
                 $locks = $DB->get_records_select('kgen_grid_lock', "gridid {$insql} AND userid = ?", array_merge($params, [$userid]));
                 if (!empty($locks)) {
-                    writer::with_context($context)->export_data(['grid_locks'], array_values($locks));
+                    writer::with_context($context)->export_data(['grid_locks'],
+                        (object)['locks' => array_values($locks)]);
                 }
             }
 
             $filemaps = $DB->get_records('kgen_method_filemap', ['cmid' => $cmid, 'userid' => $userid]);
             if (!empty($filemaps)) {
-                writer::with_context($context)->export_data(['method_filemap'], array_values($filemaps));
+                writer::with_context($context)->export_data(['method_filemap'],
+                    (object)['maps' => array_values($filemaps)]);
 
                 // Zu den oben exportierten Zuordnungen auch die Dateien selbst.
                 // Frueher stand hier helper::export_context_files($context,
@@ -232,7 +240,8 @@ final class provider implements
 
             $logs = $DB->get_records('kgen_import_export_log', ['cmid' => $cmid, 'actorid' => $userid]);
             if (!empty($logs)) {
-                writer::with_context($context)->export_data(['import_export_log'], array_values($logs));
+                writer::with_context($context)->export_data(['import_export_log'],
+                    (object)['entries' => array_values($logs)]);
             }
         }
     }

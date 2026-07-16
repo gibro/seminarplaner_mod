@@ -42,7 +42,11 @@ final class mod_seminarplaner_privacy_provider_test extends advanced_testcase {
 
     public function test_get_contexts_for_userid_includes_activity(): void {
         $contextlist = provider::get_contexts_for_userid((int)$this->user->id);
-        $this->assertContains((int)$this->context->id, $contextlist->get_contextids());
+        // get_contextids() ist als int[] dokumentiert, liefert die IDs aber roh
+        // aus der DB — unter MariaDB also Strings. assertContains vergleicht
+        // strikt, deshalb hier casten statt auf den Docblock zu vertrauen.
+        $contextids = array_map('intval', $contextlist->get_contextids());
+        $this->assertContains((int)$this->context->id, $contextids);
     }
 
     public function test_get_users_in_context_includes_owner(): void {
