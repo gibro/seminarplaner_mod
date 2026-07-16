@@ -30,6 +30,24 @@ echo html_writer::div(get_string('sequenz_previewnote', 'mod_seminarplaner'),
     'sq-pagehead__sub', ['id' => 'sq-preview-note']);
 echo html_writer::end_div();
 
+// Handoff-SEQUENZ: Planwahl und Tagesnavigation sind Rüstzeug, kein Teil des
+// Tagesverlaufs. Sie stecken deshalb in einem einklappbaren Kopf, damit die
+// Zeitleiste darunter die Ansicht dominiert. Default offen; den Zustand merkt
+// sich sequenz.js pro Aktivität.
+echo html_writer::start_div('sq-head', ['id' => 'sq-head']);
+echo html_writer::tag('button',
+    html_writer::tag('span',
+        '<svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">'
+        . '<path d="M3 1l7 5-7 5z"/></svg>',
+        ['class' => 'sq-head__tri'])
+    . html_writer::tag('span', 'Seminarplan &amp; Tag', ['class' => 'sq-head__title'])
+    . html_writer::tag('span', '', ['class' => 'sq-head__info', 'id' => 'sq-head-info']),
+    [
+        'type' => 'button', 'class' => 'sq-head__toggle', 'id' => 'sq-head-toggle',
+        'aria-expanded' => 'true', 'aria-controls' => 'sq-head-body',
+    ]);
+echo html_writer::start_div('sq-head__body', ['id' => 'sq-head-body']);
+
 // Plan selection, creation and setup (D45: templates live here now).
 echo html_writer::start_div('sq-planbar');
 echo html_writer::tag('label', get_string('sequenz_planlabel', 'mod_seminarplaner'),
@@ -203,6 +221,9 @@ echo html_writer::end_div();
 // (füllt sequenz.js aus der Plan-Konfiguration).
 echo html_writer::tag('div', '', ['id' => 'sq-plan-info', 'class' => 'sq-toolbar__info']);
 echo html_writer::end_div();
+
+echo html_writer::end_div(); // .sq-head__body
+echo html_writer::end_div(); // .sq-head
 
 // D61: Seminarziele des Gesamtplans (aufklappbar, von sequenz.js gefüllt).
 echo html_writer::tag('div', '', ['id' => 'sq-goals', 'class' => 'sq-goals']);

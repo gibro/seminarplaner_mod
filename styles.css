@@ -4894,6 +4894,46 @@ select.kg-input.rf-select {
     --sq-phase-handlung: #882A30;
     --sq-phase-transfer: #646464;
 }
+/* ---- Einklappbarer Kopf „Seminarplan & Tag" (Handoff-SEQUENZ 1) ---- */
+.sq-head {
+    background: #fff;
+    border: 1px solid var(--sq-border);
+    margin-bottom: 14px;
+}
+.sq-head__toggle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 11px 16px;
+    background: #FAFAFA;
+    border: 0;
+    border-bottom: 1px solid var(--sq-border);
+    cursor: pointer;
+    text-align: left;
+}
+.sq-head[data-open="0"] .sq-head__toggle { border-bottom: 0; }
+.sq-head__tri {
+    display: inline-flex;
+    color: #3C3C3C;
+    transition: transform .15s;
+}
+.sq-head[data-open="1"] .sq-head__tri { transform: rotate(90deg); }
+.sq-head__title {
+    font-family: var(--font-head, inherit);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 14px;
+    color: var(--sq-text);
+}
+.sq-head__info { font-size: 12.5px; color: #646464; }
+.sq-head__body { padding: 14px 16px; }
+.sq-head[data-open="0"] .sq-head__body { display: none; }
+/* Im Kopf tragen Planbar und Toolbar keine eigene Kartenkante mehr — die
+   Kante des Kopfes genuegt, sonst stapeln sich drei Rahmen ineinander. */
+.sq-head .sq-toolbar { margin-bottom: 0; }
+
 .sq-planbar {
     display: flex;
     align-items: center;
@@ -4952,74 +4992,114 @@ select.kg-input.rf-select {
 }
 .sq-toolbar__nav { display: flex; align-items: center; gap: 8px; }
 .sq-daylabel { font-weight: 600; min-width: 170px; text-align: center; color: var(--sq-text); }
+/* Handoff-SEQUENZ 3: der Abschnitt ist keine Karte mehr, sondern nur noch ein
+   Band ueber der Zeitleiste. Ohne Kasten und Fuellung liest sich der Tag als
+   ein durchgehender Fluss statt als zwei gestapelte Container. Damit entfaellt
+   auch das frühere overflow:hidden — das ⋮-Menue kann nicht mehr geklippt
+   werden, die :has()-Ausnahme dafuer ist deshalb ersatzlos weg. */
 .sq-anchor {
-    background: #fff;
-    border: 1px solid var(--sq-border);
-    border-radius: var(--sq-radius);
     margin-bottom: 12px;
-    box-shadow: var(--sq-shadow);
-    overflow: hidden;
-}
-/* The row menu (⋮) opens downward as an absolutely positioned panel. The
-   anchor's overflow:hidden (it clips the header to the rounded corners)
-   otherwise cuts off the lower entries of a tall menu on rows near the
-   anchor's bottom edge. Lift the clip only while a menu is open, so the
-   corner clipping stays intact the rest of the time. */
-.sq-anchor:has(.sq-menu__panel.open) {
-    overflow: visible;
 }
 .sq-anchor__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 14px;
-    background: #f6f8fa;
-    border-bottom: 1px solid var(--sq-border);
+    padding: 2px 0 2px 12px;
+    border-left: 6px solid var(--sq-accent);
+    margin-bottom: 10px;
     flex-wrap: wrap;
     gap: 8px;
 }
-.sq-anchor__title { font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
-.sq-anchor__time { font-weight: 400; color: var(--sq-text-muted); font-size: 12.5px; }
+.sq-anchor__title {
+    font-family: var(--font-head, inherit);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 15px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+.sq-anchor__time {
+    font-family: var(--font-body, inherit);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--sq-text-muted);
+    font-size: 12.5px;
+}
 .sq-budget { display: flex; align-items: center; gap: 8px; min-width: 200px; }
 .sq-budget__bar { width: 130px; height: 7px; background: #e1e6ea; border-radius: 0; overflow: hidden; }
 .sq-budget__fill { height: 100%; background: var(--sq-accent); }
 .sq-budget__fill--over { background: var(--sq-warn); }
 .sq-budget__label { font-size: 11.5px; color: var(--sq-text-muted); white-space: nowrap; }
-.sq-anchor__body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-.sq-empty { color: var(--sq-text-muted); font-size: 12.5px; padding: 4px 2px; }
+.sq-anchor__body { padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.sq-empty { color: var(--sq-text-muted); font-size: 12.5px; padding: 4px 2px 4px 76px; }
+
+/* Handoff-SEQUENZ 4: die Mittagspause ist ein eigener Block, keine gestrichelte
+   Trennlinie mehr. Die dunkle Vollflaeche schneidet den Tag sichtbar in
+   Vormittag und Nachmittag — das war als Haarlinie zwischen zwei Karten nicht
+   zu erkennen. */
 .sq-break-divider {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin: 6px 0 10px;
-    color: var(--sq-text-muted);
+    margin: 18px 0;
+    padding: 12px 18px;
+    background: #3C3C3C;
+    border-left: 6px solid var(--sq-accent);
+    color: #fff;
+    font-family: var(--font-head, inherit);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 13px;
+}
+.sq-break-divider__time {
+    font-family: var(--font-body, inherit);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #DADADA;
+    font-size: 12.5px;
+}
+.sq-break-divider__next {
+    margin-left: auto;
+    color: #F0A0A8;
     font-size: 12px;
 }
-.sq-break-divider::before,
-.sq-break-divider::after { content: ""; flex: 1; border-top: 1px dashed var(--sq-border-strong); }
-.sq-break-divider span {
-    background: #fff;
-    border: 1px solid var(--sq-border-strong);
-    border-radius: 0;
-    padding: 3px 12px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
+/* Handoff-SEQUENZ 3 „Gruppe/Baustein": gestrichelte Klammer in Tiefrot statt
+   grauer Karte — der Baustein ist eine Zusammenfassung, kein eigener Kasten
+   auf gleicher Ebene wie die Einheiten darin. */
+.sq-row--baustein > .sq-baustein { flex: 1; min-width: 0; }
+.sq-baustein {
+    border: 1.5px dashed #C9A9AD;
+    border-radius: var(--sq-radius);
+    background: #FCFAFA;
 }
-.sq-baustein { border: 1px solid var(--sq-border); border-radius: var(--sq-radius); background: #fbfcfd; }
-.sq-baustein--empty { border-style: dashed; background: #fff; }
-.sq-baustein--empty .sq-baustein__head { background: transparent; border-bottom: none; color: var(--sq-text-muted); }
+.sq-baustein--empty { background: #fff; }
+.sq-baustein--empty .sq-baustein__head { color: var(--sq-text-muted); }
 .sq-baustein__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px;
-    background: #f0f4f8;
-    border-bottom: 1px solid var(--sq-border);
     flex-wrap: wrap;
     gap: 6px;
 }
-.sq-baustein__title { font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sq-baustein__title {
+    font-family: var(--font-head, inherit);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 15px;
+    color: #882A30;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.sq-baustein__units { border-top: 1px solid #E4D3D5; }
 .sq-baustein__units { display: flex; flex-direction: column; gap: 6px; padding: 8px; }
 .sq-badge {
     font-size: 10.5px;
@@ -5031,6 +5111,44 @@ select.kg-input.rf-select {
     letter-spacing: .2px;
 }
 .sq-badge--variant { background: var(--sq-accent-bg); color: var(--sq-accent-dark); }
+/* Handoff-SEQUENZ 3: Zeit-Spalte vor der Einheit. Die Startzeit steht damit
+   dort, wo der Blick beim Lesen des Tagesverlaufs ohnehin zuerst hinfaellt —
+   frueher hing sie als letztes Badge hinter Dauer und Phase. Feste 64px, damit
+   alle Zeilen eine gemeinsame Kante haben, an der die Karten beginnen. */
+.sq-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+.sq-time {
+    width: 64px;
+    flex: 0 0 64px;
+    text-align: right;
+    padding-top: 9px;
+}
+.sq-time__start {
+    font-family: var(--font-head, inherit);
+    font-weight: 900;
+    font-size: 15px;
+    color: var(--sq-accent-dark);
+    line-height: 1.1;
+}
+/* In einer Gruppe tritt die Startzeit zurueck: dort fuehrt der Baustein-Kopf,
+   die Einheiten darin sind ihm untergeordnet. */
+.sq-baustein .sq-time__start { color: var(--sq-text-muted); }
+.sq-time__dur {
+    margin-top: 5px;
+    font-size: 14px;
+    color: var(--sq-text);
+}
+.sq-time__unit {
+    font-size: 10px;
+    color: #9a9a9a;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-top: 2px;
+}
+
 .sq-unit {
     display: flex;
     align-items: center;
@@ -5040,6 +5158,11 @@ select.kg-input.rf-select {
     background: #fff;
     padding: 8px 10px;
 }
+/* Nur in der Zeitleisten-Zeile fuellt die Karte die Restbreite. Ungescoped
+   wuerde flex:1 die Karten in der Migrations-Vorschau (renderIntroSequence)
+   vertikal strecken — dort haengt .sq-unit direkt im Spalten-Flex des
+   Anker-Bodys, ohne .sq-row dazwischen. */
+.sq-row > .sq-unit { flex: 1; min-width: 0; }
 .sq-unit__phase { width: 5px; align-self: stretch; border-radius: 0; flex: 0 0 5px; background: var(--ig-lightgray); }
 .sq-unit__main { flex: 1; min-width: 0; }
 .sq-unit__title { font-weight: 600; font-size: 12.8px; color: var(--sq-text); }
@@ -5056,6 +5179,7 @@ select.kg-input.rf-select {
     color: var(--sq-text-muted);
     font-size: 12px;
 }
+.sq-row > .sq-pause { flex: 1; min-width: 0; }
 .sq-pause__label { font-weight: 600; }
 .sq-overrun {
     background: var(--sq-warn-bg);
@@ -5251,7 +5375,12 @@ select.kg-input.rf-select {
 .sq-suggest__card--used { opacity: .6; }
 .sq-suggest__card--used:hover { opacity: 1; }
 /* Refactoring: display/gap/flex-wrap aus zweitem .sq-anchor__add-Block (Z.~5548) hier zusammengefuehrt (disjunkt, optikneutral). */
-.sq-anchor__add { margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; }
+/* Handoff-SEQUENZ 3: Hinzufuegen-Leiste, Ueberlauf-Hinweis und Luecken-Vorschlaege
+   sind auf die Karten-Kante eingerueckt (64px Zeit-Spalte + 12px Spalten-Abstand),
+   damit die Zeitleiste eine durchgehende linke Kante behaelt. */
+.sq-anchor__add { margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; margin-left: 76px; }
+.sq-anchor__body > .sq-overrun,
+.sq-anchor__body > .sq-gap { margin-left: 76px; }
 .sq-membership { font-size: 11.5px; padding: 3px 8px; }
 
 /* === Sequenzansicht: Uebersetzungs-Anzeige (D35) ===
