@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/seminarplaner/db" VERSION="2026071503" COMMENT="Schema for mod_seminarplaner">
+<XMLDB PATH="mod/seminarplaner/db" VERSION="2026071552" COMMENT="Schema for mod_seminarplaner">
   <TABLES>
     <TABLE NAME="seminarplaner" COMMENT="Main activity table">
       <FIELDS>
@@ -10,6 +10,7 @@
         <FIELD NAME="introformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0"/>
         <FIELD NAME="defaultmethodsetid" TYPE="int" LENGTH="10" NOTNULL="false"/>
         <FIELD NAME="logoposition" TYPE="char" LENGTH="10" NOTNULL="false" COMMENT="PDF header logo position: left or right"/>
+        <FIELD NAME="usecase" TYPE="char" LENGTH="20" NOTNULL="false" DEFAULT="durchfuehren" COMMENT="Referent use case controlling the visible tabs: konzipieren, durchfuehren or verwalten"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
       </FIELDS>

@@ -55,6 +55,18 @@ $string['pdflogo_help'] = 'Upload a logo (PNG, JPG or GIF) that is placed in the
 $string['pdflogoposition'] = 'Logo position';
 $string['pdflogoposition_right'] = 'Top right';
 $string['pdflogoposition_left'] = 'Top left';
+$string['usecaseheader'] = 'Seminar planner use case';
+$string['usecase'] = 'What do you need the seminar planner for?';
+$string['usecase_help'] = 'This choice controls which tabs are shown in this activity:
+
+* **Design a seminar:** Overview, Sequence, Library, Import/Export
+* **Run a designed seminar:** Overview, Sequence, Library, Common Thread, Import/Export
+* **Manage a global seminar concept:** Overview, Sequence, Library, Import/Export, Submit
+
+The Common Thread tab only appears with the matching capability.';
+$string['usecase_konzipieren'] = 'Design a seminar';
+$string['usecase_durchfuehren'] = 'Run a designed seminar';
+$string['usecase_verwalten'] = 'Manage a global seminar concept';
 $string['roterfadenmenu'] = 'Common Thread';
 $string['roterfaden_empty'] = 'No Common Thread has been published yet';
 $string['roterfaden_publishlabel'] = 'Publish seminar plan as Common Thread';

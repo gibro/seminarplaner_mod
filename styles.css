@@ -7679,6 +7679,19 @@ a.kg-btn-primary:focus {
   background: var(--ig-red-soft);
 }
 
+/* Das Karten-Menü der Bibliothek nutzt dieselben .sq-menu-Klassen, aber als
+   natives <details> (die Sequenz toggelt per JS-Klasse .open). Marker
+   verbergen und Panel/Button-Zustand an [open] koppeln - so sieht das Menü
+   exakt so aus wie in der Sequenz. */
+summary.sq-menu__btn { list-style: none; }
+summary.sq-menu__btn::-webkit-details-marker { display: none; }
+details.sq-menu[open] > .sq-menu__panel { display: block; }
+details.sq-menu[open] > summary.sq-menu__btn {
+  border-color: var(--ig-midgray);
+  background: #fff;
+  color: var(--ig-anthracite);
+}
+
 /* Bibliothekskarte (Handoff): Phasen-Badge getoent in seiner Phasenfarbe —
    dieselbe Palette wie Sequenz und Roter Faden. Frueher trug die neutrale
    Badge-Regel ein !important und machte jede Toenung wirkungslos (die alten

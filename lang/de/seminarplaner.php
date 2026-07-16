@@ -50,6 +50,18 @@ $string['sequenz_nextday'] = 'Nächster Tag';
 $string['reviewmenu'] = 'Review';
 $string['importexport'] = 'Import/Export';
 $string['roterfadenmenu'] = 'Roter Faden';
+$string['usecaseheader'] = 'Nutzung des Seminarplaners';
+$string['usecase'] = 'Wozu brauchst du den Seminarplaner?';
+$string['usecase_help'] = 'Die Auswahl steuert, welche Tabs in dieser Aktivität angezeigt werden:
+
+* **Ein Seminar konzipieren:** Überblick, Sequenz, Bibliothek, Import/Export
+* **Ein konzipiertes Seminar durchführen:** Überblick, Sequenz, Bibliothek, Roter Faden, Import/Export
+* **Ein globales Seminarkonzept verwalten:** Überblick, Sequenz, Bibliothek, Import/Export, Einreichen
+
+Der Rote Faden erscheint nur mit der entsprechenden Berechtigung.';
+$string['usecase_konzipieren'] = 'Ein Seminar konzipieren';
+$string['usecase_durchfuehren'] = 'Ein konzipiertes Seminar durchführen';
+$string['usecase_verwalten'] = 'Ein globales Seminarkonzept verwalten';
 $string['roterfaden_empty'] = 'Bisher wurde kein Roter Faden veröffentlicht';
 $string['roterfaden_publishlabel'] = 'Seminarplan als roten Faden veröffentlichen';
 $string['roterfaden_theme_label'] = 'Timeline-Stil';

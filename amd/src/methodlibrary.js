@@ -6,6 +6,17 @@ function(Ajax, Notification, LernzielEditor) {
     const escapeHtml = (str) => String(str || '').replace(/[&<>"']/g, (ch) => (
         {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch] || ch
     ));
+    // Menü-Icon identisch zum Sequenz-Zeilenmenü (sq-menu__icon), damit das
+    // Karten-Menü der Bibliothek exakt so aussieht wie in der Sequenz.
+    const mlMenuIcon = (paths) => `<svg class="sq-menu__icon" width="15" height="15" viewBox="0 0 24 24" fill="none"`
+        + ` stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"`
+        + ` aria-hidden="true" focusable="false">${paths}</svg>`;
+    const ML_MENU_ICONS = {
+        edit: mlMenuIcon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/>'),
+        replace: mlMenuIcon('<path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 21h14"/>'),
+        lock: mlMenuIcon('<rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V7a4 4 0 018 0v4"/>'),
+        remove: mlMenuIcon('<path d="M6 6l12 12M18 6L6 18"/>'),
+    };
     // Setzt den Änderungszeitstempel (ms) einer Seminareinheit auf "jetzt".
     const touchMethod = (method) => {
         if (method && typeof method === 'object') {
@@ -1012,7 +1023,7 @@ function(Ajax, Notification, LernzielEditor) {
             const showlock = shouldShowFreezeLock(m);
             const frozen = showlock ? isFrozenState(m._kgsync, true) : false;
             const freezeaction = showlock
-                ? `<button type="button" class="ml-card-menu-btn" data-act="freeze" title="Schützt diese Karte beim Übernehmen von Updates vor dem Überschreiben.">${frozen ? '🔒 Fixierung lösen' : '🔓 Lokal fixieren'}</button>`
+                ? `<button type="button" class="sq-menu__item" data-act="freeze" title="Schützt diese Karte beim Übernehmen von Updates vor dem Überschreiben.">${ML_MENU_ICONS.lock}<span>${frozen ? 'Fixierung lösen' : 'Lokal fixieren'}</span></button>`
                 : '';
             const updatehint = pendingUpdate
                 ? `<div class="ml-card-updatehint" title="Übernehmen über &bdquo;Ausstehende Updates übernehmen&ldquo; im Tab Import/Export. Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügbar</div>`
@@ -1036,13 +1047,13 @@ function(Ajax, Notification, LernzielEditor) {
                 </span>
                 <div class="sp-card-title ml-card-title"><strong>${escapeHtml(m.titel || '(ohne Titel)')}</strong></div>
                 <div class="ml-card-head-actions">
-                  <details class="ml-card-menu">
-                    <summary class="ml-card-menu-toggle" aria-label="Aktionen">⋮</summary>
-                    <div class="ml-card-menu-panel">
-                      <button type="button" class="ml-card-menu-btn" data-act="edit">Bearbeiten</button>
-                      <button type="button" class="ml-card-menu-btn" data-act="overwrite-import">Aus Datei ersetzen…</button>
+                  <details class="ml-card-menu sq-menu">
+                    <summary class="sq-menu__btn" aria-label="Aktionen" title="Weitere Aktionen">⋮</summary>
+                    <div class="sq-menu__panel" role="menu">
+                      <button type="button" class="sq-menu__item" data-act="edit">${ML_MENU_ICONS.edit}<span>Bearbeiten</span></button>
+                      <button type="button" class="sq-menu__item" data-act="overwrite-import">${ML_MENU_ICONS.replace}<span>Aus Datei ersetzen…</span></button>
                       ${freezeaction}
-                      <button type="button" class="ml-card-menu-btn ml-card-menu-btn-delete" data-act="delete">Löschen</button>
+                      <button type="button" class="sq-menu__item sq-menu__item--danger" data-act="delete">${ML_MENU_ICONS.remove}<span>Löschen</span></button>
                     </div>
                   </details>
                 </div>

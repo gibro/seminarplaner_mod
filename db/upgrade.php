@@ -271,5 +271,18 @@ function xmldb_seminarplaner_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026071503, 'seminarplaner');
     }
 
+    if ($oldversion < 2026071552) {
+        // Nutzungszweck pro Aktivität (Referent*innen) – steuert die sichtbaren
+        // Tabs (konzipieren / durchfuehren / verwalten). Bestandsaktivitäten
+        // bekommen den Standard "durchfuehren".
+        $table = new xmldb_table('seminarplaner');
+        $field = new xmldb_field('usecase', XMLDB_TYPE_CHAR, '20', null, null, null, 'durchfuehren', 'logoposition');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026071552, 'seminarplaner');
+    }
+
     return true;
 }

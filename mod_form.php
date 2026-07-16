@@ -26,6 +26,17 @@ class mod_seminarplaner_mod_form extends moodleform_mod {
             $this->add_intro_editor();
         }
 
+        // Nutzungszweck (Referent*innen): steuert, welche Tabs sichtbar sind.
+        $mform->addElement('header', 'usecaseheader', get_string('usecaseheader', 'mod_seminarplaner'));
+        $mform->setExpanded('usecaseheader', true);
+        $mform->addElement('select', 'usecase', get_string('usecase', 'mod_seminarplaner'), [
+            'konzipieren' => get_string('usecase_konzipieren', 'mod_seminarplaner'),
+            'durchfuehren' => get_string('usecase_durchfuehren', 'mod_seminarplaner'),
+            'verwalten' => get_string('usecase_verwalten', 'mod_seminarplaner'),
+        ]);
+        $mform->setDefault('usecase', 'durchfuehren');
+        $mform->addHelpButton('usecase', 'usecase', 'mod_seminarplaner');
+
         // D52: Dauerhaftes Logo für den Seitenkopf aller PDF-Exporte.
         $mform->addElement('header', 'pdflogoheader', get_string('pdflogoheader', 'mod_seminarplaner'));
         $mform->addElement(

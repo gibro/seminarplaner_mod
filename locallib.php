@@ -347,8 +347,21 @@ function seminarplaner_normalize_phases(array $phases): array {
  * @return string
  */
 function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $context = null): string {
+    global $DB;
+
     if ($context === null) {
         $context = context_module::instance($cmid);
+    }
+
+    // Nutzungszweck der Aktivität steuert die sichtbaren Tabs (Referent*innen-
+    // Einstellung): konzipieren / durchfuehren / verwalten. Fallback = Standard.
+    $usecase = 'durchfuehren';
+    $cm = get_coursemodule_from_id('seminarplaner', $cmid, 0, false, IGNORE_MISSING);
+    if ($cm) {
+        $instance = $DB->get_record('seminarplaner', ['id' => $cm->instance], 'id, usecase');
+        if ($instance && !empty($instance->usecase)) {
+            $usecase = (string)$instance->usecase;
+        }
     }
 
     $canmanageseminarplaner = has_capability('mod/seminarplaner:managemethods', $context)
@@ -377,29 +390,25 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
 
     $tabs = [];
     if ($canmanageseminarplaner) {
-        // Tab order and naming per D16/D50: Überblick · Sequenz · Bibliothek
-        // · Roter Faden · Import/Export · Einreichen.
-        // Der frühere Bausteine-Tab ist entfallen; die Baustein-Stammdaten
-        // werden in der Sequenzansicht gepflegt. Der Anlegen-Unterbereich ist
-        // laut D50 entfallen – Anlegen ist ein Button in der Bibliothek.
+        // Reihenfolge/Benennung D16/D50. Immer sichtbar: Überblick · Sequenz ·
+        // Bibliothek · Import/Export. Nach Nutzungszweck zusätzlich:
+        //  - "durchfuehren": Roter Faden (nach Bibliothek),
+        //  - "verwalten": Einreichen (am Ende).
         $tabs = [
             'grid' => ['label' => get_string('ueberblickmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/grid.php', 'icon' => 'calendar-range'],
             'sequenz' => ['label' => get_string('sequenzmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/sequenz.php', 'icon' => 'list-checks'],
             'methods' => ['label' => get_string('bibliothekmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methodlibrary.php', 'icon' => 'layout-grid'],
-            'importexport' => ['label' => get_string('importexport', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/importexport.php', 'icon' => 'arrow-left-right'],
-            'review' => ['label' => get_string('einreichenmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/review.php', 'icon' => 'clipboard-check'],
         ];
-        if (has_capability('mod/seminarplaner:viewroterfaden', $context)) {
-            $tabs = [
-                'grid' => $tabs['grid'],
-                'sequenz' => $tabs['sequenz'],
-                'methods' => $tabs['methods'],
-                'roterfaden' => [
-                    'label' => get_string('roterfadenmenu', 'mod_seminarplaner'),
-                    'path' => '/mod/seminarplaner/roterfaden.php',
-                    'icon' => 'route',
-                ],
-            ] + array_diff_key($tabs, ['grid' => true, 'sequenz' => true, 'methods' => true]);
+        if ($usecase === 'durchfuehren' && has_capability('mod/seminarplaner:viewroterfaden', $context)) {
+            $tabs['roterfaden'] = [
+                'label' => get_string('roterfadenmenu', 'mod_seminarplaner'),
+                'path' => '/mod/seminarplaner/roterfaden.php',
+                'icon' => 'route',
+            ];
+        }
+        $tabs['importexport'] = ['label' => get_string('importexport', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/importexport.php', 'icon' => 'arrow-left-right'];
+        if ($usecase === 'verwalten') {
+            $tabs['review'] = ['label' => get_string('einreichenmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/review.php', 'icon' => 'clipboard-check'];
         }
     } else if (has_capability('mod/seminarplaner:viewroterfaden', $context)) {
         $tabs = [
