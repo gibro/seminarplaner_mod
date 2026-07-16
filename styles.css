@@ -5137,10 +5137,41 @@ select.kg-input.rf-select {
 /* In einer Gruppe tritt die Startzeit zurueck: dort fuehrt der Baustein-Kopf,
    die Einheiten darin sind ihm untergeordnet. */
 .sq-baustein .sq-time__start { color: var(--sq-text-muted); }
-.sq-time__dur {
+.sq-time__durwrap {
+    display: flex;
+    justify-content: flex-end;
     margin-top: 5px;
+}
+.sq-time__dur {
     font-size: 14px;
     color: var(--sq-text);
+}
+/* Handoff: Dauer-Feld 46px, zentriert, scharfe Ecken. Die Spinner von
+   type=number wuerden auf 46px die Ziffern verdraengen — deshalb aus; der
+   Wert wird getippt, nicht geklickt. */
+.sq-time__input {
+    width: 46px;
+    text-align: center;
+    border: 1px solid var(--sq-border);
+    border-radius: 0;
+    background: #fff;
+    padding: 3px 2px;
+    font-family: var(--font-body, inherit);
+    font-size: 14px;
+    color: var(--sq-text);
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+.sq-time__input::-webkit-outer-spin-button,
+.sq-time__input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.sq-time__input:hover { border-color: var(--sq-border-strong); }
+.sq-time__input:focus {
+    border-color: var(--sq-accent);
+    outline: 2px solid var(--ig-red-soft, #FBEDEE);
+    outline-offset: 0;
 }
 .sq-time__unit {
     font-size: 10px;
@@ -5275,6 +5306,78 @@ select.kg-input.rf-select {
 .sq-swap--baustein .sq-swap__panel { left: 0; right: auto; max-width: min(420px, 72vw); z-index: 30; }
 .sq-swap--baustein .sq-swap__option { align-items: flex-start; white-space: normal; }
 .sq-swap--baustein .sq-swap__dot { margin-top: 5px; }
+/* ---- Seminarphase: Dropdown an der Zeile (Handoff-SEQUENZ) ----
+   Bedienung bewusst wie der ⇄-Alternativen-Chip daneben: gleicher Popover-Bau,
+   gleiche Klick-daneben-Regel. Neu ist nur der Farbpunkt, der die Phasenfarbe
+   des Streifens links an der Karte erklaert. */
+.sq-phase { position: relative; display: inline-block; }
+.sq-phase__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--sq-border);
+    border-radius: 0;
+    background: #fff;
+    color: var(--sq-text);
+    padding: 5px 9px;
+    font-family: var(--font-body, inherit);
+    font-size: 12.5px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.sq-phase__btn:hover { border-color: var(--sq-border-strong); }
+.sq-phase__dot {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 9px;
+    border-radius: 0;
+    background: var(--ig-lightgray, #DADADA);
+}
+.sq-phase__panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--sq-border-strong);
+    border-radius: 0;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+    padding: 4px;
+    min-width: 210px;
+    z-index: 40;
+}
+.sq-phase__panel.open { display: block; }
+.sq-phase__head {
+    font-family: var(--font-head, inherit);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 10px;
+    color: var(--sq-text-muted);
+    padding: 5px 10px 6px;
+}
+.sq-phase__option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    font-size: 13px;
+    cursor: pointer;
+}
+.sq-phase__option:hover { background: var(--sq-accent-bg); }
+.sq-phase__option.active { font-weight: 700; color: var(--sq-accent-dark); }
+/* Die Aenderung reicht ueber diesen Plan hinaus (sie schreibt in die
+   Bibliotheks-Karte). Der Hinweis steht im Menue, also dort, wo entschieden
+   wird — nicht erst im Toast danach. */
+.sq-phase__note {
+    border-top: 1px solid var(--sq-border);
+    margin-top: 4px;
+    padding: 6px 10px 4px;
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--sq-text-muted);
+}
+
 .sq-heading-affordance { display: flex; align-items: center; gap: 8px; margin: -2px 0 2px 2px; }
 .sq-heading-link {
     background: none;

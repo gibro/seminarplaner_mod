@@ -348,12 +348,16 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             .map((line) => line.trim()).filter(Boolean).join('\n');
     };
 
+    // `label` ist der kanonische Wert, der in die Karte geschrieben wird — er
+    // muss mit seminarplaner_phase_options() (locallib.php) uebereinstimmen,
+    // aus der Legende und das Editor-Dropdown gespeist werden. `match` bleibt
+    // die lose Erkennung fuer Alt-Bestand („Warm-up" -> Orientierung).
     const PHASE_KEYS = [
-        {key: 'orientierung', match: ['orientierung', 'warm-up', 'einstieg']},
-        {key: 'erfahrung', match: ['erfahrung', 'erwartungsabfrage', 'vorwissen']},
-        {key: 'analyse', match: ['analyse']},
-        {key: 'handlung', match: ['handlung', 'aktion', 'praxis']},
-        {key: 'transfer', match: ['transfer', 'abschluss', 'auswertung']},
+        {key: 'orientierung', label: 'Orientierung', match: ['orientierung', 'warm-up', 'einstieg']},
+        {key: 'erfahrung', label: 'Erfahrungserhebung', match: ['erfahrung', 'erwartungsabfrage', 'vorwissen']},
+        {key: 'analyse', label: 'Analyse', match: ['analyse']},
+        {key: 'handlung', label: 'Handlungsteil', match: ['handlung', 'aktion', 'praxis']},
+        {key: 'transfer', label: 'Transfer', match: ['transfer', 'abschluss', 'auswertung']},
     ];
 
     const phaseKey = (phase) => {
@@ -388,6 +392,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         heading: menuIcon('<path d="M6 4v16M18 4v16M6 12h12"/>'),
         remove: menuIcon('<path d="M6 6l12 12M18 6L6 18"/>'),
     };
+
+    // Obergrenze der direkt editierbaren Dauer (Handoff: clamp 0–600). 600 Min.
+    // sind zehn Stunden und damit laenger als jeder Anker – die Grenze faengt
+    // Vertipper ab, ohne eine realistische Eingabe zu behindern.
+    const MAX_UNIT_MINUTES = 600;
 
     // Handoff-SEQUENZ 4: Uhr-Glyph der Mittagspausen-Leiste. Ersetzt das
     // frühere 🕐-Emoji — als Line-SVG folgt es der Textfarbe und bleibt im
@@ -460,6 +469,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             // lokale Kopie an (adopt_global_method).
             this.globalMethods = [];
             this.openSwapPid = '';
+            // Handoff-SEQUENZ: offenes Phasen-Dropdown (pid) — wie openSwapPid
+            // immer nur eines gleichzeitig, geschlossen ueber denselben
+            // Klick-daneben-Handler.
+            this.openPhasePid = '';
             this.openBausteinSwapBid = '';
             this.openMenuPid = '';
             this.headingPid = '';
@@ -600,6 +613,16 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                         this.renderGapSearchResults(input);
                     }
                 });
+                // Handoff-SEQUENZ „Dauer editieren": bewusst 'change' statt
+                // 'input' — jede Aenderung rendert den Tag neu (Folgezeiten und
+                // Budget haengen daran), das wuerde bei jedem Tastenanschlag den
+                // Fokus aus dem Feld reissen. So wirkt sie beim Verlassen/Enter.
+                container.addEventListener('change', (event) => {
+                    const input = event.target;
+                    if (input && input.hasAttribute && input.hasAttribute('data-sq-duration')) {
+                        this.setPlacementDuration(input.getAttribute('data-sq-duration'), input.value);
+                    }
+                });
                 this.initDragAndDrop(container);
                 // Remember which suggestion boxes are open (toggle does not
                 // bubble, so listen in the capture phase).
@@ -621,7 +644,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 const outsideSwap = !insideSwap && this.openSwapPid;
                 const outsideBausteinSwap = !insideSwap && this.openBausteinSwapBid;
                 const outsideMenu = !event.target.closest('.sq-menu') && this.openMenuPid;
-                if (outsideSwap || outsideBausteinSwap || outsideMenu) {
+                const outsidePhase = !event.target.closest('.sq-phase') && this.openPhasePid;
+                if (outsideSwap || outsideBausteinSwap || outsideMenu || outsidePhase) {
                     if (outsideSwap) {
                         this.openSwapPid = '';
                     }
@@ -630,6 +654,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     }
                     if (outsideMenu) {
                         this.openMenuPid = '';
+                    }
+                    if (outsidePhase) {
+                        this.openPhasePid = '';
                     }
                     this.render();
                 }
@@ -1319,6 +1346,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 }
                 this.requestedTag = 0;
                 this.openSwapPid = '';
+                this.openPhasePid = '';
                 this.headingPid = '';
                 this.setDirty(false);
                 this.setSaveState('');
@@ -1725,6 +1753,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             this.dayIndex = (this.dayIndex + delta + total) % total;
             this.openSwapPid = '';
             this.openMenuPid = '';
+            this.openPhasePid = '';
             this.headingPid = '';
             this.render();
         }
@@ -2217,6 +2246,46 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             this.setDirty(true);
             this.render();
             this.toast('Alternative übernommen – Zeiten sind angepasst.');
+        }
+
+        // Handoff-SEQUENZ: Seminarphase aus der Zeile heraus setzen.
+        //
+        // Anders als Dauer oder Titel-Auswahl haengt die Phase an der
+        // Bibliotheks-Karte, nicht an der Platzierung — sie beschreibt die
+        // Methode selbst. Die Aenderung wirkt deshalb in jedem Seminarplan,
+        // der diese Einheit nutzt (bewusste Entscheidung; das Menue sagt es an).
+        // Gespeichert wird sofort ueber save_method_cards, nicht ueber den
+        // Sequenz-Autosave: die Karten sind ein eigener Bestand.
+        choosePhase(pid, label) {
+            const placement = this.placement(pid);
+            const card = placement ? this.activeCardForPlacement(placement) : null;
+            const known = PHASE_KEYS.some((ph) => ph.label === label);
+            if (!card || !known) {
+                return;
+            }
+            const previous = card.seminarphase;
+            if (this.fieldValue(card, 'seminarphase') === label) {
+                this.openPhasePid = '';
+                this.render();
+                return;
+            }
+            // seminarphase ist ein Mehrfach-Feld; die Array-Form bleibt erhalten,
+            // damit Editor und Export unveraendert damit umgehen.
+            card.seminarphase = [label];
+            this.openPhasePid = '';
+            this.render();
+            asCall('mod_seminarplaner_save_method_cards', {
+                cmid: this.cmid,
+                methodsjson: JSON.stringify(this.methodCardList),
+            }).then(() => {
+                this.toast(`Seminarphase: ${label} – gilt in allen Seminarplänen.`);
+            }).catch(() => {
+                // Zuruecksetzen, damit die Ansicht nicht eine Phase zeigt, die
+                // serverseitig nie angekommen ist.
+                card.seminarphase = previous;
+                this.render();
+                this.setStatus('Die Seminarphase konnte nicht gespeichert werden.', true);
+            });
         }
 
         // C2/D8: eine Baustein-Variante aktivieren und den zusammenhängenden
@@ -3043,6 +3112,35 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             this.setDirty(true);
             this.render();
             this.toast('Einheit angepasst – Zeiten sind aktualisiert.');
+        }
+
+        // Handoff-SEQUENZ „Dauer editieren": Dauer direkt in der Zeit-Spalte.
+        // Die Dauer haengt an der Platzierung, nicht an der Bibliotheks-Karte —
+        // dieselbe Einheit darf in einem anderen Plan anders lang sein. Alle
+        // Folgezeiten und das Budget leiten sich daraus ab und aktualisieren
+        // sich mit dem Re-Render von selbst (nichts davon ist gespeichert).
+        setPlacementDuration(pid, raw) {
+            const placement = this.placement(pid);
+            if (!placement) {
+                return;
+            }
+            const parsed = Number.parseInt(String(raw).replace(/\D+/g, ''), 10);
+            const previous = Math.max(0, Number(placement.dauer) || 0);
+            // Leeres oder unlesbares Feld heisst „nichts aendern", nicht „0" —
+            // eine Einheit auf 0 zu setzen waere fast immer ein Vertipper.
+            if (!Number.isFinite(parsed)) {
+                this.render();
+                return;
+            }
+            const duration = Math.min(MAX_UNIT_MINUTES, Math.max(0, parsed));
+            if (duration === previous) {
+                // Nur das Feld normalisieren (z. B. „0060" -> „60").
+                this.render();
+                return;
+            }
+            placement.dauer = duration;
+            this.setDirty(true);
+            this.render();
         }
 
         // ---- Neue Seminareinheit anlegen (D50) -------------------------------
@@ -4301,6 +4399,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 this.render();
             } else if (type === 'swap-choose') {
                 this.chooseCandidate(pid, action.getAttribute('data-ref') || '');
+            } else if (type === 'phase-toggle') {
+                this.openPhasePid = this.openPhasePid === pid ? '' : pid;
+                this.render();
+            } else if (type === 'phase-choose') {
+                this.choosePhase(pid, action.getAttribute('data-phase') || '');
             } else if (type === 'variant') {
                 this.chooseVariant(action.getAttribute('data-bid') || '', action.getAttribute('data-vid') || '');
             } else if (type === 'bswap-toggle') {
@@ -4819,6 +4922,47 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 </span>`;
         }
 
+        // Handoff-SEQUENZ: Seminarphase direkt an der Zeile setzen, statt dafuer
+        // den Editor zu oeffnen. Geschrieben wird in die Bibliotheks-Karte —
+        // die Phase beschreibt die Methode selbst, nicht ihre Platzierung, also
+        // gilt die Korrektur ueberall. Weil das ueber diesen Plan hinausreicht,
+        // sagt das Menue es im Moment der Auswahl (sq-phase__note) an.
+        renderPhaseSelect(p) {
+            const card = this.activeCardForPlacement(p.data);
+            const current = this.placementRawPhase(p.data);
+            const activekey = phaseKey(current);
+            // Ohne Karte gibt es nichts zu schreiben (reine Legacy-Zeile): dann
+            // bleibt die Phase eine Anzeige wie bisher.
+            if (!card) {
+                return current
+                    ? `<span class="sq-badge${activekey ? ' sq-badge--phase-' + activekey : ''}">${escapeHtml(current)}</span>`
+                    : '';
+            }
+            const open = this.openPhasePid === p.pid;
+            const label = current || 'Phase wählen';
+            const options = PHASE_KEYS.map((ph) => `
+                <div class="sq-phase__option${ph.key === activekey ? ' active' : ''}" role="menuitem"
+                  data-sq-action="phase-choose" data-pid="${escapeHtml(p.pid)}" data-phase="${escapeHtml(ph.label)}">
+                  <span class="sq-phase__dot sq-phase-bg--${ph.key}"></span>${escapeHtml(ph.label)}
+                </div>`).join('');
+            return `
+                <span class="sq-phase">
+                  <button type="button" class="sq-phase__btn" data-sq-action="phase-toggle" data-pid="${escapeHtml(p.pid)}"
+                    aria-haspopup="true" aria-expanded="${open ? 'true' : 'false'}"
+                    title="Seminarphase dieser Einheit ändern">
+                    <span class="sq-phase__dot${activekey ? ' sq-phase-bg--' + activekey : ''}"></span>
+                    <span class="sq-phase__label">${escapeHtml(label)}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                  </button>
+                  <div class="sq-phase__panel${open ? ' open' : ''}" role="menu">
+                    <div class="sq-phase__head">Didaktische Phase</div>
+                    ${options}
+                    <div class="sq-phase__note">Gilt für diese Einheit in allen Seminarplänen.</div>
+                  </div>
+                </span>`;
+        }
+
         // Nur noch das Eingabefeld: „Überschrift geben" ruft man jetzt im ⋮-Menü
         // der Zeile auf, damit unter jeder Einheit kein Dauer-Link mehr steht.
         renderHeadingAffordance(p) {
@@ -4833,13 +4977,20 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 </div>`;
         }
 
-        // Handoff-SEQUENZ 3: die Zeit-Spalte vor jeder Zeile. `dur` ist in
-        // Durchgang 1 noch Text; Durchgang 2 setzt hier das Eingabefeld ein.
-        renderTimeColumn(startMin, duration) {
+        // Handoff-SEQUENZ 3: die Zeit-Spalte vor jeder Zeile.
+        // Mit `pid` wird die Dauer direkt editierbar; ohne bleibt sie Text.
+        // Der Baustein bekommt bewusst kein Feld: seine Dauer ist die Summe
+        // der enthaltenen Einheiten und nur ueber diese zu aendern.
+        renderTimeColumn(startMin, duration, pid) {
+            const dur = pid
+                ? `<input type="number" class="sq-time__input" value="${duration}" min="0" max="${MAX_UNIT_MINUTES}"
+                     step="5" data-sq-duration="${escapeHtml(pid)}"
+                     aria-label="Dauer in Minuten" title="Dauer in Minuten – aendert alle Folgezeiten">`
+                : `<div class="sq-time__dur">${duration}</div>`;
             return `
                 <div class="sq-time">
                   <div class="sq-time__start">${minutesToLabel(startMin)}</div>
-                  <div class="sq-time__dur">${duration}</div>
+                  <div class="sq-time__durwrap">${dur}</div>
                   <div class="sq-time__unit">Min.</div>
                 </div>`;
         }
@@ -4852,7 +5003,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (data.typ === 'pause') {
                 return `
                     <div class="sq-row" draggable="true" data-sq-drag="${escapeHtml(p.pid)}">
-                      ${this.renderTimeColumn(startMin, duration)}
+                      ${this.renderTimeColumn(startMin, duration, p.pid)}
                       <div class="sq-pause" title="${escapeHtml(timelabel)}">
                         ${this.renderGrip()}
                         <span class="sq-pause__label">${escapeHtml(data.titel || 'Pause')}</span>
@@ -4870,7 +5021,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 // Residual reservation inside a partly filled module.
                 return `
                     <div class="sq-row">
-                      ${this.renderTimeColumn(startMin, duration)}
+                      ${this.renderTimeColumn(startMin, duration, p.pid)}
                       <div class="sq-unit sq-unit--planned" title="${escapeHtml(timelabel)}">
                         <div class="sq-unit__phase"></div>
                         <div class="sq-unit__main">
@@ -4885,12 +5036,6 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             }
 
             const phase = this.placementPhase(data);
-            // Phasen-Label aus derselben Quelle wie die Farbe (aktive Karte, sonst
-            // Legacy), damit die Farbe der Einheit erklärt wird – wie bei den noch
-            // nicht geplanten Einheiten. Vorher kam der Text nur aus dem Legacy-
-            // Eintrag, sodass in der Sequenz neu ergänzte Einheiten farbig, aber
-            // ohne Label blieben.
-            const phasetext = this.placementRawPhase(data);
             const groupsize = this.placementGroupSize(data);
 
             // Dauer und Startzeit stehen jetzt in der Zeit-Spalte links, nicht
@@ -4903,7 +5048,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
 
             return `
                 <div class="sq-row"${inBaustein ? '' : ` draggable="true" data-sq-drag="${escapeHtml(p.pid)}"`}>
-                  ${this.renderTimeColumn(startMin, duration)}
+                  ${this.renderTimeColumn(startMin, duration, p.pid)}
                   <div class="sq-unit${inBaustein ? '' : ' sq-unit--standalone'}" title="${escapeHtml(timelabel)}">
                     <div class="sq-unit__phase${phase ? ' sq-phase-bg--' + phase : ''}"></div>
                     ${inBaustein ? '' : this.renderGrip()}
@@ -4913,7 +5058,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     </div>
                     <div class="sq-unit__actions">
                       ${this.renderSwap(p)}
-                      ${phasetext ? `<span class="sq-badge${phase ? ' sq-badge--phase-' + phase : ''}">${escapeHtml(phasetext)}</span>` : ''}
+                      ${this.renderPhaseSelect(p)}
                       <button type="button" class="kg-btn" data-sq-action="edit" data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
                       ${this.renderRowMenu(p, inBaustein)}
                     </div>
