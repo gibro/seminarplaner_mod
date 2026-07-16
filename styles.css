@@ -5326,13 +5326,18 @@ select.kg-input.rf-select {
     white-space: nowrap;
 }
 .sq-phase__btn:hover { border-color: var(--sq-border-strong); }
+/* Kein background hier: die Phasenfarbe kommt aus .sq-phase-bg--*, die weiter
+   oben in dieser Datei steht und dieselbe Spezifitaet hat — eine
+   background-Angabe an dieser spaeteren Stelle wuerde alle Punkte grau
+   uebermalen (gleiche Falle wie bei .sq-unit__phase). Der neutrale Fall traegt
+   deshalb eine eigene Klasse, die mit keiner Phasenfarbe kollidiert. */
 .sq-phase__dot {
     width: 9px;
     height: 9px;
     flex: 0 0 9px;
     border-radius: 0;
-    background: var(--ig-lightgray, #DADADA);
 }
+.sq-phase__dot--none { background: var(--ig-lightgray, #DADADA); }
 .sq-phase__panel {
     display: none;
     position: absolute;

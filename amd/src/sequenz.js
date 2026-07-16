@@ -4950,7 +4950,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                   <button type="button" class="sq-phase__btn" data-sq-action="phase-toggle" data-pid="${escapeHtml(p.pid)}"
                     aria-haspopup="true" aria-expanded="${open ? 'true' : 'false'}"
                     title="Seminarphase dieser Einheit ändern">
-                    <span class="sq-phase__dot${activekey ? ' sq-phase-bg--' + activekey : ''}"></span>
+                    <span class="sq-phase__dot ${activekey ? 'sq-phase-bg--' + activekey : 'sq-phase__dot--none'}"></span>
                     <span class="sq-phase__label">${escapeHtml(label)}</span>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                       stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
