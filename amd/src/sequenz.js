@@ -2863,8 +2863,6 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                         this.saveBausteinEditor();
                     } else if (type === 'baustein-dissolve') {
                         this.dissolveBaustein(action.getAttribute('data-bid') || '');
-                    } else if (type === 'quick-save') {
-                        this.saveQuickCreate();
                     } else if (type === 'picker-create') {
                         // D50: aus dem Picker in den vollen Editor wechseln -
                         // dabei das Picker-Ziel (Anker oder Baustein) übernehmen.
@@ -4506,78 +4504,6 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             this.toast(`„${cardTitle(card)}" übernommen.`);
         }
 
-        // ACHTUNG, DERZEIT UNERREICHBAR (17. Juli 2026): Der einzige Einstieg war
-        // der "＋ Neue Einheit anlegen"-Button im Lücken-Vorschlagskasten
-        // (data-sq-action="quick-create"). Der ist auf Wunsch des Auftraggebers
-        // entfernt worden, weil der gleichnamige Button in der Anker-Gruppe den
-        // VOLLEN Editor öffnet — zwei gleich benannte Buttons mit verschiedener
-        // Tiefe waren die eigentliche Verwirrung.
-        // openQuickCreate/saveQuickCreate samt der Handler 'quick-create' und
-        // 'quick-save' laufen deshalb ins Leere. Bewusst stehengelassen, falls
-        // der schlanke Dialog anderswo wieder auftauchen soll; wenn nicht, kann
-        // das alles weg (ca. 65 Zeilen).
-        openQuickCreate(targetattrs) {
-            this.quickTarget = targetattrs;
-            const root = this.modalRoot();
-            root.innerHTML = `
-                <div class="sq-modal">
-                  <div class="sq-modal__head">
-                    <h3>Neue Einheit anlegen</h3>
-                    <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
-                  </div>
-                  <div class="sq-modal__body">
-                    <div class="sq-field">
-                      <label class="kg-label">Titel</label>
-                      <input type="text" class="kg-input" id="sq-quick-titel">
-                    </div>
-                    <div class="sq-field">
-                      <label class="kg-label">Dauer (Minuten)</label>
-                      <input type="text" class="kg-input" id="sq-quick-dauer" value="30">
-                    </div>
-                    <div class="sq-field__hint">Alles Weitere (Ablauf, Phase, Material …) kannst du später über „Bearbeiten" ergänzen.</div>
-                  </div>
-                  <div class="sq-modal__footer">
-                    <button type="button" class="kg-btn" data-sq-action="modal-close">Abbrechen</button>
-                    <button type="button" class="kg-btn kg-btn-primary" data-sq-action="quick-save">Anlegen und einplanen</button>
-                  </div>
-                </div>`;
-            root.classList.add('open');
-            const input = bySel('#sq-quick-titel');
-            if (input) {
-                input.focus();
-            }
-        }
-
-        saveQuickCreate() {
-            const titel = (bySel('#sq-quick-titel') || {value: ''}).value.trim();
-            const dauer = Number.parseInt((bySel('#sq-quick-dauer') || {value: ''}).value.replace(/\D+/g, ''), 10);
-            if (!titel) {
-                return;
-            }
-            const card = {
-                id: `${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
-                titel,
-                seminarphase: [],
-                zeitbedarf: String(Number.isFinite(dauer) && dauer > 0 ? dauer : 30),
-                gruppengroesse: '',
-                kurzbeschreibung: '',
-                sozialform: [],
-                tags: [],
-                alternativen: [],
-            };
-            this.methodCardList.push(card);
-            this.methodCards[String(card.id)] = card;
-            asCall('mod_seminarplaner_save_method_cards', {
-                cmid: this.cmid,
-                methodsjson: JSON.stringify(this.methodCardList),
-            }).then(() => {
-                this.closeModal();
-                this.applySuggestTarget(String(card.id), this.quickTarget || {});
-            }).catch(() => {
-                this.setStatus('Die neue Einheit konnte nicht angelegt werden.', true);
-            });
-        }
-
         applySuggestTarget(cardid, target) {
             if (target.pid) {
                 this.addCardToBaustein(cardid, target.pid);
@@ -4674,11 +4600,6 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 } else {
                     this.applySuggestTarget(action.getAttribute('data-cardid') || '', suggesttarget);
                 }
-            } else if (type === 'quick-create') {
-                this.openQuickCreate({
-                    pid: action.getAttribute('data-pid') || '',
-                    anker: action.getAttribute('data-anker') || '',
-                });
             }
         }
 
