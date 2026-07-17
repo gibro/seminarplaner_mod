@@ -126,12 +126,14 @@ class methodset_sync_service {
 
         $targetversionid = (int)($link->pendingversionid ?? 0);
         if ($targetversionid <= 0) {
-            $set = $DB->get_record('local_kgen_methodset', ['id' => $methodsetid], 'id,status,currentversion', IGNORE_MISSING);
-            if (!$set || (string)$set->status !== 'published' || (int)$set->currentversion <= 0) {
+            $set = $DB->get_record('local_kgen_methodset', ['id' => $methodsetid], 'id,status', IGNORE_MISSING);
+            if (!$set || (string)$set->status !== 'published') {
                 return false;
             }
-            $targetversionid = (int)$set->currentversion;
-            if ($targetversionid === (int)$link->methodsetversionid) {
+            // Not currentversion: that pointer follows the newest version even while it is
+            // an unpublished draft, so it could pull unreviewed content into the activity.
+            $targetversionid = $this->published_versionid($methodsetid);
+            if ($targetversionid <= 0 || $targetversionid === (int)$link->methodsetversionid) {
                 return false;
             }
         }
@@ -438,6 +440,28 @@ class methodset_sync_service {
             }
         }
         return false;
+    }
+
+    /**
+     * Id of the most recently published version of a set.
+     *
+     * @param int $methodsetid
+     * @return int Version id, or 0 if none is published.
+     */
+    private function published_versionid(int $methodsetid): int {
+        global $DB;
+
+        $record = $DB->get_record_sql(
+            "SELECT id
+               FROM {local_kgen_methodset_ver}
+              WHERE methodsetid = :methodsetid
+                AND status = :status
+           ORDER BY versionnum DESC",
+            ['methodsetid' => $methodsetid, 'status' => 'published'],
+            IGNORE_MULTIPLE
+        );
+
+        return $record ? (int)$record->id : 0;
     }
 
     /**

@@ -506,6 +506,24 @@ class api extends external_api {
     }
 
     /**
+     * Version id whose content an activity should read from a set.
+     *
+     * currentversion follows the newest version even while it is still an unpublished
+     * draft, so reading from it could pull unreviewed content into activities. The
+     * published version is what trainers are meant to receive; currentversion is only a
+     * fallback for the odd set that has no published version yet.
+     *
+     * @param \stdClass $set Method set record.
+     * @return int Version id, or 0 if none can be resolved.
+     */
+    private static function resolve_set_content_versionid(\stdClass $set): int {
+        $repo = new \local_seminarplaner\local\repository\methodset_repository();
+        $publishedid = $repo->get_published_versionid((int)$set->id);
+
+        return $publishedid > 0 ? $publishedid : (int)($set->currentversion ?? 0);
+    }
+
+    /**
      * Load current methods of a global method set as title-indexed records.
      *
      * @param int $methodsetid Method set id.
@@ -520,11 +538,12 @@ class api extends external_api {
             return [];
         }
 
+        $contentversionid = self::resolve_set_content_versionid($set);
         $rows = [];
-        if (!empty($set->currentversion)) {
+        if ($contentversionid > 0) {
             $rows = $DB->get_records('local_kgen_method', [
                 'methodsetid' => (int)$set->id,
-                'methodsetversionid' => (int)$set->currentversion,
+                'methodsetversionid' => $contentversionid,
             ]);
         }
         if (!$rows) {
@@ -858,11 +877,12 @@ class api extends external_api {
             return $konzept ?? self::import_konzept_units_only($resolved, $set);
         }
 
+        $contentversionid = self::resolve_set_content_versionid($set);
         $rows = [];
-        if (!empty($set->currentversion)) {
+        if ($contentversionid > 0) {
             $rows = $DB->get_records('local_kgen_method', [
                 'methodsetid' => (int)$set->id,
-                'methodsetversionid' => (int)$set->currentversion,
+                'methodsetversionid' => $contentversionid,
             ]);
         }
         if (!$rows) {
@@ -876,7 +896,7 @@ class api extends external_api {
         $imported = [];
         foreach ($rows as $row) {
             $mapped = self::map_global_method_record($row, (int)$set->id,
-                (int)($row->methodsetversionid ?? $set->currentversion ?? 0),
+                (int)($row->methodsetversionid ?? $contentversionid),
                 $attachmentsbymethod[(int)$row->id] ?? []);
             if (trim((string)$mapped['titel']) !== '') {
                 $imported[] = $mapped;
@@ -890,9 +910,9 @@ class api extends external_api {
         }
         $merged = array_merge($existing, $imported);
         $service->save_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id, (int)$resolved['context']->id, $merged);
-        if (!empty($set->currentversion)) {
+        if ($contentversionid > 0) {
             $syncservice = new \mod_seminarplaner\local\service\methodset_sync_service();
-            $syncservice->upsert_activity_set_link((int)$resolved['cm']->id, (int)$set->id, (int)$set->currentversion,
+            $syncservice->upsert_activity_set_link((int)$resolved['cm']->id, (int)$set->id, $contentversionid,
                 (int)$GLOBALS['USER']->id, false);
         }
 
@@ -940,10 +960,11 @@ class api extends external_api {
         \local_seminarplaner\local\repository\methodset_repository $repo): ?array {
         global $DB;
 
-        if (empty($set->currentversion)) {
+        $contentversionid = self::resolve_set_content_versionid($set);
+        if ($contentversionid <= 0) {
             return null;
         }
-        $version = $repo->get_version((int)$set->currentversion);
+        $version = $repo->get_version($contentversionid);
         $payload = $version ? json_decode((string)$version->snapshotjson, true) : null;
         if (!is_array($payload) || (string)($payload['typ'] ?? '') !== 'seminarkonzept'
                 || !is_array($payload['plan'] ?? null)) {
@@ -964,7 +985,7 @@ class api extends external_api {
         // to the snapshot units by normalized title.
         $rows = $DB->get_records('local_kgen_method', [
             'methodsetid' => (int)$set->id,
-            'methodsetversionid' => (int)$set->currentversion,
+            'methodsetversionid' => $contentversionid,
         ]);
         $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function($row) {
             return (int)$row->id;
@@ -1121,11 +1142,12 @@ class api extends external_api {
         global $DB;
 
         $actorid = (int)$GLOBALS['USER']->id;
+        $contentversionid = self::resolve_set_content_versionid($set);
         $rows = [];
-        if (!empty($set->currentversion)) {
+        if ($contentversionid > 0) {
             $rows = $DB->get_records('local_kgen_method', [
                 'methodsetid' => (int)$set->id,
-                'methodsetversionid' => (int)$set->currentversion,
+                'methodsetversionid' => $contentversionid,
             ]);
         }
         if (!$rows) {
@@ -1140,7 +1162,7 @@ class api extends external_api {
         $counter = 0;
         foreach ($rows as $row) {
             $mapped = self::map_global_method_record($row, (int)$set->id,
-                (int)($row->methodsetversionid ?? $set->currentversion ?? 0),
+                (int)($row->methodsetversionid ?? $contentversionid),
                 $attachmentsbymethod[(int)$row->id] ?? []);
             if (trim((string)$mapped['titel']) === '') {
                 continue;
@@ -1248,11 +1270,12 @@ class api extends external_api {
 
         $rows = [];
         foreach ($sets as $set) {
+            $contentversionid = self::resolve_set_content_versionid($set);
             $setrows = [];
-            if (!empty($set->currentversion)) {
+            if ($contentversionid > 0) {
                 $setrows = $DB->get_records('local_kgen_method', [
                     'methodsetid' => (int)$set->id,
-                    'methodsetversionid' => (int)$set->currentversion,
+                    'methodsetversionid' => $contentversionid,
                 ]);
             }
             if (!$setrows) {
