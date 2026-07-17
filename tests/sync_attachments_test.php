@@ -226,6 +226,66 @@ final class mod_seminarplaner_sync_attachments_test extends advanced_testcase {
         $this->assertSame([], $this->activity_attachments('Hallo'));
     }
 
+    /**
+     * Strip the attachment baseline from a card, the way every card linked before
+     * attachments were tracked looks.
+     *
+     * @param string $title Unit title.
+     * @return void
+     */
+    private function make_card_legacy(string $title): void {
+        global $USER;
+
+        $service = new method_card_service();
+        $methods = $service->get_methods($this->cmid, (int)$USER->id, $this->contextid);
+        foreach ($methods as $index => $method) {
+            if ((string)($method['titel'] ?? '') === $title) {
+                unset($methods[$index]['_kgsync']['sourcehashes']['materialien']);
+            }
+        }
+        $service->save_methods($this->cmid, (int)$USER->id, $this->contextid, $methods);
+    }
+
+    public function test_legacy_card_without_baseline_keeps_locally_added_attachment(): void {
+        $v1 = $this->publish_version(1);
+        $this->add_set_unit($v1, 'Hallo');
+        api::import_global_methodset($this->cmid, $this->setid);
+
+        global $USER;
+        $methods = (new method_card_service())->get_methods($this->cmid, (int)$USER->id, $this->contextid);
+        $methods[0]['materialien'] = [['name' => 'Eigenes.pdf', 'contentbase64' => base64_encode('lokal')]];
+        $this->save_activity_methods($methods);
+        $this->make_card_legacy('Hallo');
+
+        $v2 = $this->publish_version(2);
+        $unitid = $this->add_set_unit($v2, 'Hallo');
+        $this->attach_to_set_unit($unitid, 'Handout.pdf');
+        $this->apply_update($v2);
+
+        // The baseline is reconstructed from the old set version (which had no files),
+        // so the local file reads as a local change and is protected.
+        $this->assertSame(['Eigenes.pdf'], $this->activity_attachments('Hallo'));
+    }
+
+    public function test_legacy_card_without_local_changes_still_receives_the_update(): void {
+        $v1 = $this->publish_version(1);
+        $unit1 = $this->add_set_unit($v1, 'Hallo');
+        $this->attach_to_set_unit($unit1, 'A.pdf');
+        api::import_global_methodset($this->cmid, $this->setid);
+        $this->make_card_legacy('Hallo');
+        $this->assertSame(['A.pdf'], $this->activity_attachments('Hallo'));
+
+        $v2 = $this->publish_version(2);
+        $unit2 = $this->add_set_unit($v2, 'Hallo');
+        $this->attach_to_set_unit($unit2, 'A.pdf');
+        $this->attach_to_set_unit($unit2, 'B.pdf');
+        $this->apply_update($v2);
+
+        // Local list equals the old set version, so nothing was changed locally and the
+        // reconstruction must let the update through instead of freezing the card.
+        $this->assertSame(['A.pdf', 'B.pdf'], $this->activity_attachments('Hallo'));
+    }
+
     public function test_save_without_materialien_key_keeps_the_attachments(): void {
         $v1 = $this->publish_version(1);
         $unitid = $this->add_set_unit($v1, 'Hallo');
