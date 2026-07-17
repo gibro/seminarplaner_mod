@@ -1090,8 +1090,16 @@ class api extends external_api {
         if (!is_array($list)) {
             $list = [];
         }
-        $list[] = $entry;
-        set_config($configname, json_encode(array_values($list)), 'mod_seminarplaner');
+        // Ein Konzept steht hoechstens einmal drin: ein erneuter Import
+        // ersetzt seinen Eintrag, statt einen zweiten danebenzulegen.
+        $kept = [];
+        foreach ($list as $known) {
+            if (is_array($known) && (int)($known['setid'] ?? 0) !== (int)($entry['setid'] ?? 0)) {
+                $kept[] = $known;
+            }
+        }
+        $kept[] = $entry;
+        set_config($configname, json_encode(array_values($kept)), 'mod_seminarplaner');
     }
 
     /**
@@ -1254,11 +1262,25 @@ class api extends external_api {
             $existinggrids[(int)$grid->id] = trim((string)$grid->name);
         }
 
-        $out = [];
+        // Ein Konzept steht hoechstens einmal in der Liste. Bis zur
+        // Doppelimport-Sperre konnte dasselbe Konzept mehrfach uebernommen
+        // werden und stand dann mehrfach im Marker; der juengste Eintrag
+        // gewinnt. Ohne das Zusammenfassen zeigte die Bibliothek dasselbe
+        // Konzept doppelt, mit zwei Entfernen-Buttons fuer dieselbe Sache.
+        $byset = [];
         foreach ($list as $entry) {
             if (!is_array($entry)) {
                 continue;
             }
+            $entrysetid = (int)($entry['setid'] ?? 0);
+            $known = $byset[$entrysetid] ?? null;
+            if (!$known || (int)($entry['timeimported'] ?? 0) >= (int)($known['timeimported'] ?? 0)) {
+                $byset[$entrysetid] = $entry;
+            }
+        }
+
+        $out = [];
+        foreach ($byset as $entry) {
             $gridid = (int)($entry['gridid'] ?? 0);
             // gridid 0: das Konzept brachte nie einen Plan mit. Das ist etwas
             // anderes als ein Plan, den es gab und den jemand geloescht hat -
