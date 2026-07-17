@@ -43,26 +43,60 @@ window.__snapshot = () => {
   return shot;
 };
 
-window.__cssDiff = (candidateUrl) => {
+// Transitions/Animationen stilllegen. OHNE DAS IST JEDE MESSUNG WERTLOS:
+// styles.css hat 18 transition-Regeln, u.a. `.sp-modal__section { transition:
+// all 0.2s ease }`. Beim Stylesheet-Tausch animieren die Farben vom alten zum
+// neuen Wert, und der Schnappschuss trifft die Animation mitten im Flug -- die
+// alte Wartezeit von 150ms war kuerzer als die 200ms-Transition. Gemessen am
+// 17. Juli: outline-color rgb(30, 33, 38), ein Zwischenwert, der in KEINER
+// beteiligten Datei steht. Das erzeugt Phantom-Unterschiede und kann echte
+// ebenso verdecken. Gilt fuer Basis- und Kandidaten-Aufnahme gleichermassen,
+// verfaelscht den Vergleich also nicht -- gemessen wird der Endzustand.
+window.__stillstand = () => {
+  if (document.querySelector('#__stillstand')) { return; }
+  const s = document.createElement('style');
+  s.id = '__stillstand';
+  s.textContent = '*, *::before, *::after { transition: none !important;' +
+                  ' animation: none !important; }';
+  document.head.appendChild(s);
+};
+
+// Setzt #plugincss auf url und wartet, bis das Stylesheet WIRKLICH angewandt ist.
+window.__ladeCss = (url) => new Promise((resolve, reject) => {
   const link = document.querySelector('#plugincss');
-  const before = window.__snapshot();
+  if (link.getAttribute('href') === url) {
+    // Gleiche URL nochmal setzen loest KEIN load-Ereignis aus -> das Promise
+    // wuerde nie erfuellt und der ganze Lauf haengt (30s-Timeout).
+    reject(new Error('__ladeCss: URL ist bereits gesetzt: ' + url));
+    return;
+  }
+  link.addEventListener('load', () => requestAnimationFrame(
+    () => requestAnimationFrame(() => setTimeout(resolve, 50))), {once: true});
+  link.setAttribute('href', url);
+});
+
+window.__cssDiff = async (candidateUrl) => {
+  const link = document.querySelector('#plugincss');
+  window.__stillstand();
   const original = link.getAttribute('href');
-  return new Promise((resolve) => {
-    link.addEventListener('load', () => setTimeout(resolve, 150), {once: true});
-    link.setAttribute('href', candidateUrl);
-  }).then(() => {
-    const after = window.__snapshot();
-    const diffs = [];
-    before.forEach((b, i) => {
-      const a = after[i];
-      if (!a) { return; }
-      window.__PROPS.forEach((p) => {
-        if (b.rec[p] !== a.rec[p]) {
-          diffs.push({el: `${b.tag}.${b.cls}`.slice(0, 70), prop: p, vorher: b.rec[p], nachher: a.rec[p]});
-        }
-      });
+  const before = window.__snapshot();
+  await window.__ladeCss(candidateUrl);
+  const after = window.__snapshot();
+  const diffs = [];
+  before.forEach((b, i) => {
+    const a = after[i];
+    if (!a) { return; }
+    window.__PROPS.forEach((p) => {
+      if (b.rec[p] !== a.rec[p]) {
+        diffs.push({el: `${b.tag}.${b.cls}`.slice(0, 70), prop: p, vorher: b.rec[p], nachher: a.rec[p]});
+      }
     });
-    link.setAttribute('href', original);
-    return {geprueft: before.length, unterschiede: diffs.length, diffs: diffs.slice(0, 40)};
   });
+  // WICHTIG: das Zuruecksetzen ABWARTEN. Vorher lieferte die Funktion sofort
+  // zurueck und das Neuladen lief noch; ein direkt folgender zweiter Aufruf
+  // fotografierte dann als "Basis" noch den vorigen Kandidaten. Ergebnis waren
+  // Phantom-Unterschiede (gemessen 17. Juli: "vorher: magenta") -- oder, je nach
+  // Timing, ein falsches "0 Unterschiede". Beides unbrauchbar als Freigabe.
+  await window.__ladeCss(original);
+  return {geprueft: before.length, unterschiede: diffs.length, diffs: diffs.slice(0, 40)};
 };
