@@ -4186,7 +4186,6 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                         placeholder="🔎 In der ganzen Bibliothek suchen …" ${targetattrs}>
                       <div class="sq-gap-results"></div>
                     </div>
-                    <button type="button" class="kg-btn" data-sq-action="quick-create" ${targetattrs}>＋ Neue Einheit anlegen</button>
                   </div>
                 </details>`;
         }
@@ -4301,6 +4300,16 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             this.toast(`„${cardTitle(card)}" übernommen.`);
         }
 
+        // ACHTUNG, DERZEIT UNERREICHBAR (17. Juli 2026): Der einzige Einstieg war
+        // der "＋ Neue Einheit anlegen"-Button im Lücken-Vorschlagskasten
+        // (data-sq-action="quick-create"). Der ist auf Wunsch des Auftraggebers
+        // entfernt worden, weil der gleichnamige Button in der Anker-Gruppe den
+        // VOLLEN Editor öffnet — zwei gleich benannte Buttons mit verschiedener
+        // Tiefe waren die eigentliche Verwirrung.
+        // openQuickCreate/saveQuickCreate samt der Handler 'quick-create' und
+        // 'quick-save' laufen deshalb ins Leere. Bewusst stehengelassen, falls
+        // der schlanke Dialog anderswo wieder auftauchen soll; wenn nicht, kann
+        // das alles weg (ca. 65 Zeilen).
         openQuickCreate(targetattrs) {
             this.quickTarget = targetattrs;
             const root = this.modalRoot();
@@ -4648,8 +4657,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             const addbutton = `
                 <div class="sq-anchor__add">
                   <button type="button" class="kg-btn" data-sq-action="add-baustein" data-anker="${ankername}"${offattrs}>＋ Baustein</button>
-                  <button type="button" class="kg-btn" data-sq-action="add-unit" data-anker="${ankername}"${offattrs}>＋ Einheit hinzufügen</button>
                   <button type="button" class="kg-btn" data-sq-action="create-unit" data-anker="${ankername}"${offattrs}>＋ Neue Einheit anlegen</button>
+                  <button type="button" class="kg-btn" data-sq-action="add-unit" data-anker="${ankername}"${offattrs}>＋ Einheit hinzufügen</button>
                   <button type="button" class="kg-btn" data-sq-action="add-pause" data-anker="${ankername}"${offattrs}>＋ Pause</button>
                 </div>`;
 
