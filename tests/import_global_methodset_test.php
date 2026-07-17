@@ -174,6 +174,14 @@ final class mod_seminarplaner_import_global_methodset_test extends advanced_test
                 'description' => 'Aus dem Konzept',
                 'state' => [
                     \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY => [
+                        // 'version' ist Pflicht: ohne sie gilt der Abschnitt als
+                        // nicht vorhanden (sequence_state::has_sequence) und
+                        // save_user_state ersetzt ihn beim Anlegen des Plans
+                        // durch einen frisch konvertierten, leeren.
+                        'version' => \mod_seminarplaner\local\sequence\sequence_state::FORMAT_VERSION,
+                        'tage' => [],
+                        'platzierungen' => [],
+                        'bausteine' => [],
                         'einheitenauswahlen' => [
                             'ea-1' => [
                                 // legacy:-Referenzen zeigen in die Tageseintraege
