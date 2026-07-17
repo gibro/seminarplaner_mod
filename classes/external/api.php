@@ -40,7 +40,7 @@ class api extends external_api {
     private const SYNC_TRACKED_FIELDS = [
         'titel', 'seminarphase', 'zeitbedarf', 'gruppengroesse', 'kurzbeschreibung', 'autor',
         'lernziele', 'komplexitaet', 'vorbereitung', 'raum', 'sozialform', 'risiken', 'debrief',
-        'materialtechnik', 'ablauf', 'tags', 'kognitive',
+        'materialtechnik', 'ablauf', 'tags', 'kognitive', 'materialien',
     ];
     private static function resolve_cm_context(int $cmid): array {
         global $DB;
@@ -176,7 +176,9 @@ class api extends external_api {
         if (is_array($value)) {
             $parts = [];
             foreach ($value as $entry) {
-                $parts[] = trim((string)$entry);
+                // Attachments arrive as descriptors and are identified by their filename;
+                // the other multi-value fields are plain strings.
+                $parts[] = is_array($entry) ? trim((string)($entry['name'] ?? '')) : trim((string)$entry);
             }
             sort($parts);
             return sha1(implode('||', $parts));
