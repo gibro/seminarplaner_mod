@@ -1,5 +1,16 @@
 # Handoff: `styles.css` — der letzte offene Refactoring-Durchgang
 
+> **ERLEDIGT am 17. Juli 2026** (Commits `f353fa8`, `b05e13c`, `96ae815`).
+> Der in diesem Dokument beschriebene offene Punkt ist abgearbeitet: 311 tote
+> Deklarationen sind raus, `dup2.py` meldet statt 57 nur noch 1 KONFLIKT — und
+> der ist ein Fehlalarm (s. u.). Das Dokument bleibt als Begründungs- und
+> Fehlerprotokoll stehen. **Abschnitt 10 unten korrigiert drei Aussagen, die
+> sich beim Umsetzen als falsch herausgestellt haben — wer hier weiterarbeitet,
+> liest zuerst Abschnitt 10.**
+>
+> Nicht erledigt und weiterhin offen: der Sonderfall in Abschnitt 8
+> (Modal-Tokens) — das ist eine Design-Entscheidung, keine Aufräumarbeit.
+
 Stand: 16. Juli 2026, gemessen an Commit `ce26cc5` (v2026071566).
 Vorgeschichte: sechs Durchgänge sind gelaufen (13.–14. Juli). Dieses Dokument
 sagt, was davon erledigt ist, was **nicht**, und warum der verbliebene Punkt
@@ -195,3 +206,98 @@ bewusst entschieden, nicht im Vorbeigehen mitgenommen.
 
 Der letzte Punkt ist der wichtigste. Ohne ihn ist der Refactor in drei Monaten
 wieder rückgängig gemacht.
+
+---
+
+## 10. Nachtrag 17. Juli: was beim Umsetzen anders war
+
+### 10.1 Der Weg war nicht „kollabieren", sondern „toten Code löschen"
+
+Abschnitt 7 schlägt vor, Basis und CD-Schicht zu **einer** Regel zu
+verschmelzen. Das ist der riskante Weg — er verschiebt Deklarationen über
+dazwischenliegende Regeln hinweg und braucht für jeden Block einen Beweis, dass
+keine davon dasselbe Element trifft.
+
+Der gefahrlose Weg war ein anderer: Setzen zwei Regeln mit demselben Selektor
+dieselbe Eigenschaft, **gewinnt die spätere immer** — egal was dazwischen
+liegt (gleiche Spezifität dazwischen verliert ebenfalls gegen die spätere,
+höhere gewinnt gegen beide). Die frühere Deklaration ist damit toter Code und
+kann rechnerisch beweisbar gelöscht werden, ganz ohne Markup-Annahmen. Genau
+das behebt auch den Schaden aus Abschnitt 4: Was nur noch an einer Stelle
+steht, kann nicht mehr still zurückgedreht werden.
+
+Ergebnis: 311 Deklarationen weg, 35 Regeln komplett, KONFLIKT 57 → 1. Werkzeug:
+`fold.py analyse` / `fold.py prune`.
+
+### 10.2 Drei Behauptungen dieses Dokuments stimmen nicht
+
+- **Abschnitt 7.2: „nur prüfen, dass zwischen den Vorkommen keine Regel
+  gleicher Spezifität dazwischenliegt (das macht `dup2.py` bereits)"** — nein.
+  `dup2.py` vergleicht ausschließlich die Eigenschaften der Duplikate
+  untereinander. Dazwischenliegende Regeln sieht es nie an. Wer sich darauf
+  verlassen hätte, hätte DISJUNKT-Fälle für gefahrlos gehalten, die es nicht
+  sind.
+
+- **Abschnitt 5: „`cssdiff.js` … 0 Unterschiede = beweisbar optikneutral"** —
+  galt so nicht. Das Werkzeug hatte drei Fehler, die es als Freigabe-Instanz
+  untauglich machten (s. 10.3). Ein Kanarienvogel-Test deckte sie auf. Wer ohne
+  diesen Gegentest misst, misst womöglich nichts.
+
+- **Die Zahl 16 DISJUNKT / 57 KONFLIKT** ist eine Werkzeug-Sicht, keine
+  Eigenschaft der Datei. `dup2.py` liest mehrzeilige Gruppenselektoren
+  fälschlich als eigenständige Regeln — `.kg-library-step` erscheint als
+  Duplikat, obwohl das zweite Vorkommen `.kg-ie-block, .kg-library-step` ist.
+  Der verbliebene „KONFLIKT" ist genau so ein Fehlalarm.
+
+### 10.3 Die Fehler in `cssdiff.js` (behoben, aber lehrreich)
+
+1. **Fünf blinde Flecken.** `outline`, `flex`, `list-style`, `max-width`,
+   `min-width` standen nicht in der Messliste — obwohl `dup2.py` genau auf
+   ihnen Konflikte meldet (`.sp-slot--over`, `.kg-library-card--selected` auf
+   `outline`). Eine 7px-Magenta-Outline lief als „0 Unterschiede" durch.
+   Messliste jetzt 41 → 69 Eigenschaften.
+
+2. **Transitions wurden mitgemessen.** Die Wartezeit betrug 150 ms, aber
+   `.sp-modal__section` hat `transition: all 0.2s ease`. Der Schnappschuss traf
+   die Animation im Flug und meldete 25 reproduzierbare Phantom-Unterschiede an
+   einem neutralen Kandidaten — erkennbar an `outline-color rgb(30, 33, 38)`,
+   einem Wert, der in keiner beteiligten Datei steht. Jetzt legt
+   `__stillstand()` Transitions still.
+
+3. **Rennen beim Zurücksetzen.** `__cssDiff` kehrte zurück, während das
+   Zurücksetzen noch lief; ein direkt folgender Aufruf fotografierte als
+   „Basis" noch den vorigen Kandidaten. Je nach Timing: Phantom-Unterschiede
+   **oder ein falsches „0 Unterschiede"** — der gefährlichere Fall.
+
+**Konsequenz für künftige Läufe:** Ein „0 Unterschiede" ohne gleichzeitig
+anschlagenden Kanarienvogel ist wertlos. Beide Kontrollen gehören in denselben
+Durchlauf.
+
+### 10.4 Neu: `zoo.py` — Abdeckung statt Stichprobe
+
+`cssdiff.js` misst nur, was im DOM steht; die vier Ansichten decken bei weitem
+nicht alle Regeln ab. `zoo.py` erzeugt aus `styles.css` eine Seite mit einem
+Element je Selektor (1.189 Stück, 1.639 Elemente) und ersetzt `:hover`/`:focus`
+durch Klassen — auf Basis und Kandidat identisch, damit Pseudo-Zustände ohne
+echte Maus messbar werden.
+
+Grenze, die man kennen muss: Der Zoo baut ein Element **pro Selektor** und
+kennt keine echten Klassenkombinationen. Für das Löschen toten Codes ist das
+unerheblich (der Beweis hängt nicht am Markup). Wer doch verschmelzen will,
+braucht zusätzlich echtes Markup — `states.html`/`states2.html` decken einen
+Teil ab.
+
+### 10.5 Werkzeuge neu bauen
+
+`theme_prefix.css`/`theme_suffix.css` liegen bewusst nicht im Repo (1,5 MB
+generiert). So entstehen sie:
+
+    curl -s http://moodle501umbau.localhost/ | grep -oE 'http://[^"]*theme/styles.php/[^"]*'
+    curl -s "<URL>" -o theme_all.css
+
+Unser Block beginnt bei `/* Moodle plugin UI wrappers */` und endet dort, wo
+das nächste Plugin anfängt. Prefix = alles davor, Suffix = alles danach (dem
+Suffix ein `/*` voranstellen — Moodles CSS-Optimierer frisst den Kommentar-
+Öffner des Folge-Plugins). **Achtung:** Die im Aggregat eingebettete Kopie
+unseres CSS ist veraltet; sie wird ohnehin herausgeschnitten und ist kein
+Grund zur Sorge.
