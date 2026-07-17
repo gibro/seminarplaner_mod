@@ -105,30 +105,6 @@ class methodset_sync_service {
     }
 
     /**
-     * Set auto-sync policy for one activity+set link.
-     *
-     * @param int $cmid
-     * @param int $methodsetid
-     * @param bool $enabled
-     * @return bool
-     */
-    public function set_autosync(int $cmid, int $methodsetid, bool $enabled): bool {
-        global $DB;
-
-        if ($cmid <= 0 || $methodsetid <= 0) {
-            throw new coding_exception('Invalid autosync input');
-        }
-
-        $link = $DB->get_record('kgen_activity_setlink', ['cmid' => $cmid, 'methodsetid' => $methodsetid], '*', IGNORE_MISSING);
-        if (!$link) {
-            return false;
-        }
-        $link->autosyncenabled = $enabled ? 1 : 0;
-        $DB->update_record('kgen_activity_setlink', $link);
-        return true;
-    }
-
-    /**
      * Apply pending/latest update for one linked activity+methodset.
      *
      * @param int $cmid
@@ -185,22 +161,21 @@ class methodset_sync_service {
             return 0;
         }
 
-        $updatedlinks = 0;
+        // D54: Globale Aktualisierungen werden NIE automatisch übernommen. Eine
+        // neue veröffentlichte Version wird nur als ausstehend markiert; das
+        // tatsächliche Anwenden bleibt der bewussten Nutzeraktion "Ausstehende
+        // Updates übernehmen" vorbehalten (apply_pending_update_for_activity).
+        // Lokale Änderungen haben dadurch immer Vorrang, nichts wird still
+        // überschrieben.
         foreach ($links as $link) {
             if ((int)$link->methodsetversionid === $newversionid && (int)($link->pendingversionid ?? 0) === 0) {
                 continue;
             }
-            if (empty($link->autosyncenabled)) {
-                $link->pendingversionid = $newversionid;
-                $DB->update_record('kgen_activity_setlink', $link);
-                continue;
-            }
-            if ($this->apply_link_update($link, $newversionid, $actorid)) {
-                $updatedlinks++;
-            }
+            $link->pendingversionid = $newversionid;
+            $DB->update_record('kgen_activity_setlink', $link);
         }
 
-        return $updatedlinks;
+        return 0;
     }
 
     /**

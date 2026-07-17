@@ -33,7 +33,7 @@ final class mod_seminarplaner_methodset_sync_service_test extends advanced_testc
         ]);
     }
 
-    public function test_link_and_autosync_policy_roundtrip(): void {
+    public function test_link_roundtrip(): void {
         $this->resetAfterTest(true);
 
         $setid = $this->create_methodset('published', 11);
@@ -43,18 +43,15 @@ final class mod_seminarplaner_methodset_sync_service_test extends advanced_testc
         $links = $service->list_activity_links(7001);
         $this->assertCount(1, $links);
         $this->assertSame($setid, $links[0]['methodsetid']);
+        // D54: auto-sync is gone; new links never auto-update.
         $this->assertFalse($links[0]['autosyncenabled']);
         $this->assertFalse($links[0]['haspending']);
-
-        $this->assertTrue($service->set_autosync(7001, $setid, true));
-        $links = $service->list_activity_links(7001);
-        $this->assertTrue($links[0]['autosyncenabled']);
     }
 
-    public function test_sync_marks_pending_when_autosync_disabled(): void {
+    public function test_sync_never_auto_applies_and_marks_pending(): void {
         $this->resetAfterTest(true);
 
-        // Activity is linked to version 11, autosync left disabled.
+        // Activity is linked to version 11.
         $setid = $this->create_methodset('published', 12);
         $service = new methodset_sync_service();
         $service->upsert_activity_set_link(7002, $setid, 11, 5);
@@ -62,7 +59,8 @@ final class mod_seminarplaner_methodset_sync_service_test extends advanced_testc
         // A new version 12 is published.
         $applied = $service->sync_published_methodset($setid, 12, 5);
 
-        // Nothing is auto-applied, but the link is flagged as having a pending update.
+        // D54: nothing is ever auto-applied; the link is only flagged as pending.
+        // Applying stays the deliberate "Ausstehende Updates übernehmen" action.
         $this->assertSame(0, $applied);
         $links = $service->list_activity_links(7002);
         $this->assertTrue($links[0]['haspending']);

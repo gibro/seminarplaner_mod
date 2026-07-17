@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Roter Faden – Design-Check</title>
+<link rel="stylesheet" href="theme_prefix.css">
+<link rel="stylesheet" id="plugincss" href="styles.css">
+<link rel="stylesheet" href="theme_suffix.css">
+<script src="cssdiff.js"></script>
+<style>body{margin:0;padding:24px;background:#fff;font-family:system-ui}</style>
+</head>
+<body>
+
+<!-- Markup wie in roterfaden.php -->
+<div class="kg-shell kg-rf-shell">
+  <div class="sq-pagehead">
+    <h3>Roter Faden</h3>
+    <div class="sq-pagehead__sub">Der Ablauf des Seminars als durchgehende Linie — Tag für Tag, von der Orientierung bis zum Transfer.</div>
+  </div>
+  <div class="rf-toolbar">
+    <div class="rf-toolbar__group">
+      <label class="rf-toolbar__label" for="kg-roterfaden-theme">Timeline-Stil</label>
+      <select id="kg-roterfaden-theme" class="kg-input rf-select">
+        <option value="modern">Modern</option>
+        <option value="kompakt">Kompakt</option>
+      </select>
+    </div>
+    <button type="button" id="kg-roterfaden-handout" class="kg-btn kg-btn--outline-red rf-handout kg-hidden"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg><span>Handout-PDF für Teilnehmende</span></button>
+  </div>
+  <div id="kg-roterfaden-status" class="kg-status" role="status" aria-live="polite"></div>
+  <div id="kg-roterfaden-empty" class="sp-filter-status kg-hidden" data-empty-message="Bisher wurde kein Roter Faden veröffentlicht"></div>
+  <div id="kg-roterfaden-list" class="kg-roterfaden-list"></div>
+</div>
+
+<script src="jspdf.umd.min.js"></script>
+<script>
+// Fake-Snapshot: entspricht dem, was publish_roterfaden jetzt schreibt.
+const state = {
+  config: {
+    days: ['Montag', 'Dienstag'],
+    ankerzeiten: {
+      vormittag: {start: '08:30', end: '12:30'},
+      nachmittag: {start: '13:15', end: '17:30'},
+      ersterTagNurNachmittag: false,
+      letzterTagNurVormittag: false
+    }
+  },
+  methodcards: [
+    {id: 'm1', titel: 'Ankommen im Raum', seminarphase: ['Orientierung']},
+    {id: 'm2', titel: 'Erwartungsabfrage: Vorwissen KI', seminarphase: ['Erfahrungserhebung']},
+    {id: 'm3', titel: 'Einführung: Was ist KI?', seminarphase: ['Analyse']},
+    {id: 'm4', titel: 'Gruppenarbeit: KI im Alltag', seminarphase: ['Handlungsteil']},
+    {id: 'm5', titel: 'Kommentar-Kompass: Orientierung im Material', seminarphase: ['Analyse']},
+    {id: 'm6', titel: 'Fallbeispiel: KI-Einsatz im Betrieb', seminarphase: ['Analyse']},
+    {id: 'm7', titel: 'Transfer: Was nehme ich mit?', seminarphase: ['Transfer']}
+  ],
+  sequenz: {
+    version: 1,
+    tage: [
+      {tag: 1, bezeichnung: 'Montag', anker: {
+        vormittag: {sequenz: ['p1', 'p2', 'p3', 'p4', 'p5', 'pause1', 'p6']},
+        nachmittag: {sequenz: ['p7']}
+      }},
+      {tag: 2, bezeichnung: 'Dienstag', anker: {
+        vormittag: {sequenz: ['p8']},
+        nachmittag: {sequenz: []}
+      }}
+    ],
+    platzierungen: {
+      p1: {typ: 'einheit', titel: 'Ankommen im Raum', dauer: 20, einheitenauswahl: 'ea1'},
+      p2: {typ: 'einheit', titel: 'Erwartungsabfrage: Vorwissen KI', dauer: 30, einheitenauswahl: 'ea2'},
+      // p3–p5 = ein Baustein mit drei Themen (2 Std 30 Min gesamt)
+      p3: {typ: 'einheit', bausteinid: 'b1', titel: 'Einführung: Was ist KI?', dauer: 45, einheitenauswahl: 'ea3'},
+      p4: {typ: 'einheit', bausteinid: 'b1', titel: 'Gruppenarbeit: KI im Alltag', dauer: 60, einheitenauswahl: 'ea4'},
+      p5: {typ: 'einheit', bausteinid: 'b1', titel: 'Kommentar-Kompass: Orientierung im Material', dauer: 45, einheitenauswahl: 'ea5'},
+      pause1: {typ: 'pause', titel: 'Kaffeepause', dauer: 0},
+      p6: {typ: 'einheit', titel: 'Fallbeispiel: KI-Einsatz im Betrieb', dauer: 60, einheitenauswahl: 'ea6'},
+      p7: {typ: 'einheit', bausteinid: 'b1', titel: 'Gruppenarbeit: KI im Alltag (Teil 2)', dauer: 45, einheitenauswahl: 'ea4'},
+      p8: {typ: 'einheit', titel: 'Transfer: Was nehme ich mit?', dauer: 90, einheitenauswahl: 'ea7'}
+    },
+    bausteine: {b1: {titel: 'Grundlagen Künstliche Intelligenz', unterthemen: ''}},
+    einheitenauswahlen: {
+      ea1: {kandidaten: ['m1'], aktiv: 'm1'},
+      ea2: {kandidaten: ['m2'], aktiv: 'm2'},
+      ea3: {kandidaten: ['m3'], aktiv: 'm3'},
+      ea4: {kandidaten: ['m4'], aktiv: 'm4'},
+      ea5: {kandidaten: ['m5'], aktiv: 'm5'},
+      ea6: {kandidaten: ['m6'], aktiv: 'm6'},
+      ea7: {kandidaten: ['m7'], aktiv: 'm7'}
+    }
+  }
+};
+
+// AMD-Shim: registriert die echten Plugin-Module unter ihren Moodle-Namen.
+const modules = {
+  'core/ajax': {call: () => [Promise.resolve({ispublished: true, gridid: 1, statejson: JSON.stringify(state)})]},
+  'core/notification': {exception: (e) => console.error('Notification.exception', e)}
+};
+let pendingName = null;
+function define(deps, factory) {
+  modules[pendingName] = factory.apply(null, deps.map((d) => modules[d]));
+}
+const load = (name, url) => fetch(url).then((r) => r.text()).then((code) => {
+  pendingName = name;
+  // eslint-disable-next-line no-eval
+  (0, eval)(code);
+});
+
+// PDF-Texte mitschreiben statt herunterladen — so laesst sich der Inhalt pruefen.
+window.__pdfText = [];
+const hookPdf = () => {
+  const P = window.jspdf.jsPDF.prototype;
+  const origText = P.text;
+  P.text = function(txt, x, y, ...rest) {
+    window.__pdfText.push(Array.isArray(txt) ? txt.join(' ') : String(txt));
+    return origText.call(this, txt, x, y, ...rest);
+  };
+  P.save = function() {
+    window.__pdfPages = this.internal.getNumberOfPages();
+    window.__pdfSaved = true;
+  };
+};
+
+load('mod_seminarplaner/roterfadenmodel', 'roterfadenmodel.js')
+  .then(() => load('mod_seminarplaner/handout', 'handout.js'))
+  .then(() => load('mod_seminarplaner/roterfaden', 'roterfaden.js'))
+  .then(() => {
+    hookPdf();
+    modules['mod_seminarplaner/roterfaden'].init(1, null);
+  });
+</script>
+</body>
+</html>

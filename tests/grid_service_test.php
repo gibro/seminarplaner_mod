@@ -31,7 +31,13 @@ final class mod_seminarplaner_grid_service_test extends advanced_testcase {
         $this->assertNotEmpty($hash);
 
         $state = $service->get_user_state($gridid, 3);
-        $this->assertSame(['x' => 1], $state['state']);
+        // Die gespeicherten Nutzerdaten kommen unveraendert zurueck.
+        $this->assertSame(1, $state['state']['x']);
+        // D43: der Lesepfad ergaenzt einen fehlenden Sequenz-Abschnitt (Self-Heal
+        // fuer Zustaende aus Alt-Importen, die die Sequenzansicht sonst leer
+        // liessen). Der Zustand traegt deshalb zusaetzlich 'sequenz' - frueher
+        // erwartete dieser Test exakt ['x' => 1] und schlug seitdem fehl.
+        $this->assertArrayHasKey('sequenz', $state['state']);
         $this->assertNotEmpty($state['versionhash']);
     }
 
@@ -83,6 +89,64 @@ final class mod_seminarplaner_grid_service_test extends advanced_testcase {
         $this->assertCount(1, $grids);
         $this->assertArrayHasKey($keepid, $grids);
         $this->assertArrayNotHasKey($dropid, $grids);
+    }
+
+    /**
+     * Beim Veröffentlichen projiziert der Service die Sequenz nach plan.days.
+     * Ein Baustein bündelt dabei mehrere Platzierungen zu EINEM Eintrag — dessen
+     * Zeitspanne muss alle seine Einheiten umfassen, nicht nur die erste.
+     */
+    public function test_publish_projects_baustein_with_full_duration(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $gridid = $service->create_grid(1006, 'Sequenzplan', 7);
+
+        $state = [
+            'config' => [
+                'days' => ['Montag'],
+                'ankerzeiten' => [
+                    'vormittag' => ['start' => '08:30', 'end' => '12:30'],
+                    'nachmittag' => ['start' => '13:15', 'end' => '17:30'],
+                ],
+            ],
+            'plan' => ['days' => ['Montag' => []]],
+            'sequenz' => [
+                'version' => 1,
+                'tage' => [[
+                    'tag' => 1,
+                    'bezeichnung' => 'Montag',
+                    'anker' => [
+                        'vormittag' => ['sequenz' => ['p1', 'p2', 'p3']],
+                        'nachmittag' => ['sequenz' => []],
+                    ],
+                ]],
+                'platzierungen' => [
+                    // Zwei Einheiten desselben Bausteins (45 + 60 Minuten) …
+                    'p1' => ['typ' => 'einheit', 'bausteinid' => 'b1', 'titel' => 'Teil 1', 'dauer' => 45],
+                    'p2' => ['typ' => 'einheit', 'bausteinid' => 'b1', 'titel' => 'Teil 2', 'dauer' => 60],
+                    // … gefolgt von einer freien Einheit.
+                    'p3' => ['typ' => 'einheit', 'titel' => 'Fallbeispiel', 'dauer' => 30],
+                ],
+                'bausteine' => ['b1' => ['titel' => 'Grundlagen', 'unterthemen' => '']],
+                'einheitenauswahlen' => [],
+            ],
+        ];
+        $service->save_user_state($gridid, 7, $state);
+        $service->publish_roterfaden(1006, $gridid, $state, 7);
+
+        $published = $service->get_roterfaden_state(1006)['state'];
+        $items = $published['plan']['days']['Montag'];
+
+        $this->assertCount(2, $items);
+        // Der Baustein-Block läuft von 08:30 bis 10:15 (105 Minuten, nicht 45).
+        $this->assertSame('Grundlagen', $items[0]['title']);
+        $this->assertSame(510, $items[0]['startMin']);
+        $this->assertSame(615, $items[0]['endMin']);
+        // Die folgende Einheit schließt direkt an den vollen Baustein an.
+        $this->assertSame('Fallbeispiel', $items[1]['title']);
+        $this->assertSame(615, $items[1]['startMin']);
+        $this->assertSame(645, $items[1]['endMin']);
     }
 
     public function test_set_roterfaden_visibility_unpublishes(): void {

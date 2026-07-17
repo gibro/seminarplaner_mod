@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>Button-Zustände</title>
+<link rel="stylesheet" href="fx_theme_prefix.css">
+<link rel="stylesheet" id="plugincss" href="fx_base.css">
+<link rel="stylesheet" href="fx_theme_suffix.css">
+<script src="cssdiff.js"></script>
+<style>body{padding:16px;background:#F1F1F1;font-family:system-ui}</style>
+</head><body>
+<div class="kg-shell sq-shell">
+  <!-- Jeder Button-Typ in allen vier Zuständen: ruhend, hover, fokussiert, deaktiviert -->
+  <div id="probe"></div>
+</div>
+<script>
+const TYPEN = [
+  ['kg-btn', 'kg-btn'],
+  ['kg-btn kg-btn-primary', 'Primär'],
+  ['kg-btn kg-btn--outline-red', 'Outline-Rot'],
+  ['sp-btn', 'sp-btn'],
+  ['kg-input kg-tag-dropdown-toggle', 'Dropdown-Toggle'],
+  ['ml-card-menu-toggle', 'Karten-Menü'],
+  ['ml-card-menu-btn ml-card-menu-btn-delete', 'Löschen im Menü'],
+  ['sq-info__btn', 'ⓘ-Knopf'],
+  ['sp-modal__close', 'Modal-Schließer']
+];
+const ZUSTAENDE = ['', 'force-hover', 'force-focus', 'force-disabled'];
+const host = document.querySelector('#probe');
+TYPEN.forEach(([cls, label]) => {
+  ZUSTAENDE.forEach((z) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = cls + (z ? ' ' + z : '');
+    if (z === 'force-disabled') { b.disabled = true; }
+    b.textContent = label + (z ? ' · ' + z.replace('force-', '') : ' · ruhend');
+    host.appendChild(b);
+  });
+});
+// Anker-Buttons der Sequenz (tragen data-sq-action-Regeln)
+['add-unit', 'add-pause', 'picker-create'].forEach((a) => {
+  ZUSTAENDE.forEach((z) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'kg-btn' + (z ? ' ' + z : '');
+    b.setAttribute('data-sq-action', a);
+    if (z === 'force-disabled') { b.disabled = true; }
+    b.textContent = a + ' · ' + (z || 'ruhend');
+    host.appendChild(b);
+  });
+});
+</script>
+</body></html>

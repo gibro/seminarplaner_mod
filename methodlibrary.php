@@ -56,10 +56,76 @@ echo $OUTPUT->heading(format_string($seminarplaner->name));
 echo seminarplaner_render_tabs((int)$cm->id, 'methodlibrary');
 
 echo html_writer::start_div('kg-shell');
-echo html_writer::tag('h3', 'Bibliothek verwalten');
+echo html_writer::start_div('sq-pagehead');
+echo html_writer::tag('h3', 'Bibliothek');
+echo html_writer::div('Alle Seminareinheiten durchsuchen, bearbeiten und für deine Pläne übernehmen – oder eine neue anlegen.', 'sq-pagehead__sub');
+echo html_writer::end_div();
 
-echo html_writer::start_div('kg-ie-block kg-library-step');
-echo html_writer::tag('h4', '1. Seminareinheit suchen');
+// D55: Bibliothek in drei Unterbereiche als Tabs - lokale Seminareinheiten
+// (Arbeitsfläche), immer durchsuchbare globale Methodensammlungen und die
+// bereits importierten globalen Seminarkonzepte.
+// Der Konzepte-Tab erscheint nur, wenn tatsächlich welche importiert wurden
+// (Marker aus import_global_seminarkonzept) - sonst gäbe es dort nichts zu
+// zeigen.
+$importedkonzepteraw = get_config('mod_seminarplaner', 'imported_konzepte_cmid_' . (int)$cm->id);
+$importedkonzepte = ($importedkonzepteraw !== false && $importedkonzepteraw !== null && $importedkonzepteraw !== '')
+    ? json_decode((string)$importedkonzepteraw, true) : [];
+$hasimportedkonzepte = is_array($importedkonzepte) && count($importedkonzepte) > 0;
+
+echo html_writer::start_div('ml-subtabs', ['role' => 'tablist']);
+echo html_writer::tag('button', 'Lokale Seminareinheiten', [
+    'type' => 'button', 'class' => 'ml-subtab ml-subtab--active', 'data-ml-tab' => 'local',
+    'role' => 'tab', 'aria-selected' => 'true',
+]);
+echo html_writer::tag('button', 'Methodensammlungen', [
+    'type' => 'button', 'class' => 'ml-subtab', 'data-ml-tab' => 'collections',
+    'role' => 'tab', 'aria-selected' => 'false',
+]);
+if ($hasimportedkonzepte) {
+    echo html_writer::tag('button', 'Globale Seminarkonzepte', [
+        'type' => 'button', 'class' => 'ml-subtab', 'data-ml-tab' => 'concepts',
+        'role' => 'tab', 'aria-selected' => 'false',
+    ]);
+}
+echo html_writer::end_div();
+
+// ---- Tab 1: Lokale Seminareinheiten (Standard-Ansicht) ------------------
+echo html_writer::start_div('ml-tabpanel', ['id' => 'ml-tab-local', 'role' => 'tabpanel']);
+
+// Filterleiste, Liste, Mehrfachbearbeitung und Editor sind für lokale
+// Seminareinheiten und für Konzept-Einheiten dasselbe - Konzept-Einheiten SIND
+// lokale Kopien, nur mit Herkunft. Deshalb gibt es diesen Block genau einmal;
+// beim Tab-Wechsel wandert er in das aktive Panel und die JS-Seite tauscht nur
+// aus, welche Einheiten er zeigt (siehe activateSubtab). Eine zweite Kopie
+// hätte Drag-and-drop, Auswahl und Editor doppelt verdrahtet.
+echo html_writer::start_div('', ['id' => 'ml-browse']);
+
+// D50: Anlegen ist kein eigener Bereich mehr, sondern ein Button in der
+// Bibliothek, der den Editor unten öffnet (leer, im Anlegen-Modus).
+echo html_writer::start_div('kg-row kg-row--action', ['id' => 'ml-create-row']);
+echo html_writer::tag('button', get_string('bibliothek_create', 'mod_seminarplaner'), [
+    'type' => 'button',
+    'id' => 'ml-create-open',
+    'class' => 'kg-btn kg-btn-primary',
+]);
+// Sucht über alle drei Bereiche auf einmal - die Suche in der Filterleiste
+// darunter bleibt auf den aktiven Tab beschränkt. Solange hier etwas steht,
+// treten die Tabs samt Filterleiste zurück und es zählt nur die Trefferliste.
+echo '<label class="sp-filter ml-allsearch"><span class="sp-filter__label">Alle Bereiche durchsuchen</span>'
+    . '<input id="ml-allsearch" class="kg-input" type="search" '
+    . 'placeholder="Titel, Beschreibung, Tags – lokal, Methodensammlung und Konzepte"></label>';
+echo html_writer::end_div();
+
+// Trefferliste der bereichsübergreifenden Suche. Liegt bewusst innerhalb von
+// #ml-browse, damit sie mit dem Block in den aktiven Tab wandert.
+echo html_writer::start_div('kg-ie-block kg-library-step kg-hidden', ['id' => 'ml-allsearch-block']);
+echo html_writer::tag('h4', 'Treffer in allen Bereichen');
+echo html_writer::tag('div', '', ['id' => 'ml-allsearch-status', 'class' => 'sp-filter-status']);
+echo html_writer::tag('div', '', ['id' => 'ml-allsearch-list', 'class' => 'kg-library-list']);
+echo html_writer::end_div();
+
+echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'ml-filter-block']);
+echo html_writer::tag('h4', 'Seminareinheit suchen');
 echo html_writer::start_div('sp-filterbar');
 
 echo '<label class="sp-filter"><span class="sp-filter__label">Suche</span><input id="ml-filter-search" class="kg-input" type="search" placeholder="Titel, Beschreibung, Tags"></label>';
@@ -89,7 +155,7 @@ echo '<button type="button" class="kg-input kg-tag-dropdown-toggle" id="ml-filte
 echo '<div class="kg-tag-dropdown-panel kg-hidden" id="ml-filter-group-panel">';
 echo '<label class="kg-tag-option"><input type="checkbox" id="ml-filter-group-all" checked><span>Alle</span></label>';
 echo '<div id="ml-filter-group-options">';
-foreach (['1', '2-3', '3–5', '6–12', '13–24', '25+', 'beliebig'] as $v) {
+foreach (array_keys(seminarplaner_groupsize_options()) as $v) {
     echo '<label class="kg-tag-option"><input type="checkbox" value="' . s($v) . '"><span>' . s($v) . '</span></label>';
 }
 echo '</div></div></div></label>';
@@ -105,28 +171,13 @@ foreach (['5', '10', '20', '30', '45', '60', '90', '120', '150', '180', 'mehr al
 }
 echo '</div></div></div></label>';
 
-echo '<label class="sp-filter"><span class="sp-filter__label">Kognitive Dimension</span>';
-echo '<div class="kg-tag-dropdown" id="ml-filter-cognitive-dropdown">';
-echo '<button type="button" class="kg-input kg-tag-dropdown-toggle" id="ml-filter-cognitive-toggle">Alle Dimensionen</button>';
-echo '<div class="kg-tag-dropdown-panel kg-hidden" id="ml-filter-cognitive-panel">';
-echo '<label class="kg-tag-option"><input type="checkbox" id="ml-filter-cognitive-all" checked><span>Alle</span></label>';
-echo '<div id="ml-filter-cognitive-options">';
-foreach ([
-    'Erinnern' => 'Erinnern: Wissen wiedergeben oder abrufen (z.B. benennen, definieren)',
-    'Verstehen' => 'Verstehen: Informationen interpretieren oder erklären (z.B. zusammenfassen, vergleichen)',
-    'Anwenden' => 'Anwenden: Wissen in neuen Situationen umsetzen (z.B. ausführen, verallgemeinern)',
-    'Analysieren' => 'Analysieren: Informationen in ihre Bestandteile zerlegen (z.B. unterscheiden, klassifizieren)',
-    'Bewerten' => 'Bewerten: Urteile fällen und Kriterien anwenden (z.B. überprüfen, kritisch bewerten)',
-    'Erschaffen' => 'Erschaffen: Neues Wissen oder neue Produkte entwickeln (z.B. planen, erzeugen, bauen)',
-] as $value => $label) {
-    echo '<label class="kg-tag-option"><input type="checkbox" value="' . s($value) . '"><span>' . s($label) . '</span></label>';
-}
-echo '</div></div></div></label>';
-
+// Herkunft = aus welchem Seminarkonzept. Nur im Konzept-Tab sinnvoll, und dort
+// erst ab dem zweiten importierten Konzept - bei einem einzigen gäbe es nichts
+// zu unterscheiden. Im lokalen Tab liegen keine Konzept-Einheiten mehr (die
+// haben ihren eigenen Tab), deshalb ist der Filter dort entfallen.
 echo '<label class="sp-filter kg-hidden" id="ml-filter-origin-wrap"><span class="sp-filter__label">Herkunft</span>';
 echo '<select id="ml-filter-origin" class="kg-input">';
-echo '<option value="">Alle Seminareinheiten</option>';
-echo '<option value="local">Nur lokale Seminareinheiten</option>';
+echo '<option value="">Alle Seminarkonzepte</option>';
 echo '</select>';
 echo '</label>';
 
@@ -139,8 +190,8 @@ echo html_writer::end_div();
 echo html_writer::tag('div', '', ['id' => 'ml-filter-status', 'class' => 'sp-filter-status']);
 echo html_writer::end_div();
 
-echo html_writer::start_div('kg-ie-block kg-library-step');
-echo html_writer::tag('h4', '2. Seminareinheit auswählen');
+echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'ml-list-block']);
+echo html_writer::tag('h4', 'Seminareinheit auswählen');
 echo html_writer::tag('div', '', ['id' => 'ml-method-list', 'class' => 'kg-library-list']);
 echo html_writer::end_div();
 
@@ -152,7 +203,7 @@ echo html_writer::tag('button', 'Bearbeiten', ['type' => 'button', 'id' => 'ml-b
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block kg-library-step kg-hidden', ['id' => 'ml-bulk-section']);
-echo html_writer::tag('h4', '3. Mehrere Seminareinheiten stapelweise bearbeiten');
+echo html_writer::tag('h4', 'Mehrere Seminareinheiten stapelweise bearbeiten');
 echo html_writer::start_div('kg-form ig-container kg-container-full', ['id' => 'ml-bulk-form']);
 echo html_writer::start_div('kg-stack field-stack ig-inner');
 
@@ -176,14 +227,6 @@ $bulkmultifields = [
         'Galeriegang' => 'Galeriegang',
         'Fishbowl' => 'Fishbowl',
     ], 'Sozialformen wählen', 'Sozialformen'],
-    'kognitive' => ['Kognitive Dimension', [
-        'Erinnern' => 'Erinnern: Wissen wiedergeben oder abrufen (z.B. benennen, definieren)',
-        'Verstehen' => 'Verstehen: Informationen interpretieren oder erklären (z.B. zusammenfassen, vergleichen)',
-        'Anwenden' => 'Anwenden: Wissen in neuen Situationen umsetzen (z.B. ausführen, verallgemeinern)',
-        'Analysieren' => 'Analysieren: Informationen in ihre Bestandteile zerlegen (z.B. unterscheiden, klassifizieren)',
-        'Bewerten' => 'Bewerten: Urteile fällen und Kriterien anwenden (z.B. überprüfen, kritisch bewerten)',
-        'Erschaffen' => 'Erschaffen: Neues Wissen oder neue Produkte entwickeln (z.B. planen, erzeugen, bauen)',
-    ], 'Dimensionen wählen', 'Dimensionen'],
 ];
 foreach ($bulkmultifields as $fieldname => $fielddef) {
     [$label, $options, $placeholder, $labelprefix] = $fielddef;
@@ -224,8 +267,7 @@ echo html_writer::end_div();
 
 $bulkselectfields = [
     'zeitbedarf' => ['Zeitbedarf', ['5', '10', '20', '30', '45', '60', '90', '120', '150', '180', 'mehr als 180 Minuten']],
-    'gruppengroesse' => ['Gruppengröße', ['1', '2-3', '3–5', '6–12', '13–24', '25+', 'beliebig']],
-    'komplexitaet' => ['Komplexitätsgrad', ['sehr niedrig', 'niedrig', 'mittel', 'hoch']],
+    'gruppengroesse' => ['Gruppengröße', array_keys(seminarplaner_groupsize_options())],
     'vorbereitung' => ['Vorbereitung nötig', ['keine', '<10 Min', '10–30 Min', '>30 Min']],
 ];
 foreach ($bulkselectfields as $fieldname => $fielddef) {
@@ -265,7 +307,7 @@ if ($requestededitmethodid === '') {
     $editsectionclasses .= ' kg-hidden';
 }
 echo html_writer::start_div($editsectionclasses, ['id' => 'ml-edit-section']);
-echo html_writer::tag('h4', '4. Seminareinheit bearbeiten');
+echo html_writer::tag('h4', 'Seminareinheit bearbeiten', ['id' => 'ml-edit-heading']);
 echo html_writer::start_div('kg-form ig-container kg-container-full', ['id' => 'ml-edit-form']);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'id' => 'ml-edit-id']);
 echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'ml-section-quick', 'open' => 'open']);
@@ -278,6 +320,13 @@ echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Lernziele (Ich-kann ...)', ['for' => 'ml-e-lernziele', 'class' => 'kg-label']);
 echo html_writer::tag('textarea', '', ['id' => 'ml-e-lernziele', 'class' => 'kg-input', 'rows' => '10', 'autocomplete' => 'off']);
+// D62: geführter Lernziel-Editor („Der Differenzierer") – Satz per Helfer bauen
+// oder das Feld selbst ausfüllen.
+echo html_writer::tag('button', '✎ Lernziel formulieren', [
+    'type' => 'button',
+    'class' => 'kg-btn sq-lz-trigger',
+    'id' => 'ml-lz-open-lernziele',
+]);
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
@@ -304,7 +353,7 @@ echo html_writer::end_div();
 echo html_writer::start_div();
 echo html_writer::tag('label', 'Gruppengröße', ['for' => 'ml-e-gruppengroesse', 'class' => 'kg-label']);
 echo html_writer::start_tag('select', ['id' => 'ml-e-gruppengroesse', 'class' => 'kg-input']);
-foreach (['1', '2-3', '3–5', '6–12', '13–24', '25+', 'beliebig'] as $v) {
+foreach (array_keys(seminarplaner_groupsize_options()) as $v) {
     echo html_writer::tag('option', s($v), ['value' => $v]);
 }
 echo html_writer::end_tag('select');
@@ -312,19 +361,43 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Kognitive Dimension', ['for' => 'ml-e-kognitive', 'class' => 'kg-label']);
-echo seminarplaner_render_multi_dropdown('ml-e-kognitive', [
-    'Erinnern' => 'Erinnern: Wissen wiedergeben oder abrufen (z.B. benennen, definieren)',
-    'Verstehen' => 'Verstehen: Informationen interpretieren oder erklären (z.B. zusammenfassen, vergleichen)',
-    'Anwenden' => 'Anwenden: Wissen in neuen Situationen umsetzen (z.B. ausführen, verallgemeinern)',
-    'Analysieren' => 'Analysieren: Informationen in ihre Bestandteile zerlegen (z.B. unterscheiden, klassifizieren)',
-    'Bewerten' => 'Bewerten: Urteile fällen und Kriterien anwenden (z.B. überprüfen, kritisch bewerten)',
-    'Erschaffen' => 'Erschaffen: Neues Wissen oder neue Produkte entwickeln (z.B. planen, erzeugen, bauen)',
-], 'Dimensionen wählen', 'Dimensionen');
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Kurzbeschreibung', ['for' => 'ml-e-kurzbeschreibung', 'class' => 'kg-label']);
 echo html_writer::tag('textarea', '', ['id' => 'ml-e-kurzbeschreibung', 'class' => 'kg-input', 'rows' => '10', 'autocomplete' => 'off']);
+echo html_writer::end_div();
+echo html_writer::start_div('field-card');
+echo html_writer::tag('label', 'Alternative Seminareinheiten', ['for' => 'ml-e-alternativen', 'class' => 'kg-label']);
+echo html_writer::start_div('kg-tag-dropdown', [
+    'id' => 'ml-e-alternativen-dropdown',
+    'data-kg-form-multi-dropdown' => '1',
+    'data-kg-field' => '#ml-e-alternativen',
+    'data-kg-label-prefix' => 'Alternativen',
+    'data-kg-placeholder' => 'Alternativen wählen',
+]);
+echo html_writer::tag('button', 'Alternativen wählen', [
+    'type' => 'button',
+    'class' => 'kg-input kg-tag-dropdown-toggle',
+    'id' => 'ml-e-alternativen-toggle',
+    'data-kg-form-multi-toggle' => '1',
+]);
+echo html_writer::start_div('kg-tag-dropdown-panel kg-hidden', [
+    'id' => 'ml-e-alternativen-panel',
+    'data-kg-form-multi-panel' => '1',
+]);
+echo html_writer::empty_tag('input', [
+    'type' => 'search',
+    'class' => 'kg-input kg-multi-search',
+    'placeholder' => 'Titel der Seminareinheit suchen',
+    'data-kg-form-multi-search' => '1',
+]);
+echo html_writer::start_div('', ['id' => 'ml-e-alternativen-options']);
+echo html_writer::end_div();
+echo html_writer::end_div();
+echo html_writer::end_div();
+echo html_writer::empty_tag('input', [
+    'type' => 'hidden',
+    'id' => 'ml-e-alternativen',
+    'value' => '',
+]);
 echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_tag('details');
@@ -337,20 +410,8 @@ echo html_writer::tag('label', 'Ablauf', ['for' => 'ml-e-ablauf', 'class' => 'kg
 echo html_writer::tag('textarea', '', ['id' => 'ml-e-ablauf', 'class' => 'kg-input', 'rows' => '10', 'autocomplete' => 'off']);
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
-echo html_writer::start_div('kg-two');
-echo html_writer::start_div();
-echo html_writer::tag('label', 'Komplexitätsgrad', ['for' => 'ml-e-komplexitaet', 'class' => 'kg-label']);
-echo html_writer::start_tag('select', ['id' => 'ml-e-komplexitaet', 'class' => 'kg-input']);
-foreach (['sehr niedrig', 'niedrig', 'mittel', 'hoch'] as $v) {
-    echo html_writer::tag('option', s($v), ['value' => $v]);
-}
-echo html_writer::end_tag('select');
-echo html_writer::end_div();
-echo html_writer::start_div();
 echo html_writer::tag('label', 'Autor*in / Kontakt', ['for' => 'ml-e-autor', 'class' => 'kg-label']);
 echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'ml-e-autor', 'class' => 'kg-input']);
-echo html_writer::end_div();
-echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
@@ -411,41 +472,6 @@ echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Material/Technik', ['for' => 'ml-e-materialtechnik', 'class' => 'kg-label']);
 echo html_writer::tag('textarea', '', ['id' => 'ml-e-materialtechnik', 'class' => 'kg-input', 'rows' => '10', 'autocomplete' => 'off']);
 echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Alternative Seminareinheiten', ['for' => 'ml-e-alternativen', 'class' => 'kg-label']);
-echo html_writer::start_div('kg-tag-dropdown', [
-    'id' => 'ml-e-alternativen-dropdown',
-    'data-kg-form-multi-dropdown' => '1',
-    'data-kg-field' => '#ml-e-alternativen',
-    'data-kg-label-prefix' => 'Alternativen',
-    'data-kg-placeholder' => 'Alternativen wählen',
-]);
-echo html_writer::tag('button', 'Alternativen wählen', [
-    'type' => 'button',
-    'class' => 'kg-input kg-tag-dropdown-toggle',
-    'id' => 'ml-e-alternativen-toggle',
-    'data-kg-form-multi-toggle' => '1',
-]);
-echo html_writer::start_div('kg-tag-dropdown-panel kg-hidden', [
-    'id' => 'ml-e-alternativen-panel',
-    'data-kg-form-multi-panel' => '1',
-]);
-echo html_writer::empty_tag('input', [
-    'type' => 'search',
-    'class' => 'kg-input kg-multi-search',
-    'placeholder' => 'Titel der Seminareinheit suchen',
-    'data-kg-form-multi-search' => '1',
-]);
-echo html_writer::start_div('', ['id' => 'ml-e-alternativen-options']);
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::empty_tag('input', [
-    'type' => 'hidden',
-    'id' => 'ml-e-alternativen',
-    'value' => '',
-]);
-echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_tag('details');
 
@@ -457,7 +483,51 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_div();
 
-echo html_writer::tag('div', '', ['id' => 'ml-status', 'class' => 'kg-status']);
+echo html_writer::tag('div', '', ['id' => 'ml-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
+
+echo html_writer::end_div(); // Ende #ml-browse (wandert zwischen den Tabs).
+
+echo html_writer::end_div(); // Ende Tab 1 (#ml-tab-local).
+
+// ---- Tab 2: Methodensammlungen (globale Bibliothek, immer durchsuchbar) --
+// D29/D33: globale Bibliothek - immer durchsuchbar, kein Vor-Import einer
+// ganzen Methoden-Sammlung noetig; Uebernehmen legt sofort eine lokale Kopie an.
+echo html_writer::start_div('ml-tabpanel kg-hidden', ['id' => 'ml-tab-collections', 'role' => 'tabpanel']);
+echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'gl-section']);
+echo html_writer::tag('h4', 'Methodensammlungen');
+echo html_writer::tag('p', 'Stöbere in den Methoden aller veröffentlichten Methoden-Sammlungen – '
+    . 'ohne sie vorher importieren zu müssen. „Übernehmen" legt sofort eine eigene Kopie '
+    . 'in deinem Bestand (Tab „Lokale Seminareinheiten") an; das globale Original bleibt unberührt.');
+echo '<label class="sp-filter"><span class="sp-filter__label">Suche</span>'
+    . '<input id="gl-search" class="kg-input" type="search" placeholder="Titel, Beschreibung, Tags, Sammlung"></label>';
+echo html_writer::tag('div', '', ['id' => 'gl-facets', 'class' => 'gl-facets']);
+echo html_writer::tag('div', '', ['id' => 'gl-status', 'class' => 'sp-filter-status']);
+echo html_writer::tag('div', '', ['id' => 'gl-list', 'class' => 'kg-library-list gl-list']);
+echo html_writer::end_div();
+echo html_writer::end_div(); // Ende Tab 2 (#ml-tab-collections).
+
+// ---- Tab 3: Globale Seminarkonzepte (bereits importierte, D55) -----------
+// D55: zeigt nur die Seminarkonzepte, die bereits über den Import (D32,
+// Import/Export-Tab) in den lokalen Bestand geholt wurden - kein Import hier.
+// Panel nur ausgeben, wenn der zugehörige Tab existiert (mindestens ein
+// importiertes Konzept).
+if ($hasimportedkonzepte) {
+    echo html_writer::start_div('ml-tabpanel kg-hidden', ['id' => 'ml-tab-concepts', 'role' => 'tabpanel']);
+    echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'ml-konzepte-block']);
+    echo html_writer::tag('h4', 'Globale Seminarkonzepte');
+    echo html_writer::tag('p', 'Die Seminareinheiten aus den Seminarkonzepten, die du bereits in deinen '
+        . 'Bestand geholt hast. Es sind eigenständige lokale Kopien – du kannst sie hier genauso '
+        . 'bearbeiten wie deine übrigen Seminareinheiten, das globale Original bleibt unberührt. '
+        . 'Neue Konzepte holst du über den Tab „Import/Export".');
+    echo html_writer::tag('div', '', ['id' => 'ml-konzepte-status', 'class' => 'sp-filter-status']);
+    // Kopfzeile je Konzept: Herkunft auf einen Blick und der Absprung in den
+    // Plan, falls das Konzept einen mitgebracht hat. Die Einheiten selbst
+    // rendert darunter der geteilte Block (#ml-browse).
+    echo html_writer::tag('div', '', ['id' => 'ml-konzepte-list', 'class' => 'ml-konzepte-list']);
+    echo html_writer::end_div();
+    echo html_writer::end_div(); // Ende Tab 3 (#ml-tab-concepts).
+}
+
 echo html_writer::end_div();
 
 // Enable preferred Moodle editor (Tiny in Moodle 5.x by default) on rich text fields.

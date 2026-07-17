@@ -678,6 +678,9 @@ class api extends external_api {
                 'displayname' => (string)$set->displayname,
                 'shortname' => (string)$set->shortname,
                 'status' => (string)$set->status,
+                // D32: 'sammlung' oder 'seminarkonzept' (Altdaten ohne Spalte
+                // zählen als Sammlung).
+                'typ' => (string)($set->concepttype ?? 'sammlung'),
                 'methodcount' => $count,
             ];
         }
@@ -694,6 +697,7 @@ class api extends external_api {
                 'displayname' => new external_value(PARAM_TEXT, 'Display name'),
                 'shortname' => new external_value(PARAM_ALPHANUMEXT, 'Short name'),
                 'status' => new external_value(PARAM_ALPHA, 'Status'),
+                'typ' => new external_value(PARAM_ALPHA, 'Object kind (D32): sammlung or seminarkonzept'),
                 'methodcount' => new external_value(PARAM_INT, 'Method count'),
             ])),
         ]);
@@ -728,6 +732,20 @@ class api extends external_api {
         $set = $repo->get_methodset((int)$params['methodsetid']);
         if (!$set) {
             throw new invalid_parameter_exception('Unbekanntes Konzept');
+        }
+
+        // D32: Seminarkonzepte tragen den Plan im Versions-Snapshot und werden
+        // als kompletter neuer Plan samt Einheiten importiert. Ein
+        // Seminarkonzept KANN einen Plan tragen, muss aber nicht - massgeblich
+        // ist allein das Label, das die Konzeptverantwortlichen vergeben. Ohne
+        // Plan gibt es nichts zu planen, aber sehr wohl etwas zu uebernehmen:
+        // dann kommen nur die Einheiten. Beide Wege bleiben Konzept-Importe -
+        // sie vergeben konzept--IDs, halten die Konzept-Herkunft an jeder Karte
+        // fest und schreiben den D55-Marker. Der Sammlungs-Weg unten wuerde
+        // beides verlieren und die Einheiten unauffindbar machen.
+        if ((string)($set->concepttype ?? 'sammlung') === 'seminarkonzept') {
+            $konzept = self::import_global_seminarkonzept($resolved, $set, $repo);
+            return $konzept ?? self::import_konzept_units_only($resolved, $set);
         }
 
         $rows = [];
@@ -773,6 +791,8 @@ class api extends external_api {
             'importedcount' => count($imported),
             'totalcount' => count($merged),
             'setname' => (string)$set->displayname,
+            'plancreated' => false,
+            'planname' => '',
         ];
     }
 
@@ -782,6 +802,745 @@ class api extends external_api {
             'importedcount' => new external_value(PARAM_INT, 'Imported methods'),
             'totalcount' => new external_value(PARAM_INT, 'Total methods after import'),
             'setname' => new external_value(PARAM_TEXT, 'Methodset display name'),
+            'plancreated' => new external_value(PARAM_BOOL, 'Whether a new plan was created (D32 Seminarkonzept)'),
+            'planname' => new external_value(PARAM_TEXT, 'Name of the created plan'),
+        ]);
+    }
+
+    /**
+     * D32: Import a global Seminarkonzept - creates a NEW plan (never
+     * overwriting an existing one) from the snapshot's plan state and adds
+     * the plan's units as independent local copies.
+     *
+     * The snapshot carries the units with their original ids; every card gets
+     * a fresh id on import and all sequence references (Einheiten-Auswahlen)
+     * are rewritten accordingly. `legacy:<uid>` references point into the
+     * plan's own day entries and stay untouched.
+     *
+     * Ein Seminarkonzept muss keinen Plan tragen - das Label entscheidet, nicht
+     * der Inhalt. Traegt der Snapshot keinen Plan, gibt diese Methode null
+     * zurueck; der Aufrufer uebernimmt dann nur die Einheiten.
+     *
+     * @param array $resolved Resolved cm/course/context.
+     * @param \stdClass $set Global methodset record (concepttype seminarkonzept).
+     * @param \local_seminarplaner\local\repository\methodset_repository $repo Repository.
+     * @return array|null Import result, or null if the set carries no plan.
+     */
+    private static function import_global_seminarkonzept(array $resolved, \stdClass $set,
+        \local_seminarplaner\local\repository\methodset_repository $repo): ?array {
+        global $DB;
+
+        if (empty($set->currentversion)) {
+            return null;
+        }
+        $version = $repo->get_version((int)$set->currentversion);
+        $payload = $version ? json_decode((string)$version->snapshotjson, true) : null;
+        if (!is_array($payload) || (string)($payload['typ'] ?? '') !== 'seminarkonzept'
+                || !is_array($payload['plan'] ?? null)) {
+            // Kein Plan im Snapshot. Das trifft jedes Set, das vor D32
+            // veroeffentlicht wurde (damals blieb der Snapshot leer, die
+            // Einheiten lagen nur in local_kgen_method) und spaeter das Label
+            // "Seminarkonzept" bekam. Kein Fehler, sondern ein Konzept ohne
+            // Plan: der Aufrufer uebernimmt die Einheiten ueber den
+            // Sammlungs-Weg.
+            return null;
+        }
+        $snapshotmethods = is_array($payload['methods'] ?? null) ? $payload['methods'] : [];
+        $plan = $payload['plan'];
+        $state = is_array($plan['state'] ?? null) ? $plan['state'] : [];
+        $actorid = (int)$GLOBALS['USER']->id;
+
+        // Attachments live at the global set's method rows; match them back
+        // to the snapshot units by normalized title.
+        $rows = $DB->get_records('local_kgen_method', [
+            'methodsetid' => (int)$set->id,
+            'methodsetversionid' => (int)$set->currentversion,
+        ]);
+        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function($row) {
+            return (int)$row->id;
+        }, array_values($rows)));
+        $attachmentsbytitle = [];
+        foreach ($rows as $row) {
+            $key = self::normalize_method_title((string)($row->title ?? ''));
+            if ($key !== '') {
+                $attachmentsbytitle[$key] = $attachmentsbymethod[(int)$row->id] ?? [];
+            }
+        }
+
+        // Fresh ids for every unit; the map drives the reference rewrite.
+        $idmap = [];
+        $imported = [];
+        $counter = 0;
+        foreach ($snapshotmethods as $method) {
+            if (!is_array($method)) {
+                continue;
+            }
+            $oldid = trim((string)($method['id'] ?? ''));
+            $title = trim((string)($method['titel'] ?? ''));
+            if ($oldid === '' || $title === '') {
+                continue;
+            }
+            $counter++;
+            $newid = self::new_konzept_card_id($counter);
+            $idmap[$oldid] = $newid;
+            $copy = $method;
+            $copy['id'] = $newid;
+            // Independent copy (same principle as D33 adopt): no live link to
+            // the global original, no stale sync metadata or draft pointers.
+            unset($copy['_kgsync'], $copy['materialiendraftitemid'], $copy['h5pdraftitemid']);
+            $copy['_kgkonzept'] = self::konzept_origin($set);
+            $copy['materialien'] = $attachmentsbytitle[self::normalize_method_title($title)] ?? [];
+            $imported[] = $copy;
+        }
+
+        // Rewrite the sequence's card references onto the fresh ids.
+        $statekey = \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY;
+        if (isset($state[$statekey]) && is_array($state[$statekey])
+                && isset($state[$statekey]['einheitenauswahlen']) && is_array($state[$statekey]['einheitenauswahlen'])) {
+            foreach ($state[$statekey]['einheitenauswahlen'] as $eaid => $auswahl) {
+                if (!is_array($auswahl)) {
+                    continue;
+                }
+                $kandidaten = [];
+                foreach ((array)($auswahl['kandidaten'] ?? []) as $ref) {
+                    $ref = (string)$ref;
+                    $kandidaten[] = $idmap[$ref] ?? $ref;
+                }
+                $auswahl['kandidaten'] = $kandidaten;
+                if (isset($auswahl['aktiv']) && $auswahl['aktiv'] !== null && $auswahl['aktiv'] !== '') {
+                    $aktiv = (string)$auswahl['aktiv'];
+                    $auswahl['aktiv'] = $idmap[$aktiv] ?? $aktiv;
+                }
+                $state[$statekey]['einheitenauswahlen'][$eaid] = $auswahl;
+            }
+        }
+
+        // Units become part of the activity library.
+        $service = new method_card_service();
+        $existing = $service->get_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id);
+        if (!is_array($existing)) {
+            $existing = [];
+        }
+        $merged = array_merge($existing, $imported);
+        $service->save_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id, $merged);
+
+        // New plan, never overwriting: unique name within the activity.
+        $gridservice = new grid_service();
+        $existingnames = [];
+        foreach ($gridservice->list_grids((int)$resolved['cm']->id) as $grid) {
+            $existingnames[trim((string)$grid->name)] = true;
+        }
+        $planname = trim((string)($plan['name'] ?? '')) !== '' ? trim((string)$plan['name']) : (string)$set->displayname;
+        $uniquename = $planname;
+        $suffix = 2;
+        while (isset($existingnames[$uniquename])) {
+            $uniquename = $planname . ' (' . $suffix . ')';
+            $suffix++;
+        }
+        $newgridid = $gridservice->create_grid((int)$resolved['cm']->id, $uniquename, $actorid,
+            trim((string)($plan['description'] ?? '')) !== '' ? (string)$plan['description'] : null);
+        $gridservice->save_user_state($newgridid, $actorid, $state);
+
+        // D55: importierte Seminarkonzepte im Bibliothek-Tab "Globale
+        // Seminarkonzepte" auffindbar machen. Es gibt sonst keinen Marker -
+        // die Karten sind bewusst unabhaengige Kopien ohne _kgsync. Deshalb
+        // eine schlanke per-Aktivitaet-Liste in der Plugin-Config fuehren.
+        self::record_imported_konzept((int)$resolved['cm']->id, [
+            'setid' => (int)$set->id,
+            'setname' => (string)$set->displayname,
+            'planname' => $uniquename,
+            'gridid' => (int)$newgridid,
+            'unitcount' => count($imported),
+            'timeimported' => time(),
+        ]);
+
+        return [
+            'success' => true,
+            'importedcount' => count($imported),
+            'totalcount' => count($merged),
+            'setname' => (string)$set->displayname,
+            'plancreated' => true,
+            'planname' => $uniquename,
+        ];
+    }
+
+    /**
+     * Fresh id for a card that comes from a global Seminarkonzept.
+     *
+     * The konzept- prefix is what the library and the sequence picker read to
+     * put the card into their concept tab (D55).
+     *
+     * @param int $counter Running number within one import.
+     * @return string
+     */
+    private static function new_konzept_card_id(int $counter): string {
+        return 'konzept-' . time() . '-' . $counter . '-' . random_int(100, 999);
+    }
+
+    /**
+     * Origin marker written onto every card imported from a Seminarkonzept.
+     *
+     * The konzept- prefix alone only says THAT a card came from a concept. To
+     * filter by concept in the library and to group by concept in the picker,
+     * the card has to name WHICH one - so the source set travels with it.
+     *
+     * @param \stdClass $set Global methodset record.
+     * @return array{setid: int, setname: string}
+     */
+    private static function konzept_origin(\stdClass $set): array {
+        return [
+            'setid' => (int)$set->id,
+            'setname' => (string)$set->displayname,
+        ];
+    }
+
+    /**
+     * Import a Seminarkonzept that carries no plan - only its units.
+     *
+     * Every set published before D32 is in this shape: the snapshot stayed
+     * empty and the units live in local_kgen_method alone. Such a set becomes a
+     * Seminarkonzept the moment someone labels it that way in manage.php, and
+     * then it has units but no plan. The units are sourced from the method rows
+     * and still count as concept units.
+     *
+     * @param array $resolved Resolved cm/course/context.
+     * @param \stdClass $set Global methodset record (concepttype seminarkonzept).
+     * @return array
+     */
+    private static function import_konzept_units_only(array $resolved, \stdClass $set): array {
+        global $DB;
+
+        $actorid = (int)$GLOBALS['USER']->id;
+        $rows = [];
+        if (!empty($set->currentversion)) {
+            $rows = $DB->get_records('local_kgen_method', [
+                'methodsetid' => (int)$set->id,
+                'methodsetversionid' => (int)$set->currentversion,
+            ]);
+        }
+        if (!$rows) {
+            $rows = $DB->get_records('local_kgen_method', ['methodsetid' => (int)$set->id]);
+        }
+
+        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function($row) {
+            return (int)$row->id;
+        }, array_values($rows)));
+
+        $imported = [];
+        $counter = 0;
+        foreach ($rows as $row) {
+            $mapped = self::map_global_method_record($row, (int)$set->id,
+                (int)($row->methodsetversionid ?? $set->currentversion ?? 0));
+            if (trim((string)$mapped['titel']) === '') {
+                continue;
+            }
+            $counter++;
+            $mapped['id'] = self::new_konzept_card_id($counter);
+            $mapped['materialien'] = $attachmentsbymethod[(int)$row->id] ?? [];
+            $mapped['_kgkonzept'] = self::konzept_origin($set);
+            // Unabhaengige Kopie wie im Plan-Weg (D33): kein Live-Link zum
+            // globalen Original, sonst zoege eine Sammlungs-Aktualisierung
+            // diese Konzept-Karten mit.
+            unset($mapped['_kgsync']);
+            $imported[] = $mapped;
+        }
+
+        $service = new method_card_service();
+        $existing = $service->get_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id);
+        if (!is_array($existing)) {
+            $existing = [];
+        }
+        $merged = array_merge($existing, $imported);
+        $service->save_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id, $merged);
+
+        // gridid 0 heisst "hatte nie einen Plan" - anders als ein geloeschter.
+        self::record_imported_konzept((int)$resolved['cm']->id, [
+            'setid' => (int)$set->id,
+            'setname' => (string)$set->displayname,
+            'planname' => '',
+            'gridid' => 0,
+            'unitcount' => count($imported),
+            'timeimported' => time(),
+        ]);
+
+        return [
+            'success' => true,
+            'importedcount' => count($imported),
+            'totalcount' => count($merged),
+            'setname' => (string)$set->displayname,
+            'plancreated' => false,
+            'planname' => '',
+        ];
+    }
+
+    /**
+     * Append one imported-concept marker to the per-activity list (D55).
+     *
+     * @param int $cmid
+     * @param array<string,mixed> $entry
+     * @return void
+     */
+    private static function record_imported_konzept(int $cmid, array $entry): void {
+        if ($cmid <= 0) {
+            return;
+        }
+        $configname = 'imported_konzepte_cmid_' . $cmid;
+        $raw = get_config('mod_seminarplaner', $configname);
+        $list = ($raw !== false && $raw !== null && $raw !== '') ? json_decode((string)$raw, true) : [];
+        if (!is_array($list)) {
+            $list = [];
+        }
+        // Ein Konzept steht hoechstens einmal drin: ein erneuter Import
+        // ersetzt seinen Eintrag, statt einen zweiten danebenzulegen.
+        $kept = [];
+        foreach ($list as $known) {
+            if (is_array($known) && (int)($known['setid'] ?? 0) !== (int)($entry['setid'] ?? 0)) {
+                $kept[] = $known;
+            }
+        }
+        $kept[] = $entry;
+        set_config($configname, json_encode(array_values($kept)), 'mod_seminarplaner');
+    }
+
+    /**
+     * Collect the method rows of all published global collections visible
+     * from this activity (system scope + own course category scope).
+     *
+     * @param \stdClass $course Course record.
+     * @return array{sets: array<int, \stdClass>, rows: array<int, \stdClass>}
+     */
+    private static function collect_published_global_methods(\stdClass $course): array {
+        global $DB;
+
+        $repo = new \local_seminarplaner\local\repository\methodset_repository();
+        $syscontext = context_system::instance();
+        $catcontext = context_coursecat::instance((int)$course->category);
+        // D55: der "Methodensammlungen"-Bereich zeigt nur Methoden-Sammlungen.
+        // Globale Seminarkonzepte (concepttype 'seminarkonzept') haben ihren
+        // eigenen Bibliothek-Tab und werden hier ausgeblendet - sowohl beim
+        // Durchstöbern als auch bei der Einzel-Übernahme (D33).
+        $sets = [];
+        foreach ($repo->list_methodsets((int)$syscontext->id, 'published') as $set) {
+            if ((string)($set->concepttype ?? 'sammlung') === 'seminarkonzept') {
+                continue;
+            }
+            $sets[(int)$set->id] = $set;
+        }
+        foreach ($repo->list_methodsets((int)$catcontext->id, 'published') as $set) {
+            if ((string)($set->concepttype ?? 'sammlung') === 'seminarkonzept') {
+                continue;
+            }
+            $sets[(int)$set->id] = $set;
+        }
+        if (!$sets) {
+            return ['sets' => [], 'rows' => []];
+        }
+
+        $rows = [];
+        foreach ($sets as $set) {
+            $setrows = [];
+            if (!empty($set->currentversion)) {
+                $setrows = $DB->get_records('local_kgen_method', [
+                    'methodsetid' => (int)$set->id,
+                    'methodsetversionid' => (int)$set->currentversion,
+                ]);
+            }
+            if (!$setrows) {
+                $setrows = $DB->get_records('local_kgen_method', ['methodsetid' => (int)$set->id]);
+            }
+            foreach ($setrows as $row) {
+                $rows[(int)$row->id] = $row;
+            }
+        }
+        return ['sets' => $sets, 'rows' => $rows];
+    }
+
+    public static function browse_global_library_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+        ]);
+    }
+
+    /**
+     * D29/D33: the global library is always browsable while planning -
+     * individual methods of every published collection, no prior set
+     * import required. Filtering/facets happen client-side on the tags.
+     */
+    public static function browse_global_library(int $cmid): array {
+        $params = self::validate_parameters(self::browse_global_library_parameters(), ['cmid' => $cmid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:view', $resolved['context']);
+
+        if (!self::global_plugin_available()) {
+            return ['available' => false, 'message' => 'local_seminarplaner ist nicht installiert.', 'methods' => []];
+        }
+        if (!self::can_view_global_methodsets($resolved['context'])) {
+            return ['available' => true, 'message' => 'Keine Berechtigung für die globale Bibliothek.', 'methods' => []];
+        }
+
+        $collected = self::collect_published_global_methods($resolved['course']);
+        $out = [];
+        foreach ($collected['rows'] as $row) {
+            $title = trim(strip_tags((string)($row->title ?? '')));
+            if ($title === '') {
+                continue;
+            }
+            $set = $collected['sets'][(int)$row->methodsetid] ?? null;
+            $summary = trim(strip_tags((string)($row->kurzbeschreibung ?? '')));
+            if (\core_text::strlen($summary) > 280) {
+                $summary = \core_text::substr($summary, 0, 279) . '…';
+            }
+            $out[] = [
+                'methodid' => (int)$row->id,
+                'setid' => (int)$row->methodsetid,
+                'setname' => $set ? (string)$set->displayname : '',
+                'titel' => $title,
+                'seminarphase' => self::split_multi_text($row->seminarphase ?? '', true),
+                'zeitbedarf' => trim((string)($row->zeitbedarf ?? '')),
+                'gruppengroesse' => trim((string)($row->gruppengroesse ?? '')),
+                'sozialform' => self::split_multi_text($row->sozialform ?? ''),
+                'vorbereitung' => trim((string)($row->vorbereitung ?? '')),
+                'kurzbeschreibung' => $summary,
+                'tags' => self::split_multi_text($row->tags ?? ''),
+            ];
+        }
+        \core_collator::asort_array_of_arrays_by_key($out, 'titel');
+
+        return ['available' => true, 'message' => '', 'methods' => array_values($out)];
+    }
+
+    public static function browse_global_library_returns(): external_single_structure {
+        return new external_single_structure([
+            'available' => new external_value(PARAM_BOOL, 'Local plugin available'),
+            'message' => new external_value(PARAM_TEXT, 'Status message'),
+            'methods' => new external_multiple_structure(new external_single_structure([
+                'methodid' => new external_value(PARAM_INT, 'Global method id'),
+                'setid' => new external_value(PARAM_INT, 'Method set id'),
+                'setname' => new external_value(PARAM_TEXT, 'Method set display name'),
+                'titel' => new external_value(PARAM_TEXT, 'Title'),
+                'seminarphase' => new external_multiple_structure(new external_value(PARAM_TEXT, 'Phase')),
+                'zeitbedarf' => new external_value(PARAM_RAW, 'Duration'),
+                'gruppengroesse' => new external_value(PARAM_RAW, 'Group size'),
+                'sozialform' => new external_multiple_structure(new external_value(PARAM_RAW, 'Social form')),
+                // PARAM_RAW: Werte wie "<10 Min" wuerden von PARAM_TEXT als
+                // Tag-Anfang verworfen; der Client escaped beim Rendern.
+                'vorbereitung' => new external_value(PARAM_RAW, 'Preparation'),
+                'kurzbeschreibung' => new external_value(PARAM_TEXT, 'Short description (plain text)'),
+                'tags' => new external_multiple_structure(new external_value(PARAM_TEXT, 'Tag')),
+            ])),
+        ]);
+    }
+
+    public static function list_imported_konzepte_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+        ]);
+    }
+
+    /**
+     * D55: list the global seminar concepts already imported into this activity.
+     *
+     * Reads the per-activity marker list written on import
+     * (record_imported_konzept) and enriches each entry with whether its plan
+     * still exists, so the "Globale Seminarkonzepte" library tab can show only
+     * the concepts that were actually pulled into the local stock.
+     */
+    public static function list_imported_konzepte(int $cmid): array {
+        $params = self::validate_parameters(self::list_imported_konzepte_parameters(), ['cmid' => $cmid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:view', $resolved['context']);
+
+        $raw = get_config('mod_seminarplaner', 'imported_konzepte_cmid_' . (int)$resolved['cm']->id);
+        $list = ($raw !== false && $raw !== null && $raw !== '') ? json_decode((string)$raw, true) : [];
+        if (!is_array($list)) {
+            $list = [];
+        }
+
+        $gridservice = new grid_service();
+        $existinggrids = [];
+        foreach ($gridservice->list_grids((int)$resolved['cm']->id) as $grid) {
+            $existinggrids[(int)$grid->id] = trim((string)$grid->name);
+        }
+
+        // Ein Konzept steht hoechstens einmal in der Liste. Bis zur
+        // Doppelimport-Sperre konnte dasselbe Konzept mehrfach uebernommen
+        // werden und stand dann mehrfach im Marker; der juengste Eintrag
+        // gewinnt. Ohne das Zusammenfassen zeigte die Bibliothek dasselbe
+        // Konzept doppelt, mit zwei Entfernen-Buttons fuer dieselbe Sache.
+        $byset = [];
+        foreach ($list as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $entrysetid = (int)($entry['setid'] ?? 0);
+            $known = $byset[$entrysetid] ?? null;
+            if (!$known || (int)($entry['timeimported'] ?? 0) >= (int)($known['timeimported'] ?? 0)) {
+                $byset[$entrysetid] = $entry;
+            }
+        }
+
+        $out = [];
+        foreach ($byset as $entry) {
+            $gridid = (int)($entry['gridid'] ?? 0);
+            // gridid 0: das Konzept brachte nie einen Plan mit. Das ist etwas
+            // anderes als ein Plan, den es gab und den jemand geloescht hat -
+            // sonst meldet die Bibliothek einen Verlust, den es nie gab.
+            $hadplan = $gridid > 0;
+            $planexists = $hadplan && isset($existinggrids[$gridid]);
+            $out[] = [
+                'setid' => (int)($entry['setid'] ?? 0),
+                'setname' => (string)($entry['setname'] ?? ''),
+                // Current plan name if it still exists (user may have renamed it),
+                // otherwise the name recorded at import time.
+                'planname' => $planexists ? $existinggrids[$gridid] : (string)($entry['planname'] ?? ''),
+                'gridid' => $gridid,
+                'hadplan' => $hadplan,
+                'planexists' => $planexists,
+                'unitcount' => (int)($entry['unitcount'] ?? 0),
+                'timeimported' => (int)($entry['timeimported'] ?? 0),
+            ];
+        }
+        // Newest import first.
+        usort($out, static function($a, $b) {
+            return $b['timeimported'] <=> $a['timeimported'];
+        });
+
+        return ['konzepte' => array_values($out)];
+    }
+
+    public static function list_imported_konzepte_returns(): external_single_structure {
+        return new external_single_structure([
+            'konzepte' => new external_multiple_structure(new external_single_structure([
+                'setid' => new external_value(PARAM_INT, 'Source global set id'),
+                'setname' => new external_value(PARAM_TEXT, 'Source global set name'),
+                'planname' => new external_value(PARAM_TEXT, 'Local plan name created on import'),
+                'gridid' => new external_value(PARAM_INT, 'Local plan (grid) id, 0 if the concept brought no plan'),
+                'hadplan' => new external_value(PARAM_BOOL, 'Whether the concept brought a plan at all'),
+                'planexists' => new external_value(PARAM_BOOL, 'Whether the created plan still exists'),
+                'unitcount' => new external_value(PARAM_INT, 'Number of seminar units imported'),
+                'timeimported' => new external_value(PARAM_INT, 'Import timestamp'),
+            ])),
+        ]);
+    }
+
+    public static function delete_imported_konzept_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'setid' => new external_value(PARAM_INT, 'Source global set id of the imported concept'),
+        ]);
+    }
+
+    /**
+     * Remove an imported Seminarkonzept from this activity: its units and the
+     * marker that puts it into the library's concept tab.
+     *
+     * Refuses while any of its units is still placed in a plan. Deleting them
+     * would leave the plan pointing at units that no longer exist - the entry
+     * would silently turn into an empty reservation, and the day would look
+     * planned while its content is gone. The caller gets the concrete places
+     * back (plan and day) so the user can clear them first.
+     *
+     * The plan a concept may have created on import is NOT touched: it is an
+     * independent plan the user may have worked on, and it has its own delete.
+     *
+     * @param int $cmid
+     * @param int $setid
+     * @return array
+     */
+    public static function delete_imported_konzept(int $cmid, int $setid): array {
+        $params = self::validate_parameters(self::delete_imported_konzept_parameters(), [
+            'cmid' => $cmid,
+            'setid' => $setid,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
+        self::enforce_write_rate_limit('delete_imported_konzept', 20, 60);
+
+        $setid = (int)$params['setid'];
+        $actorid = (int)$GLOBALS['USER']->id;
+        $service = new method_card_service();
+        $existing = $service->get_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id);
+        if (!is_array($existing)) {
+            $existing = [];
+        }
+
+        $cardids = [];
+        foreach ($existing as $card) {
+            if (is_array($card) && (int)($card['_kgkonzept']['setid'] ?? 0) === $setid) {
+                $cardids[(string)$card['id']] = true;
+            }
+        }
+
+        $usages = self::find_konzept_card_usages($resolved, $actorid, $cardids);
+        if ($usages) {
+            return ['deleted' => false, 'removedcount' => 0, 'usages' => $usages];
+        }
+
+        $remaining = [];
+        foreach ($existing as $card) {
+            if (!is_array($card) || !isset($cardids[(string)($card['id'] ?? '')])) {
+                $remaining[] = $card;
+            }
+        }
+        $service->save_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id, $remaining);
+
+        // Marker entfernen - danach steht das Konzept im Import/Export-Tab
+        // wieder zum Import bereit.
+        $configname = 'imported_konzepte_cmid_' . (int)$resolved['cm']->id;
+        $raw = get_config('mod_seminarplaner', $configname);
+        $list = ($raw !== false && $raw !== null && $raw !== '') ? json_decode((string)$raw, true) : [];
+        $kept = [];
+        foreach ((is_array($list) ? $list : []) as $entry) {
+            if (is_array($entry) && (int)($entry['setid'] ?? 0) !== $setid) {
+                $kept[] = $entry;
+            }
+        }
+        set_config($configname, json_encode(array_values($kept)), 'mod_seminarplaner');
+
+        return ['deleted' => true, 'removedcount' => count($cardids), 'usages' => []];
+    }
+
+    /**
+     * Find every place where one of the given cards is actively placed.
+     *
+     * Walks the days in plan order so the reported places read the way the
+     * user sees them. Only the active choice counts as "in use" - a card that
+     * merely sits in an Einheiten-Auswahl as an alternative is not on any day.
+     *
+     * @param array $resolved Resolved cm/course/context.
+     * @param int $userid Whose plans to look at.
+     * @param array<string,bool> $cardids Card ids to look for, as a lookup map.
+     * @return array List of usages (plan name, day, unit title).
+     */
+    private static function find_konzept_card_usages(array $resolved, int $userid, array $cardids): array {
+        if (!$cardids) {
+            return [];
+        }
+
+        $statekey = \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY;
+        $gridservice = new grid_service();
+        $usages = [];
+        foreach ($gridservice->list_grids((int)$resolved['cm']->id) as $grid) {
+            $loaded = $gridservice->get_user_state((int)$grid->id, $userid);
+            $state = is_array($loaded) && is_array($loaded['state'] ?? null) ? $loaded['state'] : [];
+            $sequenz = is_array($state[$statekey] ?? null) ? $state[$statekey] : [];
+            $placements = is_array($sequenz['platzierungen'] ?? null) ? $sequenz['platzierungen'] : [];
+            $auswahlen = is_array($sequenz['einheitenauswahlen'] ?? null) ? $sequenz['einheitenauswahlen'] : [];
+
+            foreach ((is_array($sequenz['tage'] ?? null) ? $sequenz['tage'] : []) as $tag) {
+                if (!is_array($tag)) {
+                    continue;
+                }
+                foreach ((is_array($tag['anker'] ?? null) ? $tag['anker'] : []) as $anker) {
+                    foreach ((is_array($anker['sequenz'] ?? null) ? $anker['sequenz'] : []) as $pid) {
+                        $placement = $placements[(string)$pid] ?? null;
+                        if (!is_array($placement) || (string)($placement['typ'] ?? '') !== 'einheit') {
+                            continue;
+                        }
+                        $auswahl = $auswahlen[(string)($placement['einheitenauswahl'] ?? '')] ?? null;
+                        $aktiv = is_array($auswahl) ? (string)($auswahl['aktiv'] ?? '') : '';
+                        if ($aktiv === '' || !isset($cardids[$aktiv])) {
+                            continue;
+                        }
+                        $usages[] = [
+                            'planname' => (string)$grid->name,
+                            'tag' => (int)($tag['tag'] ?? 0),
+                            'tagbezeichnung' => (string)($tag['bezeichnung'] ?? ''),
+                            'einheit' => (string)($placement['titel'] ?? ''),
+                        ];
+                    }
+                }
+            }
+        }
+
+        return $usages;
+    }
+
+    public static function delete_imported_konzept_returns(): external_single_structure {
+        return new external_single_structure([
+            'deleted' => new external_value(PARAM_BOOL, 'Whether the concept was removed'),
+            'removedcount' => new external_value(PARAM_INT, 'Number of units removed'),
+            'usages' => new external_multiple_structure(new external_single_structure([
+                'planname' => new external_value(PARAM_TEXT, 'Plan the unit is placed in'),
+                'tag' => new external_value(PARAM_INT, 'Day number within that plan'),
+                'tagbezeichnung' => new external_value(PARAM_TEXT, 'Day label'),
+                'einheit' => new external_value(PARAM_TEXT, 'Title of the placed unit'),
+            ])),
+        ]);
+    }
+
+    public static function adopt_global_method_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'methodid' => new external_value(PARAM_INT, 'Global method id'),
+        ]);
+    }
+
+    /**
+     * D33: adopting a single global method creates an independent local
+     * copy right away - deliberately WITHOUT the _kgsync link that whole-set
+     * imports get: later changes to the global original must not touch
+     * adopted copies.
+     */
+    public static function adopt_global_method(int $cmid, int $methodid): array {
+        global $DB;
+
+        $params = self::validate_parameters(self::adopt_global_method_parameters(), [
+            'cmid' => $cmid,
+            'methodid' => $methodid,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
+        self::enforce_write_rate_limit('adopt_global_method', 30, 60);
+
+        if (!self::global_plugin_available()) {
+            throw new invalid_parameter_exception('local_seminarplaner ist nicht installiert');
+        }
+        if (!self::can_view_global_methodsets($resolved['context'])) {
+            throw new invalid_parameter_exception('Keine Berechtigung für die globale Bibliothek');
+        }
+
+        $row = $DB->get_record('local_kgen_method', ['id' => (int)$params['methodid']]);
+        if (!$row) {
+            throw new invalid_parameter_exception('Unbekannte Methode');
+        }
+        $repo = new \local_seminarplaner\local\repository\methodset_repository();
+        $set = $repo->get_methodset((int)$row->methodsetid);
+        if (!$set || (string)$set->status !== 'published') {
+            throw new invalid_parameter_exception('Die Methode gehört zu keiner veröffentlichten Sammlung');
+        }
+        // Only methods visible through the activity's scopes may be adopted.
+        $collected = self::collect_published_global_methods($resolved['course']);
+        if (!isset($collected['sets'][(int)$set->id])) {
+            throw new invalid_parameter_exception('Keine Berechtigung für die gewählte Sammlung');
+        }
+
+        $mapped = self::map_global_method_record($row);
+        $attachments = self::load_global_method_material_attachments([(int)$row->id]);
+        $mapped['materialien'] = $attachments[(int)$row->id] ?? [];
+
+        $service = new method_card_service();
+        $existing = $service->get_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id, (int)$resolved['context']->id);
+        if (!is_array($existing)) {
+            $existing = [];
+        }
+        $existing[] = $mapped;
+        $service->save_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id, (int)$resolved['context']->id, $existing);
+
+        return [
+            'success' => true,
+            'localid' => (string)$mapped['id'],
+            'titel' => (string)$mapped['titel'],
+            'totalcount' => count($existing),
+        ];
+    }
+
+    public static function adopt_global_method_returns(): external_single_structure {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'Adoption result'),
+            'localid' => new external_value(PARAM_RAW, 'New local method card id'),
+            'titel' => new external_value(PARAM_RAW, 'Adopted title'),
+            'totalcount' => new external_value(PARAM_INT, 'Total local methods after adoption'),
         ]);
     }
 
@@ -813,36 +1572,6 @@ class api extends external_api {
                 'autosyncenabled' => new external_value(PARAM_BOOL, 'Auto-update flag'),
                 'haspending' => new external_value(PARAM_BOOL, 'Pending update exists'),
             ])),
-        ]);
-    }
-
-    public static function set_methodset_sync_policy_parameters(): external_function_parameters {
-        return new external_function_parameters([
-            'cmid' => new external_value(PARAM_INT, 'Course module id'),
-            'methodsetid' => new external_value(PARAM_INT, 'Method set id'),
-            'autosyncenabled' => new external_value(PARAM_BOOL, 'Enable auto updates'),
-        ]);
-    }
-
-    public static function set_methodset_sync_policy(int $cmid, int $methodsetid, bool $autosyncenabled): array {
-        $params = self::validate_parameters(self::set_methodset_sync_policy_parameters(), [
-            'cmid' => $cmid,
-            'methodsetid' => $methodsetid,
-            'autosyncenabled' => $autosyncenabled,
-        ]);
-        $resolved = self::resolve_cm_context((int)$params['cmid']);
-        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
-        self::enforce_write_rate_limit('set_methodset_sync_policy', 60, 60);
-
-        $syncservice = new \mod_seminarplaner\local\service\methodset_sync_service();
-        $updated = $syncservice->set_autosync((int)$resolved['cm']->id, (int)$params['methodsetid'],
-            !empty($params['autosyncenabled']));
-        return ['updated' => (bool)$updated];
-    }
-
-    public static function set_methodset_sync_policy_returns(): external_single_structure {
-        return new external_single_structure([
-            'updated' => new external_value(PARAM_BOOL, 'Update status'),
         ]);
     }
 
@@ -913,6 +1642,9 @@ class api extends external_api {
                 'displayname' => (string)$set->displayname,
                 'description' => (string)($set->description ?? ''),
                 'status' => (string)$set->status,
+                // D32: 'sammlung' oder 'seminarkonzept' (Altdaten ohne Spalte
+                // zählen als Sammlung).
+                'typ' => (string)($set->concepttype ?? 'sammlung'),
                 'scopecontextid' => (int)$set->scopecontextid,
                 'reviewercount' => $reviewercount,
             ];
@@ -931,6 +1663,7 @@ class api extends external_api {
                 'displayname' => new external_value(PARAM_TEXT, 'Display name'),
                 'description' => new external_value(PARAM_RAW, 'Description'),
                 'status' => new external_value(PARAM_ALPHA, 'Status'),
+                'typ' => new external_value(PARAM_ALPHA, 'Object kind (D32): sammlung or seminarkonzept'),
                 'scopecontextid' => new external_value(PARAM_INT, 'Scope context id'),
                 'reviewercount' => new external_value(PARAM_INT, 'Assigned reviewer count'),
             ])),
@@ -985,6 +1718,94 @@ class api extends external_api {
                 'fullname' => new external_value(PARAM_TEXT, 'Display name'),
                 'email' => new external_value(PARAM_RAW, 'E-mail'),
             ])),
+        ]);
+    }
+
+    public static function list_public_reviewers_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+        ]);
+    }
+
+    /**
+     * D58: Öffentliche Übersichtsliste der Konzeptverantwortlichen.
+     *
+     * Zeigt nur Personen, die sich per Opt-in selbst sichtbar gemacht haben -
+     * reines Vertrauens-/Orientierungssignal (nur Name, kein Kontaktweg).
+     * Anders als list_reviewer_candidates für alle Betrachtenden der Seite
+     * lesbar und nicht an die eigene Einreich-Berechtigung gebunden.
+     */
+    public static function list_public_reviewers(int $cmid): array {
+        global $USER;
+        $params = self::validate_parameters(self::list_public_reviewers_parameters(), ['cmid' => $cmid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:view', $resolved['context']);
+
+        $optinname = 'mod_seminarplaner_konzeptverantwortliche_public';
+        if (!self::global_plugin_available()) {
+            return [
+                'available' => false,
+                'message' => 'local_seminarplaner ist nicht installiert.',
+                'reviewers' => [],
+                'caniopt' => false,
+                'optedin' => false,
+            ];
+        }
+
+        // Konzeptverantwortliche = Nutzer mit Review-Capability im Kategorie-
+        // oder Systemkontext, unabhängig von der eigenen Einreich-Berechtigung.
+        $scopecontexts = [
+            context_coursecat::instance((int)$resolved['course']->category),
+            context_system::instance(),
+        ];
+
+        $users = [];
+        $caniopt = false;
+        foreach ($scopecontexts as $scopectx) {
+            $candidates = get_users_by_capability($scopectx, 'local/seminarplaner:reviewset',
+                'u.id,u.firstname,u.lastname,u.deleted,u.suspended', 'u.lastname ASC, u.firstname ASC');
+            foreach ($candidates as $candidate) {
+                if (!empty($candidate->deleted) || !empty($candidate->suspended)) {
+                    continue;
+                }
+                $uid = (int)$candidate->id;
+                if ($uid === (int)$USER->id) {
+                    $caniopt = true;
+                }
+                if (!get_user_preferences($optinname, 0, $uid)) {
+                    continue;
+                }
+                $users[$uid] = [
+                    'id' => $uid,
+                    'fullname' => fullname($candidate),
+                ];
+            }
+        }
+
+        $reviewers = array_values($users);
+        usort($reviewers, function($a, $b) {
+            return strcasecmp($a['fullname'], $b['fullname']);
+        });
+
+        return [
+            'available' => true,
+            'message' => '',
+            'reviewers' => $reviewers,
+            'caniopt' => $caniopt,
+            'optedin' => (bool)get_user_preferences($optinname, 0, (int)$USER->id),
+        ];
+    }
+
+    public static function list_public_reviewers_returns(): external_single_structure {
+        return new external_single_structure([
+            'available' => new external_value(PARAM_BOOL, 'Local plugin available'),
+            'message' => new external_value(PARAM_TEXT, 'Status message'),
+            'reviewers' => new external_multiple_structure(new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'User id'),
+                'fullname' => new external_value(PARAM_TEXT, 'Display name'),
+            ])),
+            'caniopt' => new external_value(PARAM_BOOL, 'Current user may opt into the list'),
+            'optedin' => new external_value(PARAM_BOOL, 'Current user is currently opted in'),
         ]);
     }
 
@@ -1424,6 +2245,263 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Collect the method-card references a plan's sequence section uses (D20).
+     *
+     * Both candidate lists and the active pick of every Einheiten-Auswahl are
+     * card references; `legacy:<uid>` fallbacks point into the plan's own
+     * legacy day entries and are skipped.
+     *
+     * @param mixed $sequenz Decoded sequence section (arrays and/or stdClass).
+     * @return string[] Unique card ids.
+     */
+    private static function collect_plan_card_refs($sequenz): array {
+        $refs = [];
+        $auswahlen = is_object($sequenz) ? ($sequenz->einheitenauswahlen ?? []) : ($sequenz['einheitenauswahlen'] ?? []);
+        foreach ((array)$auswahlen as $auswahl) {
+            $auswahl = (array)$auswahl;
+            $kandidaten = (array)($auswahl['kandidaten'] ?? []);
+            if (isset($auswahl['aktiv']) && $auswahl['aktiv'] !== null && $auswahl['aktiv'] !== '') {
+                $kandidaten[] = $auswahl['aktiv'];
+            }
+            foreach ($kandidaten as $ref) {
+                $ref = trim((string)$ref);
+                if ($ref === '' || strpos($ref, 'legacy:') === 0) {
+                    continue;
+                }
+                $refs[$ref] = true;
+            }
+        }
+        return array_keys($refs);
+    }
+
+    public static function submit_seminarkonzept_for_review_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'gridid' => new external_value(PARAM_INT, 'Seminarplan id'),
+            'methodsetid' => new external_value(PARAM_INT, 'Existing Seminarkonzept set id (0 = create new)',
+                VALUE_DEFAULT, 0),
+            'shortname' => new external_value(PARAM_ALPHANUMEXT, 'New set shortname (only for new sets)',
+                VALUE_DEFAULT, ''),
+            'displayname' => new external_value(PARAM_TEXT, 'New set displayname (only for new sets)',
+                VALUE_DEFAULT, ''),
+            'description' => new external_value(PARAM_RAW, 'New set description', VALUE_DEFAULT, ''),
+            'changelog' => new external_value(PARAM_TEXT, 'Update note', VALUE_DEFAULT, ''),
+        ]);
+    }
+
+    /**
+     * D32: Submit a complete Seminarkonzept (plan incl. sequence) for review.
+     *
+     * Runs over the exact same methodset/review/workflow mechanism as the
+     * Methoden-Sammlungen: the set carries concepttype 'seminarkonzept' and
+     * its version snapshot holds an object payload with the plan state plus
+     * the method cards the plan references (ids intact, so a reimport can
+     * rebuild the plan 1:1). The referenced units are also written as
+     * local_kgen_method rows, so they stay browsable in the global library.
+     */
+    public static function submit_seminarkonzept_for_review(int $cmid, int $gridid, int $methodsetid = 0,
+        string $shortname = '', string $displayname = '', string $description = '', string $changelog = ''): array {
+        global $DB;
+
+        $params = self::validate_parameters(self::submit_seminarkonzept_for_review_parameters(), [
+            'cmid' => $cmid,
+            'gridid' => $gridid,
+            'methodsetid' => $methodsetid,
+            'shortname' => $shortname,
+            'displayname' => $displayname,
+            'description' => $description,
+            'changelog' => $changelog,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('submit_seminarkonzept_for_review', 20, 60);
+        if (\core_text::strlen((string)$params['description']) > self::MAX_METHODSET_DESCRIPTION_CHARS) {
+            throw new invalid_parameter_exception('description exceeds allowed length');
+        }
+        if (\core_text::strlen((string)$params['changelog']) > self::MAX_CHANGELOG_CHARS) {
+            throw new invalid_parameter_exception('changelog exceeds allowed length');
+        }
+
+        if (!self::global_plugin_available()) {
+            throw new invalid_parameter_exception('local_seminarplaner ist nicht installiert');
+        }
+
+        $scopecontexts = self::resolve_submit_scope_contexts($resolved['course']);
+        if (!$scopecontexts) {
+            throw new invalid_parameter_exception('Keine Berechtigung zum Einreichen für Review');
+        }
+        $allowedscopeids = array_map(static function($ctx) {
+            return (int)$ctx->id;
+        }, $scopecontexts);
+        $actorid = (int)$GLOBALS['USER']->id;
+
+        // Load the plan: master data plus the shared collaborative state.
+        $gridrepository = new \mod_seminarplaner\local\repository\grid_repository();
+        $grid = $gridrepository->get_grid((int)$params['gridid']);
+        if (!$grid || (int)$grid->cmid !== (int)$resolved['cm']->id || (int)($grid->isarchived ?? 0) === 1) {
+            throw new invalid_parameter_exception('Unbekannter Seminarplan');
+        }
+        $gridservice = new grid_service();
+        $stateresult = $gridservice->get_user_state((int)$grid->id, $actorid);
+        $state = is_array($stateresult['state'] ?? null) ? $stateresult['state'] : [];
+        $sequenz = $state[\mod_seminarplaner\local\sequence\sequence_state::STATE_KEY] ?? null;
+        if (!$sequenz) {
+            throw new invalid_parameter_exception(
+                'Dieser Seminarplan hat noch keine Sequenz – bitte einmal in der Sequenzansicht öffnen.');
+        }
+
+        // The plan's units travel inside the snapshot with their original ids,
+        // so the sequence references survive the roundtrip (table rows below
+        // get new ids on import and could not be re-linked).
+        $methodservice = new method_card_service();
+        $allactivitymethods = $methodservice->get_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id);
+        if (!is_array($allactivitymethods)) {
+            $allactivitymethods = [];
+        }
+        $refs = array_fill_keys(self::collect_plan_card_refs($sequenz), true);
+        $planmethods = [];
+        foreach ($allactivitymethods as $method) {
+            if (!is_array($method)) {
+                continue;
+            }
+            $mid = trim((string)($method['id'] ?? ''));
+            if ($mid === '' || empty($refs[$mid])) {
+                continue;
+            }
+            if (trim((string)($method['titel'] ?? '')) === '') {
+                continue;
+            }
+            $planmethods[] = $method;
+        }
+
+        $repo = new \local_seminarplaner\local\repository\methodset_repository();
+        $reviewerrepo = new \local_seminarplaner\local\repository\reviewer_repository();
+        $workflow = new \local_seminarplaner\local\service\workflow_service();
+
+        if ((int)$params['methodsetid'] > 0) {
+            // Resubmit an existing Seminarkonzept as a new version.
+            $set = $repo->get_methodset((int)$params['methodsetid']);
+            if (!$set) {
+                throw new invalid_parameter_exception('Unbekanntes Seminarkonzept');
+            }
+            if ((string)($set->concepttype ?? 'sammlung') !== 'seminarkonzept') {
+                throw new invalid_parameter_exception('Das gewählte Ziel ist keine Seminarkonzept-Einreichung');
+            }
+            if (!in_array((int)$set->scopecontextid, $allowedscopeids, true)) {
+                throw new invalid_parameter_exception('Keine Berechtigung für das gewählte Seminarkonzept');
+            }
+            if ((string)$set->status !== 'draft') {
+                $repo->update_methodset_status((int)$set->id, 'draft', $actorid);
+            }
+            $setid = (int)$set->id;
+            $versionnum = (int)$DB->get_field_sql(
+                'SELECT COALESCE(MAX(versionnum), 0) + 1 FROM {local_kgen_methodset_ver} WHERE methodsetid = :methodsetid',
+                ['methodsetid' => $setid]
+            );
+        } else {
+            $newshortname = trim((string)$params['shortname']);
+            $newdisplayname = trim((string)$params['displayname']);
+            if ($newshortname === '' || $newdisplayname === '') {
+                throw new invalid_parameter_exception('Bitte Name und Kurzbezeichnung angeben');
+            }
+            $targetscope = $scopecontexts[0];
+            $setid = $repo->create_methodset_draft($newshortname, $newdisplayname,
+                (string)$params['description'], (int)$targetscope->id, $actorid, 'seminarkonzept');
+            $versionnum = 1;
+        }
+
+        // Snapshot payload (D32): object instead of the plain method array a
+        // Methoden-Sammlung uses - plan state 1:1 plus the referenced units.
+        $snapshotpayload = [
+            'typ' => 'seminarkonzept',
+            'methods' => $planmethods,
+            'plan' => [
+                'name' => (string)$grid->name,
+                'description' => (string)($grid->description ?? ''),
+                'state' => $state,
+            ],
+        ];
+        $snapshotjson = json_encode($snapshotpayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($snapshotjson === false) {
+            throw new invalid_parameter_exception('Seminarkonzept konnte nicht serialisiert werden');
+        }
+        $versionid = $repo->create_version($setid, (int)$versionnum, 'draft', $snapshotjson, $actorid);
+
+        // Reviewer handling mirrors the Sammlung flows: keep assigned
+        // reviewers, otherwise auto-assign everyone with review capability.
+        $set = $repo->get_methodset($setid);
+        $scopecontext = \context::instance_by_id((int)$set->scopecontextid, MUST_EXIST);
+        $assignedreviewers = $reviewerrepo->get_reviewer_userids($setid);
+        if (!$assignedreviewers) {
+            $autocandidates = get_users_by_capability($scopecontext, 'local/seminarplaner:reviewset',
+                'u.id,u.deleted,u.suspended', 'u.id ASC');
+            $autorreviewerids = [];
+            foreach ($autocandidates as $candidate) {
+                if (!empty($candidate->deleted) || !empty($candidate->suspended)) {
+                    continue;
+                }
+                $autorreviewerids[] = (int)$candidate->id;
+            }
+            $autorreviewerids = array_values(array_unique(array_filter($autorreviewerids)));
+            if (!$autorreviewerids) {
+                throw new invalid_parameter_exception('Keine Konzeptverantwortliche mit Review-Berechtigung gefunden');
+            }
+            $reviewerrepo->replace_reviewers($setid, $autorreviewerids, $actorid);
+            $assignedreviewers = $autorreviewerids;
+        }
+
+        // Write the referenced units as global method rows so the plan's
+        // units are browsable/adoptable in the global library (D29/D33).
+        $now = time();
+        $DB->delete_records('local_kgen_method', ['methodsetversionid' => (int)$versionid]);
+        $savedcount = 0;
+        foreach ($planmethods as $method) {
+            $mapped = self::map_activity_method_to_global_record($method);
+            if (trim((string)$mapped['title']) === '') {
+                continue;
+            }
+            $record = (object)array_merge($mapped, [
+                'methodsetid' => $setid,
+                'methodsetversionid' => (int)$versionid,
+                'timecreated' => $now,
+                'timemodified' => $now,
+                'createdby' => $actorid,
+                'modifiedby' => $actorid,
+            ]);
+            $newmethodid = (int)$DB->insert_record('local_kgen_method', $record);
+            $savedcount++;
+            self::copy_method_material_files_to_global($method, $newmethodid,
+                (int)$resolved['context']->id, $actorid, true);
+        }
+
+        $comment = trim((string)$params['changelog']) !== ''
+            ? trim((string)$params['changelog'])
+            : 'Seminarkonzept submitted from mod_seminarplaner';
+        $workflow->transition($setid, (int)$versionid, 'review', $actorid, $comment);
+
+        return [
+            'success' => true,
+            'methodsetid' => $setid,
+            'versionid' => (int)$versionid,
+            'savedcount' => $savedcount,
+            'reviewercount' => count($assignedreviewers),
+            'planname' => (string)$grid->name,
+        ];
+    }
+
+    public static function submit_seminarkonzept_for_review_returns(): external_single_structure {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'Submit status'),
+            'methodsetid' => new external_value(PARAM_INT, 'Method set id'),
+            'versionid' => new external_value(PARAM_INT, 'Version id'),
+            'savedcount' => new external_value(PARAM_INT, 'Saved seminar units into set version'),
+            'reviewercount' => new external_value(PARAM_INT, 'Assigned reviewers'),
+            'planname' => new external_value(PARAM_TEXT, 'Submitted plan name'),
+        ]);
+    }
+
     public static function create_grid_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -1638,6 +2716,51 @@ class api extends external_api {
         return new external_single_structure([
             'statejson' => new external_value(PARAM_RAW, 'State JSON'),
             'versionhash' => new external_value(PARAM_RAW, 'Version hash'),
+        ]);
+    }
+
+    public static function get_sequenz_intro_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'gridid' => new external_value(PARAM_INT, 'Seminarplan id'),
+        ]);
+    }
+
+    public static function get_sequenz_intro(int $cmid, int $gridid): array {
+        $params = self::validate_parameters(self::get_sequenz_intro_parameters(), ['cmid' => $cmid, 'gridid' => $gridid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+
+        $service = new grid_service();
+        return ['seen' => $service->get_intro_seen((int)$params['gridid'], (int)$GLOBALS['USER']->id)];
+    }
+
+    public static function get_sequenz_intro_returns(): external_single_structure {
+        return new external_single_structure([
+            'seen' => new external_value(PARAM_BOOL, 'Whether the one-time sequence intro was already seen'),
+        ]);
+    }
+
+    public static function mark_sequenz_intro_seen_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'gridid' => new external_value(PARAM_INT, 'Seminarplan id'),
+        ]);
+    }
+
+    public static function mark_sequenz_intro_seen(int $cmid, int $gridid): array {
+        $params = self::validate_parameters(self::mark_sequenz_intro_seen_parameters(), ['cmid' => $cmid, 'gridid' => $gridid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('mark_sequenz_intro_seen', 30, 60);
+
+        $service = new grid_service();
+        return ['success' => $service->mark_intro_seen((int)$params['gridid'], (int)$GLOBALS['USER']->id)];
+    }
+
+    public static function mark_sequenz_intro_seen_returns(): external_single_structure {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'Marker result'),
         ]);
     }
 
@@ -1971,6 +3094,65 @@ class api extends external_api {
             'locked' => new external_value(PARAM_BOOL, 'Lock status'),
             'holder' => new external_value(PARAM_INT, 'Holder id'),
             'expiresat' => new external_value(PARAM_INT, 'Expiry timestamp'),
+        ]);
+    }
+
+    public static function set_pdf_columns_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'columnsjson' => new external_value(PARAM_RAW, 'PDF column setting as JSON {all, order, selected}'),
+        ]);
+    }
+
+    /**
+     * Persist the ZIM-PDF column selection and order per activity (D63).
+     */
+    public static function set_pdf_columns(int $cmid, string $columnsjson): array {
+        global $CFG;
+        require_once($CFG->dirroot . '/mod/seminarplaner/locallib.php');
+
+        $params = self::validate_parameters(self::set_pdf_columns_parameters(), [
+            'cmid' => $cmid,
+            'columnsjson' => $columnsjson,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('set_pdf_columns', 60, 60);
+
+        $decoded = json_decode((string)$params['columnsjson'], true);
+        if (!is_array($decoded)) {
+            throw new invalid_parameter_exception('columnsjson must decode to an object');
+        }
+
+        $allowed = seminarplaner_pdf_column_keys();
+        $order = [];
+        foreach ((array)($decoded['order'] ?? []) as $key) {
+            $key = (string)$key;
+            if (in_array($key, $allowed, true) && !in_array($key, $order, true)) {
+                $order[] = $key;
+            }
+        }
+        $selected = [];
+        foreach ((array)($decoded['selected'] ?? []) as $key) {
+            $key = (string)$key;
+            if (in_array($key, $allowed, true) && !in_array($key, $selected, true)) {
+                $selected[] = $key;
+            }
+        }
+
+        $payload = json_encode([
+            'all' => !empty($decoded['all']),
+            'order' => $order,
+            'selected' => $selected,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        set_config('pdfcolumns_cmid_' . (int)$resolved['cm']->id, $payload, 'mod_seminarplaner');
+        return ['success' => true];
+    }
+
+    public static function set_pdf_columns_returns(): external_single_structure {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'Save result'),
         ]);
     }
 }

@@ -18,6 +18,52 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         bewerten: 5,
         erschaffen: 6
     };
+
+    // Seminarphasen-Zuordnung wie in sequenz.js (dortige phaseKey-Kopie):
+    // die Überblick-Projektion färbt Einträge nach der Phasenpalette des
+    // Design-Handoffs statt nach Bloom-Levels.
+    const PHASE_KEYS = [
+        {key: 'orientierung', match: ['orientierung', 'warm-up', 'einstieg']},
+        {key: 'erfahrung', match: ['erfahrung', 'erwartungsabfrage', 'vorwissen']},
+        {key: 'analyse', match: ['analyse']},
+        {key: 'handlung', match: ['handlung', 'aktion', 'praxis']},
+        {key: 'transfer', match: ['transfer', 'abschluss', 'auswertung']},
+    ];
+
+    const phaseKey = (phase) => {
+        const raw = Array.isArray(phase) ? phase.filter(Boolean).join(', ') : phase;
+        const clean = String(raw || '').trim().toLowerCase();
+        if (!clean) {
+            return '';
+        }
+        const found = PHASE_KEYS.find((candidate) => candidate.match.some((m) => clean.includes(m)));
+        return found ? found.key : '';
+    };
+
+    // Kompakter Karten-Auszug fuer den veroeffentlichten Roten Faden: nur die
+    // aktiven Einheiten der Sequenz, nur Titel und Seminarphase. Deckungsgleich
+    // in sequenz.js — beide Ansichten koennen veroeffentlichen.
+    const activeMethodCardSnapshot = (sequenz, cards) => {
+        const auswahlen = (sequenz && sequenz.einheitenauswahlen && typeof sequenz.einheitenauswahlen === 'object')
+            ? sequenz.einheitenauswahlen : {};
+        const active = new Set();
+        Object.keys(auswahlen).forEach((key) => {
+            const auswahl = auswahlen[key] || {};
+            if (auswahl.aktiv !== null && auswahl.aktiv !== undefined && String(auswahl.aktiv) !== '') {
+                active.add(String(auswahl.aktiv));
+            }
+        });
+        if (!active.size) {
+            return [];
+        }
+        return (Array.isArray(cards) ? cards : [])
+            .filter((card) => card && active.has(String(card.id)))
+            .map((card) => ({
+                id: String(card.id),
+                titel: String(card.titel || ''),
+                seminarphase: Array.isArray(card.seminarphase) ? card.seminarphase : String(card.seminarphase || '')
+            }));
+    };
     const FILTER_DROPDOWNS = {
         tags: {
             root: '#sp-filter-tags-dropdown',
@@ -65,14 +111,28 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             labelSome: 'Dimensionen'
         }
     };
-    const GRID_PRESETS = {
-        'standard-week': {days: ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]},
-        'sunday-to-friday': {days: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]},
-        'weekend-seminar': {days: ['Freitag', 'Samstag', 'Sonntag'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]},
-        'half-week-mo-mi': {days: ['Montag', 'Dienstag', 'Mittwoch'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]},
-        'half-week-mi-fr': {days: ['Mittwoch', 'Donnerstag', 'Freitag'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]},
-        'compact-day': {days: ['Montag'], timeRange: {start: '08:30', end: '17:30'}, granularity: 15, breaks: [{days: ['all'], start: '12:00', duration: 60}]}
+    // D45: every template carries fixed morning/afternoon spans (editable
+    // pre-fill); the legacy timeRange/breaks fields are derived from them.
+    const DEFAULT_ANKERZEITEN = {
+        vormittag: {start: '08:30', end: '12:30'},
+        nachmittag: {start: '13:15', end: '17:30'},
+        ersterTagNurNachmittag: false,
+        letzterTagNurVormittag: false
     };
+    const GRID_PRESETS = {
+        'standard-week': {days: ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
+        'sunday-to-friday': {days: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
+        'weekend-seminar': {days: ['Freitag', 'Samstag', 'Sonntag'], granularity: 15, ankerzeiten: Object.assign({}, DEFAULT_ANKERZEITEN, {ersterTagNurNachmittag: true, letzterTagNurVormittag: true})},
+        'half-week-mo-mi': {days: ['Montag', 'Dienstag', 'Mittwoch'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
+        'half-week-mi-fr': {days: ['Mittwoch', 'Donnerstag', 'Freitag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
+        'compact-day': {days: ['Montag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN}
+    };
+    const cloneAnkerzeiten = (az) => ({
+        vormittag: Object.assign({}, az.vormittag),
+        nachmittag: Object.assign({}, az.nachmittag),
+        ersterTagNurNachmittag: !!az.ersterTagNurNachmittag,
+        letzterTagNurVormittag: !!az.letzterTagNurVormittag
+    });
     const DEFAULT_COLUMNS = {
         uhrzeit: true,
         title: true,
@@ -106,6 +166,57 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return null;
         }
         return toMin(hh, mm);
+    };
+
+    // D45: read the anchor times of a config; legacy configs (only
+    // timeRange + free break list) are translated on the fly - the longest
+    // configured break counts as the midday cut, fallback 12:30.
+    const deriveAnkerzeiten = (config) => {
+        const cfg = config || {};
+        const az = cfg.ankerzeiten;
+        if (az && az.vormittag && az.nachmittag
+                && parseTimeToMinutes(az.vormittag.start) !== null && parseTimeToMinutes(az.vormittag.end) !== null
+                && parseTimeToMinutes(az.nachmittag.start) !== null && parseTimeToMinutes(az.nachmittag.end) !== null) {
+            return cloneAnkerzeiten(az);
+        }
+        const range = cfg.timeRange || {};
+        const start = parseTimeToMinutes(range.start) === null ? '08:30' : range.start;
+        const end = parseTimeToMinutes(range.end) === null ? '17:30' : range.end;
+        let best = null;
+        (Array.isArray(cfg.breaks) ? cfg.breaks : []).forEach((brk) => {
+            if (!brk || parseTimeToMinutes(brk.start) === null) {
+                return;
+            }
+            const duration = Math.max(0, Number(brk.duration) || 0);
+            if (!duration) {
+                return;
+            }
+            if (!best || duration > best.duration
+                || (duration === best.duration
+                    && Math.abs(parseTimeToMinutes(brk.start) - 750) < Math.abs(parseTimeToMinutes(best.start) - 750))) {
+                best = {start: brk.start, duration};
+            }
+        });
+        const vmEnd = best ? best.start : '12:30';
+        const nmStart = best ? label(parseTimeToMinutes(best.start) + best.duration) : '12:30';
+        return {
+            vormittag: {start, end: vmEnd},
+            nachmittag: {start: nmStart, end},
+            ersterTagNurNachmittag: false,
+            letzterTagNurVormittag: false
+        };
+    };
+
+    // D45: keep the legacy fields as derived values so the read-only
+    // overview (time axis, midday break) keeps rendering unchanged.
+    const legacyFieldsFromAnkerzeiten = (az) => {
+        const vmEnd = parseTimeToMinutes(az.vormittag.end);
+        const nmStart = parseTimeToMinutes(az.nachmittag.start);
+        const gap = (vmEnd !== null && nmStart !== null) ? nmStart - vmEnd : 0;
+        return {
+            timeRange: {start: az.vormittag.start, end: az.nachmittag.end},
+            breaks: gap > 0 ? [{days: ['all'], start: az.vormittag.end, duration: gap}] : []
+        };
     };
 
     const escapeHtml = (str) => String(str || '').replace(/[&<>"']/g, (ch) => {
@@ -193,7 +304,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.msg = bySel('#sp-msg');
             this.status = bySel('#kg-status');
             this.savedState = bySel('#sp-saved-state');
-            this.zoomIndex = 1;
+            // D34/CD-Handoff: der schreibgeschützte Überblick rendert im
+            // groben Raster (Stundenoptik wie im Design), ohne Zeitraster-Wahl.
+            this.isReadonlyOverview = !!document.querySelector('.kg-grid-readonly');
+            this.zoomIndex = this.isReadonlyOverview ? 2 : 1;
             this.versionhash = '';
             this.methods = [];
             this.methodsetNames = new Map();
@@ -221,15 +335,20 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 config: {
                     preset: 'standard-week',
                     days: ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'],
+                    ankerzeiten: cloneAnkerzeiten(DEFAULT_ANKERZEITEN),
                     timeRange: {start: '08:30', end: '17:30'},
                     granularity: 15,
-                    breaks: [{days: ['all'], start: '12:00', duration: 60}],
+                    breaks: [{days: ['all'], start: '12:30', duration: 45}],
                     tableColumns: Object.assign({}, DEFAULT_COLUMNS)
                 },
                 view: {mode: VIEW_MODE_WEEK, day: 'Montag'},
                 plan: {days: {}},
                 sourceMode: 'methods'
             };
+            // D49/D20: sequenz-Abschnitt des geladenen Plans - wenn vorhanden,
+            // rendert der Ueberblick daraus (read-only Projektion) statt aus
+            // dem alten plan.days.
+            this.sequenzSection = null;
 
             if (!this.wrapper) {
                 return;
@@ -320,7 +439,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 units: Array.isArray(this.planningState.units) ? this.planningState.units : [],
                 slotorder: Array.isArray(this.planningState.slotorder) ? this.planningState.slotorder : [],
                 zoomIndex: this.zoomIndex,
-                sourceMode: this.state.sourceMode || 'methods'
+                sourceMode: this.state.sourceMode || 'methods',
+                // Der Roter-Faden-Snapshot braucht die Sequenz (Bloecke, Dauern)
+                // und zu den aktiven Einheiten Titel + Seminarphase; die
+                // Methoden-Bibliothek selbst steht Lesenden dort nicht offen.
+                sequenz: this.sequenzSection || null,
+                methodcards: activeMethodCardSnapshot(this.sequenzSection, this.methods)
             };
         }
 
@@ -2031,9 +2155,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
             let i = 0;
             for (let t = start; t < end; t += slotMinutes) {
+                // Im Read-only-Überblick beschriften nur volle Stunden die
+                // Zeitachse (Handoff: Stundenmarken 08:00 … 18:00).
+                const showlabel = this.isReadonlyOverview ? (t % 60 === 0) : (i % labelEvery === 0);
                 const d = document.createElement('div');
-                d.className = `sp-timeslot ${i % labelEvery === 0 ? 'sp-timeslot--major' : 'sp-timeslot--minor'}`;
-                d.textContent = i % labelEvery === 0 ? label(t) : '';
+                d.className = `sp-timeslot ${showlabel ? 'sp-timeslot--major' : 'sp-timeslot--minor'}`;
+                d.textContent = showlabel ? label(t) : '';
                 times.appendChild(d);
                 i++;
             }
@@ -2110,8 +2237,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 if (grid) {
                     grid.innerHTML = '';
                     for (let i = 0; i < slotsPerDay; i++) {
+                        // Read-only-Überblick: Rasterlinien nur zur vollen
+                        // Stunde (Handoff: Stundenlinie alle 60 Minuten).
+                        const ismajor = this.isReadonlyOverview
+                            ? ((start + (i * slotMinutes)) % 60 === 0)
+                            : (i % labelEvery === 0);
                         const cell = document.createElement('div');
-                        cell.className = `sp-timeslot ${i % labelEvery === 0 ? 'sp-timeslot--major' : 'sp-timeslot--minor'}`;
+                        cell.className = `sp-timeslot ${ismajor ? 'sp-timeslot--major' : 'sp-timeslot--minor'}`;
                         cell.addEventListener('dragover', (e) => e.preventDefault());
                         cell.addEventListener('drop', (e) => this.onDrop(e, grid, i));
                         grid.appendChild(cell);
@@ -2126,16 +2258,158 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             });
         }
 
+        // ---- D49/D20: Ueberblick liest aus der Sequenz -------------------
+        // Die Sequenz ist seit D20 die massgebliche Datenstruktur; sobald ein
+        // Plan einen sequenz-Abschnitt hat, projiziert der Ueberblick daraus
+        // seine Wochenansicht. plan.days bleibt unangetastet (wird nie aus der
+        // Projektion zurueckgeschrieben) - es dient nur noch als Farb-Lookup
+        // fuer migrierte Eintraege und als Fallback fuer Plaene ohne Sequenz.
+        overviewPlanDays() {
+            const seq = this.sequenzSection;
+            if (!seq || !Array.isArray(seq.tage) || !seq.tage.length) {
+                return this.state.plan.days || {};
+            }
+            const placements = (seq.platzierungen && typeof seq.platzierungen === 'object') ? seq.platzierungen : {};
+            const bausteine = (seq.bausteine && typeof seq.bausteine === 'object') ? seq.bausteine : {};
+            const auswahlen = (seq.einheitenauswahlen && typeof seq.einheitenauswahlen === 'object')
+                ? seq.einheitenauswahlen : {};
+            const methodById = new Map(this.methods.map((m) => [String(m.id), m]));
+
+            // Farb-/Typ-Lookup: migrierte Platzierungen zeigen auf ihre alten
+            // Grid-Eintraege (quelle.uids).
+            const legacyByUid = {};
+            Object.keys(this.state.plan.days || {}).forEach((day) => {
+                (this.state.plan.days[day] || []).forEach((entry) => {
+                    if (entry && entry.uid) {
+                        legacyByUid[String(entry.uid)] = entry;
+                    }
+                });
+            });
+
+            const config = this.state.config || {};
+            const az = config.ankerzeiten || deriveAnkerzeiten(config);
+            const vmStart = parseTimeToMinutes(az && az.vormittag ? az.vormittag.start : '') ?? 510;
+            const nmStart = parseTimeToMinutes(az && az.nachmittag ? az.nachmittag.start : '') ?? 795;
+
+            const days = {};
+            seq.tage.forEach((tag, idx) => {
+                const dayname = (tag && tag.bezeichnung && (config.days || []).includes(tag.bezeichnung))
+                    ? tag.bezeichnung
+                    : (config.days || [])[idx];
+                if (!dayname) {
+                    return;
+                }
+                const isFirst = idx === 0;
+                const isLast = idx === seq.tage.length - 1;
+                const anchorStarts = {
+                    vormittag: (isFirst && az && az.ersterTagNurNachmittag) ? nmStart : vmStart,
+                    nachmittag: (isLast && az && az.letzterTagNurVormittag) ? vmStart : nmStart,
+                };
+                const items = [];
+                let vmContentEnd = anchorStarts.vormittag;
+                ['vormittag', 'nachmittag'].forEach((ankername) => {
+                    if (ankername === 'nachmittag') {
+                        // D11: Mittagspause im Überblick sichtbar machen. Die
+                        // Einheit/der Baustein hat Vorrang - läuft der Vormittag in
+                        // die Pause hinein, beginnt sie erst am Ende der Einheit
+                        // (Pause verkürzt sich), statt überlagert zu werden.
+                        const vmEndCfg = parseTimeToMinutes(az && az.vormittag ? az.vormittag.end : '');
+                        const pauseStart = Math.max(Number.isFinite(vmEndCfg) ? vmEndCfg : vmContentEnd, vmContentEnd);
+                        const pauseEnd = anchorStarts.nachmittag;
+                        if (Number.isFinite(pauseStart) && pauseEnd > pauseStart) {
+                            items.push({
+                                uid: `sq-mittag-${idx}`,
+                                kind: 'break',
+                                title: 'Mittagspause',
+                                startMin: pauseStart,
+                                endMin: pauseEnd,
+                                details: {},
+                                sqTag: idx + 1,
+                            });
+                        }
+                    }
+                    let clock = anchorStarts[ankername];
+                    const pids = (((tag.anker || {})[ankername] || {}).sequenz) || [];
+                    pids.forEach((pid) => {
+                        const p = placements[pid];
+                        if (!p) {
+                            return;
+                        }
+                        const duration = Math.max(0, Number(p.dauer) || 0);
+                        const baustein = p.bausteinid ? bausteine[p.bausteinid] : null;
+                        let title = String(p.titel || '').trim();
+                        let reserved = false;
+                        if (!title && baustein && baustein.titel) {
+                            title = `${baustein.titel} (reserviert)`;
+                            reserved = true;
+                        }
+                        const item = {
+                            uid: `sq-${pid}`,
+                            kind: p.typ === 'pause' ? 'break' : 'method',
+                            title: title || (p.typ === 'pause' ? 'Pause' : 'Seminareinheit'),
+                            startMin: clock,
+                            endMin: clock + duration,
+                            details: {},
+                            sqTag: idx + 1,
+                            sqReserved: reserved,
+                        };
+                        // Phasenfarbe (Handoff-Palette): aktive Einheiten-Karte
+                        // -> deren Seminarphase; sonst Phase des Alt-Eintrags.
+                        if (p.typ === 'einheit') {
+                            const auswahl = auswahlen[p.einheitenauswahl] || null;
+                            if (auswahl && Array.isArray(auswahl.kandidaten) && auswahl.kandidaten.length > 1) {
+                                item.sqAlt = true;
+                            }
+                            const aktiv = auswahl && auswahl.aktiv !== null && auswahl.aktiv !== undefined
+                                ? String(auswahl.aktiv) : '';
+                            const card = aktiv ? methodById.get(aktiv) : null;
+                            if (card && card.seminarphase) {
+                                item.sqPhase = phaseKey(card.seminarphase);
+                            }
+                        }
+                        const uids = (p.quelle && Array.isArray(p.quelle.uids)) ? p.quelle.uids : [];
+                        for (const legacyuid of uids) {
+                            const legacy = legacyByUid[String(legacyuid)];
+                            if (legacy) {
+                                if (legacy.cognitiveLevel) {
+                                    item.cognitiveLevel = legacy.cognitiveLevel;
+                                }
+                                if (!item.sqPhase && legacy.phase) {
+                                    item.sqPhase = phaseKey(legacy.phase);
+                                }
+                                break;
+                            }
+                        }
+                        items.push(item);
+                        clock += duration;
+                    });
+                    if (ankername === 'vormittag') {
+                        vmContentEnd = clock;
+                    }
+                });
+                days[dayname] = items;
+            });
+            // Tage der Einrichtung ohne Sequenz-Pendant bleiben leer statt
+            // Altdaten zu zeigen (sonst waeren die Ansichten wieder asynchron).
+            (config.days || []).forEach((day) => {
+                if (!days[day]) {
+                    days[day] = [];
+                }
+            });
+            return days;
+        }
+
         renderAllDayRow() {
             if (!bySel('#sp-allday-row')) {
                 return;
             }
+            const planDays = this.overviewPlanDays();
             this.getVisibleDays().forEach((day) => {
                 const target = bySel(`[data-allday="${day}"]`);
                 if (!target) {
                     return;
                 }
-                const items = this.state.plan.days[day] || [];
+                const items = planDays[day] || [];
                 if (!items.length) {
                     target.innerHTML = '<span class="sp-allday-empty">Keine Einträge</span>';
                     return;
@@ -2168,6 +2442,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const overlayMinHeight = slotsPerDay * slotPx;
 
             const todayName = getTodayDayName();
+            const planDays = this.overviewPlanDays();
             this.getVisibleDays().forEach((day) => {
                 const overlay = document.querySelector(`[data-overlay="${day}"]`);
                 if (!overlay) {
@@ -2187,7 +2462,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     overlay.appendChild(indicator);
                 }
 
-                const items = (this.state.plan.days[day] || []).slice().sort((a, b) => a.startMin - b.startMin);
+                const items = (planDays[day] || []).slice().sort((a, b) => a.startMin - b.startMin);
                 let packedBottomPx = 0;
                 items.forEach((it) => {
                     const durationMin = Math.max(5, Number(it.endMin || 0) - Number(it.startMin || 0));
@@ -2224,6 +2499,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     if (it.cognitiveLevel) {
                         className += ` sp-level-${it.cognitiveLevel}`;
                     }
+                    // CD-Handoff: Projektions-Einträge tragen die volle
+                    // Phasenfarbe (Analyse mit dunklem Text, sonst weiß).
+                    if (it.sqTag && it.sqPhase) {
+                        className += ` sp-phase--${it.sqPhase}`;
+                    }
+                    if (it.sqTag && it.sqReserved) {
+                        className += ' sp-item--reserved';
+                    }
                     div.className = className;
                     div.style.position = 'absolute';
                     div.style.top = `${topPx}px`;
@@ -2231,6 +2514,17 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     div.style.left = '0';
                     div.style.right = '0';
                     div.draggable = false;
+                    // D49: Eintraege aus der Sequenz-Projektion sind reine
+                    // Navigation - Klick oeffnet den passenden Tag in der
+                    // Sequenzansicht, keine Move-/Drag-Interaktion.
+                    if (it.sqTag) {
+                        div.classList.add('sp-item--sqnav');
+                        div.title = 'In der Sequenzansicht bearbeiten';
+                        div.addEventListener('click', () => {
+                            const gridparam = Number(this.state.gridid) > 0 ? `&grid=${Number(this.state.gridid)}` : '';
+                            window.location.href = `${M.cfg.wwwroot}/mod/seminarplaner/sequenz.php?id=${this.cmid}${gridparam}&tag=${it.sqTag}`;
+                        });
+                    } else {
                     div.addEventListener('pointerdown', (event) => this.startItemMove(event, it, day));
                     div.addEventListener('mousedown', (event) => this.startItemMove(event, it, day));
                     div.addEventListener('touchstart', (event) => this.startItemMove(event, it, day), {passive: false});
@@ -2249,12 +2543,17 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     });
                     div.addEventListener('dragover', (event) => event.preventDefault());
                     div.addEventListener('drop', (event) => this.onDrop(event, {getAttribute: () => day}, this.minutesToIndex(it.startMin)));
+                    }
 
                     let title = it.title || '';
                     if (it.flowTotal > 1 && it.flowOrder > 1) {
                         title = `${title} (Fortsetzung ${it.flowOrder}/${it.flowTotal})`;
                     }
-                    const timeLabel = `${label(it.startMin)} - ${label(it.endMin)}`;
+                    // Projektions-Blöcke nutzen den Halbgeviertstrich wie im
+                    // Handoff ("09:20–10:05"), das Bearbeiten-Grid bleibt.
+                    const timeLabel = it.sqTag
+                        ? `${label(it.startMin)}–${label(it.endMin)}`
+                        : `${label(it.startMin)} - ${label(it.endMin)}`;
                     const isDayView = this.state.view.mode === VIEW_MODE_DAY;
                     const titleWithTime = isDayView ? `${title} - ${timeLabel}` : title;
 
@@ -2329,6 +2628,19 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     let defaultActions = '';
                     defaultActions += `<button type="button" class="ml-card-menu-btn ml-card-menu-btn-delete" data-act="delete" data-uid="${escapeHtml(it.uid)}">Löschen</button>`;
 
+                    // D49: Projektions-Eintraege haben kein Kontextmenue -
+                    // bearbeitet wird ausschliesslich in der Sequenzansicht.
+                    const contextmenu = it.sqTag ? '' : `
+                        <details class="ml-card-menu sp-item-context">
+                            <summary class="ml-card-menu-toggle" data-action="toggle-context-menu" aria-label="Kontextmenü">⋮</summary>
+                            <div class="ml-card-menu-panel" role="menu" aria-label="Eintrag Aktionen">
+                                ${menuActions}
+                                ${defaultActions}
+                            </div>
+                        </details>`;
+                    // CD-Handoff: ⇄-Marker oben rechts, wenn Alternativen
+                    // hinterlegt sind (nur Sequenz-Projektion).
+                    const altmarker = (it.sqTag && it.sqAlt) ? '<span class="sp-item__alt" aria-hidden="true">⇄</span>' : '';
                     div.innerHTML = `
                         <div class="sp-item-content">
                             ${unitLabelHtml}
@@ -2336,15 +2648,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             ${isDayView ? '' : `<div class="sp-meta">${escapeHtml(timeLabel)}</div>`}
                             ${unitmethodshtml}
                         </div>
-                        <details class="ml-card-menu sp-item-context">
-                            <summary class="ml-card-menu-toggle" data-action="toggle-context-menu" aria-label="Kontextmenü">⋮</summary>
-                            <div class="ml-card-menu-panel" role="menu" aria-label="Eintrag Aktionen">
-                                ${menuActions}
-                                ${defaultActions}
-                            </div>
-                        </details>
+                        ${altmarker}
+                        ${contextmenu}
                     `;
-                    if (it.kind === 'method' || it.kind === 'break') {
+                    if (!it.sqTag && (it.kind === 'method' || it.kind === 'break')) {
                         const topHandle = document.createElement('div');
                         topHandle.className = 'sp-resize-handle sp-resize-handle--top';
                         topHandle.setAttribute('data-resize', 'start');
@@ -2359,7 +2666,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         bottomHandle.addEventListener('pointerdown', (event) => this.startItemResize(event, it, day, 'end'));
                         div.appendChild(bottomHandle);
                     }
-                    if (it.kind === 'method') {
+                    if (!it.sqTag && it.kind === 'method') {
                         div.classList.add('sp-item--method-clickable');
                         div.setAttribute('role', 'button');
                         div.setAttribute('tabindex', '0');
@@ -2565,8 +2872,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         updateSums() {
+            const planDays = this.overviewPlanDays();
             this.getVisibleDays().forEach((day) => {
-                const sum = (this.state.plan.days[day] || []).reduce((acc, item) => acc + (item.endMin - item.startMin), 0);
+                const sum = (planDays[day] || []).reduce((acc, item) => acc + (item.endMin - item.startMin), 0);
                 const el = document.querySelector(`[data-sum="${day}"]`);
                 if (el) {
                     el.textContent = `${Math.floor(sum / 60)} Std ${sum % 60} Min`;
@@ -2583,6 +2891,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.setupDayGrids();
             this.renderOverlays();
             this.updateZoomControls();
+            // Die Phasen-Legende gehört zur Sequenz-Projektion; Altpläne ohne
+            // sequenz-Abschnitt behalten ihre Bloom-Farben ohne Legende.
+            const legend = bySel('#sp-phase-legend');
+            if (legend) {
+                legend.classList.toggle('kg-hidden', !this.sequenzSection);
+            }
         }
 
         updateZoomControls() {
@@ -3633,7 +3947,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const panel = bySel('#sp-config-inline');
             const form = bySel('#sp-config-form');
             const preset = bySel('#sp-config-preset');
-            const addbreak = bySel('#sp-add-break');
             const closepanelbtn = bySel('#sp-config-collapse');
 
             if (closepanelbtn) {
@@ -3642,9 +3955,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
             if (preset) {
                 preset.addEventListener('change', () => this.applyPreset(preset.value));
-            }
-            if (addbreak) {
-                addbreak.addEventListener('click', () => this.addBreakItem());
             }
             if (form) {
                 form.querySelectorAll('input[name="days"]').forEach((cb) => {
@@ -3657,18 +3967,40 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         this.warn('Bitte mindestens einen Tag auswählen.');
                         return;
                     }
-                    const start = form.querySelector('#sp-config-time-start').value || '08:30';
-                    const end = form.querySelector('#sp-config-time-end').value || '17:30';
-                    if ((parseTimeToMinutes(end) || 0) <= (parseTimeToMinutes(start) || 0)) {
-                        this.warn('Endzeit muss nach Startzeit liegen.');
+                    // D45: the setup collects morning/afternoon spans instead
+                    // of one free time range plus a break list.
+                    const ankerzeiten = {
+                        vormittag: {
+                            start: form.querySelector('#sp-config-vm-start').value || '08:30',
+                            end: form.querySelector('#sp-config-vm-end').value || '12:30'
+                        },
+                        nachmittag: {
+                            start: form.querySelector('#sp-config-nm-start').value || '13:15',
+                            end: form.querySelector('#sp-config-nm-end').value || '17:30'
+                        },
+                        ersterTagNurNachmittag: !!form.querySelector('#sp-config-first-arrival').checked,
+                        letzterTagNurVormittag: !!form.querySelector('#sp-config-last-departure').checked
+                    };
+                    const vmstart = parseTimeToMinutes(ankerzeiten.vormittag.start) || 0;
+                    const vmend = parseTimeToMinutes(ankerzeiten.vormittag.end) || 0;
+                    const nmstart = parseTimeToMinutes(ankerzeiten.nachmittag.start) || 0;
+                    const nmend = parseTimeToMinutes(ankerzeiten.nachmittag.end) || 0;
+                    if (vmend <= vmstart || nmend <= nmstart) {
+                        this.warn('Endzeit muss jeweils nach der Startzeit liegen.');
                         return;
                     }
+                    if (nmstart < vmend) {
+                        this.warn('Der Nachmittag darf nicht vor dem Ende des Vormittags beginnen.');
+                        return;
+                    }
+                    const legacyfields = legacyFieldsFromAnkerzeiten(ankerzeiten);
                     const pendingconfig = {
                         preset: getValue('#sp-config-preset') || 'custom',
                         days,
-                        timeRange: {start, end},
+                        ankerzeiten,
+                        timeRange: legacyfields.timeRange,
                         granularity: this.state.config.granularity || 15,
-                        breaks: this.collectBreaks(),
+                        breaks: legacyfields.breaks,
                         tableColumns: Object.assign({}, DEFAULT_COLUMNS, this.state.config.tableColumns || {})
                     };
                     const pendingname = getValue('#kg-grid-name').trim();
@@ -3744,9 +4076,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 cb.checked = this.state.config.days.includes(cb.value);
             });
             this.syncFirstDayOptions(form, this.state.config.days[0] || 'Montag');
-            form.querySelector('#sp-config-time-start').value = this.state.config.timeRange.start;
-            form.querySelector('#sp-config-time-end').value = this.state.config.timeRange.end;
-            this.loadBreaksIntoModal(this.state.config.breaks || []);
+            const ankerzeiten = deriveAnkerzeiten(this.state.config);
+            form.querySelector('#sp-config-vm-start').value = ankerzeiten.vormittag.start;
+            form.querySelector('#sp-config-vm-end').value = ankerzeiten.vormittag.end;
+            form.querySelector('#sp-config-nm-start').value = ankerzeiten.nachmittag.start;
+            form.querySelector('#sp-config-nm-end').value = ankerzeiten.nachmittag.end;
+            form.querySelector('#sp-config-first-arrival').checked = ankerzeiten.ersterTagNurNachmittag;
+            form.querySelector('#sp-config-last-departure').checked = ankerzeiten.letzterTagNurVormittag;
         }
 
         applyPreset(key) {
@@ -3754,59 +4090,16 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (!preset) {
                 return;
             }
+            const legacyfields = legacyFieldsFromAnkerzeiten(preset.ankerzeiten);
             this.state.config = Object.assign({}, this.state.config, {
                 preset: key,
                 days: preset.days.slice(),
-                timeRange: Object.assign({}, preset.timeRange),
+                ankerzeiten: cloneAnkerzeiten(preset.ankerzeiten),
+                timeRange: legacyfields.timeRange,
                 granularity: preset.granularity,
-                breaks: (preset.breaks || []).map((br) => Object.assign({}, br))
+                breaks: legacyfields.breaks
             });
             this.applyConfigToModal();
-        }
-
-        addBreakItem(breakConfig) {
-            const list = bySel('#sp-breaks-list');
-            if (!list) {
-                return;
-            }
-            const config = breakConfig || {days: ['all'], start: '12:00', duration: 60};
-            const row = document.createElement('div');
-            row.className = 'sp-break-item';
-            row.innerHTML = `
-                <select class="kg-input kg-grid-select sp-break-days-select">
-                    <option value="all" ${config.days.includes('all') ? 'selected' : ''}>Alle Tage</option>
-                    ${DAYS_ALL.map((d) => `<option value="${escapeHtml(d)}" ${(config.days || []).includes(d) ? 'selected' : ''}>${escapeHtml(d)}</option>`).join('')}
-                </select>
-                <input type="time" class="kg-input sp-break-start" value="${escapeHtml(config.start)}">
-                <input type="number" class="kg-input sp-break-duration" value="${escapeHtml(String(config.duration))}" min="5" step="5">
-                <button type="button" class="kg-btn sp-break-remove">X</button>
-            `;
-            list.appendChild(row);
-            row.querySelector('.sp-break-remove').addEventListener('click', () => {
-                row.remove();
-            });
-        }
-
-        loadBreaksIntoModal(breaks) {
-            const list = bySel('#sp-breaks-list');
-            if (!list) {
-                return;
-            }
-            list.innerHTML = '';
-            (breaks || []).forEach((br) => this.addBreakItem(br));
-        }
-
-        collectBreaks() {
-            const list = bySel('#sp-breaks-list');
-            if (!list) {
-                return [];
-            }
-            return Array.from(list.querySelectorAll('.sp-break-item')).map((row) => {
-                const day = row.querySelector('.sp-break-days-select').value || 'all';
-                const start = row.querySelector('.sp-break-start').value || '12:00';
-                const duration = Number.parseInt(row.querySelector('.sp-break-duration').value || '60', 10) || 60;
-                return {days: [day], start, duration};
-            });
         }
 
         collectTableColumns() {
@@ -3906,6 +4199,41 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (savebtn) {
                 savebtn.addEventListener('click', () => this.saveGridState({silent: false, manual: true}));
             }
+            // Seminarplan löschen aus dem Überblick (nutzt die bestehende Logik;
+            // der frühere #sp-clear-Button liegt in der im Überblick ausgeblendeten
+            // Filterleiste).
+            const deletebtn = bySel('#kg-grid-delete');
+            if (deletebtn) {
+                deletebtn.addEventListener('click', () => this.deleteSelectedGrid());
+            }
+            // PDF-Export-Leiste im Überblick — jeder Button löst per Deep-Link
+            // denselben Export-Flow im Import/Export-Tab aus (kein zweiter
+            // Mechanismus). Der Teilnehmerplan (Handout) nutzt den veröffentlichten
+            // Roten Faden und braucht keinen ausgewählten Plan.
+            const openPdfExport = (action, needsGrid) => {
+                const base = `${M.cfg.wwwroot}/mod/seminarplaner/importexport.php?id=${this.cmid}`;
+                if (!needsGrid) {
+                    window.location.href = `${base}&pdfaction=${action}`;
+                    return;
+                }
+                const gridid = this.getGridId();
+                if (!gridid) {
+                    this.setStatus('Bitte zuerst einen Seminarplan auswählen.', true);
+                    return;
+                }
+                window.location.href = `${base}&pdfgrid=${gridid}&pdfaction=${action}`;
+            };
+            [
+                ['#kg-ov-pdf-zim', 'zim', true],
+                ['#kg-ov-pdf-flow', 'flow', true],
+                ['#kg-ov-pdf-handout', 'handout', false],
+                ['#kg-ov-pdf-materials', 'materials', true],
+            ].forEach(([sel, action, needsGrid]) => {
+                const btn = bySel(sel);
+                if (btn) {
+                    btn.addEventListener('click', () => openPdfExport(action, needsGrid));
+                }
+            });
             const publishcheckbox = bySel('#kg-publish-roterfaden');
             if (publishcheckbox) {
                 publishcheckbox.addEventListener('change', () => {
@@ -4009,9 +4337,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 config: {
                     preset: 'standard-week',
                     days: ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'],
+                    ankerzeiten: cloneAnkerzeiten(DEFAULT_ANKERZEITEN),
                     timeRange: {start: '08:30', end: '17:30'},
                     granularity: 15,
-                    breaks: [{days: ['all'], start: '12:00', duration: 60}],
+                    breaks: [{days: ['all'], start: '12:30', duration: 45}],
                     tableColumns: Object.assign({}, DEFAULT_COLUMNS)
                 },
                 view: {mode: VIEW_MODE_WEEK, day: 'Montag'},
@@ -4063,6 +4392,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return {
                 meta: Object.assign({}, defaults.meta, raw.meta || {}),
                 config: Object.assign({}, defaults.config, raw.config || {}, {
+                    // D45 migration rule: legacy configs derive their anchor
+                    // times from timeRange + longest break, not the defaults.
+                    ankerzeiten: raw.config ? deriveAnkerzeiten(raw.config) : cloneAnkerzeiten(DEFAULT_ANKERZEITEN),
                     tableColumns: Object.assign({}, DEFAULT_COLUMNS, (raw.config || {}).tableColumns || {})
                 }),
                 view: Object.assign({}, defaults.view, raw.view || {}),
@@ -4078,6 +4410,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             if (!gridid) {
                 this.clearRememberedLoadedGridId();
                 this.state = Object.assign({}, this.state, this.normalizeLoadedState({}));
+                this.sequenzSection = null;
                 this.ensurePlanDays();
                 this.syncSourceTabs();
                 this.renderMethods();
@@ -4096,6 +4429,11 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 }
                 const normalized = this.normalizeLoadedState(parsed);
                 this.state = Object.assign({}, this.state, normalized, {gridid});
+                // D49: Ueberblick ist immer der Wochen-Gesamtblick - gespeicherte
+                // Tagesansichten aus Altdaten werden nicht wiederhergestellt.
+                this.state.view.mode = VIEW_MODE_WEEK;
+                this.sequenzSection = (parsed && parsed.sequenz && typeof parsed.sequenz === 'object'
+                    && !Array.isArray(parsed.sequenz)) ? parsed.sequenz : null;
                 this.versionhash = res.versionhash || '';
                 this.rememberLoadedGridId(gridid);
                 this.ensurePlanDays();

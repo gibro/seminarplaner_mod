@@ -1,4 +1,4 @@
-define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
+define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function(Ajax, Notification, Handout) {
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
     const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -16,13 +16,18 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     let currentImportPayload = null;
     let globalMethodsets = [];
     let globalSyncLinks = [];
-    let pendingAutosyncPrefs = {};
-    const PDF_COLUMN_ORDER = ['uhrzeit', 'titel', 'seminarphase', 'kognitive', 'kurzbeschreibung', 'debrief', 'ablauf', 'lernziele', 'risiken', 'materialtechnik', 'sonstiges'];
+    // D52: dauerhaftes Logo für den Seitenkopf aller PDF-Exporte.
+    let pdfLogo = null;
+    // Rohform (dataurl/position) wie aus PHP — das Handout-Modul bereitet sie selbst auf.
+    let pdfLogoRaw = null;
+    // D63: pro Aktivität gespeicherte Spaltenauswahl/-reihenfolge des ZIM-Exports.
+    let pdfColumnsSetting = null;
+    let pdfColumnsSaveTimer = null;
+    const PDF_COLUMN_ORDER = ['uhrzeit', 'titel', 'seminarphase', 'kurzbeschreibung', 'debrief', 'ablauf', 'lernziele', 'risiken', 'materialtechnik', 'sonstiges'];
     const PDF_COLUMN_LABELS = {
         uhrzeit: 'Uhrzeit',
         titel: 'Titel',
         seminarphase: 'Seminarphase',
-        kognitive: 'Kognitive Dimension',
         kurzbeschreibung: 'Kurzbeschreibung',
         debrief: 'Debrief-/Reflexionsfragen',
         ablauf: 'Ablauf',
@@ -647,26 +652,48 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         if (!select) {
             return Promise.resolve();
         }
-        return asCall('mod_seminarplaner_list_global_methodsets', {cmid}).then((res) => {
-            globalMethodsets = Array.isArray(res.methodsets) ? res.methodsets : [];
+        // Schon importierte Konzepte gehören nicht mehr in die Auswahl - sonst
+        // holt ein zweiter Klick dieselben Einheiten ein zweites Mal in den
+        // Bestand. Entfernt man ein Konzept in der Bibliothek wieder, steht es
+        // hier automatisch erneut bereit.
+        return Promise.all([
+            asCall('mod_seminarplaner_list_global_methodsets', {cmid}),
+            asCall('mod_seminarplaner_list_imported_konzepte', {cmid}).catch(() => ({konzepte: []})),
+        ]).then(([res, imported]) => {
+            const all = Array.isArray(res.methodsets) ? res.methodsets : [];
+            const importedids = new Set(
+                (Array.isArray(imported && imported.konzepte) ? imported.konzepte : [])
+                    .map((k) => Number(k.setid) || 0)
+            );
+            // D55: Hier werden nur globale Seminarkonzepte importiert. Methoden-
+            // Sammlungen sind ohne Import jederzeit in der Bibliothek durchsuchbar.
+            const konzepte = all.filter((set) => String(set.typ) === 'seminarkonzept');
+            globalMethodsets = konzepte.filter((set) => !importedids.has(Number(set.id)));
             select.innerHTML = '<option value="">Bitte wählen</option>';
             globalMethodsets.forEach((set) => {
                 const opt = document.createElement('option');
                 opt.value = String(set.id);
-                opt.textContent = `${set.displayname}`;
+                opt.textContent = String(set.displayname);
                 select.appendChild(opt);
             });
+            const alreadycount = konzepte.length - globalMethodsets.length;
+            const alreadynote = alreadycount
+                ? ` ${alreadycount} bereits übernommene ${alreadycount === 1 ? 'ist' : 'sind'} ausgeblendet – `
+                    + `entfernen kannst du sie im Tab „Bibliothek" unter „Globale Seminarkonzepte".`
+                : '';
             if (res.available === false) {
                 setGlobalStatus(res.message || 'Local-Plugin nicht verfügbar.', true);
             } else if (res.message) {
                 setGlobalStatus(res.message, true);
             } else if (!globalMethodsets.length) {
-                setGlobalStatus('Keine veröffentlichten globalen Konzepte gefunden.', false);
+                setGlobalStatus(alreadycount
+                    ? `Alle verfügbaren globalen Seminarkonzepte sind bereits übernommen.${alreadynote}`
+                    : 'Keine veröffentlichten globalen Seminarkonzepte gefunden.', false);
             } else {
-                setGlobalStatus(`${globalMethodsets.length} globale Konzepte verfügbar.`, false);
+                setGlobalStatus(`${globalMethodsets.length} globale Seminarkonzepte verfügbar.${alreadynote}`, false);
             }
         }).catch((e) => {
-            setGlobalStatus(`Globale Konzepte konnten nicht geladen werden: ${e.message || e}`, true);
+            setGlobalStatus(`Globale Seminarkonzepte konnten nicht geladen werden: ${e.message || e}`, true);
         });
     };
 
@@ -687,44 +714,42 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return globalSyncLinks.find((link) => Number(link.methodsetid) === setid) || null;
     };
 
+    // D54: kein Auto-Update-Schalter mehr - nur noch der bewusste "Ausstehende
+    // Updates übernehmen"-Button plus ein Info-Text. Der Hinweis auf verfügbare
+    // Aktualisierungen erscheint zusätzlich an der betroffenen Karte in der
+    // Bibliothek (methodlibrary.js).
     const refreshGlobalSyncUi = () => {
-        const autoswitch = bySel('#kg-global-set-autosync');
         const select = bySel('#kg-global-set-select');
         const applybtn = bySel('#kg-global-set-apply');
         const selected = getSelectedSyncLink();
-        if (!autoswitch || !applybtn) {
+        if (!applybtn) {
             return;
         }
         const setid = Number.parseInt(select ? (select.value || '0') : '0', 10) || 0;
         if (!setid) {
-            autoswitch.checked = false;
-            autoswitch.disabled = true;
             applybtn.disabled = true;
-            setGlobalSyncInfo('Bitte zuerst ein globales Konzept auswählen.', false);
+            setGlobalSyncInfo('Bitte zuerst eine Methoden-Sammlung auswählen.', false);
             return;
         }
         if (!selected) {
-            autoswitch.disabled = false;
-            autoswitch.checked = !!pendingAutosyncPrefs[setid];
             applybtn.disabled = true;
             setGlobalSyncInfo(
-                'Dieses Konzept ist noch nicht verknüpft. Auto-Update wird nach dem Import angewendet.',
+                'Diese Sammlung ist noch nicht in deinen Bestand übernommen.',
                 false
             );
             return;
         }
-        autoswitch.disabled = false;
-        autoswitch.checked = !!selected.autosyncenabled;
         const hasPending = !!selected.haspending || (Number(selected.currentversionid) > Number(selected.linkedversionid));
         applybtn.disabled = !hasPending;
         if (hasPending) {
             setGlobalSyncInfo(
-                `Update verfügbar (aktuell ${selected.linkedversionid}, global ${selected.currentversionid}). ` +
-                `Mit "Ausstehende Updates übernehmen" lokal anwenden.`,
+                'Eine aktualisierte Version dieser Sammlung ist verfügbar. ' +
+                'Mit "Ausstehende Updates übernehmen" holst du sie in deinen Bestand - ' +
+                'lokal geänderte Einheiten bleiben dabei unangetastet.',
                 false
             );
         } else {
-            setGlobalSyncInfo('Aktivität ist auf dem aktuellen Stand dieses Konzepts.', false);
+            setGlobalSyncInfo('Dein Bestand ist auf dem aktuellen Stand dieser Sammlung.', false);
         }
     };
 
@@ -792,11 +817,138 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         };
     };
 
+    // Anker-Zeiten aus der Config ableiten — deckungsgleich mit grid.js
+    // (deriveAnkerzeiten), damit die Export-Zeiten exakt dem Überblick entsprechen.
+    const pdfParseClock = (value) => {
+        if (!value) {
+            return null;
+        }
+        const parts = String(value).split(':');
+        const hh = Number.parseInt(parts[0], 10);
+        const mm = Number.parseInt(parts[1], 10);
+        return (Number.isFinite(hh) && Number.isFinite(mm)) ? (hh * 60 + mm) : null;
+    };
+    const pdfClockLabel = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+    const pdfDeriveAnkerzeiten = (config) => {
+        const cfg = config || {};
+        const az = cfg.ankerzeiten;
+        if (az && az.vormittag && az.nachmittag
+                && pdfParseClock(az.vormittag.start) !== null && pdfParseClock(az.nachmittag.start) !== null) {
+            return az;
+        }
+        const range = cfg.timeRange || {};
+        const start = pdfParseClock(range.start) === null ? '08:30' : range.start;
+        const end = pdfParseClock(range.end) === null ? '17:30' : range.end;
+        let best = null;
+        (Array.isArray(cfg.breaks) ? cfg.breaks : []).forEach((brk) => {
+            if (!brk || pdfParseClock(brk.start) === null) {
+                return;
+            }
+            const duration = Math.max(0, Number(brk.duration) || 0);
+            if (duration && (!best || duration > best.duration)) {
+                best = {start: brk.start, duration};
+            }
+        });
+        const vmEnd = best ? best.start : '12:30';
+        const nmStart = best ? pdfClockLabel(pdfParseClock(best.start) + best.duration) : '12:30';
+        return {
+            vormittag: {start, end: vmEnd},
+            nachmittag: {start: nmStart, end},
+            ersterTagNurNachmittag: false,
+            letzterTagNurVormittag: false
+        };
+    };
+
+    // Projiziert den Sequenz-Abschnitt (aktuelle Bearbeitungsquelle) in
+    // tagesbasierte Export-Einträge mit vollen Karten-Details. Jede Platzierung
+    // (typ 'einheit') wird zu genau einer Zeile; eine aktive Einheiten-Karte
+    // liefert die Detailfelder, sonst bleibt es Titel + Zeit.
+    const getSequencePlanByDay = (state) => {
+        const seq = state.sequenz || {};
+        const config = state.config || {};
+        const placements = (seq.platzierungen && typeof seq.platzierungen === 'object') ? seq.platzierungen : {};
+        const bausteine = (seq.bausteine && typeof seq.bausteine === 'object') ? seq.bausteine : {};
+        const auswahlen = (seq.einheitenauswahlen && typeof seq.einheitenauswahlen === 'object') ? seq.einheitenauswahlen : {};
+        const methodById = new Map(methods.map((m) => [String(m.id), m]));
+        const az = pdfDeriveAnkerzeiten(config);
+        const vmStart = pdfParseClock(az.vormittag.start);
+        const nmStart = pdfParseClock(az.nachmittag.start);
+        const days = {};
+        const tage = Array.isArray(seq.tage) ? seq.tage : [];
+        tage.forEach((tag, idx) => {
+            const dayname = (tag && tag.bezeichnung && (config.days || []).includes(tag.bezeichnung))
+                ? tag.bezeichnung
+                : (config.days || [])[idx];
+            if (!dayname) {
+                return;
+            }
+            const isFirst = idx === 0;
+            const isLast = idx === (tage.length - 1);
+            const anchorStarts = {
+                vormittag: (isFirst && az.ersterTagNurNachmittag) ? nmStart : vmStart,
+                nachmittag: (isLast && az.letzterTagNurVormittag) ? vmStart : nmStart
+            };
+            const items = [];
+            ['vormittag', 'nachmittag'].forEach((ankername) => {
+                let clock = Number.isFinite(anchorStarts[ankername]) ? anchorStarts[ankername] : 0;
+                const pids = (((tag.anker || {})[ankername] || {}).sequenz) || [];
+                pids.forEach((pid) => {
+                    const p = placements[pid];
+                    if (!p) {
+                        return;
+                    }
+                    const duration = Math.max(0, Number(p.dauer) || 0);
+                    if (p.typ === 'pause') {
+                        items.push({kind: 'break', title: String(p.titel || 'Pause'), startMin: clock, endMin: clock + duration, details: {}});
+                        clock += duration;
+                        return;
+                    }
+                    let card = null;
+                    if (p.einheitenauswahl) {
+                        const auswahl = auswahlen[p.einheitenauswahl];
+                        const aktiv = auswahl && auswahl.aktiv !== null && auswahl.aktiv !== undefined ? String(auswahl.aktiv) : '';
+                        card = aktiv ? methodById.get(aktiv) : null;
+                    }
+                    if (card) {
+                        const normalized = normalizeMethodForPdf(card);
+                        items.push(Object.assign({}, normalized, {
+                            kind: 'method',
+                            title: String(p.titel || '').trim() || normalized.title,
+                            startMin: clock,
+                            endMin: clock + duration
+                        }));
+                    } else {
+                        const baustein = p.bausteinid ? bausteine[p.bausteinid] : null;
+                        const title = String(p.titel || '').trim()
+                            || (baustein && baustein.titel ? String(baustein.titel) : 'Seminareinheit');
+                        items.push({kind: 'method', title, phase: '', startMin: clock, endMin: clock + duration, details: {}});
+                    }
+                    clock += duration;
+                });
+            });
+            days[dayname] = items;
+        });
+        (config.days || []).forEach((day) => {
+            if (!days[day]) {
+                days[day] = [];
+            }
+        });
+        return days;
+    };
+
+    // Aktuelle Bearbeitungsquelle ist die Sequenz; plan.days (Legacy-Grid) wird
+    // beim Sequenz-Editieren NICHT mehr nachgezogen. Der Export muss deshalb aus
+    // der Sequenz projizieren (wie der Überblick), sonst zeigt das PDF Altdaten.
     const getPlanByDay = () => {
-        if (!currentGridState || !currentGridState.plan || !currentGridState.plan.days) {
+        const state = currentGridState;
+        if (!state) {
             return {};
         }
-        return currentGridState.plan.days;
+        const seq = state.sequenz;
+        if (seq && Array.isArray(seq.tage) && seq.tage.length) {
+            return getSequencePlanByDay(state);
+        }
+        return (state.plan && state.plan.days) ? state.plan.days : {};
     };
 
     const getOrderedDays = () => {
@@ -1082,13 +1234,23 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const getSelectedPdfColumns = () => {
         const all = bySel('#kg-pdf-columns-all');
         const host = bySel('#kg-pdf-columns-options');
-        if (!host || (all && all.checked)) {
+        if (!host) {
             return PDF_COLUMN_ORDER.slice();
+        }
+        // D63: Reihenfolge folgt der (per ◄/► editierten) DOM-Reihenfolge der Zeilen.
+        const orderedKeys = Array.from(host.querySelectorAll('.kg-pdf-col-row'))
+            .map((row) => String(row.getAttribute('data-col') || '').trim())
+            .filter((key) => PDF_COLUMN_ORDER.includes(key));
+        const domOrder = orderedKeys.length ? orderedKeys : PDF_COLUMN_ORDER.slice();
+        if (all && all.checked) {
+            return domOrder;
         }
         const selected = Array.from(host.querySelectorAll('input[type="checkbox"]:checked'))
             .map((el) => String(el.value || '').trim())
             .filter((key) => PDF_COLUMN_ORDER.includes(key));
-        return selected.length ? selected : PDF_COLUMN_ORDER.slice();
+        // In editierter Reihenfolge zurückgeben, nicht in Klick-Reihenfolge.
+        const ordered = domOrder.filter((key) => selected.includes(key));
+        return ordered.length ? ordered : domOrder;
     };
 
     const updatePdfColumnsToggleLabel = () => {
@@ -1105,7 +1267,68 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         toggle.textContent = count ? `Spalten (${count})` : 'Spalten wählen';
     };
 
-    const bindPdfColumnsDropdown = () => {
+    // D63: gespeicherte Reihenfolge/Auswahl auf das Panel anwenden.
+    const applyPdfColumnsSetting = () => {
+        const all = bySel('#kg-pdf-columns-all');
+        const options = bySel('#kg-pdf-columns-options');
+        if (!all || !options || !pdfColumnsSetting) {
+            return;
+        }
+        const order = Array.isArray(pdfColumnsSetting.order) ? pdfColumnsSetting.order : [];
+        // Zeilen entlang der gespeicherten Reihenfolge neu einhängen.
+        order.forEach((key) => {
+            const row = options.querySelector(`.kg-pdf-col-row[data-col="${key}"]`);
+            if (row) {
+                options.appendChild(row);
+            }
+        });
+        const useAll = !!pdfColumnsSetting.all;
+        all.checked = useAll;
+        const selected = Array.isArray(pdfColumnsSetting.selected) ? pdfColumnsSetting.selected : [];
+        options.querySelectorAll('.kg-pdf-col-row input[type="checkbox"]').forEach((cb) => {
+            cb.checked = !useAll && selected.includes(String(cb.value || ''));
+        });
+        updatePdfColumnsToggleLabel();
+    };
+
+    const getPdfColumnsState = () => {
+        const all = bySel('#kg-pdf-columns-all');
+        const options = bySel('#kg-pdf-columns-options');
+        const order = [];
+        const selected = [];
+        if (options) {
+            options.querySelectorAll('.kg-pdf-col-row').forEach((row) => {
+                const key = String(row.getAttribute('data-col') || '');
+                if (!key) {
+                    return;
+                }
+                order.push(key);
+                const cb = row.querySelector('input[type="checkbox"]');
+                if (cb && cb.checked) {
+                    selected.push(key);
+                }
+            });
+        }
+        return {all: !!(all && all.checked), order, selected};
+    };
+
+    const savePdfColumns = (cmid) => {
+        if (pdfColumnsSaveTimer) {
+            window.clearTimeout(pdfColumnsSaveTimer);
+        }
+        pdfColumnsSaveTimer = window.setTimeout(() => {
+            const state = getPdfColumnsState();
+            pdfColumnsSetting = state;
+            asCall('mod_seminarplaner_set_pdf_columns', {
+                cmid,
+                columnsjson: JSON.stringify(state)
+            }).catch(() => {
+                // Speichern des Settings darf den Export nie blockieren.
+            });
+        }, 500);
+    };
+
+    const bindPdfColumnsDropdown = (cmid) => {
         const root = bySel('#kg-pdf-columns-dropdown');
         const toggle = bySel('#kg-pdf-columns-toggle');
         const panel = bySel('#kg-pdf-columns-panel');
@@ -1114,6 +1337,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         if (!toggle || !panel || !all || !options) {
             return;
         }
+        applyPdfColumnsSetting();
         toggle.addEventListener('click', () => panel.classList.toggle('kg-hidden'));
         document.addEventListener('click', (event) => {
             if (root && !root.contains(event.target)) {
@@ -1127,6 +1351,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 });
             }
             updatePdfColumnsToggleLabel();
+            savePdfColumns(cmid);
         });
         options.addEventListener('change', (event) => {
             const target = event.target;
@@ -1137,6 +1362,27 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 all.checked = false;
             }
             updatePdfColumnsToggleLabel();
+            savePdfColumns(cmid);
+        });
+        // D63: ◄/► verschieben eine Spalte in der Export-Reihenfolge.
+        options.addEventListener('click', (event) => {
+            const btn = event.target.closest ? event.target.closest('.kg-pdf-col-btn') : null;
+            if (!btn) {
+                return;
+            }
+            const row = btn.closest('.kg-pdf-col-row');
+            if (!row) {
+                return;
+            }
+            const dir = btn.getAttribute('data-move');
+            if (dir === 'left' && row.previousElementSibling) {
+                options.insertBefore(row, row.previousElementSibling);
+            } else if (dir === 'right' && row.nextElementSibling) {
+                options.insertBefore(row.nextElementSibling, row);
+            } else {
+                return;
+            }
+            savePdfColumns(cmid);
         });
         updatePdfColumnsToggleLabel();
     };
@@ -1152,8 +1398,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     return escapeTextForPdf(unit.title || item.title || '');
                 case 'seminarphase':
                     return joinUniquePdfValues(unit.methods.map((method) => normalizePhaseText(method.phase || '')));
-                case 'kognitive':
-                    return joinUniquePdfValues(unit.methods.map((method) => getCognitiveLabel(method)));
                 case 'kurzbeschreibung': {
                     const parts = [];
                     const topics = escapeTextForPdf(unit.topics || '');
@@ -1199,8 +1443,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 return escapeTextForPdf(item.title || '');
             case 'seminarphase':
                 return escapeTextForPdf(normalizePhaseText(item.phase || details.phase || ''));
-            case 'kognitive':
-                return escapeTextForPdf(getCognitiveLabel(item));
             case 'kurzbeschreibung':
                 return escapeTextForPdf(details.description || '');
             case 'ablauf':
@@ -1255,7 +1497,72 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return lines;
     };
 
+    // D52: Logo-Format aus der Data-URL ableiten (jsPDF erwartet PNG/JPEG/GIF/WEBP).
+    const detectPdfLogoFormat = (dataurl) => {
+        const match = /^data:image\/([a-z0-9.+-]+)/i.exec(String(dataurl || ''));
+        const mime = match ? match[1].toLowerCase() : 'png';
+        if (mime === 'jpg' || mime === 'jpeg') {
+            return 'JPEG';
+        }
+        if (mime === 'gif') {
+            return 'GIF';
+        }
+        if (mime === 'webp') {
+            return 'WEBP';
+        }
+        return 'PNG';
+    };
+
+    // D52: Logo aus PHP übernehmen und die Bildmaße vorab bestimmen, damit das
+    // Stempeln beim Export synchron ohne Ladeverzögerung erfolgen kann.
+    const preparePdfLogo = (logo) => {
+        pdfLogoRaw = (logo && logo.dataurl) ? logo : null;
+        if (!logo || !logo.dataurl) {
+            pdfLogo = null;
+            return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                pdfLogo = {
+                    dataurl: logo.dataurl,
+                    position: logo.position === 'left' ? 'left' : 'right',
+                    format: detectPdfLogoFormat(logo.dataurl),
+                    w: img.naturalWidth || img.width || 1,
+                    h: img.naturalHeight || img.height || 1
+                };
+                resolve();
+            };
+            img.onerror = () => {
+                pdfLogo = null;
+                resolve();
+            };
+            img.src = logo.dataurl;
+        });
+    };
+
+    // D52: Logo oben links/rechts in den Seitenkopf der aktuellen Seite stempeln.
+    const stampPdfLogo = (doc) => {
+        if (!pdfLogo || !pdfLogo.dataurl) {
+            return;
+        }
+        try {
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const maxH = 14;
+            const maxW = 45;
+            const scale = Math.min(maxH / pdfLogo.h, maxW / pdfLogo.w, 1);
+            const w = pdfLogo.w * scale;
+            const h = pdfLogo.h * scale;
+            const x = pdfLogo.position === 'left' ? 14 : (pageWidth - 14 - w);
+            doc.addImage(pdfLogo.dataurl, pdfLogo.format, x, 8, w, h);
+        } catch (e) {
+            // Logo-Fehler dürfen den PDF-Export nie blockieren.
+            pdfLogo = null;
+        }
+    };
+
     const drawPdfTitlePage = (doc, title, meta, subtitle = '') => {
+        stampPdfLogo(doc);
         const pageHeight = doc.internal.pageSize.getHeight();
         let y = 48;
         doc.setFont(undefined, 'bold');
@@ -1280,7 +1587,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
         doc.setDrawColor(220, 224, 233);
         doc.setLineWidth(0.3);
-        doc.line(14, y, 196, y);
+        // Trennlinie über die volle Seitenbreite ziehen (zieht im Querformat mit).
+        doc.line(14, y, doc.internal.pageSize.getWidth() - 14, y);
         y += 10;
 
         doc.setFontSize(11);
@@ -1299,6 +1607,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     const addBausteinCoverPage = (doc, day, unit, methodCount) => {
         doc.addPage();
+        stampPdfLogo(doc);
         let y = 24;
         doc.setFont(undefined, 'bold');
         doc.setFontSize(20);
@@ -1338,6 +1647,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     };
 
     const renderFlowMethodPage = (doc, day, item) => {
+        stampPdfLogo(doc);
         let y = 20;
         const details = item && item.details ? item.details : {};
         const duration = Math.max(5, (Number(item.endMin) || 0) - (Number(item.startMin) || 0));
@@ -1380,6 +1690,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             }
             if (y > 252) {
                 doc.addPage();
+                stampPdfLogo(doc);
                 y = 20;
             }
             doc.setFontSize(11);
@@ -1474,7 +1785,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const days = getOrderedDays();
         const plan = getPlanByDay();
         const selectedcols = getSelectedPdfColumns();
-        const doc = new jsPDF();
+        // ZIM-Papier im Querformat: mehr Platz für die nebeneinander stehenden ZIM-Spalten.
+        const doc = new jsPDF({orientation: 'landscape'});
         if (typeof doc.autoTable !== 'function') {
             throw new Error('PDF-Tabellenbibliothek nicht geladen');
         }
@@ -1515,7 +1827,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             uhrzeit: 25,
             titel: 35,
             seminarphase: 28,
-            kognitive: 28,
             kurzbeschreibung: 40,
             debrief: 35,
             ablauf: 60,
@@ -1547,7 +1858,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             headStyles: {fillColor: [43, 104, 197], textColor: 255, fontStyle: 'bold'},
             alternateRowStyles: {fillColor: [245, 247, 250]},
             margin: {top: 30},
-            columnStyles
+            columnStyles,
+            didDrawPage: () => stampPdfLogo(doc)
         });
 
         const filename = meta.title ? `ZIM-${meta.title}.pdf` : 'ZIM-Papier.pdf';
@@ -1590,6 +1902,115 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const filename = meta.title ? `Konzeptsammlung-${meta.title}.pdf` : 'Konzeptsammlung.pdf';
         doc.save(filename);
     };
+
+    // D52: Freitext-Materialfeld in einzelne Abhak-Einträge zerlegen. Block- und
+    // Zeilenumbrüche werden als Trenner erhalten, restliche Tags entfernt.
+    const splitMaterialEntries = (text) => {
+        const withBreaks = String(text || '')
+            .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+            .replace(/<\/\s*(?:p|div|li|tr)\s*>/gi, '\n')
+            .replace(/<[^>]*>/g, ' ');
+        const decoder = document.createElement('textarea');
+        decoder.innerHTML = withBreaks;
+        return (decoder.value || '')
+            .split(/\r?\n|;|•|·|,/)
+            .map((entry) => entry.replace(/^[\s\-–—*·•]+/, '').replace(/\s+/g, ' ').trim())
+            .filter(Boolean);
+    };
+
+    // D52: Alle Materialeinträge eines Plan-Eintrags (Baustein oder Einzelmethode).
+    const getMaterialEntriesForItem = (item) => {
+        const unit = getUnitForPdf(item);
+        const texts = [];
+        if (unit) {
+            unit.methods.forEach((method) => texts.push(method.details.materials || ''));
+        } else {
+            const details = item && item.details ? item.details : {};
+            texts.push(details.materials || '');
+        }
+        const entries = [];
+        texts.forEach((text) => splitMaterialEntries(text).forEach((entry) => entries.push(entry)));
+        return entries;
+    };
+
+    // D52: Eigenständige Materialliste als Abgabeliste (pro Tag dedupliziert, zum Abhaken).
+    const exportPdfMaterials = () => {
+        const jsPDF = ensurePdfReady();
+        const meta = getPdfMeta();
+        const days = getOrderedDays();
+        const plan = getPlanByDay();
+        const doc = new jsPDF();
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        drawPdfTitlePage(doc, 'Materialliste', meta, 'Abgabeliste');
+
+        let anyMaterial = false;
+        days.forEach((day) => {
+            const entries = (plan[day] || []).filter((entry) => entry && entry.kind !== 'break');
+            const seen = {};
+            const materials = [];
+            entries.forEach((item) => {
+                getMaterialEntriesForItem(item).forEach((material) => {
+                    const key = material.toLowerCase();
+                    if (!seen[key]) {
+                        seen[key] = true;
+                        materials.push(material);
+                    }
+                });
+            });
+            if (!materials.length) {
+                return;
+            }
+            anyMaterial = true;
+
+            doc.addPage();
+            stampPdfLogo(doc);
+            let y = 26;
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(16);
+            doc.text(escapeTextForPdf(day), 14, y);
+            y += 4;
+            doc.setDrawColor(220, 224, 233);
+            doc.setLineWidth(0.3);
+            doc.line(14, y, 196, y);
+            y += 10;
+
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(11);
+            materials.forEach((material) => {
+                const lines = doc.splitTextToSize(escapeTextForPdf(material), 168);
+                const blockHeight = Math.max(8, lines.length * 6);
+                if (y + blockHeight > pageHeight - 16) {
+                    doc.addPage();
+                    stampPdfLogo(doc);
+                    y = 26;
+                }
+                doc.setDrawColor(120, 120, 120);
+                doc.setLineWidth(0.4);
+                doc.rect(14, y - 4, 5, 5);
+                doc.text(lines, 24, y);
+                y += blockHeight;
+            });
+        });
+
+        if (!anyMaterial) {
+            doc.addPage();
+            stampPdfLogo(doc);
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(12);
+            doc.text('Für diesen Seminarplan sind keine Materialien hinterlegt.', 14, 30);
+        }
+
+        const filename = meta.title ? `Materialliste-${meta.title}.pdf` : 'Materialliste.pdf';
+        doc.save(filename);
+    };
+
+    // D64: Handout für Teilnehmende — PDF-Export des veröffentlichten Roten Fadens.
+    // D64: Das Handout-PDF erzeugt das gemeinsame Modul mod_seminarplaner/handout —
+    // derselbe Generator, den der Roter-Faden-Tab benutzt (Teilnehmende erzeugen es
+    // dort selbst). Hier bleibt nur der Aufruf, damit beide Wege dasselbe Dokument
+    // liefern.
+    const exportPdfHandout = (cmid) => Handout.exportPdf(cmid, pdfLogoRaw);
 
     const saveMethods = (cmid, newMethods) => {
         return asCall('mod_seminarplaner_save_method_cards', {
@@ -1803,14 +2224,21 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const pdfGrid = bySel('#kg-pdf-grid');
         const pdfZimBtn = bySel('#kg-pdf-zim');
         const pdfFlowBtn = bySel('#kg-pdf-flow');
+        const pdfMaterialsBtn = bySel('#kg-pdf-materials');
+        const pdfHandoutBtn = bySel('#kg-pdf-handout');
         const globalSetSelect = bySel('#kg-global-set-select');
         const globalSetImportBtn = bySel('#kg-global-set-import');
-        const globalSetAutosync = bySel('#kg-global-set-autosync');
         const globalSetApplyBtn = bySel('#kg-global-set-apply');
-        bindPdfColumnsDropdown();
+        bindPdfColumnsDropdown(cmid);
 
         if (parsebtn && fileinput) {
             fileinput.addEventListener('change', () => {
+                const nameEl = bySel('#kg-ie-filename');
+                if (nameEl) {
+                    nameEl.textContent = (fileinput.files && fileinput.files[0])
+                        ? fileinput.files[0].name
+                        : 'Keine Datei ausgewählt';
+                }
                 currentImportPayload = null;
                 previewRows = [];
                 previewUnits = [];
@@ -2038,77 +2466,69 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 }
             });
         }
+        if (pdfMaterialsBtn) {
+            pdfMaterialsBtn.addEventListener('click', () => {
+                try {
+                    exportPdfMaterials();
+                    setStatus('Materiallisten-PDF erstellt.', false);
+                } catch (e) {
+                    setStatus(`PDF-Export fehlgeschlagen: ${e.message || e}`, true);
+                }
+            });
+        }
+        if (pdfHandoutBtn) {
+            // D64: Handout aus dem veröffentlichten Roten Faden.
+            pdfHandoutBtn.addEventListener('click', () => {
+                setStatus('Handout wird erstellt …', false);
+                exportPdfHandout(cmid)
+                    .then(() => setStatus('Handout-PDF erstellt.', false))
+                    .catch((e) => setStatus(`Handout-Export fehlgeschlagen: ${e.message || e}`, true));
+            });
+        }
         if (globalSetImportBtn) {
             globalSetImportBtn.addEventListener('click', () => {
                 const setid = Number.parseInt(globalSetSelect ? (globalSetSelect.value || '0') : '0', 10) || 0;
                 if (!setid) {
-                    setGlobalStatus('Bitte zuerst ein globales Konzept auswählen.', true);
+                    setGlobalStatus('Bitte zuerst ein Seminarkonzept auswählen.', true);
                     return;
                 }
                 asCall('mod_seminarplaner_import_global_methodset', {cmid, methodsetid: setid})
                     .then((res) => {
-                        if (pendingAutosyncPrefs[setid]) {
-                            return asCall('mod_seminarplaner_set_methodset_sync_policy', {
-                                cmid,
-                                methodsetid: setid,
-                                autosyncenabled: true
-                            }).then(() => res).catch(() => res);
-                        }
-                        return res;
-                    })
-                    .then((res) => {
-                        return Promise.all([loadMethods(cmid), loadGlobalSyncStatus(cmid)]).then(() => res);
+                        // loadGlobalMethodsets neu: das eben uebernommene
+                        // Konzept faellt damit aus der Auswahl.
+                        return Promise.all([
+                            loadMethods(cmid),
+                            loadGlobalSyncStatus(cmid),
+                            loadGlobalMethodsets(cmid),
+                        ]).then(() => res);
                     })
                     .then((res) => {
                         refreshGlobalSyncUi();
-                        setGlobalStatus(
-                            `Import erfolgreich: ${res.importedcount} Seminareinheiten aus "${res.setname}" importiert (insgesamt ${res.totalcount}).`,
+                        // D32: beim Seminarkonzept entsteht zusätzlich ein
+                        // neuer Plan (nie überschreibend).
+                        setGlobalStatus(res.plancreated
+                            ? `Import erfolgreich: Seminarkonzept "${res.setname}" als neuer Plan „${res.planname}" angelegt, `
+                                + `${res.importedcount} Seminareinheiten übernommen (insgesamt ${res.totalcount}).`
+                            : `Import erfolgreich: ${res.importedcount} Seminareinheiten aus "${res.setname}" in die Bibliothek `
+                                + `übernommen (insgesamt ${res.totalcount}). Dieses Konzept enthält keinen Seminarplan, `
+                                + `deshalb wurde kein Plan angelegt.`,
                             false
                         );
                     })
                     .catch((e) => {
                         Notification.exception(e);
-                        setGlobalStatus('Import des globalen Konzepts fehlgeschlagen.', true);
+                        setGlobalStatus('Übernehmen fehlgeschlagen.', true);
                     });
             });
         }
         if (globalSetSelect) {
             globalSetSelect.addEventListener('change', refreshGlobalSyncUi);
         }
-        if (globalSetAutosync) {
-            globalSetAutosync.addEventListener('change', () => {
-                const selected = getSelectedSyncLink();
-                if (!selected) {
-                    const setid = Number.parseInt(globalSetSelect ? (globalSetSelect.value || '0') : '0', 10) || 0;
-                    if (setid > 0) {
-                        pendingAutosyncPrefs[setid] = !!globalSetAutosync.checked;
-                        setGlobalStatus(
-                            globalSetAutosync.checked
-                                ? 'Auto-Update vorgemerkt und wird nach dem Import aktiviert.'
-                                : 'Auto-Update-Vormerkung entfernt.',
-                            false
-                        );
-                    }
-                    return;
-                }
-                asCall('mod_seminarplaner_set_methodset_sync_policy', {
-                    cmid,
-                    methodsetid: Number(selected.methodsetid),
-                    autosyncenabled: !!globalSetAutosync.checked
-                }).then(() => loadGlobalSyncStatus(cmid)).then(() => {
-                    refreshGlobalSyncUi();
-                    setGlobalStatus('Auto-Update-Einstellung gespeichert.', false);
-                }).catch((e) => {
-                    Notification.exception(e);
-                    setGlobalStatus('Auto-Update-Einstellung konnte nicht gespeichert werden.', true);
-                });
-            });
-        }
         if (globalSetApplyBtn) {
             globalSetApplyBtn.addEventListener('click', () => {
                 const selected = getSelectedSyncLink();
                 if (!selected) {
-                    setGlobalStatus('Bitte zuerst ein verknüpftes globales Konzept auswählen.', true);
+                    setGlobalStatus('Bitte zuerst eine verknüpfte Methoden-Sammlung auswählen.', true);
                     return;
                 }
                 asCall('mod_seminarplaner_apply_methodset_updates', {
@@ -2133,20 +2553,84 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     };
 
+    // D63b/D64: Deep-Link aus dem Überblick (ZIM) bzw. Roten Faden (Handout) —
+    // denselben Export-Flow ohne zweiten Mechanismus auslösen.
+    const runDeepLinkExport = (cmid) => {
+        let params;
+        try {
+            params = new URLSearchParams(window.location.search);
+        } catch (e) {
+            return;
+        }
+        const action = params.get('pdfaction');
+        if (!action) {
+            return;
+        }
+        const pdfCard = bySel('#kg-pdf-grid') ? bySel('#kg-pdf-grid').closest('.kg-ie-card') : null;
+        if (pdfCard && pdfCard.scrollIntoView) {
+            pdfCard.scrollIntoView({behavior: 'smooth', block: 'start'});
+        }
+        if (action === 'handout') {
+            setStatus('Handout wird erstellt …', false);
+            exportPdfHandout(cmid)
+                .then(() => setStatus('Handout-PDF erstellt.', false))
+                .catch((e) => setStatus(`Handout-Export fehlgeschlagen: ${e.message || e}`, true));
+            return;
+        }
+        // Plan-gebundene Exporte (ZIM, Konzeptsammlung, Materialliste): erst den
+        // übergebenen Plan laden, dann denselben Export wie im Tab auslösen.
+        const gridExports = {
+            zim: {fn: exportPdfZim, label: 'ZIM-PDF'},
+            flow: {fn: exportPdfFlow, label: 'Konzeptsammlungs-PDF'},
+            materials: {fn: exportPdfMaterials, label: 'Materiallisten-PDF'}
+        };
+        const target = gridExports[action];
+        if (!target) {
+            return;
+        }
+        const gridid = Number.parseInt(params.get('pdfgrid') || '0', 10) || 0;
+        if (!gridid) {
+            setStatus('Kein Seminarplan für den Export übergeben.', true);
+            return;
+        }
+        const select = bySel('#kg-pdf-grid');
+        if (select) {
+            select.value = String(gridid);
+        }
+        setStatus('Seminarplan wird geladen …', false);
+        loadGridState(cmid, gridid).then(() => {
+            if (currentGridState && currentGridState.meta) {
+                ['title', 'date', 'number', 'contact'].forEach((key) => {
+                    const el = bySel(`#kg-pdf-${key}`);
+                    if (el && !el.value) {
+                        el.value = currentGridState.meta[key] || '';
+                    }
+                });
+            }
+            target.fn();
+            setStatus(`${target.label} erstellt.`, false);
+        }).catch((e) => {
+            setStatus(`Export fehlgeschlagen: ${e.message || e}`, true);
+        });
+    };
+
     return {
-        init: function(cmid) {
+        init: function(cmid, logo, columns) {
+            pdfColumnsSetting = columns && typeof columns === 'object' ? columns : null;
             ensureExternalLibraries().then(() => {
                 return Promise.all([
                     loadMethods(cmid),
                     loadGrids(cmid),
                     loadPlanningState(cmid),
                     loadGlobalMethodsets(cmid),
-                    loadGlobalSyncStatus(cmid)
+                    loadGlobalSyncStatus(cmid),
+                    preparePdfLogo(logo)
                 ]);
             }).then(() => {
                     bind(cmid);
                     step(1);
                     refreshGlobalSyncUi();
+                    runDeepLinkExport(cmid);
                 }).catch((e) => {
                     Notification.exception(e);
                     setStatus('Initialisierung fehlgeschlagen.', true);

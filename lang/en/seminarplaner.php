@@ -31,14 +31,48 @@ $string['addmethodcard'] = 'Add method';
 $string['clearform'] = 'Clear form';
 $string['methodlibrary'] = 'Method library';
 $string['gridplanning'] = 'Seminar plan';
+$string['sequenzmenu'] = 'Sequence';
+$string['ueberblickmenu'] = 'Overview';
+$string['einreichenmenu'] = 'Submit';
+$string['bibliothekmenu'] = 'Library';
+$string['bibliothek_create'] = '＋ Create new seminar unit';
+$string['ueberblick_subline'] = 'The complete seminar plan at a glance - read-only.';
+$string['ueberblick_readonlynote'] = 'This overview shows your complete plan. Editing happens in the "Sequence" tab.';
+$string['ueberblick_tosequenz'] = 'Go there';
+$string['sequenz_dramatoggle'] = 'Didactic recommendations';
+$string['sequenz_dramatoggle_info'] = 'Checks the plan against didactic rules of thumb - morning opening, activation after lunch, varied social forms, breaks, closing, time frame and goal coverage - and shows hints below the day plan. Recommendations only: nothing in the plan changes automatically.';
+$string['sequenz_publishlabel'] = 'Publish seminar plan';
+$string['sequenz_publishlabel_info'] = 'Shows this seminar plan to all participants in the "Common Thread" tab. Only one plan per activity can be published - switching on replaces an existing publication, switching off withdraws it.';
+$string['sequenz_previewnote'] = 'The day at a glance - reorder units via drag & drop or the arrows, pick alternatives, add headings.';
+$string['sequenz_planlabel'] = 'Seminar plan';
+$string['sequenz_prevday'] = 'Previous day';
+$string['sequenz_nextday'] = 'Next day';
 $string['reviewmenu'] = 'Review';
 $string['importexport'] = 'Import/Export';
+$string['pdflogoheader'] = 'PDF logo';
+$string['pdflogo'] = 'Logo for PDF exports';
+$string['pdflogo_help'] = 'Upload a logo (PNG, JPG or GIF) that is placed in the header of every PDF export of this activity (ZIM, concept collection and material list). The logo is stored once per activity and does not need to be uploaded again for each export.';
+$string['pdflogoposition'] = 'Logo position';
+$string['pdflogoposition_right'] = 'Top right';
+$string['pdflogoposition_left'] = 'Top left';
+$string['usecaseheader'] = 'Seminar planner use case';
+$string['usecase'] = 'What do you need the seminar planner for?';
+$string['usecase_help'] = 'This choice controls which tabs are shown in this activity:
+
+* **Design a seminar:** Overview, Sequence, Library, Import/Export
+* **Run a designed seminar:** Overview, Sequence, Library, Common Thread, Import/Export
+* **Manage a global seminar concept:** Overview, Sequence, Library, Import/Export, Submit
+
+The Common Thread tab only appears with the matching capability.';
+$string['usecase_konzipieren'] = 'Design a seminar';
+$string['usecase_durchfuehren'] = 'Run a designed seminar';
+$string['usecase_verwalten'] = 'Manage a global seminar concept';
 $string['roterfadenmenu'] = 'Common Thread';
 $string['roterfaden_empty'] = 'No Common Thread has been published yet';
 $string['roterfaden_publishlabel'] = 'Publish seminar plan as Common Thread';
 $string['roterfaden_theme_label'] = 'Timeline style';
 $string['roterfaden_theme_modern'] = 'Modern';
-$string['roterfaden_theme_clean'] = 'Clean';
+$string['roterfaden_theme_kompakt'] = 'Compact';
 $string['timespan'] = 'Time range';
 $string['stepsize'] = 'Step (minutes)';
 $string['applygrid'] = 'Apply seminar plan';

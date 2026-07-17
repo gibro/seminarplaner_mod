@@ -1,19 +1,98 @@
 /* Moodle plugin UI wrappers */
+
+/* ==========================================================================
+   INHALTSVERZEICHNIS  (nach den Abschnitts-Überschriften im Dateiverlauf;
+   per Suche nach dem Titel anspringbar — bewusst ohne Zeilennummern, die
+   veralten würden)
+   --------------------------------------------------------------------------
+   0. Tab-Leiste + Basis-Wrapper (ab hier, vor dem ersten Abschnitt)
+   1. DESIGN SYSTEM – CSS VARIABLES        (Farb-, Typo-, Abstands-Token, :root)
+   2. ADD TEMPLATE (Eingabeformular)       (Seminareinheit anlegen)
+   3. LIST TEMPLATE (Seminarplaner)        (Filterleiste, Karten-Grid)
+   4. KOGNITIVE DIMENSIONEN – FARBCODIERUNG (Alt-Farbschema, teils Bestand)
+   5. SINGLE TEMPLATE (Seminareinheit)     (Editor-Formular, Modal)
+   6. INFORMATION-FIRST DESIGN             (Methoden-Karte, Stapel-Bearbeitung,
+                                            Baustein, Sequenz-Grundlayout)
+   7. CD-Handoff Stufe 1                   (IG-Metall-Token angewandt: Rot,
+                                            Radius 0, Typografie)
+   8. CD-Handoff Stufe 2                   (Sequenz-Komponenten-Feinschliff)
+   9. Feature-Blöcke: D47 Drag&Drop · D48 Schmiede-Hinweis · D29/D33 Globale
+      Bibliothek · D37 Einreichen-Statusliste · D49 Überblick-Navigation
+  10. CD-Handoff Stufe 3                   (näher an den Screenshots)
+  11. Nachträge am Dateiende (jüngste Änderungen zuerst gepflegt): D50 Picker,
+      D51 Weggabelung + Unterschied-Grafik, D58 Konzeptverantwortliche,
+      Sequenz-Toolbar einreihig, Meta-Font-Token
+
+   HINWEIS für Änderungen: Dieser File nutzt an mehreren Stellen bewusst die
+   Kaskaden-Reihenfolge (spätere Regel überschreibt eine frühere gleicher
+   Spezifität, v. a. in den CD-Handoff-Blöcken). Regeln daher NICHT umsortieren,
+   ohne die betroffenen Komponenten vorher/nachher visuell zu prüfen. Geänderte
+   Eigenschaften explizit auf den Zielwert setzen statt nur zu entfernen (die
+   aggregierte Theme-CSS kann eine ältere Kopie einer Regel weiter erzwingen).
+
+   --------------------------------------------------------------------------
+   WARUM EINE EIGENSCHAFT HIER NUR NOCH AN EINER STELLE STEHT  (17. Juli 2026)
+   --------------------------------------------------------------------------
+   Die Basis-Blöcke und die CD-Handoff-Schichten haben dieselben Komponenten
+   lange DOPPELT definiert, bei gleicher Spezifität. Das sah nach zwei Ebenen
+   aus, war aber keine: die frühere Deklaration konnte das Ergebnis nie
+   beeinflussen — die spätere gewinnt immer. Sie war schlicht toter Code.
+
+   Der Schaden war real und dreifach belegt (16. Juli): Änderungen am
+   Basis-Block wurden von der CD-Schicht still zurückgedreht (.sq-anchor__head,
+   .sq-baustein, Commit 5ca0441), und eine neue Regel übermalte bei gleicher
+   Spezifität fünf Phasenfarben grau (.sq-phase__dot, 8071ae3). Wer die Datei
+   anfasste, zahlte jedes Mal mit einem Fehler oder einer Suche.
+
+   Am 17. Juli sind daher 311 tote Deklarationen entfernt worden — nur solche,
+   die eine spätere Regel mit demselben (oder einem umfassenderen) Selektorsatz
+   ohnehin überschrieb. Rechnerisch optikneutral, zusätzlich nachgewiesen mit
+   docs/styles-refactor-werkzeug/ (0 Unterschiede über 1.639 Elemente, bei
+   scharfem Kanarienvogel-Gegentest).
+
+   WAS DAS FÜR NEUE ÄNDERUNGEN HEISST: Wenn eine Eigenschaft für einen Selektor
+   nur noch einmal dasteht, ist das kein Versehen und keine Lücke — es ist der
+   Zustand, der verhindert, dass eine Bearbeitung still verpufft. Eine zweite
+   Definition derselben Eigenschaft für denselben Selektor NICHT wieder
+   anlegen; stattdessen den vorhandenen Wert ändern. Neue Werte gehören dorthin,
+   wo die Eigenschaft schon steht.
+
+   Ausnahme, die bewusst bleibt: Gruppenselektoren, von denen nur ein Mitglied
+   später überschrieben wird (z. B. `.sq-goals__summary, …, .sq-gap__summary
+   { list-style: none }`). Die Deklaration lebt dort für die übrigen Mitglieder
+   weiter und darf nicht weg. dup2.py meldet sie trotzdem als KONFLIKT — ein
+   Fehlalarm seines zeilenweisen Lesens, kein offener Punkt.
+
+   Prüfen lässt sich der Zustand mit:
+       python3 docs/styles-refactor-werkzeug/fold.py analyse
+   „0 tote Deklarationen" heißt: die Datei hat keine stille Doppel-Ebene mehr.
+   ========================================================================== */
+
+/* CD-Handoff: Tabs als Zeile mit 4px-Unterstrich statt Button-Blöcken. */
 .kg-tabs {
   display: flex;
-  gap: 8px;
-  margin: 0 0 12px;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: 0 0 14px;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .kg-tab {
   display: inline-flex;
   align-items: center;
-  padding: 8px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
+  padding: 11px 15px;
+  border: none;
+  border-bottom: 4px solid transparent;
+  margin-bottom: -1px;
+  border-radius: 0;
   text-decoration: none;
-  color: var(--color-text);
-  background: var(--color-background);
+  color: var(--ig-gray);
+  background: transparent;
+}
+
+.kg-tab:hover {
+  color: var(--ig-anthracite);
+  text-decoration: none;
 }
 
 .kg-tab-content {
@@ -34,30 +113,12 @@
   display: inline-block;
 }
 
-.kg-tab-active {
-  background: var(--ig-red);
-  border-color: var(--ig-red);
-  color: #fff;
-}
-
 .kg-tab-active .kg-tab-icon {
-  filter: brightness(0) invert(1);
   opacity: 1;
 }
 
 .kg-shell {
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: var(--color-background);
-  padding: 12px;
-}
-
-.kg-topbar {
-  display: grid;
-  grid-template-columns: minmax(180px, 260px) repeat(5, max-content) minmax(220px, 1fr);
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 12px;
+  border-radius: 0;
 }
 
 .kg-input,
@@ -66,12 +127,37 @@
   width: 100%;
   min-height: 36px;
   padding: 8px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border: 1px solid var(--ig-midgray);
+  border-radius: 0;
   box-sizing: border-box;
   font-size: 0.9rem;
   background: var(--color-background);
   transition: var(--transition-fast);
+}
+
+/* Native <select> uebernimmt border-radius:0 zwar, behaelt aber ohne
+   appearance:none je nach Browser (macOS/Safari/Chrome) runde Ecken und den
+   nativen Pfeil. Darum fuer alle Plugin-Selects die native Optik abschalten und
+   einen eigenen, kantigen IG-Metall-Chevron (grau) als Hintergrund setzen –
+   scharfe Ecken wie bei allen anderen Elementen. Gilt fuer .kg-input-Selects
+   und die Modal-Selects. */
+select.kg-input,
+.sp-modal__field select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 30px;
+  background-color: var(--color-background);
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='12'%20height='8'%20viewBox='0%200%2012%208'%3E%3Cpath%20d='M1%201l5%205%205-5'%20fill='none'%20stroke='%23646464'%20stroke-width='1.6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  background-size: 12px 8px;
+}
+
+/* Firefox: internen Fokus-Ring des Selects unterdruecken. */
+select.kg-input:-moz-focusring {
+  color: transparent;
+  text-shadow: 0 0 0 var(--ig-anthracite);
 }
 
 .kg-grid-select,
@@ -95,18 +181,22 @@
 .kg-btn {
   min-height: 36px;
   padding: 7px 10px;
-  border: 1px solid var(--color-border);
-  background: var(--color-background);
-  border-radius: 8px;
+  border: 1px solid var(--ig-midgray);
+  border-radius: 0;
   cursor: pointer;
   margin-top: 8px;
   margin-bottom: 8px;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
 
-.kg-btn-primary {
-  background: var(--ig-red);
-  border-color: var(--ig-red);
-  color: #fff;
+.kg-btn:hover {
+  border-color: var(--ig-gray);
+  background: var(--color-background-light);
+}
+
+.kg-btn-primary:hover {
+  background: var(--ig-red-hover);
+  border-color: var(--ig-red-hover);
 }
 
 .kg-status {
@@ -132,7 +222,6 @@
 .kg-row--action .kg-btn {
   margin: 0;
   min-height: 38px;
-  width: 100%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -159,11 +248,9 @@
 .kg-label {
   display: block;
   margin: 6px 0 4px;
-  font-weight: 600;
 }
 
 .kg-label-content,
-.kg-summary-content,
 .kg-btn-content {
   display: inline-flex;
   align-items: center;
@@ -201,35 +288,70 @@
 
 .kg-ie-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 24px;
+  align-items: start;
 }
 
 .kg-ie-block {
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  padding: 10px;
-  background: var(--ig-surface-soft);
+  border-radius: 0;
 }
 
 .kg-ie-steps {
   display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 6px;
+  margin-bottom: 14px;
 }
 
 .kg-step {
   font-size: .85rem;
   padding: 5px 8px;
-  border-radius: 999px;
+  border-radius: 0;
   border: 1px solid var(--color-border);
   background: var(--color-background-light);
 }
 
-.kg-step-active {
-  border-color: var(--ig-blue);
-  color: var(--ig-blue);
-  background: var(--ig-blue-soft);
+/* Wizard-Schrittleiste (Handoff): aktiver Schritt rot mit weisser Ziffernbox,
+   inaktiver Schritt neutral grau. Scoped, damit die Deko nur die Import-Karte
+   betrifft; die Ziffernbox liegt als .kg-step__num im Chip.
+   !important am aktiven Zustand ueberschreibt die globalen .kg-step-active-
+   Regeln (mit gleicher Wichtigkeit, aber geringerer Spezifitaet). */
+.kg-ie-steps .kg-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 0;
+  background: var(--ig-surface-muted);
+  color: var(--ig-gray);
+  font-family: var(--font-head);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  font-size: 11px;
+}
+
+.kg-ie-steps .kg-step__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  background: var(--ig-midgray);
+  color: #fff;
+  font-size: 10px;
+}
+
+.kg-ie-steps .kg-step-active {
+  background: var(--ig-red);
+  color: #fff;
+  border: 0;
+}
+
+.kg-ie-steps .kg-step-active .kg-step__num {
+  background: #fff;
+  color: var(--ig-red);
 }
 
 .kg-ie-preview {
@@ -239,7 +361,7 @@
   max-height: 420px;
   overflow: auto;
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: 0;
   padding: 8px;
 }
 
@@ -249,7 +371,7 @@
   gap: 8px;
   align-items: center;
   border: 1px solid var(--ig-lightgray);
-  border-radius: 8px;
+  border-radius: 0;
   padding: 6px 8px;
   background: #fff;
 }
@@ -267,6 +389,353 @@
   color: var(--ig-gray);
 }
 
+/* =========================================================================
+   IMPORT/EXPORT – Zwei-Zonen-Kartenlayout (Design-Handoff IMPORT-EXPORT.md)
+   Zwei Zonen (Importieren / Exportieren), jede Funktion als eigene Karte mit
+   Kategorie-Farbe (Top-Rule), Icon-Badge und Zweck-Einzeiler.
+   ========================================================================= */
+.kg-ie-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---- Zonen-Kopf ---- */
+.kg-ie-zonehead {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.kg-ie-zonehead__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  background: var(--ig-anthracite);
+  color: #fff;
+}
+
+.kg-ie-zonehead__title {
+  font-family: var(--font-head);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  font-size: 15px;
+  color: var(--ig-anthracite);
+}
+
+.kg-ie-zonehead__sub {
+  font-size: 12px;
+  color: var(--ig-gray);
+}
+
+/* ---- Kategorie-Karte ---- */
+.kg-ie-card {
+  /* Standard-Kategorie: Rot. Modifier setzen --cat / --cat-tint neu. */
+  --cat: var(--ig-red);
+  --cat-tint: #FCE9EB;
+  background: #fff;
+  border: 1px solid var(--ig-lightgray);
+  border-top: 3px solid var(--cat);
+  padding: 20px;
+}
+
+.kg-ie-card--red    { --cat: var(--ig-red);       --cat-tint: #FCE9EB; }
+.kg-ie-card--blue   { --cat: var(--ig-blue);      --cat-tint: #E7F0F5; }
+.kg-ie-card--green  { --cat: var(--ig-green);     --cat-tint: #E7F1E3; }
+.kg-ie-card--darkred{ --cat: var(--ig-darkred);   --cat-tint: #F3E6E7; }
+
+.kg-ie-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-bottom: 14px;
+}
+
+.kg-ie-card__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  background: var(--cat-tint);
+  color: var(--cat);
+}
+
+.kg-ie-card__headtext {
+  flex: 1;
+  min-width: 0;
+}
+
+.kg-ie-card__title {
+  margin: 0 0 2px;
+  font-size: 16px;
+  color: var(--ig-anthracite);
+}
+
+.kg-ie-card__sub {
+  font-size: 12.5px;
+  color: var(--ig-gray);
+  line-height: 1.45;
+}
+
+/* ---- Feldbeschriftung (Meta Head, uppercase) ---- */
+.kg-ie-fieldlabel {
+  display: block;
+  font-family: var(--font-head);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  font-size: 11px;
+  color: var(--ig-gray);
+  margin: 0 0 6px;
+}
+
+.kg-ie-note {
+  font-size: 12.5px;
+  color: var(--ig-gray);
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+
+.kg-ie-footnote {
+  font-size: 11.5px;
+  color: #8A8A8A;
+  margin-top: 10px;
+}
+
+/* ---- Themenschmiede-Hinweis (neutral, kein Fehlerton) ---- */
+.kg-ie-hint {
+  display: flex;
+  gap: 11px;
+}
+
+.kg-ie-hint__icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--ig-gray);
+}
+
+.kg-ie-hint__text {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ig-gray);
+  line-height: 1.5;
+}
+
+.kg-ie-hint__text strong {
+  color: var(--ig-anthracite);
+}
+
+.kg-ie-hint__btn {
+  margin: 9px 0 0;
+  min-height: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-family: var(--font-head);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  font-size: 11px;
+  text-decoration: none;
+}
+
+/* ---- Datei-Auswahl (Label-Button + verstecktes File-Input) ---- */
+.kg-ie-filepick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.kg-ie-filepick__btn {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--ig-surface-muted);
+  font-family: var(--font-head);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  font-size: 11px;
+}
+
+.kg-ie-filepick__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Sichtbarer Fokusring, wenn das versteckte Input per Tastatur fokussiert wird. */
+.kg-ie-filepick__input:focus-visible + .kg-ie-filepick__btn,
+.kg-ie-filepick__btn:focus-within {
+  outline: 2px solid var(--ig-red);
+  outline-offset: 1px;
+}
+
+.kg-ie-filepick__name {
+  font-size: 12.5px;
+  color: var(--ig-gray);
+}
+
+/* ---- Voll breite Aktionsbuttons in Karten ---- */
+.kg-ie-fullbtn {
+  width: 100%;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.kg-ie-btnstack {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+/* Gruener Primaerknopf (JSON-Austausch). */
+.kg-ie-btn--green {
+  background: var(--ig-green);
+  border-color: var(--ig-green);
+  color: #fff;
+}
+
+.kg-ie-btn--green:hover {
+  background: #4f8b3b;
+  border-color: #4f8b3b;
+}
+
+/* Outline-Roter Sekundaerknopf (Konzeptsammlung-/Materialliste-PDF). */
+.kg-btn--outline-red {
+  border: 1px solid var(--ig-red);
+  background: #fff;
+  color: var(--ig-red);
+}
+
+.kg-btn--outline-red:hover {
+  background: var(--ig-red-soft);
+  border-color: var(--ig-red);
+  color: var(--ig-red);
+}
+
+/* ---- Scope-Chip (Toggle statt nackter Checkbox) ---- */
+.kg-scope-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.kg-scope-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 7px 12px;
+  border: 1px solid var(--ig-midgray);
+  background: #fff;
+  color: var(--ig-gray);
+  font-size: 12.5px;
+  user-select: none;
+}
+
+.kg-scope-chip input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.kg-scope-chip__box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  border: 1.5px solid var(--ig-midgray);
+  background: #fff;
+}
+
+.kg-scope-chip__box svg {
+  opacity: 0;
+}
+
+.kg-scope-chip:has(input:checked) {
+  border-color: var(--ig-red);
+  background: #FCE9EB;
+  color: var(--ig-darkred);
+  font-weight: 700;
+}
+
+.kg-scope-chip:has(input:checked) .kg-scope-chip__box {
+  border-color: var(--ig-red);
+  background: var(--ig-red);
+}
+
+.kg-scope-chip:has(input:checked) .kg-scope-chip__box svg {
+  opacity: 1;
+}
+
+.kg-scope-chip:focus-within {
+  outline: 2px solid var(--ig-red);
+  outline-offset: 1px;
+}
+
+/* Dropdowns in den Karten brauchen Abstand nach unten (sonst klebt z. B. das
+   Sammlungs-Dropdown direkt am „Seminarkonzept importieren"-Button). */
+.kg-ie-card select.kg-input {
+  margin-bottom: 12px;
+}
+
+/* ---- PDF-Metadaten-Raster (2x2) ---- */
+.kg-ie-metagrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 11px;
+  margin: 0 0 13px;
+}
+
+/* Spaltenauswahl nutzt das bestehende .field-card (Dropdown-Container), soll
+   hier aber ohne dessen Rahmen/Linksbalken/Fuellung wie ein normales Feld
+   wirken. */
+.kg-ie-columns.field-card {
+  margin: 0 0 15px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.kg-ie-pdfactions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.kg-ie-pdfactions .kg-btn {
+  flex: 1;
+  min-width: 150px;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .kg-library-layout {
   display: grid;
   grid-template-columns: 1.1fr .9fr;
@@ -276,7 +745,7 @@
 .kg-library-left,
 .kg-library-right {
   border: 1px solid var(--ig-lightgray);
-  border-radius: 10px;
+  border-radius: 0;
   padding: 10px;
   background: #fff;
 }
@@ -298,11 +767,7 @@
 
 .kg-library-card.sp-card {
   max-width: none;
-  min-height: 180px;
-  height: auto;
-  padding: 12px;
   overflow: visible;
-  background: #fff;
 }
 
 .kg-library-card[draggable="true"] {
@@ -327,9 +792,7 @@
 .kg-library-card--drop-after-x::after {
   content: "";
   position: absolute;
-  border-radius: 999px;
-  background: var(--ig-blue);
-  box-shadow: 0 0 0 2px var(--ig-blue-soft);
+  border-radius: 0;
   z-index: 3;
 }
 
@@ -421,12 +884,6 @@
   grid-row: 2;
 }
 
-.kg-library-card:hover .ml-card-drag-handle,
-.kg-library-card:focus-within .ml-card-drag-handle {
-  color: var(--ig-blue);
-  background: var(--ig-blue-soft);
-}
-
 .ml-card-title strong {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -451,12 +908,9 @@
   gap: 6px;
 }
 
-
 .ml-card-menu-toggle {
   list-style: none;
   border: 0;
-  background: transparent;
-  color: var(--color-text-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -470,10 +924,6 @@
 
 .ml-card-menu-toggle::-webkit-details-marker {
   display: none;
-}
-
-.ml-card-menu[open] .ml-card-menu-toggle {
-  color: var(--ig-blue);
 }
 
 .ml-card-menu-panel {
@@ -507,11 +957,6 @@
   cursor: pointer;
 }
 
-.ml-card-menu-btn:hover {
-  border-color: var(--ig-blue);
-  background: var(--ig-blue-soft);
-}
-
 .ml-card-menu-btn-delete {
   color: var(--ig-darkred);
 }
@@ -519,10 +964,6 @@
 .ml-card-menu-btn-delete:hover {
   border-color: var(--ig-red);
   background: var(--ig-red-soft);
-}
-
-.kg-library-step {
-  margin-bottom: 12px;
 }
 
 .kg-library-step:last-of-type {
@@ -603,7 +1044,7 @@
   right: 0;
   background: #fff;
   border: 1px solid var(--ig-lightgray);
-  border-radius: 8px;
+  border-radius: 0;
   box-shadow: 0 8px 24px rgba(2, 6, 23, .12);
   padding: 8px;
   max-height: 220px;
@@ -612,8 +1053,7 @@
 
 .sp-filter,
 .sp-filterbar,
-.kg-inline-filter,
-.kg-plan-col {
+.kg-inline-filter {
   overflow: visible;
 }
 
@@ -630,19 +1070,16 @@
   border: 1px solid var(--ig-red-soft);
   background: var(--ig-red-soft);
   color: var(--ig-darkred);
-  border-radius: 6px;
+  border-radius: 0;
   padding: 2px 8px;
   cursor: pointer;
 }
 
 @media (max-width: 1100px) {
-  .kg-topbar {
-    grid-template-columns: 1fr 1fr;
-  }
 
-  .kg-ie-layout {
-    grid-template-columns: 1fr;
-  }
+  /* .kg-ie-layout regelt das Umbrechen ueber auto-fit (minmax 360px) selbst;
+     keine harte Ein-Spalten-Erzwingung mehr, damit die zwei Zonen bereits ab
+     ~744px nebeneinander stehen. */
 
   .kg-library-layout {
     grid-template-columns: 1fr;
@@ -663,6 +1100,7 @@
 :root {
   /* IG Metall palette */
   --ig-red: #E3051B;
+  --ig-red-hover: #B80416;
   --ig-darkred: #882A30;
   --ig-yellow: #EAB500;
   --ig-anthracite: #3C3C3C;
@@ -670,6 +1108,15 @@
   --ig-green: #5B9945;
   --ig-gray: #646464;
   --ig-lightgray: #DADADA;
+  --ig-midgray: #B9B9B9;
+
+  /* CD-Handoff Stufe 1: Typografie-Token (Meta IGM mit Handoff-Fallbacks). */
+  /* Font-Familien-Namen muessen exakt den @font-face-Handles im Theme
+     (boost_union Raw SCSS) entsprechen. Primaer: "Meta"/"Meta Head";
+     die frueheren Theme-Handles bleiben als Fallback, falls eine Instanz
+     sie noch so benennt. */
+  --font-head: "Meta Head", "Meta Headline Condensed Bold", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --font-body: "Meta", "Meta Regular Webfont", "Calibri", "Segoe UI", system-ui, sans-serif;
   --ig-sunrise: linear-gradient(20deg, #882A30 0%, #E3051B 50%, #EAB500 100%);
   --ig-sunrise-soft: linear-gradient(20deg, rgba(136, 42, 48, .25) 0%, rgba(227, 5, 27, .2) 50%, rgba(234, 181, 0, .2) 100%);
   --ig-shadow-strong: 0 8px 24px rgba(60, 60, 60, .22);
@@ -689,14 +1136,17 @@
   --ig-surface-muted: #f1f1f1;
   --ig-blue-surface-solid: color-mix(in srgb, var(--ig-blue) 14%, #ffffff);
   --ig-tooltip-bg: var(--ig-anthracite);
-  --ig-focus-ring: 0 0 0 3px var(--ig-blue-soft);
+  --ig-focus-ring: 0 0 0 3px var(--ig-red-soft);
   --ig-element-gradient: var(--ig-sunrise);
-  --ig-element-corner-size: 16px;
+  /* CD-Handoff: keine dekorativen Ecken-Elemente mehr. */
+  --ig-element-corner-size: 0px;
 
   /* Semantic colors (mapped to IG Metall palette) */
-  --color-primary: var(--ig-blue);
-  --color-primary-light: rgba(47, 128, 171, .35);
-  --color-primary-bg: rgba(47, 128, 171, .1);
+  /* CD-Handoff: Primäraktionen sind Rot; Blau bleibt der Phase Orientierung
+     vorbehalten (Tone-Variablen in .ig-container). */
+  --color-primary: var(--ig-red);
+  --color-primary-light: var(--ig-red-mid);
+  --color-primary-bg: var(--ig-red-soft);
   --color-success: var(--ig-green);
   --color-success-light: rgba(91, 153, 69, .35);
   --color-success-bg: rgba(91, 153, 69, .1);
@@ -726,11 +1176,12 @@
   --spacing-xxl: 24px;
   
   /* Border Radius */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 14px;
-  --radius-xl: 16px;
-  --radius-full: 999px;
+  /* CD-Handoff: Ecken überall scharf (Print-Erbe). */
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-full: 0;
   
   /* Typography */
   --font-size-xs: 0.8rem;
@@ -741,13 +1192,24 @@
   --font-size-xxl: 1.2rem;
   
   /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(0,0,0,.08);
-  --shadow-md: 0 4px 18px rgba(0,0,0,.04);
-  --shadow-lg: 0 25px 60px -15px rgba(15,23,42,.45);
+  /* CD-Handoff: Schatten minimal - nur Modal/Toast/Popover. */
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, .3);
   
   /* Transitions */
   --transition-fast: 0.15s ease;
   --transition-base: 0.2s ease;
+
+  /* Phasenfarben (CD-Handoff Stufe 3). Global auf :root, damit sie ueberall
+     gelten - auch im Ueberblick ohne .sq-shell. .sq-shell setzt sie zusaetzlich
+     lokal mit identischen Werten (Refactoring: zweiter :root-Block Z.~6555
+     hierher zusammengefuehrt, gleiche Werte -> optikneutral). */
+  --sq-phase-orientierung: #2F80AB;
+  --sq-phase-erfahrung: #5B9945;
+  --sq-phase-analyse: #EAB500;
+  --sq-phase-handlung: #882A30;
+  --sq-phase-transfer: #646464;
 }
 
 .kg-shell,
@@ -780,9 +1242,10 @@
    ADD TEMPLATE (Eingabeformular)
    ========================================= */
 .ig-container {
-  --tone1-bg: var(--color-primary-bg);
-  --tone1-br: var(--color-primary-light);
-  --tone1-ac: var(--color-primary);
+  /* Tone 1 bleibt Blau (Phase Orientierung), unabhängig vom roten Primärton. */
+  --tone1-bg: var(--ig-blue-soft);
+  --tone1-br: var(--ig-blue-mid);
+  --tone1-ac: var(--ig-blue);
   --tone2-bg: var(--color-success-bg);
   --tone2-br: var(--color-success-light);
   --tone2-ac: var(--color-success);
@@ -797,34 +1260,6 @@
 .kg-container-full {
   max-width: none;
   margin: 0;
-}
-/* Navigation */
-.ig-nav {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-sm) 10px;
-  margin: 10px 0 var(--spacing-md);
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-}
-
-.ig-nav a {
-  text-decoration: none;
-  font-weight: 600;
-  font-size: var(--font-size-base);
-  padding: 6px 10px;
-  border: 1px solid var(--ig-lightgray);
-  border-radius: var(--radius-full);
-  transition: var(--transition-fast);
-}
-
-.ig-nav a:hover {
-  background: var(--color-background-light);
 }
 
 /* Sections */
@@ -859,6 +1294,10 @@
 
 @media (max-width: 640px) {
   .field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .kg-ie-metagrid {
     grid-template-columns: 1fr;
   }
 }
@@ -897,39 +1336,13 @@
   border-left-color: var(--tone3-ac);
 }
 
-/* Form Elements */
-.ig-label {
-  font-weight: 600;
-  display: block;
-  margin: var(--spacing-xs) 0 6px;
-}
-
-.ig-help {
-  display: block;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-light);
-  margin: 6px 0 0;
-}
-
 .field-card :is(input[type="text"], input[type="number"], input[type="url"], select, textarea) {
-  width: 100% !important;
-  max-width: 100% !important;
+  width: 100%;
+  max-width: 100%;
 }
 
 .field-card textarea {
   min-height: 150px;
-}
-
-/* Info Note */
-.ig-note {
-  font-size: var(--font-size-base);
-  color: var(--ig-anthracite);
-  background: var(--color-background-muted);
-  border: 1px dashed var(--ig-lightgray);
-  border-left: 6px solid var(--ig-gray);
-  border-radius: var(--radius-md);
-  padding: 10px var(--spacing-md);
-  margin: var(--spacing-md) 0 0;
 }
 
 /* =========================================
@@ -938,9 +1351,7 @@
 .sp-wrapper {
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
   --slot-height: 18px;
-  border: 1px solid var(--ig-lightgray);
-  border-radius: 12px;
-  background: #fff;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -953,7 +1364,6 @@
   margin-bottom: 0;
   border-bottom: 1px solid var(--ig-lightgray);
   border-radius: 0;
-  background: var(--ig-surface-soft);
 }
 
 .sp-weekbar__nav {
@@ -987,7 +1397,7 @@
   min-height: 34px;
   padding: 0 10px;
   border: 1px solid var(--ig-lightgray);
-  border-radius: 8px;
+  border-radius: 0;
   background: #fff;
   color: var(--ig-gray);
   font-size: 0.85rem;
@@ -1012,7 +1422,7 @@
   align-items: center;
   gap: 0;
   border: 1px solid var(--ig-lightgray);
-  border-radius: 10px;
+  border-radius: 0;
   background: #fff;
   overflow: hidden;
 }
@@ -1033,8 +1443,6 @@
 }
 
 .sp-view-switch .kg-btn.is-active {
-  background: var(--ig-blue-soft);
-  color: var(--ig-blue);
   font-weight: 700;
 }
 
@@ -1099,7 +1507,7 @@
 
 .sp-grid-scroll::-webkit-scrollbar-thumb {
   background: var(--ig-lightgray);
-  border-radius: 999px;
+  border-radius: 0;
 }
 
 .sp-grid-scroll::-webkit-scrollbar-track {
@@ -1156,9 +1564,7 @@
   align-items: center;
   height: 20px;
   padding: 0 8px;
-  border-radius: 999px;
-  background: var(--ig-blue-soft);
-  color: var(--ig-blue);
+  border-radius: 0;
   font-size: 11px;
   font-weight: 600;
 }
@@ -1278,7 +1684,7 @@
   left: 6px;
   background: var(--ig-red);
   color: #fff;
-  border-radius: 999px;
+  border-radius: 0;
   padding: 2px 6px;
   font-size: 10px;
   font-weight: 700;
@@ -1383,7 +1789,7 @@
   white-space: normal;
   max-width: 300px;
   width: max-content;
-  border-radius: 6px;
+  border-radius: 0;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   pointer-events: none;
@@ -1455,24 +1861,19 @@
 }
 
 .sp-zoom-coarse .sp-item {
-  margin: 2px 3px;
-  padding: 2px 6px;
   gap: 0;
   min-height: 0;
   overflow: hidden;
-  border-radius: 5px;
+  border-radius: 0;
   box-shadow: none;
 }
 
 .sp-zoom-coarse .sp-item .sp-title {
   font-size: 11px;
   line-height: 1.1;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .sp-zoom-coarse .sp-item .sp-meta {
-  font-size: 9px;
   line-height: 1.05;
 }
 
@@ -1505,7 +1906,7 @@
   max-width: 100%;
   padding: 2px 8px;
   margin-bottom: 2px;
-  border-radius: 999px;
+  border-radius: 0;
   background: color-mix(in srgb, var(--sp-unit-color, var(--ig-blue)) 14%, #ffffff);
   color: var(--ig-anthracite);
   font-size: 10px;
@@ -1568,13 +1969,7 @@
   box-sizing: border-box;
 }
 
-.sp-unit-method-card:hover {
-  border-color: var(--ig-blue-mid);
-  background: var(--ig-blue-soft);
-}
-
 .sp-unit-method-card:focus-visible {
-  outline: 2px solid var(--ig-blue-mid);
   outline-offset: 1px;
 }
 
@@ -1619,16 +2014,12 @@
 
 /* Item Variants */
 .sp-item--break {
-  background: var(--ig-surface-muted) !important;
+  background: var(--ig-surface-muted);
   border: 1px dashed var(--ig-gray);
 }
 
 .sp-item--method-clickable {
   cursor: pointer;
-}
-
-.sp-item--method-clickable:hover {
-  box-shadow: 0 0 0 1px var(--ig-blue-mid), var(--shadow-sm);
 }
 
 .sp-item--compact {
@@ -1721,7 +2112,7 @@
   gap: 0;
   min-height: 0;
   overflow: hidden;
-  border-radius: 5px;
+  border-radius: 0;
   box-shadow: none;
 }
 
@@ -1777,7 +2168,7 @@
   transform: translateX(-50%);
   width: 28px;
   height: 2px;
-  border-radius: 999px;
+  border-radius: 0;
   background: rgba(51, 65, 85, .45);
   pointer-events: none;
 }
@@ -1820,11 +2211,11 @@
 
 body.sp-resizing,
 body.sp-resizing * {
-  cursor: ns-resize !important;
+  cursor: ns-resize;
 }
 
 .sp-item--placeholder {
-  background: var(--ig-surface-muted) !important;
+  background: var(--ig-surface-muted);
   border: 1px dashed rgba(30, 64, 175, .35);
   padding: var(--spacing-xs) var(--spacing-sm);
   display: flex;
@@ -1833,7 +2224,7 @@ body.sp-resizing * {
 
 /* Show delete buttons for all items, including placeholders */
 .sp-item--placeholder .ml-card-menu {
-  display: flex !important;
+  display: flex;
 }
 
 .sp-item-placeholder {
@@ -1845,23 +2236,6 @@ body.sp-resizing * {
   width: 100%;
   overflow: hidden;
   flex: 1 1 auto;
-}
-
-.sp-placeholder-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--ig-blue);
-  flex: 0 0 6px;
-}
-
-.sp-placeholder-title {
-  font-weight: 600;
-  white-space: normal;
-  overflow: hidden;
-  word-break: break-word;
-  position: relative;
-  cursor: help;
 }
 
 /* Tooltip für vollständigen Titel in Placeholder-Items */
@@ -1880,7 +2254,7 @@ body.sp-resizing * {
   white-space: normal;
   max-width: 300px;
   width: max-content;
-  border-radius: 6px;
+  border-radius: 0;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   pointer-events: none;
@@ -1899,12 +2273,6 @@ body.sp-resizing * {
   border-top-color: var(--ig-anthracite);
   z-index: 1001;
   pointer-events: none;
-}
-
-.sp-placeholder-meta {
-  font-size: 10px;
-  color: var(--ig-blue);
-  white-space: nowrap;
 }
 
 /* =========================================
@@ -1988,8 +2356,6 @@ body.sp-resizing * {
   border-color: var(--ig-red-mid);
 }
 
-/* Utility Classes */
-.sp-hidden-data,
 .sp-hidden {
   display: none !important;
 }
@@ -1998,103 +2364,21 @@ body.sp-resizing * {
   display: inline-block;
   font-size: 10px;
   padding: 2px 6px;
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-background);
   margin-left: 6px;
-}
-
-.kg-method-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: 0;
-}
-
-.sp-chip {
-  display: inline-block;
-  font-size: 10px;
-  padding: 2px 6px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-background);
-  margin: 2px 6px 0 0;
 }
 
 /* Button System */
 .sp-btn {
   padding: 6px 10px;
-  border-radius: 10px;
+  border-radius: 0;
   border: 1px solid var(--color-border);
-  background: var(--color-background);
   cursor: pointer;
   transition: var(--transition-fast);
 }
 
 .sp-btn:active {
   transform: translateY(1px);
-}
-/* Button Variants */
-.sp-btn--icon {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  background: var(--color-background);
-  border: 1px solid var(--ig-lightgray);
-  padding: 6px var(--spacing-md);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  font-size: var(--font-size-base);
-  transition: background var(--transition-fast), border-color var(--transition-fast);
-  min-height: 40px;
-  line-height: 1;
-}
-
-.sp-btn--icon span[aria-hidden="true"] {
-  font-size: 1.1rem;
-  line-height: 1;
-}
-
-.sp-btn--icon:hover {
-  background: var(--ig-surface-muted);
-  border-color: var(--ig-lightgray);
-}
-
-.sp-btn--icon:focus-visible {
-  outline: 2px solid var(--ig-blue-mid);
-  outline-offset: 2px;
-}
-
-.sp-tools label.sp-btn--icon {
-  cursor: pointer;
-}
-
-.sp-btn--primary {
-  border-color: var(--ig-blue);
-  background: var(--ig-blue);
-  color: var(--color-background);
-  box-shadow: 0 1px 2px var(--ig-blue-soft);
-}
-
-.sp-btn--primary:hover {
-  background: var(--ig-blue);
-  border-color: var(--ig-blue);
-}
-
-.sp-btn--primary:focus-visible {
-  outline: 2px solid var(--ig-blue-mid);
-  outline-offset: 2px;
-}
-
-.sp-btn--ghost {
-  border-color: transparent;
-  background: transparent;
-  color: var(--ig-anthracite);
-}
-
-.sp-btn--ghost:hover {
-  background: var(--ig-surface-muted);
 }
 
 /* Print button styles removed - now using PDF export */
@@ -2121,13 +2405,6 @@ body.sp-resizing * {
   align-items: center;
   justify-content: space-between;
   margin-bottom: var(--spacing-md);
-}
-
-.sp-header__title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ig-anthracite);
 }
 
 /* Cards */
@@ -2185,7 +2462,6 @@ body.sp-resizing * {
 
 .sp-card-description {
   font-size: 11px;
-  color: var(--ig-gray);
   line-height: 1.3;
   margin-top: var(--spacing-xs);
   flex: 1;
@@ -2243,22 +2519,15 @@ body.sp-resizing * {
 
 .sp-unit-method-link {
   border: 1px solid var(--ig-lightgray);
-  border-radius: 999px;
+  border-radius: 0;
   background: #fff;
-  color: var(--ig-blue);
   font-size: 11px;
   line-height: 1.2;
   padding: 2px 8px;
   cursor: pointer;
 }
 
-.sp-unit-method-link:hover {
-  background: var(--ig-blue-soft);
-  border-color: var(--ig-blue-mid);
-}
-
 .sp-unit-method-link:focus-visible {
-  outline: 2px solid var(--ig-blue-mid);
   outline-offset: 1px;
 }
 
@@ -2290,7 +2559,7 @@ body.sp-resizing * {
   white-space: normal;
   max-width: 300px;
   width: max-content;
-  border-radius: 6px;
+  border-radius: 0;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   pointer-events: none;
@@ -2335,15 +2604,6 @@ body.sp-resizing * {
   font-size: 14px;
   color: var(--ig-anthracite);
 }
-
-.sp-morelink {
-  display: none !important;
-}
-
-.sp-morelink a {
-  font-size: var(--spacing-md);
-  margin-left: var(--spacing-sm);
-}
 /* Modal System */
 .sp-modal {
   position: fixed;
@@ -2368,7 +2628,7 @@ body.sp-resizing * {
 .sp-modal__dialog {
   position: relative;
   background: var(--color-background);
-  border-radius: 18px;
+  border-radius: 0;
   box-shadow: var(--shadow-lg);
   padding: 0;
   width: min(420px, calc(100% - 32px));
@@ -2391,15 +2651,13 @@ body.sp-resizing * {
   justify-content: space-between;
   padding: 24px var(--spacing-xl) 20px;
   border-bottom: 2px solid var(--color-border);
-  background: linear-gradient(135deg, var(--ig-surface-soft) 0%, var(--ig-surface-muted) 100%);
-  border-radius: 18px 18px 0 0;
+  border-radius: 0;
 }
 
 .sp-modal__header h2 {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--ig-anthracite);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2424,13 +2682,11 @@ body.sp-resizing * {
 .sp-modal__close {
   appearance: none;
   border: none;
-  background: transparent;
   font-size: 1.25rem;
   line-height: 1;
   cursor: pointer;
-  color: var(--ig-gray);
   padding: 8px;
-  border-radius: 8px;
+  border-radius: 0;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
@@ -2453,7 +2709,7 @@ body.sp-resizing * {
   overflow-y: auto;
   flex: 1;
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: 0;
   background: var(--color-background);
 }
 
@@ -2472,11 +2728,8 @@ body.sp-resizing * {
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  border: 1px solid var(--ig-blue-soft);
-  border-radius: 999px;
-  background: var(--ig-blue-soft);
+  border-radius: 0;
   font-size: 12px;
-  color: var(--ig-blue);
 }
 
 .sp-method-detail__section h3 {
@@ -2487,7 +2740,6 @@ body.sp-resizing * {
 .sp-method-detail__text {
   margin: 0;
   line-height: 1.45;
-  color: var(--ig-gray);
 }
 
 .sp-method-detail__text > :first-child {
@@ -2516,7 +2768,6 @@ body.sp-resizing * {
 
 .sp-method-detail__empty {
   margin: 0;
-  color: var(--ig-gray);
 }
 
 .sp-modal__field {
@@ -2527,8 +2778,6 @@ body.sp-resizing * {
 
 .sp-modal__label {
   font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--ig-gray);
   margin: 0 0 8px;
   display: flex;
   align-items: center;
@@ -2539,21 +2788,14 @@ body.sp-resizing * {
   content: "";
   width: 10px;
   height: 10px;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--ig-red);
   box-shadow: 0 0 0 3px var(--ig-red-soft);
-}
-
-.sp-modal__section:nth-child(even) .sp-modal__label::before {
-  background: var(--ig-blue);
-  box-shadow: 0 0 0 3px var(--ig-blue-soft);
 }
 
 .sp-modal__field input:focus,
 .sp-modal__field select:focus {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(47, 128, 171, .2);
 }
 
 .sp-modal__actions {
@@ -2563,11 +2805,10 @@ body.sp-resizing * {
   margin-top: 24px;
   padding: 20px var(--spacing-xl);
   border-top: 2px solid var(--ig-lightgray);
-  background: linear-gradient(135deg, var(--ig-surface-soft) 0%, var(--ig-surface-muted) 100%);
   position: sticky;
   bottom: 0;
   flex-shrink: 0;
-  border-radius: 0 0 18px 18px;
+  border-radius: 0;
 }
 
 /* Grid Configuration Modal Styles */
@@ -2575,8 +2816,7 @@ body.sp-resizing * {
   margin-bottom: 32px;
   padding: 20px;
   border: 1px solid var(--ig-lightgray);
-  border-radius: 12px;
-  background: var(--ig-surface-soft);
+  border-radius: 0;
   transition: all 0.2s ease;
 }
 
@@ -2601,111 +2841,53 @@ body.sp-resizing * {
   max-width: 280px;
 }
 
-.sp-table-columns-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-sm);
-}
-
-.sp-day-checkbox,
-.sp-table-column-checkbox,
-.sp-granularity-option {
+.sp-day-checkbox {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
   border: 2px solid var(--ig-lightgray);
-  border-radius: 10px;
-  background: #fff;
+  border-radius: 0;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
 }
 
-.sp-day-checkbox,
-.sp-table-column-checkbox {
+.sp-day-checkbox {
   overflow: hidden;
 }
 
-.sp-granularity-option {
-  padding: 14px 16px;
-  overflow: hidden;
-}
-
-.sp-day-checkbox::before,
-.sp-table-column-checkbox::before {
+.sp-day-checkbox::before {
   content: "";
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, var(--ig-blue), var(--ig-blue));
   opacity: 0;
   transition: opacity 0.2s ease;
   border-radius: inherit;
 }
 
-.sp-granularity-option::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, var(--ig-green), var(--ig-green));
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.sp-day-checkbox:hover,
-.sp-table-column-checkbox:hover:not(:has(input:disabled)) {
-  border-color: var(--ig-blue);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px var(--ig-blue-soft);
-}
-
-.sp-day-checkbox input[type="checkbox"],
-.sp-table-column-checkbox input[type="checkbox"] {
+.sp-day-checkbox input[type="checkbox"] {
   margin: 0;
   position: relative;
   z-index: 1;
 }
 
-.sp-table-column-checkbox input[type="checkbox"]:disabled {
-  cursor: not-allowed;
-}
-
-.sp-table-column-checkbox:has(input:disabled) {
-  cursor: not-allowed;
-  opacity: 0.7;
-  background: var(--ig-surface-soft);
-}
-
-.sp-day-checkbox span,
-.sp-table-column-checkbox span {
+.sp-day-checkbox span {
   position: relative;
   z-index: 1;
   font-weight: 500;
   color: var(--ig-gray);
 }
 
-.sp-day-checkbox input[type="checkbox"]:checked + span,
-.sp-table-column-checkbox input[type="checkbox"]:checked + span {
+.sp-day-checkbox input[type="checkbox"]:checked + span {
   font-weight: 600;
   color: #ffffff;
 }
 
-.sp-day-checkbox:has(input:checked),
-.sp-table-column-checkbox:has(input:checked) {
-  border-color: var(--ig-blue);
-  background: linear-gradient(135deg, var(--ig-blue), var(--ig-blue));
-  color: #ffffff;
-}
-
-.sp-day-checkbox:has(input:checked)::before,
-.sp-table-column-checkbox:has(input:checked)::before {
+.sp-day-checkbox:has(input:checked)::before {
   opacity: 1;
 }
 
@@ -2716,47 +2898,15 @@ body.sp-resizing * {
   margin-top: var(--spacing-sm);
 }
 
-/* Individual days CSS removed - functionality no longer needed */
-
-.sp-granularity-options {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-sm);
+/* D45: fixed morning/afternoon spans in the setup form. */
+.sp-anchor-times {
+  grid-template-columns: 110px 1fr 1fr;
+  align-items: end;
 }
 
-.sp-granularity-option:hover {
-  border-color: var(--ig-green);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px var(--ig-green-soft);
-}
-
-.sp-granularity-option input[type="radio"] {
-  margin: 0;
-  position: relative;
-  z-index: 1;
-}
-
-.sp-granularity-option span {
-  position: relative;
-  z-index: 1;
-  font-weight: 500;
-  color: var(--ig-gray);
-}
-
-.sp-granularity-option:has(input:checked) {
-  border-color: var(--ig-green);
-  background: linear-gradient(135deg, var(--ig-green), var(--ig-green));
-  color: #ffffff;
-}
-
-.sp-granularity-option:has(input:checked)::before {
-  opacity: 1;
-}
-
-.sp-granularity-option:has(input:checked) span {
+.sp-anchor-times .sp-anchor-label {
   font-weight: 600;
-  color: #ffffff;
+  padding-bottom: 10px;
 }
 
 .sp-breaks-header {
@@ -2764,11 +2914,6 @@ body.sp-resizing * {
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--spacing-sm);
-}
-
-.sp-btn--small {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  font-size: var(--font-size-sm);
 }
 
 .sp-breaks-list {
@@ -2784,14 +2929,11 @@ body.sp-resizing * {
   align-items: end;
   padding: 16px;
   border: 2px solid var(--ig-lightgray);
-  border-radius: 10px;
-  background: #ffffff;
+  border-radius: 0;
   transition: all 0.2s ease;
 }
 
 .sp-break-item:hover {
-  border-color: var(--ig-yellow);
-  box-shadow: 0 4px 12px var(--ig-yellow-soft);
   transform: translateY(-1px);
 }
 
@@ -2809,66 +2951,6 @@ body.sp-resizing * {
   border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
   color: var(--color-primary);
-}
-
-.sp-preview-container {
-  margin-top: 12px;
-  padding: 20px;
-  border: 2px solid var(--ig-lightgray);
-  border-radius: 10px;
-  background: #ffffff;
-  max-height: 250px;
-  overflow: auto;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
-}
-
-.sp-preview-grid {
-  display: grid;
-  gap: 1px;
-  font-size: var(--font-size-xs);
-}
-
-.sp-preview-header {
-  display: grid;
-  grid-template-columns: 60px repeat(var(--preview-columns, 5), 1fr);
-  gap: 1px;
-  margin-bottom: 2px;
-}
-
-.sp-preview-header-cell {
-  padding: 2px 4px;
-  background: var(--color-primary);
-  color: var(--color-background);
-  text-align: center;
-  font-weight: 600;
-  border-radius: 2px;
-}
-
-.sp-preview-time-cell {
-  padding: 2px 4px;
-  background: var(--color-background);
-  border: 1px solid var(--color-border);
-  text-align: right;
-  font-size: 10px;
-}
-
-.sp-preview-day-cell {
-  padding: 2px 4px;
-  background: var(--color-background);
-  border: 1px solid var(--color-border);
-  min-height: 12px;
-  position: relative;
-}
-
-.sp-preview-break {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(156, 163, 175, 0.3);
-  border: 1px dashed var(--ig-gray);
-  border-radius: 2px;
 }
 
 @media (max-width: 768px) {
@@ -2892,19 +2974,9 @@ body.sp-resizing * {
     gap: 8px;
   }
   
-  .sp-table-columns-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
-  
   .sp-time-range {
     grid-template-columns: 1fr;
     gap: 12px;
-  }
-  
-  .sp-granularity-options {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
   }
   
   .sp-break-item {
@@ -2918,15 +2990,6 @@ body.sp-resizing * {
     flex-direction: column;
     gap: 12px;
   }
-}
-
-/* Tools */
-.sp-tools {
-  display: flex;
-  gap: var(--spacing-sm);
-  flex-wrap: wrap;
-  align-items: center;
-  margin: var(--spacing-xl) 0 var(--spacing-md);
 }
 
 .sp-zoom-controls {
@@ -2943,9 +3006,6 @@ body.sp-resizing * {
   align-items: flex-end;
   overflow: visible;
   margin: var(--spacing-md) 0;
-  padding: var(--spacing-sm);
-  background: var(--ig-surface-soft);
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
 }
 
@@ -2959,7 +3019,6 @@ body.sp-resizing * {
 
 .sp-filter__label {
   font-size: var(--font-size-sm);
-  font-weight: 600;
   color: var(--ig-gray);
 }
 
@@ -2995,19 +3054,18 @@ body.sp-resizing * {
   cursor: pointer;
   user-select: none;
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: 0;
   background: #fff;
   color: var(--ig-anthracite);
 }
 
-.sp-source-tab.is-active {
-  box-shadow: inset 0 0 0 2px rgba(47, 128, 171, .2);
-  border-color: var(--ig-blue);
-  color: var(--ig-blue);
-}
-
 .sp-tab-panel {
   display: none;
+  /* Refactoring: width-Deklarationen aus zweitem .sp-tab-panel-Block (Z.~3116)
+     hierher zusammengefuehrt (disjunkt, optikneutral). */
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .sp-tab-panel.active {
@@ -3021,12 +3079,6 @@ body.sp-resizing * {
   max-height: 220px;
   overflow-x: auto;
   overflow-y: hidden;
-}
-
-.sp-tab-panel {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
 }
 
 #sp-methods,
@@ -3122,18 +3174,16 @@ body.sp-resizing * {
   width: 100%;
 }
 
-.sp-unit-slot .sp-unit-method-link {
-  border-left: 3px solid var(--sp-unit-color, var(--ig-blue));
-  padding-left: 10px;
-}
-
 .sp-filterbar .kg-input,
 .sp-filterbar .kg-tag-dropdown-toggle,
 .sp-filterbar .kg-btn {
   min-height: 36px;
   height: 36px;
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
+  /* Refactoring: important-Flag entfernt - dieser Selektor (0,2,0) schlaegt die
+     .kg-btn-Basis (0,1,0, margin:8px) bereits per Spezifitaet; kein Konkurrent
+     >=0,2,0 setzt hier margin. Optikneutral. */
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .sp-filterbar .kg-tag-dropdown {
@@ -3143,7 +3193,6 @@ body.sp-resizing * {
 .sp-filter-status {
   margin: 4px 0 var(--spacing-md);
   font-size: var(--font-size-sm);
-  color: var(--ig-gray);
 }
 
 .sp-zoom-btn {
@@ -3151,17 +3200,12 @@ body.sp-resizing * {
   height: 32px;
   border-radius: var(--radius-full);
   border: 1px solid var(--ig-lightgray);
-  background: var(--color-background);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: var(--spacing-lg);
   cursor: pointer;
   line-height: 1;
-}
-
-.sp-zoom-btn:hover:not(:disabled) {
-  background: var(--ig-surface-muted);
 }
 
 .sp-zoom-btn:disabled {
@@ -3181,13 +3225,6 @@ body.sp-resizing * {
   color: var(--ig-anthracite);
   min-width: 64px;
   font-weight: 600;
-}
-
-/* Export Group */
-.sp-export-group {
-  display: inline-flex;
-  gap: var(--spacing-xs);
-  align-items: center;
 }
 /* Grid and Layout */
 .sp-grid {
@@ -3221,7 +3258,7 @@ body.sp-resizing * {
 .sp-config-inline {
   margin-top: 10px;
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: 0;
   background: var(--color-background);
 }
 
@@ -3240,7 +3277,7 @@ body.sp-resizing * {
 .sp-config-inline .sp-modal__section {
   margin: 0;
   padding: 10px;
-  border-radius: 8px;
+  border-radius: 0;
 }
 
 .sp-config-inline .sp-modal__section h3 {
@@ -3288,7 +3325,7 @@ body.sp-resizing * {
   gap: 6px;
   padding: 7px 9px;
   border-width: 1px;
-  border-radius: 8px;
+  border-radius: 0;
   min-height: 34px;
 }
 
@@ -3321,7 +3358,7 @@ body.sp-resizing * {
   gap: 8px;
   padding: 8px;
   border-width: 1px;
-  border-radius: 8px;
+  border-radius: 0;
 }
 
 .sp-config-inline .sp-modal__actions {
@@ -3407,98 +3444,6 @@ body.sp-resizing * {
   }
 }
 
-/* Meta Grid */
-.sp-meta-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px;
-  margin: var(--spacing-md) 0 var(--spacing-sm);
-}
-
-.sp-meta-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.sp-meta-label {
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  color: var(--ig-gray);
-}
-
-.sp-input {
-  width: 100%;
-  padding: var(--spacing-sm) 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  font-size: 14px;
-}
-
-/* Print Styles removed - now using PDF export */
-
-/* =========================================
-   SINGLE TEMPLATE (Seminareinheit)
-   ========================================= */
-.ig-wrap {
-  --card-bg: var(--color-background);
-  --card-br: var(--color-border-light);
-  --card-radius: var(--spacing-lg);
-  --ink: var(--color-text);
-  --muted: var(--color-text-muted);
-  --chip-bg: var(--ig-surface-soft);
-  --chip-br: var(--ig-lightgray);
-  --accent: var(--color-primary);
-  --section-br: var(--ig-lightgray);
-  max-width: 900px;
-  margin: 0 auto;
-  color: var(--ink);
-}
-
-.ig-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-sm);
-  margin: var(--spacing-sm) 0 var(--spacing-md);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: var(--color-background);
-  padding: var(--spacing-sm) 0;
-}
-
-.ig-btn {
-  appearance: none;
-  border: 1px solid var(--card-br);
-  background: var(--color-background);
-  border-radius: 10px;
-  padding: var(--spacing-sm) var(--spacing-md);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.ig-btn--primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--color-background);
-}
-
-.ig-btn--danger {
-  border-color: var(--color-danger);
-  background: var(--color-danger);
-  color: var(--color-background);
-}
-
-.ig-btn--secondary {
-  border-color: var(--color-text-muted);
-  background: var(--color-background);
-  color: var(--color-text);
-}
-
-.ig-btn--secondary:hover {
-  background: var(--color-background-light);
-}
-
 /* .no-print removed - no longer needed */
 
 .ig-card {
@@ -3507,35 +3452,6 @@ body.sp-resizing * {
   border-radius: var(--card-radius);
   padding: 18px 18px 6px;
   box-shadow: var(--shadow-md);
-}
-
-.ig-title {
-  margin: 0 0 6px;
-  line-height: 1.2;
-}
-
-.ig-sub {
-  margin: 0 0 var(--spacing-md);
-  color: var(--muted);
-  font-size: .95rem;
-}
-
-.ig-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-  margin: var(--spacing-sm) 0 var(--spacing-md);
-}
-
-.ig-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border: 1px solid var(--chip-br);
-  background: var(--chip-bg);
-  border-radius: var(--radius-full);
-  font-size: var(--font-size-base);
 }
 
 .ig-wrap .ig-section {
@@ -3550,35 +3466,14 @@ body.sp-resizing * {
   padding-left: 10px;
 }
 
-.ig-body {
-  line-height: 1.55;
-}
-
-.ig-kv {
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: 10px var(--spacing-lg);
-  margin-top: 6px;
-}
-
 @media (max-width: 680px) {
-  .ig-kv {
-    grid-template-columns: 1fr;
-  }
-  
-  .ig-toolbar {
-    justify-content: flex-start;
-  }
 }
 
 .kg-tab-active {
-  background: var(--ig-red) !important;
-  border-color: var(--ig-red) !important;
-  color: #fff !important;
-}
-
-.sp-header__title {
-  color: var(--ig-anthracite) !important;
+  background: transparent;
+  border-color: transparent;
+  border-bottom-color: var(--ig-red);
+  color: var(--ig-red);
 }
 
 /* Neutral controls + clear IG action hierarchy */
@@ -3587,9 +3482,9 @@ body.sp-resizing * {
 .sp-zoom-btn,
 .kg-tag-dropdown-toggle,
 .sp-modal__close {
-  background: #fff !important;
-  border-color: var(--ig-lightgray) !important;
-  color: var(--ig-anthracite) !important;
+  background: #fff;
+  border-color: var(--ig-lightgray);
+  color: var(--ig-anthracite);
 }
 
 .kg-btn:hover:not(:disabled),
@@ -3597,53 +3492,41 @@ body.sp-resizing * {
 .sp-zoom-btn:hover:not(:disabled),
 .kg-tag-dropdown-toggle:hover:not(:disabled),
 .sp-modal__close:hover:not(:disabled) {
-  background: var(--ig-blue-soft) !important;
-  border-color: var(--ig-blue) !important;
-  color: var(--ig-blue) !important;
+  background: var(--ig-blue-soft);
+  border-color: var(--ig-blue);
+  color: var(--ig-blue);
 }
 
-.kg-btn:focus-visible,
-.sp-btn:focus-visible,
-.sp-zoom-btn:focus-visible,
-.kg-tag-dropdown-toggle:focus-visible,
-.sp-modal__close:focus-visible {
-  outline: 2px solid var(--ig-blue-mid) !important;
-  outline-offset: 2px !important;
+.kg-btn-primary {
+  background: var(--ig-red);
+  border-color: var(--ig-red);
+  color: #fff;
 }
 
-.kg-btn-primary,
-.sp-btn--primary,
-.ig-btn--primary {
-  background: var(--ig-red) !important;
-  border-color: var(--ig-red) !important;
-  color: #fff !important;
-}
-
-.kg-btn-primary:hover:not(:disabled),
-.sp-btn--primary:hover:not(:disabled),
-.ig-btn--primary:hover:not(:disabled) {
-  background: var(--ig-darkred) !important;
-  border-color: var(--ig-darkred) !important;
-  color: #fff !important;
+.kg-btn-primary:hover:not(:disabled) {
+  background: var(--ig-darkred);
+  border-color: var(--ig-darkred);
+  color: #fff;
 }
 
 .ml-card-menu-btn-delete:not(:disabled),
 .ml-card-menu-btn-delete:not(:disabled):hover {
-  background: #fff !important;
-  border-color: var(--ig-red) !important;
-  color: var(--ig-darkred) !important;
+  background: #fff;
+  border-color: var(--ig-red);
+  color: var(--ig-darkred);
 }
 
-.kg-btn:disabled,
-.sp-btn:disabled,
-.sp-zoom-btn:disabled,
-.kg-tag-dropdown-toggle:disabled,
-.sp-modal__close:disabled {
-  background: #fff !important;
-  border-color: var(--ig-lightgray) !important;
-  color: var(--ig-gray) !important;
-  opacity: 1 !important;
-  cursor: not-allowed !important;
+/* Klasse doppelt (0,3,0): Deaktiviert muss die Varianten am Dateiende schlagen. */
+.kg-btn.kg-btn:disabled,
+.sp-btn.sp-btn:disabled,
+.sp-zoom-btn.sp-zoom-btn:disabled,
+.kg-tag-dropdown-toggle.kg-tag-dropdown-toggle:disabled,
+.sp-modal__close.sp-modal__close:disabled {
+  background: #fff;
+  border-color: var(--ig-lightgray);
+  color: var(--ig-gray);
+  opacity: 1;
+  cursor: not-allowed;
 }
 
 .sp-btn,
@@ -3655,40 +3538,22 @@ body.sp-resizing * {
 }
 
 /* Strict IG Metall color overrides for grid UI elements. */
-.kg-step-active {
-  border-color: var(--ig-blue) !important;
-  color: var(--ig-blue) !important;
-  background: rgba(47, 128, 171, .12) !important;
-}
-
-.sp-badge,
-.sp-method-detail__meta-item {
-  background: rgba(47, 128, 171, .12) !important;
-  border-color: rgba(47, 128, 171, .35) !important;
-  color: var(--ig-blue) !important;
-}
 
 .ml-card-menu-toggle {
-  border-color: transparent !important;
-  color: var(--ig-anthracite) !important;
-  background: transparent !important;
+  border-color: transparent;
+  color: var(--ig-anthracite);
+  background: transparent;
 }
 
 .ml-card-menu-toggle:hover {
-  border-color: var(--ig-blue) !important;
-  color: var(--ig-blue) !important;
-  background: transparent !important;
-}
-
-.ml-card-menu-toggle:focus-visible {
-  outline: 2px solid rgba(47, 128, 171, .45) !important;
+  background: transparent;
 }
 
 .sp-modal__header,
 .sp-modal__actions,
 .sp-modal__section {
-  border-color: var(--color-border) !important;
-  background: linear-gradient(180deg, #fff, var(--ig-surface-soft)) !important;
+  border-color: var(--color-border);
+  background: linear-gradient(180deg, #fff, var(--ig-surface-soft));
 }
 
 .sp-modal__header h2,
@@ -3703,75 +3568,26 @@ body.sp-resizing * {
   color: var(--ig-gray) !important;
 }
 
-.sp-modal__field input:focus,
-.sp-modal__field select:focus {
-  border-color: var(--ig-blue) !important;
-  box-shadow: 0 0 0 3px rgba(47, 128, 171, .2) !important;
-}
-
 .sp-day-checkbox,
-.sp-table-column-checkbox,
-.sp-granularity-option,
 .sp-break-item,
 .sp-modal__section,
-.sp-day-checkbox:has(input:disabled),
-.sp-table-column-checkbox:has(input:disabled) {
-  border-color: var(--color-border) !important;
-  background: #fff !important;
-}
-
-.sp-day-checkbox:hover,
-.sp-table-column-checkbox:hover:not(:has(input:disabled)) {
-  border-color: var(--ig-blue) !important;
-  box-shadow: 0 4px 12px rgba(47, 128, 171, .16) !important;
-}
-
-.sp-day-checkbox:has(input:checked),
-.sp-table-column-checkbox:has(input:checked) {
-  border-color: var(--ig-blue) !important;
-  background: var(--ig-blue) !important;
-}
-
-.sp-granularity-option:hover,
-.sp-granularity-option:has(input:checked) {
-  border-color: var(--ig-green) !important;
-  background: var(--ig-green) !important;
+.sp-day-checkbox:has(input:disabled) {
+  border-color: var(--color-border);
+  background: #fff;
 }
 
 .sp-break-item:hover {
-  border-color: var(--ig-yellow) !important;
-  box-shadow: 0 4px 12px rgba(234, 181, 0, .22) !important;
+  border-color: var(--ig-yellow);
+  box-shadow: 0 4px 12px rgba(234, 181, 0, .22);
 }
 
-.sp-card,
-.kg-unit-row,
-.kg-plan-row {
+.sp-card {
   border-top: 3px solid var(--ig-blue-soft);
 }
 
 .sp-card.sp-level-6,
 .sp-card.sp-level-5 {
   border-top-color: var(--ig-red-soft);
-}
-
-.kg-plan-col {
-  background: #fff;
-  border-color: var(--ig-lightgray);
-}
-
-.kg-plan-col h5 {
-  margin: 0 0 10px;
-  padding-left: 10px;
-  border-left: 4px solid var(--ig-red);
-  color: var(--ig-anthracite);
-}
-
-.kg-method-pool,
-.kg-unit-canvas {
-  background: var(--ig-surface-soft);
-  border: 1px dashed var(--ig-lightgray);
-  border-radius: 8px;
-  padding: 10px;
 }
 
 .sp-weekbar {
@@ -3822,191 +3638,8 @@ body.sp-resizing * {
   margin-bottom: 8px;
 }
 
-.kg-unit-list {
-  display: grid;
-  gap: 8px;
-}
-
-.kg-unit-row {
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 8px;
-  background: #fff;
-  display: grid;
-  gap: 6px;
-}
-
-.kg-unit-row--colored {
-  border-left: 6px solid var(--sp-unit-color, var(--ig-blue));
-  background: color-mix(in srgb, var(--sp-unit-color, var(--ig-blue)) 12%, #ffffff);
-}
-
-.kg-unit-row-main {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.kg-unit-row-title {
-  color: var(--ig-anthracite);
-  font-size: 20px;
-  line-height: 1.25;
-}
-
-.kg-unit-row-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.kg-unit-meta {
-  display: grid;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--ig-gray);
-}
-
 #kg-pm-cancel-edit {
   margin-left: 8px;
-}
-
-.kg-plan-accordion {
-  display: grid;
-  gap: 10px;
-}
-
-.kg-plan-row {
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: #fff;
-}
-
-.kg-plan-row--colored {
-  border-left: 6px solid var(--sp-unit-color, var(--ig-blue));
-  background: color-mix(in srgb, var(--sp-unit-color, var(--ig-blue)) 9%, #ffffff);
-}
-
-.kg-plan-row > summary {
-  cursor: pointer;
-  display: grid;
-  gap: 8px;
-  padding: 10px;
-  font-weight: 600;
-}
-
-.kg-plan-row--colored > summary {
-  background: color-mix(in srgb, var(--sp-unit-color, var(--ig-blue)) 13%, #ffffff);
-  border-radius: 4px 10px 0 0;
-}
-
-.kg-plan-summary-title {
-  color: var(--ig-anthracite);
-  font-size: 22px;
-  font-weight: 800;
-  line-height: 1.2;
-}
-
-.kg-plan-row > summary::-webkit-details-marker {
-  display: none;
-}
-
-.kg-accordion-indicator {
-  display: inline-flex;
-  width: 16px;
-  justify-content: center;
-  transform: rotate(0deg);
-  transition: transform .2s ease;
-}
-
-.kg-plan-row[open] > summary .kg-accordion-indicator {
-  transform: rotate(90deg);
-}
-
-.kg-plan-summary-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.kg-plan-summary-boxes {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(200px, 1fr));
-  gap: 8px;
-}
-
-.kg-plan-summary-box {
-  border: 1px solid var(--color-border-light);
-  border-radius: 8px;
-  padding: 8px;
-  background: var(--ig-surface-soft);
-}
-
-.kg-plan-summary-box-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ig-gray);
-  margin-bottom: 4px;
-}
-
-.kg-plan-summary-box-content {
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 1.35;
-  color: var(--ig-anthracite);
-}
-
-.kg-richtext-edit {
-  min-height: 110px;
-  height: auto;
-  padding: 8px 10px;
-  overflow: auto;
-}
-
-.kg-richtext-edit:empty::before {
-  content: attr(data-placeholder);
-  color: var(--ig-gray);
-}
-
-.kg-plan-grid {
-  border-top: 1px solid var(--color-border);
-  padding: 10px;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(3, minmax(260px, 1fr));
-}
-
-.kg-plan-col {
-  border: 1px solid var(--ig-lightgray);
-  border-radius: 8px;
-  padding: 8px;
-  background: #fff;
-}
-
-.kg-plan-col h5 {
-  margin: 0 0 10px;
-  padding-left: 10px;
-  border-left: 4px solid var(--ig-red);
-  color: var(--ig-anthracite);
-}
-
-.kg-unit-canvas,
-.kg-method-pool {
-  min-height: 180px;
-  display: grid;
-  gap: 8px;
-  align-content: start;
-  background: var(--ig-surface-soft);
-  border: 1px dashed var(--ig-lightgray);
-  border-radius: 8px;
-  padding: 10px;
-}
-
-.kg-method-pool {
-  height: 600px;
-  max-height: 600px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 4px;
 }
 
 .sp-card.kg-unit-method {
@@ -4031,10 +3664,6 @@ body.sp-resizing * {
   line-height: 1.25;
   word-break: break-word;
   overflow-wrap: anywhere;
-}
-
-.kg-unit-method-menu {
-  align-self: start;
 }
 
 .kg-unit-method-menu .ml-card-menu-toggle {
@@ -4101,11 +3730,6 @@ body.sp-resizing * {
   align-items: center;
 }
 
-.kg-drop-over {
-  outline: 2px dashed var(--ig-blue);
-  outline-offset: 2px;
-}
-
 .kg-pm-overrun-warning {
   display: flex;
   align-items: center;
@@ -4135,33 +3759,7 @@ body.sp-resizing * {
   line-height: 1;
 }
 
-.kg-dnd-hint {
-  font-size: 12px;
-  color: var(--ig-gray);
-}
-
-.kg-dnd-zone {
-  border: 1px dashed var(--ig-blue-mid);
-  border-radius: 8px;
-  padding: 8px;
-  background: var(--ig-blue-soft);
-}
-
-.kg-dnd-source {
-  border: 1px dashed var(--ig-lightgray);
-  border-radius: 8px;
-  padding: 8px;
-  background: var(--ig-blue-soft);
-}
-
 @media (max-width: 1200px) {
-  .kg-plan-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .kg-plan-summary-boxes {
-    grid-template-columns: 1fr;
-  }
 }
 
 .sp-entry--unit {
@@ -4188,7 +3786,7 @@ body.sp-resizing * {
   display: grid;
   gap: 0;
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: 0;
   overflow: hidden;
   background: #fff;
 }
@@ -4224,7 +3822,6 @@ body.sp-resizing * {
 }
 
 .sp-slot--over {
-  outline: 2px dashed var(--ig-blue);
   outline-offset: -2px;
 }
 
@@ -4237,8 +3834,8 @@ body.sp-resizing * {
 .sp-item.sp-entry--unit,
 .sp-item.sp-item--unit-colored,
 .sp-item.sp-entry--unit.sp-item--unit-colored {
-  background: var(--ig-blue-surface-solid) !important;
-  opacity: 1 !important;
+  background: var(--ig-blue-surface-solid);
+  opacity: 1;
 }
 
 .sp-slot--unitband-start {
@@ -4289,7 +3886,7 @@ body.sp-resizing * {
   font-weight: 600;
   color: var(--kg-band-color);
   background: rgba(255, 255, 255, .75);
-  border-radius: 10px;
+  border-radius: 0;
   padding: 0 4px;
   pointer-events: none;
 }
@@ -4304,7 +3901,7 @@ body.sp-resizing * {
 
 .sp-entry {
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 0;
   background: #fff;
   padding: 4px 6px;
   margin-top: 4px;
@@ -4327,376 +3924,448 @@ body.sp-resizing * {
   margin-bottom: 0;
 }
 
-.kg-roterfaden-list {
-  overflow-x: visible;
-  padding-bottom: 8px;
+/* =========================================================
+   ROTER FADEN  (Design-Handoff: docs/design_handoff_seminarplaner/ROTER-FADEN.md)
+   Der Seminarablauf als eine durchgehende Linie: grauer Grund, weisse Karten
+   mit Haarlinien-Rand, scharfe Ecken, keine Schatten. Die einzigen Rundformen
+   sind die kleinen Phasen-Punkte, die einzige Bewegung ist der drehende
+   Chevron am Themen-Schalter.
+   ========================================================= */
+
+/* Grauer Grund: nur so wirken die weissen Tageskarten und der Halo des
+   Meilenstein-Knotens (box-shadow in Seitenfarbe) wie im Handoff. */
+.kg-rf-shell {
+  max-width: 1180px;
+  padding: 16px;
+  background: var(--ig-surface-muted);
 }
 
-.kg-roterfaden-theme-clean .kg-roterfaden-node-dot {
-  background: var(--ig-red);
-  box-shadow: 0 0 0 4px rgba(227, 5, 27, .2);
-}
-
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-node-content {
-  background: #ffffff;
-  border: 2px solid var(--ig-anthracite);
-  box-shadow: none;
-}
-
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-entry {
-  border: 1px solid var(--ig-gray);
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-entry-header {
-  background: #f7f7f7;
-  border-bottom: 1px solid var(--ig-gray);
-}
-
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-entry-content {
-  background: #ffffff;
-  color: var(--ig-anthracite);
-}
-
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-title,
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-period-title,
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-meta,
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-topics,
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-method-note {
-  color: var(--ig-anthracite);
-}
-
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card .kg-roterfaden-topics-toggle > summary {
-  color: var(--ig-anthracite);
-  font-weight: 700;
-}
-
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-card.is-today .kg-roterfaden-node-content {
-  border-color: var(--ig-red);
-  box-shadow: 0 0 0 3px rgba(227, 5, 27, .18);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-node-dot {
-  background: radial-gradient(circle at 35% 35%, rgba(227, 5, 27, .62) 0%, var(--ig-red) 60%, var(--ig-darkred) 100%);
-  box-shadow: 0 0 0 6px rgba(227, 5, 27, .18), 0 0 14px rgba(136, 42, 48, .34);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-node-content {
-  position: relative;
-  background: linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--ig-yellow) 16%, #ffffff) 100%);
-  border: 1px solid rgba(227, 5, 27, .35);
-  border-radius: 16px;
-  box-shadow: 0 12px 24px rgba(136, 42, 48, .18), 0 2px 0 rgba(255, 255, 255, .7) inset;
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-node-content::before {
-  content: "";
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 0;
-  height: 0;
-  border-top: 18px solid rgba(227, 5, 27, .22);
-  border-left: 18px solid transparent;
-  pointer-events: none;
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-entry {
-  border: 1px solid rgba(136, 42, 48, .24);
-  border-radius: 14px;
-  box-shadow: 0 3px 10px rgba(60, 60, 60, .12);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-entry-header {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--ig-yellow) 16%, #ffffff) 0%, color-mix(in srgb, var(--ig-yellow) 30%, #ffffff) 100%);
-  border-bottom: 1px solid rgba(136, 42, 48, .24);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-entry-content {
-  background: linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--ig-yellow) 8%, #ffffff) 100%);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-title {
-  color: var(--ig-darkred);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-period-title {
-  color: var(--ig-red);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card .kg-roterfaden-topics-toggle > summary {
-  color: var(--ig-darkred);
-}
-
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-card.is-today .kg-roterfaden-node-content {
-  border-color: var(--ig-red);
-  box-shadow: 0 0 0 3px rgba(227, 5, 27, .2), 0 12px 28px rgba(136, 42, 48, .2);
-}
-
-.kg-roterfaden-node-content {
-  width: 100%;
-  height: 100%;
-  border: 1px solid var(--ig-lightgray);
-  border-radius: 12px;
+/* ---- Werkzeugleiste (Ansichtsdichte links, Handout rechts) ---- */
+.rf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 11px 16px;
+  margin-bottom: 16px;
   background: #fff;
-  padding: 12px;
-  box-shadow: 0 3px 10px rgba(60, 60, 60, .1);
-  max-height: 100%;
-  overflow: auto;
+  border: 1px solid var(--ig-lightgray);
 }
 
-.kg-roterfaden-today {
-  display: inline-block;
-  margin-left: 6px;
-  font-size: 12px;
-  font-weight: 700;
+.rf-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rf-toolbar__label {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 11px;
+  letter-spacing: .03em;
   text-transform: uppercase;
-  letter-spacing: .04em;
-  color: var(--ig-red);
-  background: var(--ig-red-soft);
-  border-radius: 999px;
-  padding: 2px 8px;
-  vertical-align: middle;
+  color: var(--ig-gray);
 }
 
-.kg-roterfaden-node-dot {
+select.kg-input.rf-select {
+  width: auto;
+  min-height: 34px;
+  height: 34px;
+  padding: 7px 30px 7px 11px;
+  border-color: var(--ig-midgray);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+
+.rf-handout {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 15px;
+  border-width: 2px;
+  font-family: var(--font-head);
+  font-size: 12px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.rf-handout:hover {
+  text-decoration: none;
+}
+
+.rf-icon {
+  flex: none;
+}
+
+/* ---- Timeline: ein durchgehender roter Faden hinter allen Tagen ---- */
+.kg-roterfaden-list {
+  padding-bottom: 4px;
+}
+
+.rf-timeline {
   position: relative;
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
+}
+
+.rf-thread {
+  position: absolute;
+  left: 11px;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
   background: var(--ig-red);
-  box-shadow: 0 0 0 4px rgba(227, 5, 27, .15);
-  z-index: 3;
 }
 
-.kg-roterfaden-mobile-card.is-today .kg-roterfaden-node-content {
+/* ---- Tag: Schiene mit Meilenstein-Knoten + Inhalt ---- */
+.rf-day {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.rf-rail {
+  flex: 0 0 25px;
+  display: flex;
+  justify-content: center;
+  padding-top: 7px;
+}
+
+.rf-node {
+  position: relative;
+  z-index: 1;
+  width: 19px;
+  height: 19px;
+  background: var(--ig-darkred);
+  /* Halo in Seitenfarbe: der Faden laeuft optisch hinter dem Knoten durch. */
+  box-shadow: 0 0 0 4px var(--ig-surface-muted);
+}
+
+.rf-day.is-today .rf-node {
+  background: var(--ig-red);
+}
+
+.rf-day__body {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 22px;
+}
+
+.rf-day__chiprow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.rf-daychip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  background: #fff;
+  border: 1px solid var(--ig-lightgray);
+  font-family: var(--font-head);
+  font-size: 15px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--ig-anthracite);
+}
+
+.rf-day.is-today .rf-daychip {
   border-color: var(--ig-red);
-  box-shadow: 0 0 0 2px rgba(227, 5, 27, .14);
+  color: var(--ig-red);
 }
 
-.kg-roterfaden-mobile-row.is-today .kg-roterfaden-node-dot {
-  background: var(--ig-yellow);
-  box-shadow: 0 0 0 7px rgba(234, 181, 0, .25);
+.rf-today {
+  padding: 3px 9px;
+  background: var(--ig-red);
+  color: #fff;
+  font-family: var(--font-head);
+  font-size: 10px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
 }
 
-.kg-roterfaden-period {
-  margin-top: 0;
+.rf-daycount {
+  font-size: 12.5px;
+  color: var(--ig-gray);
 }
 
-.kg-roterfaden-period + .kg-roterfaden-period {
-  margin-top: 2px;
+/* ---- Tageskarte mit Dreieck (die eine Heldenform des CD) ---- */
+.rf-daycard {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid var(--ig-lightgray);
 }
 
-.kg-roterfaden-period-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--kg-inner-gap);
-  align-items: start;
+.rf-dreieck {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 46px;
+  height: 46px;
+  clip-path: polygon(100% 0, 0 0, 100% 100%);
+  background: var(--ig-sunrise);
 }
 
-.kg-roterfaden-period-columns--single {
-  grid-template-columns: 1fr;
+/* ---- Anker: Vormittag / Nachmittag ---- */
+.rf-anchor__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 11px;
 }
 
-.kg-roterfaden-period-title {
-  margin: 0 0 10px 0;
+.rf-anchor__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--ig-lightgray);
+  color: var(--ig-red);
+}
+
+.rf-anchor__name {
+  font-family: var(--font-head);
+  font-size: 13px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--ig-red);
+}
+
+.rf-anchor__time {
+  font-size: 12px;
+  color: var(--ig-gray);
+}
+
+.rf-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ---- Programmblock (eine Einheit oder ein Baustein mit mehreren Themen) ---- */
+.rf-block {
+  background: #fff;
+  border: 1px solid var(--ig-lightgray);
+}
+
+.rf-block__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 13px;
+  background: #fafafa;
+  border-bottom: 1px solid var(--ig-lightgray);
+  color: var(--ig-anthracite);
+}
+
+/* "Modern": die Kopfzeile traegt die Phasenfarbe des Blocks (Kompakt bleibt
+   neutral). Die Phasen-Token stehen auf .rf-block (siehe .rf-phase--*). */
+.rf-timeline--modern .rf-block .rf-block__head {
+  background: var(--rf-tint, #fafafa);
+  border-bottom-color: var(--rf-color, var(--ig-lightgray));
+  color: var(--rf-text, var(--ig-anthracite));
+}
+
+.rf-block__num,
+.rf-block__title {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 13px;
+  line-height: 1.25;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: inherit;
+}
+
+/* Derselbe Baustein an spaeterer Stelle: als Fortsetzung kenntlich (D20). */
+.rf-block__cont {
+  margin-left: auto;
+  padding: 2px 7px;
+  border: 1px solid currentcolor;
+  font-family: var(--font-head);
+  font-size: 10px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.rf-block__body {
+  padding: 11px 13px;
+}
+
+.rf-block__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.rf-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .78);
+  background: var(--ig-surface-soft);
   border: 1px solid var(--ig-lightgray);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ig-anthracite);
-}
-
-.kg-roterfaden-period-list {
-  display: grid;
-  gap: 10px;
-}
-
-.kg-roterfaden-entry {
-  border: 1px solid var(--ig-lightgray);
-  border-radius: 10px;
-  background: #fff;
-  overflow: hidden;
-}
-
-.kg-roterfaden-entry-header {
-  padding: 10px 12px;
-  background: #f7f7f7;
-  border-bottom: 1px solid var(--ig-lightgray);
-}
-
-.kg-roterfaden-entry-content {
-  padding: 10px 12px;
-}
-
-.kg-roterfaden-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #f8f8f8;
-  border: 1px solid var(--ig-lightgray);
-  border-radius: 999px;
-  padding: 2px 8px;
   font-size: 12px;
   color: var(--ig-gray);
-  margin-bottom: 8px;
 }
 
-.kg-roterfaden-title {
-  margin: 0;
-  font-size: 15px;
-  color: var(--ig-anthracite);
+.rf-dur {
+  font-size: 12px;
+  color: var(--ig-gray);
 }
 
-.kg-roterfaden-topics {
-  margin-top: 6px;
-  color: var(--ig-anthracite);
-}
-
-.kg-roterfaden-topics-toggle {
-  margin-top: 6px;
-}
-
-.kg-roterfaden-topics-toggle > summary {
+.rf-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  margin-left: auto;
+  padding: 4px 2px;
+  background: none;
+  border: 0;
   cursor: pointer;
-  font-weight: 600;
-  color: var(--ig-anthracite);
+  white-space: nowrap;
+  font-family: var(--font-head);
+  font-size: 12px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--ig-red);
 }
 
-.kg-roterfaden-method-note {
-  color: var(--ig-anthracite);
+.rf-toggle:hover {
+  color: var(--ig-red-hover);
 }
 
-.kg-roterfaden-timeline-wrap {
-  width: 100%;
-  --kg-inner-gap: 12px;
+.rf-toggle:focus-visible {
+  outline: 2px solid var(--ig-red);
+  outline-offset: 2px;
 }
 
-.kg-roterfaden-timeline-mobile {
-  display: grid;
-  gap: 18px;
-  padding: 6px 0 4px;
+/* Einzige Bewegung im Roten Faden. */
+.rf-toggle .rf-icon:last-child {
+  transition: transform .15s;
 }
 
-.kg-roterfaden-mobile-row {
-  position: relative;
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
-  column-gap: 10px;
-  align-items: start;
+.rf-block.is-open .rf-toggle .rf-icon:last-child {
+  transform: rotate(180deg);
 }
 
-.kg-roterfaden-mobile-row::before {
-  content: "";
-  position: absolute;
-  left: 14px;
-  top: 10px;
-  bottom: -22px;
-  width: 2px;
-  background: var(--ig-gray);
-  z-index: 0;
-}
-
-.kg-roterfaden-mobile-row:last-child::before {
+/* ---- Themen eines Blocks ---- */
+.rf-themen {
   display: none;
+  margin: 11px 0 0;
+  padding: 11px 0 0;
+  border-top: 1px solid #ededed;
+  list-style: none;
 }
 
-.kg-roterfaden-mobile-marker {
-  position: relative;
-  z-index: 2;
-  width: 30px;
-  padding-top: 2px;
+.rf-block.is-open .rf-themen {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.kg-roterfaden-mobile-content {
-  min-width: 0;
-}
-
-.kg-roterfaden-mobile-day {
-  display: inline-flex;
+.rf-theme {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-  font-weight: 700;
-  font-size: 15px;
-  color: var(--ig-anthracite);
-  background: rgba(255, 255, 255, .92);
-  border: 1px solid var(--ig-lightgray);
-  border-radius: 999px;
-  padding: 2px 10px;
-}
-
-.kg-roterfaden-mobile-row.is-today .kg-roterfaden-mobile-day {
-  border-color: var(--ig-red);
-  box-shadow: 0 0 0 2px rgba(227, 5, 27, .12);
-}
-
-.kg-roterfaden-mobile-card {
-  position: relative;
-  z-index: 1;
-}
-
-.kg-roterfaden-mobile-card .kg-roterfaden-node-content {
-  overflow: visible;
-}
-
-.kg-roterfaden-mobile-card .kg-roterfaden-period-columns {
-  grid-template-columns: 1fr;
   gap: 10px;
+  margin: 0;
 }
 
-.kg-roterfaden-icon {
-  width: 16px;
-  height: 16px;
-  display: inline-block;
-  flex: 0 0 auto;
-  opacity: .86;
+.rf-dot {
+  flex: 0 0 11px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--rf-color, var(--ig-lightgray));
 }
 
-.kg-roterfaden-icon--day {
-  width: 17px;
-  height: 17px;
+.rf-theme__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ig-anthracite);
 }
 
-.kg-roterfaden-icon--period {
-  width: 15px;
-  height: 15px;
+.rf-badge {
+  padding: 3px 8px;
+  background: var(--rf-tint, var(--ig-surface-muted));
+  border: 1px solid var(--rf-color, var(--ig-lightgray));
+  font-family: var(--font-head);
+  font-size: 11px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--rf-text, var(--ig-gray));
 }
 
-.kg-roterfaden-icon--meta,
-.kg-roterfaden-icon--inline {
-  width: 14px;
-  height: 14px;
+.rf-theme__dur {
+  min-width: 52px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--ig-gray);
 }
 
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-row::before {
-  background: var(--ig-anthracite);
+/* ---- Seminarphasen: Volltonfarbe, heller Grund, dunkle Schrift ---- */
+.rf-phase--orientierung {
+  --rf-color: var(--ig-blue);
+  --rf-tint: #e7f0f5;
+  --rf-text: #215d7e;
 }
 
-.kg-roterfaden-theme-clean .kg-roterfaden-mobile-day {
-  background: #ffffff;
-  border-color: var(--ig-anthracite);
+.rf-phase--erfahrung {
+  --rf-color: var(--ig-green);
+  --rf-tint: #e7f1e3;
+  --rf-text: #3f6e2f;
 }
 
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-row::before {
-  background: var(--ig-sunrise);
+.rf-phase--analyse {
+  --rf-color: var(--ig-yellow);
+  --rf-tint: #fbf1d0;
+  --rf-text: #8a6d00;
 }
 
-.kg-roterfaden-theme-modern .kg-roterfaden-mobile-day {
-  background: linear-gradient(180deg, rgba(255, 255, 255, .98), rgba(255, 247, 233, .95));
-  border-color: rgba(227, 5, 27, .35);
-  box-shadow: 0 4px 10px rgba(60, 60, 60, .14);
+.rf-phase--handlung {
+  --rf-color: var(--ig-darkred);
+  --rf-tint: #f3e6e7;
+  --rf-text: var(--ig-darkred);
+}
+
+.rf-phase--transfer {
+  --rf-color: var(--ig-gray);
+  --rf-tint: #eee;
+  --rf-text: #4a4a4a;
+}
+
+@media (max-width: 640px) {
+  .kg-rf-shell {
+    padding: 12px 10px;
+  }
+
+  .rf-day {
+    gap: 10px;
+  }
+
+  .rf-daycard {
+    padding: 12px 12px;
+  }
+
+  .rf-block__meta {
+    gap: 8px;
+  }
+
+  .rf-toggle {
+    margin-left: 0;
+  }
 }
 
 /* =========================================================
@@ -4715,14 +4384,12 @@ body.sp-resizing * {
   --if-surface: #f9f9ff;
   --if-surface-low: #f0f3ff;
   --if-surface-high: #d8e3fb;
-  --if-radius: 8px;
-  --if-radius-sm: 4px;
+  --if-radius: 0;
+  --if-radius-sm: 0;
 }
 
 /* ---- Seminareinheit / Methoden-Karte ---- */
 .kg-library-card.sp-card {
-  background: #fff;
-  border: 1px solid var(--if-outline-variant);
   border-radius: var(--if-radius);
   padding: 16px;
   height: auto;
@@ -4745,27 +4412,6 @@ body.sp-resizing * {
 
 /* Farbcodierung nach kognitiver Dimension (Bloom): farbiger linker Akzent + sanfte Tönung.
    1 Erinnern / 2 Verstehen = Blau · 3 Anwenden = Grün · 4 Analysieren / 5 Bewerten = Gelb · 6 Erschaffen = Rot. */
-.kg-library-card.sp-card.sp-level-1,
-.kg-library-card.sp-card.sp-level-2 {
-  border-left: 4px solid var(--ig-blue);
-  background: var(--ig-blue-soft);
-}
-
-.kg-library-card.sp-card.sp-level-3 {
-  border-left: 4px solid var(--ig-green);
-  background: var(--ig-green-soft);
-}
-
-.kg-library-card.sp-card.sp-level-4,
-.kg-library-card.sp-card.sp-level-5 {
-  border-left: 4px solid var(--ig-yellow);
-  background: var(--ig-yellow-soft);
-}
-
-.kg-library-card.sp-card.sp-level-6 {
-  border-left: 4px solid var(--ig-red);
-  background: var(--ig-red-soft);
-}
 
 /* ---- Mehrfachauswahl / Stapel-Bearbeitung ---- */
 .ml-card-select {
@@ -4785,7 +4431,6 @@ body.sp-resizing * {
 }
 
 .kg-library-card--selected {
-  outline: 2px solid var(--ig-blue);
   outline-offset: 2px;
 }
 
@@ -4855,19 +4500,8 @@ body.sp-resizing * {
   gap: 4px;
   margin: 0;
   padding: 3px 8px;
-  font-size: 12px;
-  font-weight: 500;
   line-height: 16px;
-  color: var(--if-secondary);
-  background: var(--if-surface-low);
-  border: 1px solid var(--if-outline-variant);
   border-radius: var(--if-radius-sm);
-}
-
-.kg-library-card.sp-card .sp-card-meta .sp-badge--phase {
-  color: var(--if-primary);
-  background: rgba(14, 116, 144, .08);
-  border-color: rgba(14, 116, 144, .25);
 }
 
 .ml-card-tags {
@@ -4880,13 +4514,8 @@ body.sp-resizing * {
   display: inline-block;
   padding: 2px 8px;
   font-size: 11px;
-  font-weight: 700;
   line-height: 16px;
-  letter-spacing: .04em;
   text-transform: uppercase;
-  color: var(--if-secondary);
-  background: var(--if-surface-high);
-  border-radius: var(--if-radius-sm);
 }
 
 .kg-library-card.sp-card .sp-card-description {
@@ -5048,4 +4677,3221 @@ body.sp-resizing * {
   .sp-tab-content {
     max-height: 380px;
   }
+}
+
+/* === Sequenzansicht (Block 2, D3/D10/D11/D20) – Chrome-Variante "Vertraut" === */
+/* Die Token gelten auch im Modal-Overlay: das haengt an document.body, also
+   AUSSERHALB von .sq-shell — ohne diese Zeile blieben dort z. B. Budget-Balken
+   farblos (var(--sq-accent) waere nicht aufgeloest). */
+.sq-shell,
+.sq-modal-overlay {
+    --sq-border: #d7dce2;
+    --sq-border-strong: #b9c1cb;
+    --sq-text: #26313d;
+    --sq-text-muted: #5b6b79;
+    /* CD-Handoff Stufe 1: Akzent Rot, Phasenfarben aus der DS-Palette. */
+    --sq-accent: var(--ig-red);
+    --sq-accent-dark: var(--ig-red-hover);
+    --sq-accent-bg: var(--ig-red-soft);
+    --sq-warn: #7a5e00;
+    --sq-warn-bg: #FBF1D0;
+    --sq-radius: 0;
+    --sq-shadow: none;
+    --sq-phase-orientierung: #2F80AB;
+    --sq-phase-erfahrung: #5B9945;
+    --sq-phase-analyse: #EAB500;
+    --sq-phase-handlung: #882A30;
+    --sq-phase-transfer: #646464;
+}
+/* ---- Klapp-Indikator: EIN Muster fuer alle Aufklapp-Elemente ----
+   Vorher gab es drei: den nativen <details>-Marker (Seminarziele, Ziel-
+   Verknuepfungen, Modal-Abschnitte), ein rotes ▸ (Luecken-Vorschlaege) und ein
+   Inline-SVG (Kopf). Der native Marker sieht zudem je nach Browser anders aus,
+   war also nicht mal mit sich selbst einheitlich. Jetzt tragen alle dieselbe
+   Form, Groesse, Farbe und Drehung — genau ein Ort, an dem das definiert ist.
+   Rotation deckt beide Bauarten ab: <details>/<summary> und den Button-Kopf. */
+/* Groesse und Farbe bewusst FEST, nicht relativ/token-abhaengig:
+   - `em` waere die Schriftgroesse der jeweiligen Kopfzeile gefolgt, der Pfeil
+     also in jedem Menue verschieden gross (11,25px bis 14,4px gemessen);
+   - var(--sq-text) loest im Modal zu einem anderen Wert auf als in der Shell
+     (dort wurde --sq-text beim CD-Update auf --ig-anthracite gezogen, im
+     Modal-Overlay nicht) — der Pfeil waere dort blaustichig.
+   Ein Indikator, der ueberall gleich aussehen soll, darf an keinem der beiden
+   haengen. 12px entspricht dem Play-Dreieck aus dem Handoff. */
+.sq-tri {
+    display: inline-block;
+    flex: 0 0 auto;
+    color: var(--ig-anthracite, #3C3C3C);
+    font-size: 12px;
+    line-height: 1;
+    transition: transform .15s;
+}
+details[open] > summary .sq-tri,
+.sq-head[data-open="1"] .sq-tri {
+    transform: rotate(90deg);
+}
+/* Nativen Marker abschalten, wo der eigene Indikator steht — sonst stehen zwei
+   Pfeile nebeneinander. */
+.sq-goals__summary,
+.sq-goal-links > summary,
+.sq-section > summary,
+.sq-gap__summary {
+    list-style: none;
+}
+.sq-goals__summary::-webkit-details-marker,
+.sq-goal-links > summary::-webkit-details-marker,
+.sq-section > summary::-webkit-details-marker,
+.sq-gap__summary::-webkit-details-marker {
+    display: none;
+}
+
+/* ---- Einklappbarer Kopf „Seminarplan & Tag" (Handoff-SEQUENZ 1) ---- */
+.sq-head {
+    background: #fff;
+    border: 1px solid var(--sq-border);
+    margin-bottom: 14px;
+}
+.sq-head__toggle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 11px 16px;
+    background: #FAFAFA;
+    border: 0;
+    border-bottom: 1px solid var(--sq-border);
+    cursor: pointer;
+    text-align: left;
+}
+.sq-head[data-open="0"] .sq-head__toggle { border-bottom: 0; }
+.sq-head__title {
+    font-family: var(--font-head, inherit);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 14px;
+    color: var(--sq-text);
+}
+.sq-head__info { font-size: 12.5px; color: #646464; }
+.sq-head__body { padding: 14px 16px; }
+.sq-head[data-open="0"] .sq-head__body { display: none; }
+/* Planbar und Toolbar bleiben eigene weisse Cards — der Handoff sieht im Kopf
+   genau diese zwei Unter-Panels vor. Nur der Aussenabstand der letzten faellt
+   weg, sonst entstuende unter ihr eine Luecke zur Kopf-Kante. */
+.sq-head .sq-toolbar { margin-bottom: 0; }
+
+.sq-planbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap; /* Refactoring: aus zweitem .sq-planbar-Block hierher (optikneutral). */
+}
+.sq-planbar__label { margin: 0; }
+.sq-planbar__select { max-width: 320px; }
+
+/* D45: plan creation/setup panel in the sequence view. */
+.sq-setup {
+    margin: 0 0 12px;
+    border-radius: 0;
+}
+
+.sq-setup .sp-modal__section {
+    margin: 0 0 12px;
+    padding: 10px;
+    border-radius: 0;
+}
+
+.sq-setup .sp-modal__section h3 {
+    margin: 0 0 8px;
+    font-size: 1rem;
+}
+
+.sq-setup .sp-modal__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.sq-publishbar .kg-inline-checkbox {
+    margin: 0;
+}
+.sq-toolbar {
+    display: flex;
+    align-items: center;
+    /* explizit flex-start (nicht nur space-between entfernen): eine evtl.
+       gecachte aeltere Kopie dieser Regel in der aggregierten Theme-CSS
+       wuerde sonst weiter space-between erzwingen. */
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    background: #fff;
+    border: 1px solid var(--sq-border);
+    border-radius: var(--sq-radius);
+    margin-bottom: 14px;
+    box-shadow: var(--sq-shadow);
+}
+.sq-toolbar__nav { display: flex; align-items: center; gap: 8px; }
+.sq-daylabel { text-align: center; color: var(--sq-text); }
+/* Handoff-SEQUENZ 3: der Abschnitt ist keine Karte mehr, sondern nur noch ein
+   Band ueber der Zeitleiste. Ohne Kasten und Fuellung liest sich der Tag als
+   ein durchgehender Fluss statt als zwei gestapelte Container. Damit entfaellt
+   auch das frühere overflow:hidden — das ⋮-Menue kann nicht mehr geklippt
+   werden, die :has()-Ausnahme dafuer ist deshalb ersatzlos weg. */
+.sq-anchor {
+    margin-bottom: 12px;
+}
+.sq-anchor__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 0 2px 12px;
+    border-left: 6px solid var(--sq-accent);
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.sq-anchor__title {
+    font-size: 15px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+.sq-anchor__time {
+    font-family: var(--font-body, inherit);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--sq-text-muted);
+    font-size: 12.5px;
+}
+.sq-budget { display: flex; align-items: center; gap: 8px; min-width: 200px; }
+.sq-budget__bar { border-radius: 0; overflow: hidden; }
+.sq-budget__fill { height: 100%; background: var(--sq-accent); }
+.sq-budget__label { color: var(--sq-text-muted); white-space: nowrap; }
+.sq-anchor__body { padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.sq-empty { color: var(--sq-text-muted); font-size: 12.5px; padding: 4px 2px 4px 76px; }
+
+/* Handoff-SEQUENZ 4: die Mittagspause ist ein eigener Block, keine gestrichelte
+   Trennlinie mehr. Die dunkle Vollflaeche schneidet den Tag sichtbar in
+   Vormittag und Nachmittag — das war als Haarlinie zwischen zwei Karten nicht
+   zu erkennen. */
+.sq-break-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 18px 0;
+    padding: 12px 18px;
+    background: #3C3C3C;
+    border-left: 6px solid var(--sq-accent);
+    color: #fff;
+    font-family: var(--font-head, inherit);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 13px;
+}
+.sq-break-divider__time {
+    font-family: var(--font-body, inherit);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #DADADA;
+    font-size: 12.5px;
+}
+.sq-break-divider__next {
+    margin-left: auto;
+    color: #F0A0A8;
+    font-size: 12px;
+}
+/* Handoff-SEQUENZ 3 „Gruppe/Baustein": gestrichelte Klammer in Tiefrot statt
+   grauer Karte — der Baustein ist eine Zusammenfassung, kein eigener Kasten
+   auf gleicher Ebene wie die Einheiten darin. */
+.sq-row--baustein > .sq-baustein { flex: 1; min-width: 0; }
+.sq-baustein {
+    border-radius: var(--sq-radius);
+}
+.sq-baustein__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.sq-baustein__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.sq-baustein__units { border-top: 1px solid #E4D3D5; }
+.sq-baustein__units { display: flex; flex-direction: column; }
+.sq-badge {
+    border-radius: 0;
+}
+/* Handoff-SEQUENZ 3: Zeit-Spalte vor der Einheit. Die Startzeit steht damit
+   dort, wo der Blick beim Lesen des Tagesverlaufs ohnehin zuerst hinfaellt —
+   frueher hing sie als letztes Badge hinter Dauer und Phase. Feste 64px, damit
+   alle Zeilen eine gemeinsame Kante haben, an der die Karten beginnen. */
+.sq-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+.sq-time {
+    width: 64px;
+    flex: 0 0 64px;
+    text-align: right;
+    padding-top: 9px;
+}
+.sq-time__start {
+    font-family: var(--font-head, inherit);
+    font-weight: 900;
+    font-size: 15px;
+    color: var(--sq-accent-dark);
+    line-height: 1.1;
+}
+/* In einer Gruppe tritt die Startzeit zurueck: dort fuehrt der Baustein-Kopf,
+   die Einheiten darin sind ihm untergeordnet. */
+.sq-baustein .sq-time__start { color: var(--sq-text-muted); }
+.sq-time__durwrap {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 5px;
+}
+.sq-time__dur {
+    font-size: 14px;
+    color: var(--sq-text);
+}
+/* Handoff: Dauer-Feld 46px, zentriert, scharfe Ecken. Die Spinner von
+   type=number wuerden auf 46px die Ziffern verdraengen — deshalb aus; der
+   Wert wird getippt, nicht geklickt. */
+.sq-time__input {
+    width: 46px;
+    text-align: center;
+    border: 1px solid var(--sq-border);
+    border-radius: 0;
+    background: #fff;
+    padding: 3px 2px;
+    font-family: var(--font-body, inherit);
+    font-size: 14px;
+    color: var(--sq-text);
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+.sq-time__input::-webkit-outer-spin-button,
+.sq-time__input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.sq-time__input:hover { border-color: var(--sq-border-strong); }
+.sq-time__input:focus {
+    border-color: var(--sq-accent);
+    outline: 2px solid var(--ig-red-soft, #FBEDEE);
+    outline-offset: 0;
+}
+.sq-time__unit {
+    font-size: 10px;
+    color: #9a9a9a;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-top: 2px;
+}
+
+.sq-unit {
+    display: flex;
+    border: 1px solid var(--sq-border);
+    border-radius: 0;
+    background: #fff;
+}
+/* Nur in der Zeitleisten-Zeile fuellt die Karte die Restbreite. Ungescoped
+   wuerde flex:1 die Karten in der Migrations-Vorschau (renderIntroSequence)
+   vertikal strecken — dort haengt .sq-unit direkt im Spalten-Flex des
+   Anker-Bodys, ohne .sq-row dazwischen. */
+.sq-row > .sq-unit { flex: 1; min-width: 0; }
+.sq-unit__phase { align-self: stretch; border-radius: 0; background: var(--ig-lightgray); }
+.sq-unit__main { flex: 1; min-width: 0; }
+.sq-unit__title { font-weight: 600; color: var(--sq-text); }
+.sq-unit__meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 3px; align-items: center; }
+.sq-unit__time { font-size: 11px; color: var(--sq-text-muted); }
+.sq-pause {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px dashed var(--sq-border-strong);
+    border-radius: 0;
+    background: #fafbfc;
+    padding: 6px 10px;
+    color: var(--sq-text-muted);
+    font-size: 12px;
+}
+.sq-row > .sq-pause { flex: 1; min-width: 0; }
+.sq-pause__label { font-weight: 600; }
+.sq-overrun {
+    border-radius: 0;
+    margin-top: 2px;
+}
+.sq-legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 11.5px;
+    color: var(--sq-text-muted);
+    margin: 10px 2px 4px;
+}
+.sq-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.sq-legend__dot { width: 9px; height: 9px; border-radius: 0; display: inline-block; background: #cfd6dd; }
+.sq-phase-bg--orientierung { background: var(--sq-phase-orientierung, #5b8fb0); }
+.sq-phase-bg--erfahrung { background: var(--sq-phase-erfahrung, #6f9e6c); }
+.sq-phase-bg--analyse { background: var(--sq-phase-analyse, #c99a3e); }
+.sq-phase-bg--handlung { background: var(--sq-phase-handlung, #b06a6a); }
+.sq-phase-bg--transfer { background: var(--sq-phase-transfer, #8a6fb0); }
+
+/* === Sequenzansicht: Bearbeitungs-Interaktionen (Block 2b, D42 C1-C7) === */
+/* Aktions-Elemente sind direkte Flex-Kinder der Toolbar (display: contents),
+   damit im Standard alles in EINER Reihe steht und beim Verkleinern die
+   einzelnen Elemente umbrechen statt der ganze Block auf einmal. */
+.sq-toolbar__actions { display: contents; }
+.sq-unit__actions { display: flex; gap: 6px; flex: 0 0 auto; flex-wrap: wrap; }
+.sq-baustein__tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sq-pause__spacer { flex: 1; }
+.sq-overrun { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.sq-pills { display: flex; gap: 4px; flex-wrap: wrap; }
+.sq-pill {
+    border-radius: 0;
+    cursor: pointer;
+}
+.sq-pill.active { font-weight: 600; }
+.sq-swap { position: relative; display: inline-block; }
+.sq-swap__chip {
+    border-radius: 0;
+    padding: 3px 9px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.sq-swap__panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: #fff;
+    border-radius: 0;
+    padding: 6px;
+    z-index: 20;
+}
+.sq-swap__panel.open { display: block; }
+.sq-swap__option {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 8px;
+    border-radius: 0;
+    font-size: 12px;
+    cursor: pointer;
+}
+.sq-swap__option:hover { background: var(--sq-accent-bg); }
+.sq-swap__option.active { font-weight: 600; color: var(--sq-accent-dark); }
+.sq-swap__dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--sq-border-strong); flex: 0 0 auto; }
+.sq-swap__option.active .sq-swap__dot { background: var(--sq-accent); border-color: var(--sq-accent); }
+/* Der Baustein-⇄-Chip sitzt links im Kopf – Popover linksbündig öffnen,
+   lange Baustein-Titel umbrechen und über den Einheiten liegen, damit es
+   nicht über den Rand läuft und keine Klicks der Einheiten abfängt. */
+.sq-swap--baustein .sq-swap__panel { left: 0; right: auto; max-width: min(420px, 72vw); z-index: 30; }
+.sq-swap--baustein .sq-swap__option { align-items: flex-start; white-space: normal; }
+.sq-swap--baustein .sq-swap__dot { margin-top: 5px; }
+/* ---- Seminarphase: Dropdown an der Zeile (Handoff-SEQUENZ) ----
+   Bedienung bewusst wie der ⇄-Alternativen-Chip daneben: gleicher Popover-Bau,
+   gleiche Klick-daneben-Regel. Neu ist nur der Farbpunkt, der die Phasenfarbe
+   des Streifens links an der Karte erklaert. */
+.sq-phase { position: relative; display: inline-block; }
+.sq-phase__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--sq-border);
+    border-radius: 0;
+    background: #fff;
+    color: var(--sq-text);
+    padding: 5px 9px;
+    font-family: var(--font-body, inherit);
+    font-size: 12.5px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.sq-phase__btn:hover { border-color: var(--sq-border-strong); }
+/* Kein background hier: die Phasenfarbe kommt aus .sq-phase-bg--*, die weiter
+   oben in dieser Datei steht und dieselbe Spezifitaet hat — eine
+   background-Angabe an dieser spaeteren Stelle wuerde alle Punkte grau
+   uebermalen (gleiche Falle wie bei .sq-unit__phase). Der neutrale Fall traegt
+   deshalb eine eigene Klasse, die mit keiner Phasenfarbe kollidiert. */
+.sq-phase__dot {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 9px;
+    border-radius: 0;
+}
+.sq-phase__dot--none { background: var(--ig-lightgray, #DADADA); }
+.sq-phase__panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--sq-border-strong);
+    border-radius: 0;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+    padding: 4px;
+    min-width: 210px;
+    z-index: 40;
+}
+.sq-phase__panel.open { display: block; }
+.sq-phase__head {
+    font-family: var(--font-head, inherit);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 10px;
+    color: var(--sq-text-muted);
+    padding: 5px 10px 6px;
+}
+.sq-phase__option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    font-size: 13px;
+    cursor: pointer;
+}
+.sq-phase__option:hover { background: var(--sq-accent-bg); }
+.sq-phase__option.active { font-weight: 700; color: var(--sq-accent-dark); }
+/* Die Aenderung reicht ueber diesen Plan hinaus (sie schreibt in die
+   Bibliotheks-Karte). Der Hinweis steht im Menue, also dort, wo entschieden
+   wird — nicht erst im Toast danach. */
+.sq-phase__note {
+    border-top: 1px solid var(--sq-border);
+    margin-top: 4px;
+    padding: 6px 10px 4px;
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--sq-text-muted);
+}
+
+.sq-heading-affordance { display: flex; align-items: center; gap: 8px; margin: -2px 0 2px 2px; }
+.sq-heading-link {
+    background: none;
+    border: none;
+    color: var(--sq-text-muted);
+    font-size: 11.5px;
+    cursor: pointer;
+    padding: 2px 4px;
+    text-decoration: underline dotted;
+}
+.sq-heading-link:hover { color: var(--sq-accent-dark); }
+.sq-heading-inline { display: flex; align-items: center; gap: 6px; margin: 2px 0 2px 2px; }
+.sq-heading-inline input { max-width: 260px; }
+.sq-baustein__topics { font-size: 12px; color: var(--sq-text-muted); padding: 2px 4px 4px; white-space: pre-line; }
+/* Frisch angelegter leerer Baustein: Hinweis + Einladung zum Hinzufügen. */
+.sq-baustein__empty { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 2px; }
+.sq-baustein__emptyhint { font-size: 12px; color: var(--sq-text-muted); }
+.sq-unit--planned { opacity: .85; border-style: dashed; }
+.sq-badge--planned { background: #fff; border: 1px dashed var(--sq-border-strong); }
+.sq-toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    color: #fff;
+    border-radius: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: .25s;
+}
+.sq-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* === Sequenzansicht: Editor-Modal, Picker, Mitgliedschaft (Block 2c) === */
+.sq-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 30, 40, .45);
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 80px 16px 40px;
+    z-index: 2000; /* above the fixed Moodle navbar */
+    overflow: auto;
+}
+.sq-modal-overlay.open { display: flex; }
+.sq-modal { background: #fff; border-radius: 0; max-width: 640px; width: 100%; }
+.sq-modal__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #d7dce2;
+}
+.sq-modal__head h3 { margin: 0; }
+.sq-modal__body { max-height: 70vh; overflow: auto; }
+.sq-modal__close { border: none; background: transparent; font-size: 18px; cursor: pointer; color: #5b6b79; }
+.sq-modal__footer { padding: 12px 18px; border-top: 1px solid #d7dce2; display: flex; justify-content: flex-end; gap: 8px; }
+.sq-field { margin-bottom: 12px; }
+.sq-field__hint { font-size: 11px; color: #5b6b79; margin-top: 3px; }
+.sq-section { border: 1px solid #d7dce2; border-radius: 0; margin-bottom: 10px; }
+.sq-section summary { padding: 8px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.sq-section__inner { padding: 12px; }
+.sq-picker { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow-y: auto; }
+/* Quellen-Tabs im „Einheit hinzufügen"-Modal (Lokal · Methodensammlung · Konzept). */
+.sq-picker__tabs { display: flex; gap: 2px; margin-bottom: 10px; border-bottom: 1px solid var(--sq-border); flex-wrap: wrap; }
+.sq-picker__tab {
+    border: 0;
+    background: none;
+    padding: 7px 12px;
+    margin-bottom: -1px;
+    border-bottom: 3px solid transparent;
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    color: var(--sq-text-muted);
+    cursor: pointer;
+}
+.sq-picker__tab.active { color: var(--sq-accent-dark); border-bottom-color: var(--sq-accent); font-weight: 600; }
+/* „Nur noch nicht verwendete Einheiten anzeigen" unter dem Suchfeld. */
+.sq-picker__filter { display: flex; align-items: center; gap: 7px; margin: 0 0 10px; font-size: 12.5px; color: var(--sq-text-muted); cursor: pointer; }
+.sq-picker__filter input { margin: 0; }
+.sq-picker__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid #d7dce2;
+    border-radius: 0;
+    padding: 8px 10px;
+}
+/* Warnung, wenn ein Seminarkonzept nicht entfernt werden kann, weil seine
+   Einheiten noch in Plänen liegen. Steht an der Karte statt in einem Dialog:
+   die genannten Stellen muss man beim Aufräumen ablesen können. */
+.ml-konzept-card__warn {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--sq-border-strong, #b8c0cc);
+    border-left-width: 3px;
+    font-size: 13px;
+}
+.ml-konzept-card__warn ul { margin: 6px 0; padding-left: 20px; }
+.ml-konzept-card__warn li { margin: 2px 0; }
+
+/* Bereichsübergreifende Suche der Bibliothek: eine gemeinsame Trefferliste
+   über lokale Einheiten, Methodensammlung und Konzepte. Das Badge sagt, aus
+   welchem Bereich ein Treffer stammt - ohne es waeren die Zeilen nicht
+   auseinanderzuhalten. */
+.ml-allsearch { flex: 1 1 320px; }
+.ml-allsearch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid var(--sq-border, #d7dce2);
+    padding: 8px 10px;
+}
+.ml-allsearch-row + .ml-allsearch-row { border-top: 0; }
+.ml-allsearch-row__main { min-width: 0; }
+.ml-allsearch-row__title { font-weight: 600; }
+.ml-allsearch-row__sub {
+    font-size: 12.5px;
+    color: var(--sq-text-muted, #5b6572);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+.ml-allsearch-row__badge {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    padding: 1px 7px;
+    border: 1px solid var(--sq-border-strong, #b8c0cc);
+    color: var(--sq-text-muted, #5b6572);
+    background: #fff;
+}
+.ml-allsearch-row__badge--konzept { border-style: dashed; }
+
+/* Konzept-Tab mit mehreren importierten Konzepten: je Konzept eine Gruppe
+   untereinander. Die Überschrift ist im Modal die einzige Herkunftsanzeige -
+   es gibt hier bewusst keine Filter. */
+.sq-picker__group + .sq-picker__group { margin-top: 14px; }
+.sq-picker__grouphead {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--sq-text-muted);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--sq-border);
+}
+/* Schon im Plan verwendete Einheiten: gedämpft, aber weiter wählbar. */
+.sq-picker__row--used { opacity: .6; }
+.sq-picker__row--used:hover { opacity: 1; }
+.sq-badge--used { background: #fff; border: 1px dashed var(--sq-border-strong); color: var(--sq-text-muted); }
+.sq-suggest__card--used { opacity: .6; }
+.sq-suggest__card--used:hover { opacity: 1; }
+/* Refactoring: display/gap/flex-wrap aus zweitem .sq-anchor__add-Block (Z.~5548) hier zusammengefuehrt (disjunkt, optikneutral). */
+/* Handoff-SEQUENZ 3: Hinzufuegen-Leiste, Ueberlauf-Hinweis und Luecken-Vorschlaege
+   sind auf die Karten-Kante eingerueckt (64px Zeit-Spalte + 12px Spalten-Abstand),
+   damit die Zeitleiste eine durchgehende linke Kante behaelt. */
+.sq-anchor__add { margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; margin-left: 76px; }
+.sq-anchor__body > .sq-overrun,
+.sq-anchor__body > .sq-gap { margin-left: 76px; }
+.sq-membership { font-size: 11.5px; padding: 3px 8px; }
+
+/* === Sequenzansicht: Uebersetzungs-Anzeige (D35) ===
+   Beide Spalten zeigen die ECHTEN Ansichten, nicht mehr vereinfachte Skizzen:
+   links die Ueberblick-Optik (dauerechte Bloecke in Phasenfarbe an der
+   Zeitachse), rechts die Sequenz-Bausteine (Anker mit Budget, Einheiten-Zeilen
+   mit Phasen-Streifen und Badges, Baustein-Klammer) — nur verkleinert und ohne
+   Bedienelemente. */
+.sq-modal--intro { max-width: 1040px; }
+.sq-intro__lead { font-size: 13px; }
+.sq-intro__columns { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+.sq-intro__col {
+    flex: 1;
+    min-width: 300px;
+    border: 1px solid var(--ig-lightgray);
+    border-radius: 0;
+    background: #fff;
+    padding: 10px 12px;
+}
+.sq-intro__col--new { background: var(--ig-surface-muted); border-color: var(--ig-red-mid); }
+.sq-intro__col h4 {
+    margin: 0 0 8px;
+    font-family: var(--font-head);
+    font-size: 12.5px;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    color: var(--ig-anthracite);
+}
+.sq-intro__note { font-size: 12px; color: var(--ig-gray); margin-top: 10px; }
+
+/* --- Linke Spalte: "So war es" in der Optik des Ueberblicks --- */
+.sq-intro__grid {
+    position: relative;
+    margin-top: 4px;
+}
+.sq-intro__hour { position: absolute; left: 0; right: 0; border-top: 1px solid var(--ig-lightgray); }
+.sq-intro__hour span {
+    position: absolute;
+    top: -7px;
+    left: 0;
+    padding-right: 4px;
+    background: #fff;
+    font-size: 10px;
+    color: var(--ig-gray);
+    font-variant-numeric: tabular-nums;
+}
+.sq-intro__block {
+    position: absolute;
+    left: 44px;
+    right: 4px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    overflow: hidden;
+    padding: 2px 7px;
+    border-radius: 0;
+    background: var(--ig-lightgray);
+    color: #fff;
+    font-size: 10.5px;
+    line-height: 1.2;
+}
+/* Volle Phasenfarbe wie die Bloecke im Ueberblick. */
+.sq-intro__block--orientierung { background: var(--sq-phase-orientierung, #2F80AB); }
+.sq-intro__block--erfahrung { background: var(--sq-phase-erfahrung, #5B9945); }
+.sq-intro__block--analyse { background: var(--sq-phase-analyse, #EAB500); color: var(--ig-anthracite); }
+.sq-intro__block--handlung { background: var(--sq-phase-handlung, #882A30); }
+.sq-intro__block--transfer { background: var(--sq-phase-transfer, #646464); }
+.sq-intro__block--analyse .sq-intro__blocktime { color: var(--ig-anthracite); }
+
+/* Pausen: 45°-Schraffur wie im Ueberblick. */
+.sq-intro__block--break {
+    background: repeating-linear-gradient(45deg, #ededed 0, #ededed 5px, #f7f7f7 5px, #f7f7f7 10px);
+    border: 1px dashed var(--ig-midgray);
+    color: var(--ig-gray);
+}
+.sq-intro__block--break .sq-intro__blocktime { color: var(--ig-gray); }
+.sq-intro__blocktime { color: rgba(255, 255, 255, .85); font-size: 10px; font-variant-numeric: tabular-nums; }
+.sq-intro__blocktitle { font-weight: 600; line-height: 1.25; }
+
+/* --- Rechte Spalte: "So ist es jetzt" = echte Sequenz-Bausteine, verkleinert --- */
+.sq-intro__preview {
+    zoom: .85;
+    /* Reine Vorschau: hier wird nichts bedient. */
+    pointer-events: none;
+}
+
+.sq-intro__preview .sq-anchor { margin-bottom: 8px; }
+
+.sq-intro__preview .sq-anchor__body { padding: 8px; gap: 8px; }
+
+/* === Baustein-Editor (Stammdaten in der Sequenz) === */
+.sq-readonly {
+    background: #f6f8fa;
+    border: 1px solid #d7dce2;
+    border-radius: 0;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: #5b6b79;
+    white-space: pre-line;
+}
+.sq-modal__footer--split { justify-content: flex-start; }
+.sq-modal__footer-gap { flex: 1; }
+.sq-danger { color: #a02f2f; border-color: #d9b3b3; }
+.sq-danger:hover { background: #fdf2f2; border-color: #a02f2f; }
+
+/* === D16-Abschluss: Ueberblick read-only (D34) === */
+.kg-grid-readonly .sp-sidebar { display: none; }
+.kg-grid-readonly #sp-filterbar { display: none; }
+.kg-grid-readonly #sp-addbreak,
+.kg-grid-readonly #sp-clear { display: none; }
+.kg-grid-readonly .sp-item,
+.kg-grid-readonly .sp-item * { pointer-events: none !important; }
+.kg-grid-readonly .sp-layout { grid-template-columns: 1fr; }
+
+/* === D37: Flussdiagramm Pruefprozess (Einreichen-Tab) === */
+.kg-flow {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 4px 0 18px;
+}
+.kg-flow__step {
+    flex: 1;
+    min-width: 170px;
+    background: #fff;
+    border: 1px solid #d7dce2;
+    border-radius: 0;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 12.5px;
+    box-shadow: 0 1px 2px rgba(20, 30, 40, .06);
+}
+.kg-flow__num {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--ig-red);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2px;
+}
+.kg-flow__text { color: #5b6b79; font-size: 12px; }
+.kg-flow__arrow { align-self: center; color: #8a97a3; font-size: 16px; }
+
+/* === Block 3: Dramaturgie-Blick (D15/D22/D23/D27) === */
+.sq-toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: #5b6b79; margin: 0; cursor: pointer; }
+.sq-drama { display: none; }
+.sq-drama--visible {
+    display: block;
+    background: #fff;
+    border-radius: 0;
+    margin-top: 14px;
+}
+.sq-drama h4 { margin: 0 0 8px; }
+.sq-drama__item { display: flex; gap: 8px; align-items: flex-start; border-radius: 0; }
+.sq-drama__icon { flex: 0 0 auto; }
+
+/* === Block 3: Vorschlaege in der Luecke (D14/D41) === */
+.sq-gap { border: 1px dashed #b9c1cb; border-radius: 0; background: #fff; }
+.sq-suggest { display: flex; flex-wrap: wrap; margin-bottom: 8px; }
+.sq-suggest__card { border-radius: 0; display: flex; flex-direction: column; gap: 4px; }
+/* Begründung auf 2 Zeilen begrenzen, damit alle Karten gleich hoch bleiben. */
+.sq-suggest__why { font-size: 11px; color: #5b6b79; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+/* Titel ebenfalls auf 2 Zeilen begrenzen (gleiche Kartenhöhe). */
+.sq-suggest__card .sq-unit__title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.sq-suggest__card .kg-btn { margin-top: auto; }
+.sq-suggest__empty { font-size: 12px; color: #5b6b79; margin-bottom: 8px; }
+
+/* =========================================================================
+   CD-Handoff Stufe 1 (Token-Anwendung, docs/design_handoff_seminarplaner)
+   Zentrale Angleichung an das IG-Metall-CD: Typografie-Token und
+   Interaktionsakzente (Blau -> Rot/Neutral). Inhalts-Codierungen (Phasen,
+   Bloom-Level, Einheiten-Farben) bleiben unberührt. Der Komponenten-
+   Feinschliff je Ansicht folgt in Stufe 2.
+   ========================================================================= */
+
+/* ---- Typografie: Fließtext ---- */
+.kg-shell,
+.kg-tabs,
+.sp-modal,
+.sq-modal,
+.sq-toast {
+  font-family: var(--font-body);
+}
+
+/* ---- Typografie: Headline-Schnitt (Meta Head Cond, versal) ---- */
+.kg-btn,
+.sp-btn,
+.kg-tab,
+.kg-label,
+.sp-modal__label,
+.sp-filter__label,
+.sp-anchor-label,
+.sq-anchor__title,
+.sq-daylabel,
+.sq-badge,
+.kg-shell h3,
+.kg-shell h4,
+.kg-shell h5 {
+  font-family: var(--font-head);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+.kg-tab {
+  font-size: 13px;
+}
+
+/* Satzförmige Labels (Checkbox-Zeilen, Hinweise) bleiben Fließtext. */
+.kg-inline-checkbox,
+.kg-inline-checkbox span,
+.sq-toggle {
+  font-family: var(--font-body);
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* ---- Interaktionsakzente: Auswahl/Hover/Fokus in Rot ---- */
+.kg-step-active {
+  border-color: var(--ig-red);
+  color: var(--ig-red);
+  background: var(--ig-red-soft);
+}
+
+.kg-library-card--drop-before-y::before,
+.kg-library-card--drop-after-y::after,
+.kg-library-card--drop-before-x::before,
+.kg-library-card--drop-after-x::after {
+  background: var(--ig-red);
+  box-shadow: 0 0 0 2px var(--ig-red-soft);
+}
+
+.kg-library-card:hover .ml-card-drag-handle,
+.kg-library-card:focus-within .ml-card-drag-handle {
+  color: var(--ig-anthracite);
+  background: var(--ig-surface-muted);
+}
+
+.ml-card-menu[open] .ml-card-menu-toggle {
+  color: var(--ig-red);
+}
+
+.ml-card-menu-toggle:hover {
+  border-color: var(--ig-red);
+  color: var(--ig-red);
+}
+
+.ml-card-menu-toggle:focus-visible {
+  outline: 2px solid var(--ig-red-mid);
+}
+
+.ml-card-menu-btn:hover {
+  border-color: var(--ig-red);
+  background: var(--ig-red-soft);
+}
+
+.sp-view-switch .kg-btn.is-active,
+.sp-day-switch .kg-btn.is-active {
+  background: var(--ig-red-soft);
+  color: var(--ig-red);
+}
+
+.sp-unit-method-card:hover {
+  border-color: var(--ig-red-mid);
+  background: var(--ig-red-soft);
+}
+
+.sp-unit-method-card:focus-visible {
+  outline: 2px solid var(--ig-red-mid);
+}
+
+.sp-item--method-clickable:hover {
+  box-shadow: 0 0 0 1px var(--ig-red-mid);
+}
+
+.sp-unit-method-link {
+  color: var(--ig-red-hover);
+}
+
+.sp-unit-method-link:hover {
+  background: var(--ig-red-soft);
+  border-color: var(--ig-red-mid);
+}
+
+.sp-unit-method-link:focus-visible {
+  outline: 2px solid var(--ig-red-mid);
+}
+
+.sp-source-tab.is-active {
+  box-shadow: inset 0 0 0 2px var(--ig-red-soft);
+  border-color: var(--ig-red);
+  color: var(--ig-red);
+}
+
+.sp-btn:hover:not(:disabled),
+.sp-zoom-btn:hover:not(:disabled),
+.kg-tag-dropdown-toggle:hover:not(:disabled),
+.sp-modal__close:hover:not(:disabled) {
+  background: var(--ig-surface-muted);
+  border-color: var(--ig-gray);
+  color: var(--ig-anthracite);
+}
+
+.kg-btn:focus-visible,
+.sp-btn:focus-visible,
+.sp-zoom-btn:focus-visible,
+.kg-tag-dropdown-toggle:focus-visible,
+.sp-modal__close:focus-visible {
+  outline: 2px solid var(--ig-red-mid);
+  outline-offset: 2px;
+}
+
+.sp-modal__field input:focus,
+.sp-modal__field select:focus {
+  border-color: var(--ig-red);
+  box-shadow: 0 0 0 3px var(--ig-red-soft);
+}
+
+.sp-day-checkbox::before {
+  background: linear-gradient(135deg, var(--ig-red), var(--ig-red));
+}
+
+.sp-day-checkbox:hover {
+  border-color: var(--ig-red);
+  transform: none;
+  box-shadow: none;
+}
+
+.sp-day-checkbox:has(input:checked) {
+  border-color: var(--ig-red);
+  background: linear-gradient(135deg, var(--ig-red), var(--ig-red));
+  color: #ffffff;
+}
+
+.sp-slot--over {
+  outline: 2px dashed var(--ig-red);
+}
+
+.kg-library-card--selected {
+  outline: 2px solid var(--ig-red);
+}
+
+/* ---- Badges neutral (Handoff: Grund #F2F2F2, Text Grau, Hairline) ---- */
+.sp-badge,
+.sp-method-detail__meta-item,
+.sp-allday-chip {
+  background: #F2F2F2;
+  border: 1px solid var(--ig-lightgray);
+  color: var(--ig-gray);
+}
+
+/* Label-Punkte im Formular: einheitlich neutral statt Rot/Blau-Wechsel. */
+.sp-modal__section:nth-child(even) .sp-modal__label::before {
+  background: var(--ig-gray);
+  box-shadow: 0 0 0 3px rgba(100, 100, 100, .12);
+}
+
+/* Karten-Top-Rule: neutral als Default (kategorisierende Farben je
+   Komponente kommen in Stufe 2). */
+.sp-card {
+  border-top-color: var(--ig-lightgray);
+}
+
+/* =========================================================================
+   CD-Handoff Stufe 2: Komponenten-Feinschliff der Sequenzansicht
+   (Anker, SeqUnit-Zeilen, Bausteine, Lücken, Dramaturgie, Modal, Toast,
+   Toggle-Switch, Seitenkopf) nach docs/design_handoff_seminarplaner.
+   ========================================================================= */
+
+/* ---- Sequenz-Grautöne auf CD-Grau ----
+   Gilt bewusst AUCH für .sq-modal-overlay (Editor-, Intro- und Lernziel-Modal).
+   Bis 17. Juli 2026 stand hier nur .sq-shell — die Modals behielten dadurch
+   Schrift UND Rahmen auf der alten bläulichen Palette (#26313d/#5b6b79/
+   #d7dce2/#b9c1cb aus dem frühen Token-Block), während die Shell daneben auf
+   CD-Grau lief. Das war kein Vorsatz, sondern ein vergessener Selektor: beide
+   hängen am selben Token-Block, nur diese Anhebung ließ das Modal aus. */
+.sq-shell,
+.sq-modal-overlay {
+    --sq-border: var(--ig-lightgray);
+    --sq-border-strong: var(--ig-midgray);
+    --sq-text: var(--ig-anthracite);
+    --sq-text-muted: var(--ig-gray);
+}
+
+/* ---- Seitenkopf: H-Zeile + 4px roter Regel-Strich ---- */
+.sq-pagehead {
+    margin: 2px 0 14px;
+}
+
+.sq-pagehead h3 {
+    margin: 0;
+    font-size: 22px;
+    color: var(--ig-anthracite);
+    line-height: 1.1;
+}
+
+.sq-pagehead__sub {
+    color: var(--ig-gray);
+    font-size: 13px;
+    margin-top: 4px;
+    max-width: 860px;
+}
+
+.sq-pagehead::after {
+    content: "";
+    display: block;
+    width: 64px;
+    height: 4px;
+    background: var(--ig-red);
+    margin-top: 10px;
+}
+
+/* ---- Werkzeugleiste ---- */
+.sq-toolbar {
+    padding: 11px 16px;
+}
+
+.sq-toolbar .kg-btn {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+#sq-prev-day,
+#sq-next-day {
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-color: var(--ig-midgray);
+    font-family: var(--font-body);
+}
+
+.sq-daylabel {
+    min-width: 180px;
+    font-size: 15px;
+}
+
+/* Dramaturgie-Toggle als Switch (38x20, Rot wenn an). */
+.sq-toggle input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 38px;
+    height: 20px;
+    border: none;
+    border-radius: 999px;
+    background: #C4C4C4;
+    position: relative;
+    cursor: pointer;
+    margin: 0;
+    transition: background .15s;
+    flex: 0 0 auto;
+}
+
+.sq-toggle input[type="checkbox"]:checked {
+    background: var(--ig-red);
+}
+
+.sq-toggle input[type="checkbox"]::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .3);
+    transition: left .15s;
+}
+
+.sq-toggle input[type="checkbox"]:checked::after {
+    left: 20px;
+}
+
+/* ---- Anker ---- */
+/* Die frueheren Nachzieh-Regeln fuer __head/__title/__time/__body sind hier
+   entfallen: seit dem Handoff-Redesign traegt der Basis-Block (Abschnitt
+   „Sequenzansicht") die gueltigen Werte. Stehengeblieben haetten sie ihn
+   ueberschrieben — das graue #FAFAFA und padding:11px 16px haetten den
+   Kasten um den Abschnitt zurueckgeholt, den das Redesign gerade entfernt. */
+
+.sq-budget__bar {
+    width: 130px;
+    height: 8px;
+    background: var(--ig-lightgray);
+}
+
+.sq-budget__fill--over {
+    background: var(--ig-yellow);
+}
+
+.sq-budget__label {
+    font-size: 12px;
+}
+
+.sq-budget__label--over {
+    color: #8a6d00;
+    font-weight: 700;
+}
+
+/* ---- SeqUnit-Zeile: Phasen-Streifen über volle Höhe ---- */
+.sq-unit {
+    padding: 0;
+    gap: 0;
+    align-items: stretch;
+}
+
+/* Kein background hier: die Phasenfarbe kommt aus .sq-phase-bg--* (gleiche
+   Spezifität — eine background-Angabe an dieser späteren Stelle würde alle
+   Streifen grau übermalen). Neutraler Default steht an der Basisregel. */
+.sq-unit__phase {
+    width: 6px;
+    flex: 0 0 6px;
+}
+
+.sq-unit__main {
+    padding: 9px 6px 9px 10px;
+}
+
+.sq-unit__title {
+    font-size: 14px;
+}
+
+.sq-unit__actions {
+    padding: 8px 10px;
+    align-items: center;
+}
+
+/* ---- Badges: neutral + getönte Phasen-Badges ---- */
+.sq-badge {
+    background: #F2F2F2;
+    color: var(--ig-gray);
+    border: 1px solid var(--ig-lightgray);
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+.sq-badge--phase-orientierung { background: #E7F0F5; color: #215d7e; border-color: var(--sq-phase-orientierung); }
+.sq-badge--phase-erfahrung { background: #E7F1E3; color: #3f6e2f; border-color: var(--sq-phase-erfahrung); }
+.sq-badge--phase-analyse { background: #FBF1D0; color: #8a6d00; border-color: var(--sq-phase-analyse); }
+.sq-badge--phase-handlung { background: #F3E6E7; color: #882A30; border-color: var(--sq-phase-handlung); }
+.sq-badge--phase-transfer { background: #EEEEEE; color: #4a4a4a; border-color: var(--sq-phase-transfer); }
+
+/* Fortsetzung-Chip: voll Tiefrot. */
+.sq-badge--variant {
+    background: var(--ig-darkred);
+    color: #fff;
+    border-color: var(--ig-darkred);
+}
+
+/* ---- Baustein: Tiefrot-Familie ---- */
+/* Handoff-SEQUENZ 3 „Gruppe/Baustein": durchgehend gestrichelte Klammer statt
+   Karte mit roter Oberkante. Der Baustein klammert Einheiten, er steht nicht
+   als eigene Karte neben ihnen — die Strichelung sagt „Zusammenfassung", die
+   fehlende Kopf-Fuellung nimmt ihm das Kartengewicht. */
+.sq-baustein {
+    border: 1.5px dashed #C9A9AD;
+    border-top: 1.5px dashed #C9A9AD;
+    background: #FCFAFA;
+}
+
+.sq-baustein--empty {
+    border-style: dashed;
+    border-top: 1.5px dashed #C9A9AD;
+    background: #fff;
+}
+
+.sq-baustein__head {
+    background: transparent;
+    border-bottom: 0;
+    padding: 9px 12px;
+}
+
+.sq-baustein--empty .sq-baustein__head {
+    color: var(--ig-darkred);
+}
+
+.sq-baustein__title {
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 15px;
+    color: var(--ig-darkred);
+}
+
+.sq-baustein__title .sq-badge {
+    background: #fff;
+    color: var(--ig-darkred);
+    border-color: #C9A9AD;
+}
+
+.sq-baustein__title .sq-badge--variant {
+    background: var(--ig-darkred);
+    color: #fff;
+    border-color: var(--ig-darkred);
+}
+
+.sq-baustein__units {
+    padding: 8px;
+    gap: 8px;
+}
+
+/* Varianten-Pillen: Tiefrot-Schema, versal. */
+.sq-pill {
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 11px;
+    padding: 4px 11px;
+    border: 1px solid #C9A9AD;
+    background: #fff;
+    color: var(--ig-darkred);
+}
+
+.sq-pill:hover {
+    border-color: var(--ig-darkred);
+    color: var(--ig-darkred);
+}
+
+.sq-pill.active {
+    background: var(--ig-darkred);
+    border-color: var(--ig-darkred);
+    color: #fff;
+}
+
+/* ---- Alternative-Chip + Popover ---- */
+.sq-swap__chip {
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 11px;
+    border: 1px solid var(--ig-midgray);
+    background: #fff;
+    color: var(--ig-red-hover);
+}
+
+.sq-swap__chip:hover {
+    border-color: var(--ig-midgray);
+    background: #fff;
+    color: var(--ig-red);
+}
+
+.sq-swap__panel {
+    border: 1px solid var(--ig-midgray);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+    min-width: 240px;
+}
+
+/* ---- Lücke mit Vorschlägen ---- */
+.sq-gap {
+    border-color: var(--ig-midgray);
+}
+
+.sq-suggest {
+    gap: 10px;
+}
+
+.sq-suggest__card {
+    /* Feste Breite + Mindesthöhe, damit alle Karten gleich groß sind -
+       auch die mit längerem Begründungstext (global/„bereits im Plan"). */
+    width: 240px;
+    flex: 0 0 240px;
+    box-sizing: border-box;
+    height: 150px;
+    background: #FBFBFB;
+    border: 1px solid var(--ig-lightgray);
+    border-top: 3px solid var(--ig-lightgray);
+    padding: 10px;
+}
+
+.sq-suggest__card--orientierung { border-top-color: var(--sq-phase-orientierung); }
+.sq-suggest__card--erfahrung { border-top-color: var(--sq-phase-erfahrung); }
+.sq-suggest__card--analyse { border-top-color: var(--sq-phase-analyse); }
+.sq-suggest__card--handlung { border-top-color: var(--sq-phase-handlung); }
+.sq-suggest__card--transfer { border-top-color: var(--sq-phase-transfer); }
+
+.sq-suggest__card .kg-btn {
+    width: 100%;
+    margin-bottom: 0;
+}
+
+/* ---- Überlauf-Banner ---- */
+.sq-overrun {
+    background: #FBF1D0;
+    border: 1px solid var(--ig-yellow);
+    color: #7a5e00;
+    padding: 10px 12px;
+    font-size: 13px;
+}
+
+/* ---- Mittagspausen-Trenner ---- */
+/* Die frueheren Regeln fuer `.sq-break-divider span` (Rahmen + Polsterung des
+   weissen Chips) sind entfallen: seit dem Handoff-Redesign ist die Pause eine
+   dunkle Voll-Leiste, kein Chip auf einer gestrichelten Linie. Die Basisregel
+   traegt die gueltigen Werte. */
+
+/* ---- Dramaturgie-Blick-Panel ---- */
+.sq-drama--visible {
+    border: 1px solid var(--ig-lightgray);
+    border-top: 3px solid var(--ig-red);
+    padding: 14px 16px;
+    box-shadow: none;
+}
+
+.sq-drama h4 {
+    font-size: 15px;
+}
+
+.sq-drama__item {
+    padding: 8px 10px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    margin-bottom: 7px;
+}
+
+.sq-drama__item--ok {
+    background: #E7F1E3;
+    color: #3f6e2f;
+}
+
+.sq-drama__item--hint {
+    background: #FBF1D0;
+    color: #7a5e00;
+}
+
+/* ---- Toast: Anthrazit mit grünem Marker ---- */
+.sq-toast {
+    background: var(--ig-anthracite);
+    padding: 11px 20px;
+    font-size: 13px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .3);
+    z-index: 2100;
+}
+
+.sq-toast::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: var(--ig-green);
+    margin-right: 8px;
+}
+
+/* ---- Modal ---- */
+.sq-modal {
+    box-shadow: var(--shadow-lg);
+}
+
+.sq-modal__head {
+    padding: 15px 20px;
+    border-bottom-color: var(--ig-lightgray);
+}
+
+.sq-modal__head h3 {
+    font-size: 17px;
+}
+
+.sq-modal__body {
+    padding: 18px 20px;
+}
+
+.sq-modal__footer {
+    border-top-color: var(--ig-lightgray);
+}
+
+.sq-section {
+    border-color: var(--ig-lightgray);
+}
+
+.sq-section summary {
+    background: #FAFAFA;
+}
+
+.sq-picker__row {
+    border-color: var(--ig-lightgray);
+}
+
+/* Entfallender Anker (An-/Abreisetag): gedämpft, Bedienung deaktiviert. */
+/* D45-Sonderfall An-/Abreisetag: der entfallende Abschnitt bleibt als getoente
+   Flaeche erkennbar. Seit der Anker keine Karte mehr ist, traegt der Body
+   padding:0 — die Toenung braucht hier wieder etwas Luft, sonst klebt sie
+   ohne Rand an den Zeilen. */
+.sq-anchor--off .sq-anchor__body {
+    background: var(--ig-surface-muted);
+    padding: 10px 12px;
+}
+
+.sq-anchor--off .sq-anchor__head {
+    color: var(--ig-gray);
+}
+
+.sq-anchor--off .sq-empty {
+    color: var(--ig-gray);
+}
+
+.sq-anchor--off .sq-anchor__add .kg-btn:disabled {
+    background: transparent;
+}
+
+/* Vorschläge aus der Bibliothek: eingeklappt, aber einladend (details). */
+.sq-gap {
+    padding: 8px 12px;
+}
+
+.sq-gap__summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.sq-gap__summary::-webkit-details-marker {
+    display: none;
+}
+
+/* Der frueher eigene .sq-gap__chevron ist entfallen: die Luecken-Box nutzt jetzt
+   denselben .sq-tri wie alle anderen Aufklapp-Elemente. */
+
+.sq-gap__label {
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 12px;
+    color: var(--ig-red-hover);
+}
+
+.sq-gap__summary:hover .sq-gap__label {
+    color: var(--ig-red);
+}
+
+.sq-gap__free {
+    font-size: 12px;
+    color: var(--ig-gray);
+}
+
+.sq-gap__body {
+    margin-top: 10px;
+}
+
+/* Passive Speicher-Statusanzeige (ersetzt den Speichern-Button). */
+.sq-savestate {
+    font-size: 12.5px;
+    color: var(--ig-gray);
+    white-space: nowrap;
+    /* Refactoring: margin-left aus spaeterem .sq-savestate-Block (Z.~7085)
+       hierher (schiebt die Anzeige ans rechte Zeilenende; optikneutral). */
+    margin-left: auto;
+}
+
+.sq-savestate--ok {
+    color: var(--ig-green);
+}
+
+.sq-savestate--error {
+    color: var(--ig-red-hover);
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   D47: Drag & Drop in der Sequenz (zweiter Bedienweg neben den ↑/↓-Pfeilen)
+   ========================================================================== */
+
+/* Sechs-Punkte-Grip als Anfass-Affordance (Handoff SeqUnit). */
+.sq-grip {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    padding-left: 6px;
+    color: #C4C4C4;
+    cursor: grab;
+}
+
+.sq-baustein__title .sq-grip {
+    padding-left: 0;
+}
+
+/* Gezogene Zeile bleibt sichtbar, aber erkennbar „unterwegs". */
+.sq-dragging {
+    opacity: .45;
+}
+
+/* Einfüge-Linie: Drop auf einer Zeile sortiert davor ein. */
+.sq-drop-before {
+    box-shadow: 0 -3px 0 0 var(--color-primary);
+}
+
+/* Drop auf dem Anker-Body hängt ans Ende an. */
+.sq-anchor__body.sq-drop-append {
+    outline: 2px dashed var(--color-primary);
+    outline-offset: -2px;
+}
+
+/* ==========================================================================
+   D48: Hinweis auf die Seminarschmiede im Import/Export-Tab
+   ========================================================================== */
+.kg-ie-hint {
+    border: 1px solid var(--ig-lightgray);
+    border-left: 4px solid var(--color-primary);
+    background: #FAFAFA;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+}
+
+.kg-ie-hint p {
+    margin: 0 0 8px;
+    font-size: 13px;
+}
+
+/* ==========================================================================
+   D29/D33: Globale Bibliothek (Tag-Facetten, Übernehmen als Kopie)
+   ========================================================================== */
+.gl-facets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 10px 0;
+}
+
+.gl-facet {
+    border: 1px solid var(--ig-lightgray);
+    background: #fff;
+    color: var(--ig-gray);
+    padding: 4px 10px;
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.gl-facet--active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+}
+
+.gl-facet__count {
+    opacity: .7;
+    font-weight: 400;
+}
+
+.gl-card__source {
+    font-size: 12px;
+    color: var(--ig-gray);
+}
+
+.gl-card__adopt[disabled] {
+    opacity: .7;
+    cursor: default;
+}
+
+/* ==========================================================================
+   D37: Statusliste laufender Einreichungen im Einreichen-Tab
+   ========================================================================== */
+.kg-review-status-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--ig-lightgray);
+}
+
+.kg-review-status-row:last-child {
+    border-bottom: none;
+}
+
+.kg-review-status-chip {
+    flex: 0 0 auto;
+    padding: 3px 10px;
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 11px;
+}
+
+.kg-review-status-chip--draft { background: #F2F2F2; color: var(--ig-gray); border: 1px solid var(--ig-lightgray); }
+.kg-review-status-chip--review { background: #FBF1D0; color: #8a6d00; border: 1px solid #E3CE7B; }
+.kg-review-status-chip--published { background: #E7F1E3; color: #3f6e2f; border: 1px solid #9FC48D; }
+.kg-review-status-chip--archived { background: #EEEEEE; color: #7a7a7a; border: 1px solid var(--ig-lightgray); }
+
+.kg-review-status-name {
+    font-weight: 700;
+}
+
+.kg-review-status-step {
+    color: var(--ig-gray);
+    font-size: 12.5px;
+}
+
+/* ==========================================================================
+   D49: Überblick = reiner Wochenblick mit Klick-Navigation zur Sequenz
+   ========================================================================== */
+
+/* Der Wochen-/Tages-Umschalter entfällt ersatzlos. */
+.kg-grid-readonly .sp-view-switch,
+.kg-grid-readonly .sp-day-switch {
+    display: none;
+}
+
+/* Einträge aus der Sequenz-Projektion sind klickbare Navigation. */
+.kg-grid-readonly .sp-item--sqnav,
+.kg-grid-readonly .sp-item--sqnav * {
+    pointer-events: auto !important;
+}
+
+.sp-item--sqnav {
+    cursor: pointer;
+}
+
+.kg-grid-readonly .sp-item--sqnav:hover {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+}
+
+/* =========================================================================
+   CD-Handoff Stufe 3: Näher an den Screenshots
+   (docs/design_handoff_seminarplaner/screenshots) — Seitengrund #F1F1F1 mit
+   weißen Karten, Überblick-Wochenraster in vollen Phasenfarben, Bibliotheks-
+   karten mit Phasen-Top-Rule, Seitenköpfe auf allen Tabs.
+   ========================================================================= */
+
+/* Die Phasenfarben (--sq-phase-*) sind global auf :root am Dateikopf definiert
+   (Design-System-Block), damit sie überall gelten - auch im Überblick ohne
+   .sq-shell. Der frühere doppelte :root-Block an dieser Stelle wurde dorthin
+   zusammengeführt (identische Werte, optikneutral). */
+
+/* ---- Seitengrund + weiße Inhaltskarten ---- */
+.kg-shell {
+    background: var(--ig-surface-muted);
+    border: none;
+    padding: 16px;
+}
+
+.kg-ie-block,
+.kg-library-step {
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+}
+
+/* Filterleisten liegen in den weißen Karten - kein grauer Unterbau mehr. */
+.sp-filterbar {
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+.sp-wrapper {
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+    padding: 12px;
+}
+
+/* Plan-Auswahl und Veröffentlichen-Zeile der Sequenz als weiße Karten. */
+.sq-planbar {
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+    padding: 11px 16px;
+}
+
+/* ---- Sekundär-Aktionen (Handoff: 2px rote Outline, Fill-Invert on hover).
+   Diese Regeln brauchen kein !important mehr: sie sind spezifischer
+   (Attribut + Klasse) als die neutrale Button-Basis. */
+[data-sq-action="add-unit"].kg-btn,
+[data-sq-action="add-pause"].kg-btn,
+[data-sq-action="picker-create"].kg-btn,
+[data-sq-action="create-unit"].kg-btn,
+[data-sq-action="add-baustein"].kg-btn,
+#sq-new-unit.kg-btn {
+    border: 2px solid var(--ig-red);
+    color: var(--ig-red);
+    background: #fff;
+}
+
+[data-sq-action="add-unit"].kg-btn:hover:not(:disabled),
+[data-sq-action="add-pause"].kg-btn:hover:not(:disabled),
+[data-sq-action="picker-create"].kg-btn:hover:not(:disabled),
+[data-sq-action="create-unit"].kg-btn:hover:not(:disabled),
+[data-sq-action="add-baustein"].kg-btn:hover:not(:disabled),
+#sq-new-unit.kg-btn:hover:not(:disabled) {
+    background: var(--ig-red);
+    border-color: var(--ig-red);
+    color: #fff;
+}
+
+/* Werkzeugleisten-Button ohne die Standard-Außenabstände der kg-btn. */
+#sq-new-unit.kg-btn {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+/* Entfallende Anker (An-/Abreisetag): Hinzufügen bleibt gedämpft. */
+/* Deaktiviert gilt fuer ALLE roten Anker-Buttons — vorher fehlten picker-create und
+   #sq-new-unit in dieser Liste, sie blieben deaktiviert rot (sahen also aktiv aus). */
+[data-sq-action="add-unit"].kg-btn:disabled,
+[data-sq-action="add-pause"].kg-btn:disabled,
+[data-sq-action="picker-create"].kg-btn:disabled,
+[data-sq-action="create-unit"].kg-btn:disabled,
+[data-sq-action="add-baustein"].kg-btn:disabled,
+#sq-new-unit.kg-btn:disabled {
+    border-color: var(--ig-lightgray);
+    color: var(--ig-midgray);
+    background: #fff;
+}
+
+/* Primär-Buttons als Link (Hinweisleiste) brauchen Link-Neutralisierung. */
+a.kg-btn {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+a.kg-btn-primary,
+a.kg-btn-primary:hover,
+a.kg-btn-primary:focus {
+    color: #fff;
+    text-decoration: none;
+}
+
+/* ---- Überblick: Hinweisleiste (tiefrot getönt, Button rechts) ---- */
+/* Hinweisleiste (Handoff): tiefrot getoent, mit Primaer-Button in die Sequenz. */
+.kg-ov-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    background: #F3E6E7;
+    border: 1px solid #E4D3D5;
+    color: var(--ig-darkred);
+    font-size: 13px;
+}
+
+.kg-ov-hint__note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 320px;
+}
+
+.kg-ov-hint__note > svg {
+    flex: 0 0 auto;
+    color: var(--ig-darkred);
+}
+
+.kg-ov-hint__btn {
+    margin: 0;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+.kg-ov-hint__btn:hover {
+    text-decoration: none;
+    color: #fff;
+}
+
+/* Werkzeugleiste (Handoff): eine schmale weisse Karte ueber dem Raster. */
+.kg-ov-toolbar {
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+    margin-bottom: 12px;
+}
+
+.kg-ov-toolbar__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 11px 16px;
+}
+
+.kg-ov-toolbar__row--second {
+    border-top: 1px solid var(--ig-lightgray);
+    background: var(--ig-surface-soft);
+}
+
+.kg-ov-toolbar__group {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.kg-ov-toolbar__label {
+    margin: 0;
+    font-family: var(--font-head);
+    font-size: 11px;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    color: var(--ig-gray);
+}
+
+.kg-ov-toolbar__group .kg-btn {
+    margin: 0;
+}
+
+.kg-ov-toolbar__group select.kg-input {
+    width: auto;
+    min-width: 220px;
+    min-height: 34px;
+    height: 34px;
+}
+
+.kg-ov-toolbar__status {
+    font-size: 12px;
+    color: var(--ig-gray);
+}
+
+.kg-ov-toolbar__hint {
+    margin: -4px 0 12px;
+    font-size: 12px;
+    color: var(--ig-gray);
+}
+
+/* "Nur Ansicht": der Ueberblick ist schreibgeschuetzt (D34). */
+.kg-ov-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 13px;
+    background: var(--ig-surface-muted);
+    border: 1px solid var(--ig-midgray);
+    color: var(--ig-gray);
+    font-family: var(--font-head);
+    font-size: 11px;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+}
+
+.kg-ov-pdfbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.kg-ov-pdfbar__label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: #7a7a7a;
+    margin-right: 4px;
+}
+
+.kg-ov-pdfbtn {
+    margin: 0;
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    /* Rote Outline-Optik (schlägt die neutrale Basis über die eigene Klasse). */
+    background: #fff;
+    border-color: var(--ig-red);
+    color: var(--ig-red);
+}
+
+.kg-ov-pdfbtn:hover:not(:disabled) {
+    background: var(--ig-red-soft);
+    border-color: var(--ig-red);
+    color: var(--ig-red);
+}
+
+.kg-ov-pdfbtn .kg-btn-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+
+/* ---- Überblick (read-only): Wochenraster nach Handoff ---- */
+
+/* Die Werkzeugzeile ist im Read-only-Modus leer - komplett ausblenden. */
+.kg-grid-readonly .sp-weekbar,
+.kg-grid-readonly #sp-saved-state,
+.kg-grid-readonly .sp-time-scale,
+.kg-grid-readonly #sp-view-label {
+    display: none;
+}
+
+/* Kein Chip-Band über den Tagen - das Raster spricht für sich. */
+.kg-grid-readonly #sp-allday-row {
+    display: none;
+}
+
+/* Tages-Kopfzeile: Grund #FAFAFA, versaler Wochentag. */
+.kg-grid-readonly .sp-colhead {
+    background: #FAFAFA;
+    border-bottom: 1px solid var(--ig-lightgray);
+    border-right: 1px solid var(--ig-lightgray);
+}
+
+.kg-grid-readonly .sp-colhead-day {
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 13px;
+    color: var(--ig-anthracite);
+}
+
+.kg-grid-readonly .sp-sum {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--ig-gray);
+}
+
+.kg-grid-readonly .sp-daycol {
+    border-right: 1px solid var(--ig-lightgray);
+}
+
+.kg-grid-readonly .sp-timecol {
+    background: #FBFBFB;
+    border-right: 1px solid var(--ig-lightgray);
+}
+
+/* Zeitachse: nur Stundenmarken, kleine graue Ziffern. */
+.kg-grid-readonly .sp-timeslot {
+    font-size: 10.5px;
+    color: var(--ig-gray);
+}
+
+.kg-grid-readonly .sp-grid .sp-timeslot--minor {
+    border-bottom-color: transparent;
+}
+
+/* Projektions-Einträge: volle Phasenfarbe, Titel bold, Zeit klein. */
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav {
+    margin: 0 5px;
+    padding: 3px 8px;
+    background: #FAFAFA;
+    border: 1px solid var(--ig-lightgray);
+    color: var(--ig-anthracite);
+    box-shadow: 0 1px 2px rgba(20, 30, 40, .14);
+    overflow: hidden;
+    gap: 1px;
+}
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav .sp-title {
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 1.2;
+    padding-right: 12px;
+    cursor: pointer;
+}
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav .sp-meta {
+    font-size: 10.5px;
+    color: rgba(60, 60, 60, .7);
+}
+
+/* Tooltip-Duplikat im farbigen Block unterdrücken (Titel steht ja da). */
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav .sp-title:hover::after {
+    display: none;
+}
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--orientierung,
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--erfahrung,
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--handlung,
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--transfer {
+    color: #fff;
+    border: none;
+}
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--orientierung { background: var(--sq-phase-orientierung); }
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--erfahrung { background: var(--sq-phase-erfahrung); }
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--handlung { background: var(--sq-phase-handlung); }
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--transfer { background: var(--sq-phase-transfer); }
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--analyse {
+    background: var(--sq-phase-analyse);
+    color: var(--ig-anthracite);
+    border: none;
+}
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--orientierung .sp-meta,
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--erfahrung .sp-meta,
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--handlung .sp-meta,
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--transfer .sp-meta {
+    color: rgba(255, 255, 255, .85);
+}
+
+/* Kurze Blöcke: Zeitzeile ausblenden (Handoff: erst ab ~35 Minuten). */
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-item--short .sp-meta {
+    display: none;
+}
+
+/* Reservierte Bausteine: zurückhaltend statt vollfarbig. */
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-item--reserved {
+    background: #FCFAFA;
+    border: 1px dashed #C9A9AD;
+    color: var(--ig-darkred);
+    box-shadow: none;
+}
+
+/* Pausen: 45°-Schraffur mit zentriertem versalem Label. */
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-item--break {
+    background: repeating-linear-gradient(45deg, #F1F1F1, #F1F1F1 6px, #E4E4E4 6px, #E4E4E4 12px) !important;
+    border: 1px dashed var(--ig-midgray);
+    color: var(--ig-gray);
+    box-shadow: none;
+    justify-content: center;
+}
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-item--break .sp-title {
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 10px;
+    color: var(--ig-gray);
+    text-align: center;
+    padding-right: 0;
+}
+
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-item--break .sp-meta {
+    display: none;
+}
+
+/* ⇄-Marker oben rechts, wenn Alternativen hinterlegt sind. */
+.sp-item__alt {
+    position: absolute;
+    top: 3px;
+    right: 6px;
+    font-size: 11px;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* ---- Überblick: Legende ---- */
+.kg-ov-legend {
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+    padding: 10px 14px;
+    margin: 12px 0 0;
+    align-items: center;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--ig-anthracite);
+}
+
+.kg-ov-legend .sq-legend__dot {
+    width: 10px;
+    height: 10px;
+}
+
+.kg-ov-legend__label {
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 11px;
+    color: var(--ig-gray);
+}
+
+.kg-ov-legend__alt {
+    color: var(--ig-gray);
+    margin-left: auto;
+}
+
+/* ---- Bibliothekskarten: weiß mit Phasen-Top-Rule statt Bloom-Tönung ---- */
+.kg-library-card.sp-card {
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+    border-top: 3px solid var(--ig-lightgray);
+}
+
+.kg-library-card.sp-card.ml-phase--orientierung { border-top-color: var(--sq-phase-orientierung); }
+.kg-library-card.sp-card.ml-phase--erfahrung { border-top-color: var(--sq-phase-erfahrung); }
+.kg-library-card.sp-card.ml-phase--analyse { border-top-color: var(--sq-phase-analyse); }
+.kg-library-card.sp-card.ml-phase--handlung { border-top-color: var(--sq-phase-handlung); }
+.kg-library-card.sp-card.ml-phase--transfer { border-top-color: var(--sq-phase-transfer); }
+
+/* Meta-Badges neutral (Grund #F2F2F2, Hairline), Phasen-Badge getönt. */
+.kg-library-card.sp-card .sp-card-meta .sp-badge {
+    background: #F2F2F2;
+    border: 1px solid var(--ig-lightgray);
+    color: var(--ig-gray);
+    font-family: var(--font-head);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 11px;
+}
+
+.kg-library-card.sp-card .sp-card-meta .sp-badge--phase {
+    background: #F2F2F2;
+    border-color: var(--ig-lightgray);
+    color: var(--ig-gray);
+}
+
+/* Tag-Chips neutral grau statt blau. */
+.ml-card-tag {
+    background: #F2F2F2;
+    color: var(--ig-gray);
+    border: 1px solid var(--ig-lightgray);
+    border-radius: 0;
+    font-weight: 400;
+    font-family: var(--font-head);
+    font-weight: 900;
+    letter-spacing: .03em;
+}
+
+/* ---- Stufe-3-Feinschliff nach erstem Sichttest ---- */
+
+/* Blocktitel im Wochenraster umbrechen statt ellipsen (Handoff). */
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav .sp-title {
+    white-space: normal;
+    text-overflow: clip;
+    overflow: hidden;
+}
+
+/* Primär-Buttons kompakt statt über die volle Kartenbreite. */
+.kg-row--action .kg-btn {
+    width: auto;
+    padding-left: 18px;
+    padding-right: 18px;
+}
+
+/* Trefferzähler des (ausgeblendeten) Filters hat im Überblick keinen Sinn. */
+.kg-grid-readonly #sp-filter-status {
+    display: none;
+}
+
+/* Bibliothekskarten: die Bloom-Tönung weicht dem Handoff-Look (weiße Karte,
+   Phasen-Top-Rule). Die Bloom-Levels bleiben in den Daten und im Überblick
+   alter Pläne erhalten - hier werden sie nur nicht mehr eingefärbt. */
+.kg-library-card.sp-card.sp-level-1,
+.kg-library-card.sp-card.sp-level-2,
+.kg-library-card.sp-card.sp-level-3,
+.kg-library-card.sp-card.sp-level-4,
+.kg-library-card.sp-card.sp-level-5,
+.kg-library-card.sp-card.sp-level-6 {
+    border-left: 1px solid var(--ig-lightgray);
+    background: #fff;
+}
+
+/* Roter-Faden-Veröffentlichung sitzt in der Werkzeugleiste (statt in einer
+   eigenen Karte darüber); Hairline trennt sie von den Tages-Werkzeugen. */
+.sq-toolbar .sq-publish {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sq-toolbar .sq-publish .kg-inline-checkbox {
+    margin: 0;
+    white-space: nowrap;
+}
+
+.sq-toolbar .sq-publish .sp-filter-status {
+    margin: 0;
+}
+
+/* Setup-Panel (Neuer Seminarplan / Einrichtung) läuft wie alle anderen
+   Karten über die volle Breite der Shell (Basisregel: max-width 760px). */
+.sq-setup {
+    max-width: none;
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+    padding: 14px 16px;
+}
+
+/* Fußzeile der Werkzeugleiste: genutzte Vorlage + An-/Abreise-Hinweise. */
+.sq-toolbar__info {
+    flex: 1 1 100%;
+    font-size: 12px;
+    color: var(--ig-gray);
+    border-top: 1px solid #EDEDED;
+    padding-top: 8px;
+    margin-top: 2px;
+}
+
+.sq-toolbar__info:empty {
+    display: none;
+}
+
+/* ⓘ-Erklärungen in der Werkzeugleiste: kleiner runder Knopf (Radio-Dot-
+   Familie), Popover wie das Alternative-Popover (weiß, Hairline, Schatten). */
+.sq-info {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.sq-info__btn {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid var(--ig-midgray);
+    background: #fff;
+    color: var(--ig-gray);
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 700;
+    font-style: italic;
+    line-height: 1;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.sq-info__btn:hover,
+.sq-info--open .sq-info__btn {
+    border-color: var(--ig-red);
+    color: var(--ig-red);
+}
+
+.sq-info__pop {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 240px;
+    max-width: 320px;
+    background: #fff;
+    border: 1px solid var(--ig-midgray);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+    padding: 10px 12px;
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    font-weight: 400;
+    line-height: 1.45;
+    color: var(--ig-anthracite);
+    text-transform: none;
+    letter-spacing: normal;
+    text-align: left;
+    white-space: normal;
+    z-index: 60;
+}
+
+.sq-info--open .sq-info__pop {
+    display: block;
+}
+
+/* Publish-Status neben dem Regler: klein, grau, darf umbrechen. */
+.sq-publish .sp-filter-status {
+    font-size: 12px;
+}
+
+/* Veröffentlichungs-Status lebt im ⓘ-Popover (eigene Zeile, abgesetzt). */
+.sq-info__status {
+    display: block;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #EDEDED;
+    font-weight: 700;
+}
+
+.sq-info__status:empty {
+    display: none;
+}
+
+/* Alle Toolbar-Elemente nebeneinander auf gleicher Höhe, aber responsiv:
+   bei schmalen Fenstern brechen ganze Elemente um (kein Umbruch mitten
+   im Label). Nur die Tag-Navigation bleibt als Einheit zusammen. */
+.sq-toolbar__nav {
+    flex-wrap: nowrap;
+}
+
+/* Toggle + ⓘ bleiben als Einheit zusammen, auch wenn die Zeile umbricht. */
+.sq-toggle-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Speicher-Status wird ans rechte Ende der Zeile geschoben (wie Vorlage) -
+   margin-left:auto ist in den Basis-.sq-savestate-Block oben zusammengefuehrt. */
+.sq-toggle span,
+#sq-new-unit.kg-btn {
+    white-space: nowrap;
+}
+
+/* Tag-Navigation auf dieselbe Höhe wie die übrigen Toolbar-Elemente
+   (Stufe 2 hatte 34x34; der Neue-Einheit-Button kommt mit 2px-Border
+   auf 38px - beides jetzt einheitlich 38px). */
+#sq-prev-day,
+#sq-next-day {
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
+}
+
+#sq-new-unit.kg-btn {
+    min-height: 38px;
+}
+
+/* ---- D50: Anlegen-Zeile im Einheiten-Picker --------------------------- */
+.sq-picker__createrow {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--ig-lightgray, #ddd);
+}
+
+/* ---- D51: Weggabelung "Was moechtest du einreichen?" ------------------ */
+.kg-review-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.kg-review-choice {
+    flex: 1 1 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px;
+    border: 2px solid var(--ig-lightgray, #ddd);
+    background: #fff;
+    cursor: pointer;
+}
+
+.kg-review-choice:hover {
+    border-color: var(--color-primary, #e2001a);
+}
+
+.kg-review-choice:has(.kg-review-choice__input:checked) {
+    border-color: var(--color-primary, #e2001a);
+    background: var(--color-primary-bg, #fdeef0);
+}
+
+.kg-review-choice:has(.kg-review-choice__input:focus-visible) {
+    outline: 2px solid var(--color-primary, #e2001a);
+    outline-offset: 2px;
+}
+
+.kg-review-choice__input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.kg-review-choice__title {
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.kg-review-choice__desc {
+    font-size: 0.85em;
+    color: #555;
+    line-height: 1.35;
+}
+
+/* Ausklappbare Erklaerung Methoden-Sammlung vs. Seminarkonzept */
+.kg-review-diff {
+    margin-top: 12px;
+    border: 1px solid var(--ig-lightgray, #ddd);
+    background: #fff;
+}
+
+.kg-review-diff > summary {
+    cursor: pointer;
+    padding: 9px 12px;
+    font-weight: 600;
+    color: var(--color-primary, #e2001a);
+    list-style: none;
+}
+
+.kg-review-diff > summary::-webkit-details-marker {
+    display: none;
+}
+
+.kg-review-diff > summary::before {
+    content: "\203A";
+    display: inline-block;
+    margin-right: 8px;
+    transition: transform 0.15s ease;
+}
+
+.kg-review-diff[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.kg-review-diff__body {
+    padding: 4px 14px 14px;
+    border-top: 1px solid var(--ig-lightgray, #eee);
+}
+
+.kg-review-diff__svg {
+    display: block;
+    width: 100%;
+    max-width: 640px;
+    height: auto;
+    margin: 8px auto 4px;
+}
+
+.kg-review-diff__list {
+    margin: 6px 0 0;
+    padding-left: 20px;
+    line-height: 1.45;
+}
+
+.kg-review-diff__list li {
+    margin-bottom: 5px;
+}
+
+/* ---- D58: Uebersichtsliste der Konzeptverantwortlichen ---------------- */
+.kg-review-reviewers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.kg-review-reviewer {
+    display: inline-block;
+    padding: 5px 12px;
+    border: 1px solid var(--ig-lightgray, #ddd);
+    background: #fafafa;
+    font-weight: 600;
+}
+
+.kg-review-optin {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--ig-lightgray, #ddd);
+}
+
+.kg-review-optin__label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.kg-review-optin small {
+    display: block;
+    color: #555;
+    margin-top: 4px;
+}
+
+/* =========================================================================
+   D54 - Hinweis "Aktualisierte Version verfügbar" an der Bibliothekskarte.
+   Kein Auto-Update mehr: eine aktualisierte globale Sammlung wird nur
+   angezeigt, das Übernehmen bleibt die bewusste Aktion im Import/Export-Tab.
+   ========================================================================= */
+.ml-card-updatehint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 8px 10px 0;
+    padding: 5px 9px;
+    border-left: 3px solid var(--ig-blue, #2F80AB);
+    background: var(--ig-blue-soft, rgba(47, 128, 171, .12));
+    color: var(--ig-anthracite, #3C3C3C);
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: help;
+}
+
+/* =========================================================================
+   D55 - Bibliothek in drei Unterbereiche als Tabs (lokale Seminareinheiten,
+   Methodensammlungen, globale Seminarkonzepte). Tab-Leiste als 4px-
+   Unterstrich-Zeile analog zur Haupt-Tab-Leiste; Konzeptliste als Karten.
+   ========================================================================= */
+.ml-subtabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 4px 0 16px;
+    border-bottom: 1px solid var(--ig-lightgray, #DADADA);
+}
+.ml-subtab {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 9px 14px;
+    margin-bottom: -1px;
+    border-bottom: 4px solid transparent;
+    font-family: var(--font-head, inherit);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 12.5px;
+    color: var(--ig-gray, #646464);
+    cursor: pointer;
+}
+.ml-subtab:hover {
+    color: var(--ig-anthracite, #3C3C3C);
+}
+.ml-subtab--active {
+    color: var(--ig-red, #E3051B);
+    border-bottom-color: var(--ig-red, #E3051B);
+}
+.ml-subtab:focus-visible {
+    outline: 2px solid var(--ig-blue-mid, rgba(47, 128, 171, .35));
+    outline-offset: 2px;
+}
+
+.ml-konzepte-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+}
+.ml-konzept-card {
+    border: 1px solid var(--ig-lightgray, #DADADA);
+    border-left: 3px solid var(--ig-darkred, #882A30);
+    background: #fff;
+    padding: 12px 14px;
+}
+.ml-konzept-card__head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.ml-konzept-card__title {
+    font-family: var(--font-head, inherit);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .02em;
+}
+.ml-konzept-card__source {
+    font-size: 12px;
+    color: var(--ig-gray, #646464);
+}
+.ml-konzept-card__meta {
+    font-size: 12px;
+    color: var(--ig-gray, #646464);
+    margin: 6px 0 10px;
+}
+.ml-konzept-card__gone {
+    font-size: 12px;
+    color: var(--ig-gray, #646464);
+    font-style: italic;
+}
+
+/* =========================================================================
+   D56/D59 - Bibliothek beim Planbau: manuelles Suchfeld an der Vorschlags-
+   Lücke (Suchen-und-Ablegen). Ergänzt die automatischen Vorschläge (D14) um
+   eine Suche über den gesamten Bestand (lokale Einheiten + globale Sammlungen).
+   ========================================================================= */
+.sq-gap__search {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--ig-lightgray, #DADADA);
+}
+.sq-gap__search .sq-gap-search {
+    width: 100%;
+}
+.sq-gap-results {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 6px;
+}
+.sq-gap-results:empty {
+    margin-top: 0;
+}
+
+/* =========================================================================
+   D61 - Seminarziele des Gesamtplans: aufklappbarer Bereich oben in der
+   Sequenz, je Ziel Freitext + Verknüpfungs-Checkliste der platzierten
+   Einheiten. Speist die neunte "Zielabdeckung"-Regel der Empfehlungen.
+   ========================================================================= */
+.sq-goals {
+    margin: 0 0 14px;
+}
+.sq-goals__box {
+    background: #fff;
+    border: 1px solid var(--ig-lightgray, #DADADA);
+    border-top: 3px solid var(--color-primary, #E2001A);
+}
+.sq-goals__summary {
+    cursor: pointer;
+    padding: 10px 14px;
+    font-family: var(--font-head, inherit);
+    text-transform: uppercase;
+    letter-spacing: .02em;
+    font-weight: 700;
+    font-size: 14px;
+}
+.sq-goals__body {
+    padding: 4px 14px 14px;
+    border-top: 1px solid var(--ig-lightgray, #DADADA);
+}
+.sq-goals__hint {
+    margin: 10px 0;
+    font-size: 13px;
+    color: var(--ig-gray, #646464);
+}
+.sq-goals__list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.sq-goal {
+    border: 1px solid var(--ig-lightgray, #DADADA);
+    padding: 8px 10px;
+    background: var(--ig-offwhite, #FAFAFA);
+}
+.sq-goal__head {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.sq-goal__head .sq-goal-text {
+    flex: 1 1 auto;
+}
+.sq-goal__del {
+    flex: 0 0 auto;
+    line-height: 1;
+    padding: 6px 10px;
+}
+.sq-goal-links {
+    margin-top: 8px;
+}
+.sq-goal-links > summary {
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--ig-gray, #646464);
+}
+.sq-goal-links__list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 6px;
+    padding-left: 4px;
+}
+.sq-goal-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    cursor: pointer;
+}
+.sq-goals__add {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+.sq-goals__add .kg-input {
+    flex: 1 1 auto;
+}
+.sq-goals__add .kg-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+/* =========================================================================
+   D62 - „Der Differenzierer": geführter Lernziel-Generator. Modaler Baukasten
+   aus fünf Spalten (Denkoperation, Inhalt, Quelle, Produkt, Arbeitsform), der
+   einen „Ich kann …"-Satz zusammensetzt. Aufgerufen am Lernziele-Feld
+   (Einheiten-Modal) und an den Seminarzielen (D61). Liegt über dem
+   Einheiten-Modal. Nach dem Vorbild von „The Differentiator" (Ian Byrd).
+   ========================================================================= */
+.sq-lz-overlay {
+    z-index: 2100;
+}
+.sq-lz-modal {
+    max-width: 1080px;
+    width: 100%;
+    /* Fünf Kategoriefarben – tragen die Spalten und die farbigen Satzbausteine. */
+    --lz-denken: #5457E6;
+    --lz-inhalt: #0E8880;
+    --lz-quelle: #B07D1E;
+    --lz-produkt: #C8497B;
+    --lz-form: #6B8B2E;
+    --lz-denken-bg: #EDEDFC;
+    --lz-inhalt-bg: #E3F3F1;
+    --lz-quelle-bg: #F7EFDD;
+    --lz-produkt-bg: #FBEAF1;
+    --lz-form-bg: #EEF3E0;
+}
+
+/* Einführungstext oben im Modal. */
+.sq-lz-lede {
+    margin: 0 0 14px;
+    color: var(--ig-darkgray, #4A4B58);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+/* Thema-Feld mit Würfel-Knopf. */
+.sq-lz-thema-field {
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--ig-lightgray, #E3E3EC);
+}
+.sq-lz-thema-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+/* Satz-Vorschau mit farbigen Bausteinen. */
+.sq-lz-sentence {
+    margin: 0;
+    padding: 14px 16px;
+    background: var(--ig-offwhite, #FAFAFA);
+    border-left: 3px solid var(--color-primary, #E2001A);
+    font-size: 18px;
+    line-height: 1.5;
+    font-weight: 600;
+    min-height: 24px;
+}
+.sq-lz-slot {
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin: 0 -1px;
+}
+.sq-lz-slot.empty {
+    color: var(--ig-gray, #8A8B99);
+    font-weight: 500;
+    border-bottom: 2px dashed var(--ig-lightgray, #DADADA);
+    border-radius: 0;
+    padding: 0 3px;
+}
+.sq-lz-slot[data-cat="denken"].filled  { color: var(--lz-denken);  background: var(--lz-denken-bg); }
+.sq-lz-slot[data-cat="inhalt"].filled  { color: var(--lz-inhalt);  background: var(--lz-inhalt-bg); }
+.sq-lz-slot[data-cat="quelle"].filled  { color: var(--lz-quelle);  background: var(--lz-quelle-bg); }
+.sq-lz-slot[data-cat="produkt"].filled { color: var(--lz-produkt); background: var(--lz-produkt-bg); }
+.sq-lz-slot[data-cat="form"].filled    { color: var(--lz-form);    background: var(--lz-form-bg); }
+.sq-lz-slot[data-cat="thema"] { cursor: pointer; }
+.sq-lz-slot[data-cat="thema"].filled { color: var(--ig-black, #16171F); background: var(--ig-lightgray, #EFEFF4); }
+.sq-lz-punct {
+    margin-left: -4px;
+}
+
+/* Werkzeugleiste über den Spalten. */
+.sq-lz-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 14px 0 16px;
+}
+
+/* Spalten-Raster. */
+.sq-lz-columns {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+.sq-lz-col {
+    border: 1px solid var(--ig-lightgray, #E3E3EC);
+    border-top: 3px solid var(--lz-accent, #999);
+    border-radius: 8px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+.sq-lz-col[data-cat="denken"]  { --lz-accent: var(--lz-denken); }
+.sq-lz-col[data-cat="inhalt"]  { --lz-accent: var(--lz-inhalt); }
+.sq-lz-col[data-cat="quelle"]  { --lz-accent: var(--lz-quelle); }
+.sq-lz-col[data-cat="produkt"] { --lz-accent: var(--lz-produkt); }
+.sq-lz-col[data-cat="form"]    { --lz-accent: var(--lz-form); }
+.sq-lz-col__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 10px 8px;
+    border-bottom: 1px solid var(--ig-offwhite, #EFEFF4);
+}
+.sq-lz-col__title {
+    font-size: 12px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--lz-accent, #333);
+}
+.sq-lz-col__hint {
+    margin: 0;
+    padding: 8px 10px 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ig-gray, #8A8B99);
+}
+.sq-lz-options {
+    padding: 8px 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 360px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.sq-lz-group__label {
+    font-size: 10px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ig-gray, #8A8B99);
+    margin-bottom: 5px;
+}
+
+/* Würfel-Knopf in Spaltenkopf und Thema-Zeile. */
+.sq-lz-dice {
+    border: 1px solid var(--ig-lightgray, #DADADA);
+    background: #fff;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: var(--ig-darkgray, #4A4B58);
+    cursor: pointer;
+}
+.sq-lz-dice:hover {
+    border-color: var(--lz-accent, var(--color-primary, #E2001A));
+    color: var(--lz-accent, var(--color-primary, #E2001A));
+}
+
+/* Auswahl-Chips (Spalten). */
+.sq-lz-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+.sq-lz-chip {
+    border: 1px solid var(--ig-lightgray, #DADADA);
+    background: #fff;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 13px;
+    color: var(--ig-darkgray, #4A4B58);
+    cursor: pointer;
+}
+.sq-lz-col .sq-lz-chip:hover {
+    border-color: var(--lz-accent, var(--color-primary, #E2001A));
+    color: var(--lz-accent, var(--color-primary, #E2001A));
+}
+.sq-lz-col .sq-lz-chip[aria-pressed="true"] {
+    background: var(--lz-accent, var(--color-primary, #E2001A));
+    border-color: var(--lz-accent, var(--color-primary, #E2001A));
+    color: #fff;
+    font-weight: 600;
+}
+.sq-lz-trigger {
+    margin: -4px 0 10px;
+    font-size: 13px;
+    padding: 5px 12px;
+}
+
+@media (max-width: 900px) {
+    .sq-lz-columns {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .sq-lz-options {
+        max-height: none;
+    }
+}
+@media (max-width: 560px) {
+    .sq-lz-columns {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* D63: ZIM-Spaltenauswahl mit editierbarer Reihenfolge (◄/►). */
+.kg-pdf-columns-hint {
+    margin: 4px 2px 6px;
+    font-size: .78rem;
+}
+.kg-pdf-col-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 3px 2px;
+    font-size: .9rem;
+}
+.kg-pdf-col-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    cursor: pointer;
+}
+.kg-pdf-col-move {
+    display: inline-flex;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+.kg-pdf-col-btn {
+    border: 1px solid var(--ig-lightgray, #cbd5e1);
+    background: #fff;
+    color: var(--color-primary, #882a30);
+    width: 24px;
+    height: 24px;
+    line-height: 1;
+    padding: 0;
+    font-size: .8rem;
+    cursor: pointer;
+    border-radius: 0;
+}
+.kg-pdf-col-btn:hover {
+    background: var(--color-primary, #882a30);
+    color: #fff;
+    border-color: var(--color-primary, #882a30);
+}
+
+/* =========================================================
+   SEQUENZ: Zeilen-Menü (⋮)
+   Handoff: in der Zeile stehen nur „⇄ Alternative" und „Bearbeiten".
+   Reihenfolge, Zugehörigkeit und Entfernen liegen im ⋮-Menü — Drag & Drop
+   (D47) bleibt der schnelle Weg dorthin, das Menü der erklärte.
+   ========================================================= */
+.sq-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.sq-menu__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--ig-gray);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sq-menu__btn:hover,
+.sq-menu__btn[aria-expanded="true"] {
+  border-color: var(--ig-midgray);
+  background: #fff;
+  color: var(--ig-anthracite);
+}
+
+.sq-menu__panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 40;
+  min-width: 210px;
+  padding: 4px 0;
+  background: #fff;
+  border: 1px solid var(--ig-midgray);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+}
+
+.sq-menu__panel.open {
+  display: block;
+}
+
+.sq-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: none;
+  text-align: left;
+  white-space: nowrap;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  color: var(--ig-anthracite);
+  cursor: pointer;
+}
+
+/* Icons in Grau, damit die Beschriftung führt; der Entfernen-Eintrag faerbt
+   sein Icon ueber currentColor automatisch rot mit. */
+.sq-menu__icon {
+  flex: none;
+  color: var(--ig-gray);
+}
+
+.sq-menu__item--danger .sq-menu__icon {
+  color: inherit;
+}
+
+.sq-menu__item:hover {
+  background: var(--ig-surface-soft);
+}
+
+.sq-menu__item--danger {
+  margin-top: 4px;
+  border-top: 1px solid var(--ig-lightgray);
+  color: var(--ig-red);
+}
+
+.sq-menu__item--danger:hover {
+  background: var(--ig-red-soft);
+}
+
+/* Das Karten-Menü der Bibliothek nutzt dieselben .sq-menu-Klassen, aber als
+   natives <details> (die Sequenz toggelt per JS-Klasse .open). Marker
+   verbergen und Panel/Button-Zustand an [open] koppeln - so sieht das Menü
+   exakt so aus wie in der Sequenz. */
+summary.sq-menu__btn { list-style: none; }
+summary.sq-menu__btn::-webkit-details-marker { display: none; }
+details.sq-menu[open] > .sq-menu__panel { display: block; }
+details.sq-menu[open] > summary.sq-menu__btn {
+  border-color: var(--ig-midgray);
+  background: #fff;
+  color: var(--ig-anthracite);
+}
+
+/* Bibliothekskarte (Handoff): Phasen-Badge getoent in seiner Phasenfarbe —
+   dieselbe Palette wie Sequenz und Roter Faden. Frueher trug die neutrale
+   Badge-Regel ein !important und machte jede Toenung wirkungslos (die alten
+   .ml-phase--*-Regeln waren deshalb toter Code); seit dem Abbau reicht die
+   Spezifitaet. */
+.kg-library-card.sp-card .sp-card-meta .sp-badge--phase-orientierung {
+  background: #E7F0F5;
+  border-color: var(--ig-blue);
+  color: #215d7e;
+}
+
+.kg-library-card.sp-card .sp-card-meta .sp-badge--phase-erfahrung {
+  background: #E7F1E3;
+  border-color: var(--ig-green);
+  color: #3f6e2f;
+}
+
+.kg-library-card.sp-card .sp-card-meta .sp-badge--phase-analyse {
+  background: #FBF1D0;
+  border-color: var(--ig-yellow);
+  color: #8a6d00;
+}
+
+.kg-library-card.sp-card .sp-card-meta .sp-badge--phase-handlung {
+  background: #F3E6E7;
+  border-color: var(--ig-darkred);
+  color: var(--ig-darkred);
+}
+
+.kg-library-card.sp-card .sp-card-meta .sp-badge--phase-transfer {
+  background: #EEEEEE;
+  border-color: var(--ig-gray);
+  color: #4a4a4a;
+}
+
+/* =========================================================
+   BUTTONS – die eine massgebliche Stelle (14. Juli 2026)
+   Vorher stand die neutrale CD-Basis (".kg-btn, .sp-btn, …") HINTER den Varianten und
+   setzte sich mit !important durch. Zwei Fehler waren die Folge, im Produkt sichtbar,
+   aber nie aufgefallen, weil niemand Zustaende screenshottet:
+     1. ".kg-btn--outline-red" war wirkungslos — der Button sah aus wie ein normaler
+        grauer Button. Rot war er nur dort, wo eine spezifischere Regel ihn rettete
+        (Anker-Buttons, PDF-Buttons).
+     2. Jeder neutrale UND jeder outline-rote Button hoverte BLAU (alte
+        Information-First-Palette), weil die CD-Hover-Regel ".kg-btn" in ihrer
+        Selektorliste vergessen hatte.
+   Jetzt tragen die Varianten ihre Klasse doppelt (Spezifitaet 0,2,0) und stehen am
+   Ende: Sie schlagen die Basis (0,1,0) unabhaengig von der Reihenfolge — ohne
+   !important. Neue Button-Varianten gehoeren HIERHER.
+   Handoff-Muster: Primaer = roter Grund; Outline = roter Rahmen, Hover als Fill-Invert;
+   Neutral = weiss mit Hairline.
+   ========================================================= */
+.kg-btn:hover:not(:disabled) {
+  background: var(--ig-surface-muted);
+  border-color: var(--ig-gray);
+  color: var(--ig-anthracite);
+}
+
+.kg-btn.kg-btn-primary {
+  background: var(--ig-red);
+  border-color: var(--ig-red);
+  color: #fff;
+}
+
+.kg-btn.kg-btn-primary:hover:not(:disabled) {
+  background: var(--ig-red-hover);
+  border-color: var(--ig-red-hover);
+  color: #fff;
+}
+
+.kg-btn.kg-btn--outline-red {
+  background: #fff;
+  border-color: var(--ig-red);
+  color: var(--ig-red);
+}
+
+.kg-btn.kg-btn--outline-red:hover:not(:disabled) {
+  background: var(--ig-red);
+  border-color: var(--ig-red);
+  color: #fff;
+}
+
+/* =========================================================================
+   Titel direkt in der Sequenz aendern (17. Juli 2026)
+   -------------------------------------------------------------------------
+   Die Titel von Einheiten und Bausteinen sind contenteditable statt <input>.
+   Der Grund steht in sequenz.js: ein Eingabefeld ist EINZEILIG und schnitt
+   lange Titel ab („Geschichte der Massenmedien - Erstellung von Zeitl…"),
+   waehrend sie als Text ueber zwei Zeilen umbrechen. Ein editierbares div/span
+   bricht um und erbt Schrift, Groesse und Versalien von selbst — deshalb
+   braucht es hier KEINE Schrift- oder Breitenregeln.
+
+   Bleibt die ERKENNBARKEIT: ein Titel, der sich wie Text liest, laedt niemanden
+   zum Klicken ein. Im Ruhezustand deshalb unsichtbar, beim Ueberfahren ein
+   Rahmen, beim Fokus der rote CD-Rahmen. Der negative Rand haelt den Text an
+   seiner alten Stelle, damit die Zeile beim Umschalten nicht springt.
+
+   Steht am Dateiende, damit die CD-Schichten weiter oben nicht dagegen
+   arbeiten (siehe Kaskaden-Leitplanke im Dateikopf).
+   ========================================================================= */
+.sq-titleedit {
+    border: 1px solid transparent;
+    border-radius: 0;
+    padding: 1px 4px;
+    margin: 0 -4px;
+    cursor: text;
+}
+
+.sq-titleedit:hover:not(:focus) {
+    border-color: var(--sq-border);
+    background: #fff;
+}
+
+.sq-titleedit:focus {
+    border-color: var(--ig-red);
+    background: #fff;
+    outline: none;
+}
+
+/* Der Baustein-Name steht als Flex-Item neben Griff und Badges. min-width: 0
+   erlaubt ihm zu schrumpfen statt die Badges aus der Zeile zu draengen. */
+.sq-baustein__name {
+    min-width: 0;
 }

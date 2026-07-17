@@ -50,7 +50,11 @@ function seminarplaner_add_instance($data, $mform = null) {
         $data->defaultmethodsetid = null;
     }
 
-    return $DB->insert_record('seminarplaner', $data);
+    $instanceid = $DB->insert_record('seminarplaner', $data);
+
+    seminarplaner_save_logo_file($data);
+
+    return $instanceid;
 }
 
 /**
@@ -70,7 +74,32 @@ function seminarplaner_update_instance($data, $mform = null) {
         $data->defaultmethodsetid = null;
     }
 
-    return $DB->update_record('seminarplaner', $data);
+    $result = $DB->update_record('seminarplaner', $data);
+
+    seminarplaner_save_logo_file($data);
+
+    return $result;
+}
+
+/**
+ * Persist the uploaded PDF logo (D52) from the activity settings form.
+ *
+ * @param stdClass $data Form data with the logofile draft area id and coursemodule.
+ * @return void
+ */
+function seminarplaner_save_logo_file($data) {
+    if (empty($data->coursemodule) || !isset($data->logofile)) {
+        return;
+    }
+    $context = context_module::instance($data->coursemodule);
+    file_save_draft_area_files(
+        $data->logofile,
+        $context->id,
+        'mod_seminarplaner',
+        'logo',
+        0,
+        ['subdirs' => 0, 'maxfiles' => 1]
+    );
 }
 
 /**
@@ -150,7 +179,8 @@ function seminarplaner_extend_settings_navigation(settings_navigation $settingsn
         );
         $modulenode->add(
             get_string('addmethodcardmenu', 'mod_seminarplaner'),
-            new moodle_url('/mod/seminarplaner/methods.php', ['id' => $cmid], 'kg-add-method-section'),
+            // D50: Anlegen öffnet den Editor direkt in der Bibliothek.
+            new moodle_url('/mod/seminarplaner/methodlibrary.php', ['id' => $cmid, 'create' => 1]),
             navigation_node::TYPE_SETTING,
             null,
             'seminarplaner_addmethodcard'
@@ -193,10 +223,24 @@ function seminarplaner_pluginfile($course, $cm, $context, $filearea, $args, $for
     if ($context->contextlevel !== CONTEXT_MODULE) {
         return false;
     }
-    if (!in_array($filearea, ['method_materialien', 'method_h5p'], true)) {
+    if (!in_array($filearea, ['method_materialien', 'method_h5p', 'logo'], true)) {
         return false;
     }
     require_capability('mod/seminarplaner:view', $context);
+
+    // D52: PDF-Logo liegt als einzelne Datei unter itemid 0.
+    if ($filearea === 'logo') {
+        $filename = array_pop($args);
+        $filepath = empty($args) ? '/' : '/' . implode('/', $args) . '/';
+        $fs = get_file_storage();
+        $file = $fs->get_file($context->id, 'mod_seminarplaner', 'logo', 0, $filepath, $filename);
+        if (!$file || $file->is_directory()) {
+            return false;
+        }
+        send_stored_file($file, 0, 0, $forcedownload, $options);
+        return;
+    }
+
     if (count($args) < 2) {
         return false;
     }
@@ -237,6 +281,7 @@ function seminarplaner_get_file_areas($course, $cm, $context): array {
     return [
         'method_materialien' => 'Materialien',
         'method_h5p' => 'H5P-Inhalte',
+        'logo' => get_string('pdflogo', 'mod_seminarplaner'),
     ];
 }
 
@@ -271,7 +316,7 @@ function seminarplaner_get_file_info(
     if (!isset($areas[$filearea])) {
         return null;
     }
-    if (!in_array($filearea, ['method_materialien', 'method_h5p'], true)) {
+    if (!in_array($filearea, ['method_materialien', 'method_h5p', 'logo'], true)) {
         return null;
     }
 
@@ -287,4 +332,85 @@ function seminarplaner_get_file_info(
         $resolvedfilepath,
         $resolvedfilename
     );
+}
+
+/**
+ * Declare user preferences writable via the core AJAX preference API.
+ *
+ * @return array
+ */
+function mod_seminarplaner_user_preferences(): array {
+    return [
+        // D27: Dramaturgie-Blick per user across all plans.
+        'mod_seminarplaner_dramaturgie' => [
+            'type' => PARAM_BOOL,
+            'null' => NULL_NOT_ALLOWED,
+            'default' => true,
+            'permissioncallback' => [core_user::class, 'is_current_user'],
+        ],
+        // D58: Opt-in einer Konzeptverantwortlichen, in der öffentlichen
+        // Übersichtsliste zu erscheinen (reines Vertrauenssignal, kein
+        // Kontaktweg). Default aus - die Liste ist opt-in.
+        'mod_seminarplaner_konzeptverantwortliche_public' => [
+            'type' => PARAM_BOOL,
+            'null' => NULL_NOT_ALLOWED,
+            'default' => false,
+            'permissioncallback' => [core_user::class, 'is_current_user'],
+        ],
+    ];
+}
+
+/**
+ * Fragment: Materialien-Filemanager für den Einheiten-Editor der Sequenz.
+ *
+ * Der Datei-Upload braucht einen serverseitig vorbereiteten Entwurfsbereich
+ * je Seminareinheit; das Sequenz-Modal lädt dieses Formular deshalb bei
+ * jedem Öffnen über die Fragment-API nach (D17: alle Editor-Einstiege
+ * bieten dieselben Felder wie der Bibliotheks-Editor).
+ *
+ * @param array $args Fragment arguments: context plus 'methodid'
+ *                    (leer = Anlegen-Modus, Entwurfsbereich ohne Dateien).
+ * @return string Rendered form HTML.
+ */
+function mod_seminarplaner_output_fragment_unitmaterials($args) {
+    global $CFG;
+    require_once($CFG->libdir . '/formslib.php');
+
+    $args = (array)$args;
+    $context = $args['context'];
+    if (!($context instanceof context_module)) {
+        throw new invalid_parameter_exception('Module context required');
+    }
+    require_capability('mod/seminarplaner:managemethods', $context);
+
+    $cmid = (int)$context->instanceid;
+    $methodid = clean_param((string)($args['methodid'] ?? ''), PARAM_ALPHANUMEXT);
+    $maxuploadbytes = get_user_max_upload_file_size($context, $CFG->maxbytes);
+
+    if ($methodid !== '') {
+        $service = new \mod_seminarplaner\local\service\method_card_service();
+        $draftitemid = $service->prepare_material_draft_itemid($cmid, (int)$context->id, $methodid, 0, 0);
+    } else {
+        // Anlegen-Modus: leerer Entwurfsbereich (wie methodlibrary.php ohne editmethodid).
+        $draftitemid = file_get_unused_draft_itemid();
+        file_prepare_draft_area($draftitemid, $context->id, 'mod_seminarplaner', 'method_materialien', 0, [
+            'subdirs' => 0,
+            'maxfiles' => 25,
+            'maxbytes' => $maxuploadbytes,
+            'areamaxbytes' => $maxuploadbytes,
+            'accepted_types' => '*',
+        ]);
+    }
+
+    $form = new \mod_seminarplaner\form\material_filemanager_form(null, [
+        'fieldname' => 'sq_materialiendraftitemid',
+        'maxbytes' => $maxuploadbytes,
+        'context' => $context,
+    ]);
+    if (method_exists($form, 'disable_form_change_checker')) {
+        $form->disable_form_change_checker();
+    }
+    $form->set_data((object)['sq_materialiendraftitemid' => $draftitemid]);
+
+    return $form->render();
 }

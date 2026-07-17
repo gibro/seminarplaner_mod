@@ -42,7 +42,11 @@ final class mod_seminarplaner_privacy_provider_test extends advanced_testcase {
 
     public function test_get_contexts_for_userid_includes_activity(): void {
         $contextlist = provider::get_contexts_for_userid((int)$this->user->id);
-        $this->assertContains((int)$this->context->id, $contextlist->get_contextids());
+        // get_contextids() ist als int[] dokumentiert, liefert die IDs aber roh
+        // aus der DB — unter MariaDB also Strings. assertContains vergleicht
+        // strikt, deshalb hier casten statt auf den Docblock zu vertrauen.
+        $contextids = array_map('intval', $contextlist->get_contextids());
+        $this->assertContains((int)$this->context->id, $contextids);
     }
 
     public function test_get_users_in_context_includes_owner(): void {
@@ -51,7 +55,7 @@ final class mod_seminarplaner_privacy_provider_test extends advanced_testcase {
         $this->assertContains((int)$this->user->id, $userlist->get_userids());
     }
 
-    public function test_export_user_data_writes_grid_state(): void {
+    public function test_export_user_data_writes_authored_grid(): void {
         writer::reset();
 
         $contextlist = new approved_contextlist($this->user, 'mod_seminarplaner', [$this->context->id]);
@@ -59,8 +63,36 @@ final class mod_seminarplaner_privacy_provider_test extends advanced_testcase {
 
         $writer = writer::with_context($this->context);
         $this->assertTrue($writer->has_any_data());
-        $exported = $writer->get_data(['grid_user_state']);
+
+        // Der Plan, den dieser Nutzer angelegt hat, muss in der Auskunft stehen:
+        // get_contexts_for_userid meldet den Kontext genau deswegen, und
+        // delete_data_for_user anonymisiert genau dieses createdby.
+        $exported = $writer->get_data(['kgen_grid']);
         $this->assertNotEmpty($exported);
+        $this->assertCount(1, $exported->records);
+        $this->assertSame('Owned grid', reset($exported->records)->name);
+    }
+
+    /**
+     * Der Zustand liegt geteilt, nicht beim Nutzer — das darf die Auskunft nicht behaupten.
+     *
+     * grid_service::save_user_state() schreibt unter SHARED_STATE_USERID (0),
+     * nicht unter der echten Nutzer-ID. Frueher erwartete dieser Test hier
+     * einen personenbezogenen 'grid_user_state' und schlug fehl, weil es den
+     * fuer echte Nutzer gar nicht mehr gibt (nur noch Altzeilen aus der Zeit
+     * vor der Umstellung).
+     */
+    public function test_export_user_data_has_no_personal_grid_state(): void {
+        global $DB;
+
+        $this->assertFalse($DB->record_exists('kgen_grid_user_state', [
+            'gridid' => $this->gridid,
+            'userid' => (int)$this->user->id,
+        ]), 'Der Zustand wird geteilt gespeichert, nicht pro Nutzer.');
+        $this->assertTrue($DB->record_exists('kgen_grid_user_state', [
+            'gridid' => $this->gridid,
+            'userid' => 0,
+        ]), 'Der geteilte Zustand liegt unter SHARED_STATE_USERID = 0.');
     }
 
     public function test_delete_data_for_user_removes_state_and_anonymises_grid(): void {

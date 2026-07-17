@@ -36,119 +36,91 @@ $renderbuttonlabel = static function(string $text, string $icon) use ($renderico
     return $rendericontext($icon, $text, 'kg-btn-content');
 };
 
+// Inline-SVG-Icons (Meta-Line, dekorativ) für die Überblick-Export-Leiste.
+$icon = static function(string $paths, float $size = 16, float $stroke = 2.0): string {
+    return '<svg width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24" fill="none" '
+        . 'stroke="currentColor" stroke-width="' . $stroke . '" aria-hidden="true" focusable="false">'
+        . $paths . '</svg>';
+};
+$icInfo = $icon('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>', 16, 2);
+$icDownload = $icon('<path d="M12 3v12M8 11l4 4 4-4M5 21h14"/>', 14, 2.2);
+
+// PDF-Export-Buttons für den Überblick: lösen per Deep-Link denselben Export-Flow
+// im Import/Export-Tab aus (kein zweiter Mechanismus).
+$pdfbtn = static function(string $id, string $label) use ($icDownload): string {
+    return html_writer::tag('button',
+        '<span class="kg-btn-content">' . $icDownload . html_writer::tag('span', s($label)) . '</span>',
+        ['type' => 'button', 'id' => $id, 'class' => 'kg-btn kg-btn--outline-red kg-ov-pdfbtn']);
+};
+
 echo $OUTPUT->header();
 
 echo $OUTPUT->heading(format_string($seminarplaner->name));
 echo seminarplaner_render_tabs((int)$cm->id, 'grid');
 
-echo html_writer::start_div('kg-shell');
-echo html_writer::tag('div', '', ['id' => 'kg-status', 'class' => 'kg-status']);
-echo html_writer::tag('h3', 'Seminarplaner (Drag & Drop)');
-
-echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'kg-grid-step-1']);
-echo html_writer::tag('h4', '1. Seminarplan erstellen oder laden');
-echo html_writer::start_div('kg-two');
-echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h5', 'Seminarplan erstellen');
-echo html_writer::tag('label', 'Name', ['for' => 'kg-grid-name', 'class' => 'kg-label']);
-echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'kg-grid-name', 'class' => 'kg-input', 'placeholder' => 'Neuer Seminarplan']);
-echo html_writer::start_div('kg-row kg-row--action');
-echo html_writer::tag('button', 'Seminarplan erstellen', ['type' => 'button', 'id' => 'kg-create-grid', 'class' => 'kg-btn kg-btn-primary']);
-echo html_writer::end_div();
-echo html_writer::tag('p', 'Namen eingeben, Einstellungen festlegen und mit "Übernehmen" erstellen.', ['class' => 'sp-filter-status']);
+echo html_writer::start_div('kg-shell kg-grid-readonly');
+echo html_writer::tag('div', '', ['id' => 'kg-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
+echo html_writer::start_div('sq-pagehead');
+echo html_writer::tag('h3', get_string('ueberblickmenu', 'mod_seminarplaner'));
+echo html_writer::div(get_string('ueberblick_subline', 'mod_seminarplaner'), 'sq-pagehead__sub');
 echo html_writer::end_div();
 
-echo html_writer::start_div('kg-ie-block');
-echo html_writer::tag('h5', 'Seminarplan laden');
-echo html_writer::tag('label', 'Vorhandene Seminarpläne', ['for' => 'kg-grid-select', 'class' => 'kg-label']);
+// Hinweiszeile (Handoff: tiefrot getönt, mit Primär-Button in die Sequenz).
+echo html_writer::start_div('kg-ov-hint');
+echo html_writer::start_div('kg-ov-hint__note');
+echo $icInfo;
+echo html_writer::tag('span', get_string('ueberblick_readonlynote', 'mod_seminarplaner'));
+echo html_writer::end_div();
+echo html_writer::link(
+    new moodle_url('/mod/seminarplaner/sequenz.php', ['id' => (int)$cm->id]),
+    get_string('ueberblick_tosequenz', 'mod_seminarplaner'),
+    ['class' => 'kg-btn kg-btn-primary kg-ov-hint__btn']
+);
+echo html_writer::end_div();
+
+// Werkzeugleiste (Handoff): eine schmale weiße Karte statt zweier Kästen.
+// Erste Zeile: Plan-Auswahl links, „Nur Ansicht"-Badge rechts. Zweite Zeile
+// (erst mit geladenem Plan, id kg-grid-step-2 bleibt — grid.js schaltet sie):
+// Veröffentlichen-Schalter und PDF-Export.
+echo html_writer::start_div('kg-ov-toolbar');
+echo html_writer::start_div('kg-ov-toolbar__row');
+echo html_writer::start_div('kg-ov-toolbar__group');
+echo html_writer::tag('label', 'Seminarplan', ['for' => 'kg-grid-select', 'class' => 'kg-ov-toolbar__label']);
 echo html_writer::start_tag('select', ['id' => 'kg-grid-select', 'class' => 'kg-input kg-grid-select']);
 foreach ($grids as $grid) {
     echo html_writer::tag('option', format_string($grid->name) . ' (#' . $grid->id . ')', ['value' => $grid->id]);
 }
 echo html_writer::end_tag('select');
-echo html_writer::start_div('kg-row kg-row--action');
-echo html_writer::tag('button', 'Seminarplan laden', ['type' => 'button', 'id' => 'kg-load-grid', 'class' => 'kg-btn kg-btn-primary']);
+echo html_writer::tag('button', 'Laden', ['type' => 'button', 'id' => 'kg-load-grid', 'class' => 'kg-btn kg-btn-primary']);
+echo html_writer::tag('button', 'Löschen', ['type' => 'button', 'id' => 'kg-grid-delete', 'class' => 'kg-btn kg-btn--outline-red']);
 echo html_writer::end_div();
-echo html_writer::tag('p', 'Seminarplan auswählen und "Seminarplan laden" klicken', ['class' => 'sp-filter-status']);
-echo html_writer::end_div();
-echo html_writer::end_div();
-
-?>
-<div class="sp-config-inline kg-hidden" id="sp-config-inline">
-  <form class="sp-modal__body" id="sp-config-form">
-    <div class="sp-modal__section">
-      <div class="sp-modal__field">
-        <h3>Vorlage wählen</h3>
-        <select name="preset" id="sp-config-preset" class="kg-input kg-grid-select">
-          <option value="custom">Individuelle Konfiguration</option>
-          <option value="standard-week">Standard-Woche (Mo-Fr, 8:30-17:30)</option>
-          <option value="sunday-to-friday">Seminarwoche (So-Fr, 8:30-17:30)</option>
-          <option value="weekend-seminar">Wochenendseminar (Fr-So, 8:30-17:30)</option>
-          <option value="half-week-mo-mi">Halbe Woche (Mo-Mi, 8:30-17:30)</option>
-          <option value="half-week-mi-fr">Halbe Woche (Mi-Fr, 8:30-17:30)</option>
-          <option value="compact-day">Kompakttag (8:30-17:30)</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="sp-modal__section">
-      <h3>Wochentage</h3>
-      <div class="sp-days-grid">
-        <?php
-        $days = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
-        foreach ($days as $day) {
-            $idattr = 'sp-day-' . strtolower(substr($day, 0, 2));
-            echo '<label class="sp-day-checkbox"><input type="checkbox" name="days" value="' . s($day) . '" id="' . s($idattr) . '"><span>' . s($day) . '</span></label>';
-        }
-        ?>
-      </div>
-      <label class="sp-modal__field sp-first-day-field" for="sp-config-first-day">
-        <span class="sp-modal__label">Erster Seminartag</span>
-        <select name="firstDay" id="sp-config-first-day" class="kg-input kg-grid-select">
-          <?php
-          foreach ($days as $day) {
-              echo '<option value="' . s($day) . '">' . s($day) . '</option>';
-          }
-          ?>
-        </select>
-      </label>
-    </div>
-
-    <div class="sp-modal__section">
-      <h3>Zeitbereich</h3>
-      <div class="sp-time-range">
-        <label class="sp-modal__field"><span class="sp-modal__label">Start</span><input type="time" name="timeStart" id="sp-config-time-start" class="kg-input" value="08:30"></label>
-        <label class="sp-modal__field"><span class="sp-modal__label">Ende</span><input type="time" name="timeEnd" id="sp-config-time-end" class="kg-input" value="17:30"></label>
-      </div>
-    </div>
-
-    <div class="sp-modal__section">
-      <div class="sp-breaks-header">
-        <h3>Pausenzeiten</h3>
-        <button type="button" class="kg-btn" id="sp-add-break">+ Pause hinzufügen</button>
-      </div>
-      <div class="sp-breaks-list" id="sp-breaks-list"></div>
-    </div>
-
-    <div class="sp-modal__actions">
-      <button type="submit" class="kg-btn kg-btn-primary">Übernehmen</button>
-    </div>
-  </form>
-</div>
-<?php
+echo html_writer::tag('span',
+    $icon('<rect x="5" y="11" width="14" height="9"/><path d="M8 11V8a4 4 0 018 0v3"/>', 14, 2)
+    . html_writer::tag('span', 'Nur Ansicht'),
+    ['class' => 'kg-ov-badge']);
 echo html_writer::end_div();
 
-echo html_writer::start_div('kg-ie-block kg-library-step kg-hidden', ['id' => 'kg-grid-step-2']);
-echo html_writer::tag('h4', '2. Seminarplan anzeigen und speichern');
-echo html_writer::start_div('field-card');
-echo html_writer::start_div('kg-row');
-echo html_writer::start_tag('label', ['class' => 'kg-label kg-inline-checkbox']);
+echo html_writer::start_div('kg-ov-toolbar__row kg-ov-toolbar__row--second kg-hidden', ['id' => 'kg-grid-step-2']);
+echo html_writer::start_div('kg-ov-toolbar__group');
+echo html_writer::start_tag('label', ['class' => 'kg-ov-toolbar__label kg-inline-checkbox', 'for' => 'kg-publish-roterfaden']);
 echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'kg-publish-roterfaden']);
 echo html_writer::tag('span', get_string('roterfaden_publishlabel', 'mod_seminarplaner'));
 echo html_writer::end_tag('label');
-echo html_writer::tag('span', '', ['id' => 'kg-publish-roterfaden-status', 'class' => 'sp-filter-status']);
+echo html_writer::tag('span', '', ['id' => 'kg-publish-roterfaden-status', 'class' => 'kg-ov-toolbar__status']);
+echo html_writer::end_div();
+echo html_writer::start_div('kg-ov-pdfbar');
+echo html_writer::tag('span', 'PDF-Export', ['class' => 'kg-ov-pdfbar__label']);
+echo $pdfbtn('kg-ov-pdf-zim', 'ZIM');
+echo $pdfbtn('kg-ov-pdf-flow', 'Konzeptsammlung');
+echo $pdfbtn('kg-ov-pdf-handout', 'Teilnehmerplan');
+echo $pdfbtn('kg-ov-pdf-materials', 'Material-Checkliste');
 echo html_writer::end_div();
 echo html_writer::end_div();
+echo html_writer::end_div();
+
+echo html_writer::tag('p',
+    'Neue Seminarpläne legst du im Tab „Sequenz" an – dort sitzt auch die Einrichtung (Tage und Seminarzeiten).',
+    ['class' => 'kg-ov-toolbar__hint']);
 
 ?>
 <div class="sp-wrapper">
@@ -191,12 +163,8 @@ echo html_writer::end_div();
         <div class="kg-tag-dropdown-panel kg-hidden" id="sp-filter-group-panel">
           <label class="kg-tag-option"><input type="checkbox" id="sp-filter-group-all" checked><span>Alle</span></label>
           <div id="sp-filter-group-options">
-            <label class="kg-tag-option"><input type="checkbox" value="1"><span>1</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="2-3"><span>2-3</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="3–5"><span>3–5</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="6–12"><span>6–12</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="13–24"><span>13–24</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="25+"><span>25+</span></label>
+            <label class="kg-tag-option"><input type="checkbox" value="Gruppenarbeit (2-5)"><span>Gruppenarbeit (2-5)</span></label>
+            <label class="kg-tag-option"><input type="checkbox" value="Plenum (10-20)"><span>Plenum (10-20)</span></label>
             <label class="kg-tag-option"><input type="checkbox" value="beliebig"><span>beliebig</span></label>
           </div>
         </div>
@@ -316,6 +284,27 @@ echo html_writer::end_div();
       </div>
 
       <div id="sp-msg" class="sp-warn" style="margin-top:6px"></div>
+
+      <?php
+        // CD-Handoff: Legende der Seminarphasen. Nur sinnvoll, wenn der
+        // Überblick aus der Sequenz projiziert (Phasenfarben) - grid.js
+        // blendet sie dann ein.
+        $phases = [
+            'orientierung' => 'Orientierung',
+            'erfahrung' => 'Erfahrungserhebung',
+            'analyse' => 'Analyse',
+            'handlung' => 'Handlungsteil',
+            'transfer' => 'Transfer',
+        ];
+        echo html_writer::start_div('sq-legend kg-ov-legend kg-hidden', ['id' => 'sp-phase-legend']);
+        echo html_writer::tag('span', 'Seminarphasen', ['class' => 'kg-ov-legend__label']);
+        foreach ($phases as $key => $label) {
+            echo html_writer::tag('span',
+                html_writer::tag('i', '', ['class' => 'sq-legend__dot sq-phase-bg--' . $key]) . s($label));
+        }
+        echo html_writer::tag('span', '⇄ Alternative hinterlegt', ['class' => 'kg-ov-legend__alt']);
+        echo html_writer::end_div();
+      ?>
     </main>
   </div>
 

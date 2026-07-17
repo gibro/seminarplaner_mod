@@ -30,6 +30,97 @@ function seminarplaner_require_activity_context(int $id, string $capability): ar
 }
 
 /**
+ * Build the PDF logo payload (D52) for the client-side export.
+ *
+ * The stored logo file is embedded as a base64 data URL so the browser-side
+ * jsPDF export can place it in the header of every PDF without an extra fetch.
+ *
+ * @param context_module $context Module context.
+ * @param stdClass $seminarplaner Activity record (provides the logo position).
+ * @return array{dataurl: string, position: string}|null Logo payload or null when no logo is set.
+ */
+function seminarplaner_get_pdf_logo(context_module $context, stdClass $seminarplaner): ?array {
+    $fs = get_file_storage();
+    $files = $fs->get_area_files($context->id, 'mod_seminarplaner', 'logo', 0, 'itemid, filepath, filename', false);
+    $file = reset($files);
+    if (!$file || $file->is_directory()) {
+        return null;
+    }
+
+    $content = $file->get_content();
+    if ($content === '') {
+        return null;
+    }
+
+    $position = ($seminarplaner->logoposition ?? '') === 'left' ? 'left' : 'right';
+
+    return [
+        'dataurl' => 'data:' . $file->get_mimetype() . ';base64,' . base64_encode($content),
+        'position' => $position,
+    ];
+}
+
+/**
+ * Canonical list of PDF/ZIM export column keys (D63).
+ *
+ * Single source of truth shared by the persisted column setting and its
+ * validation. Order here is the default export order.
+ *
+ * @return string[]
+ */
+function seminarplaner_pdf_column_keys(): array {
+    return [
+        'uhrzeit', 'titel', 'seminarphase', 'kurzbeschreibung',
+        'debrief', 'ablauf', 'lernziele', 'risiken', 'materialtechnik', 'sonstiges',
+    ];
+}
+
+/**
+ * Read the persisted ZIM-PDF column selection/order for an activity (D63).
+ *
+ * Stored per activity as plugin config `pdfcolumns_cmid_<cmid>` (JSON), analogous
+ * to the D52 logo setting. Returns null when nothing valid is stored, so the
+ * client falls back to "all columns in default order".
+ *
+ * @param int $cmid Course module id.
+ * @return array|null {all: bool, order: string[]} or null.
+ */
+function seminarplaner_get_pdf_columns(int $cmid): ?array {
+    $raw = get_config('mod_seminarplaner', 'pdfcolumns_cmid_' . $cmid);
+    if ($raw === false || $raw === null || $raw === '') {
+        return null;
+    }
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return null;
+    }
+
+    $allowed = seminarplaner_pdf_column_keys();
+    $order = [];
+    foreach ((array)($decoded['order'] ?? []) as $key) {
+        $key = (string)$key;
+        if (in_array($key, $allowed, true) && !in_array($key, $order, true)) {
+            $order[] = $key;
+        }
+    }
+    // Append any columns missing from the stored order so new columns stay reachable.
+    foreach ($allowed as $key) {
+        if (!in_array($key, $order, true)) {
+            $order[] = $key;
+        }
+    }
+
+    return [
+        'all' => !empty($decoded['all']),
+        'order' => $order,
+        'selected' => array_values(array_filter(
+            (array)($decoded['selected'] ?? []),
+            static fn($key) => in_array((string)$key, $allowed, true)
+        )),
+    ];
+}
+
+/**
  * Install a runtime guard for malformed unserialize() notices in user preferences.
  *
  * The handler targets only the known unserialize offset notice and tries to
@@ -179,6 +270,22 @@ function seminarplaner_phase_options(): array {
 }
 
 /**
+ * Gruppengrößen-Cluster (value => label). Ersetzt die frühere 7-Werte-Skala
+ * (1 / 2-3 / 3–5 / 6–12 / 13–24 / 25+ / beliebig) durch drei Cluster. Wert und
+ * Label sind identisch, damit Filter, Karten, Import/Export und der gespeicherte
+ * JSON-Wert konsistent bleiben.
+ *
+ * @return array<string,string>
+ */
+function seminarplaner_groupsize_options(): array {
+    return [
+        'Gruppenarbeit (2-5)' => 'Gruppenarbeit (2-5)',
+        'Plenum (10-20)' => 'Plenum (10-20)',
+        'beliebig' => 'beliebig',
+    ];
+}
+
+/**
  * Map legacy seminar phase labels to the current five-phase taxonomy.
  *
  * @param string $phase Raw phase label.
@@ -240,8 +347,21 @@ function seminarplaner_normalize_phases(array $phases): array {
  * @return string
  */
 function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $context = null): string {
+    global $DB;
+
     if ($context === null) {
         $context = context_module::instance($cmid);
+    }
+
+    // Nutzungszweck der Aktivität steuert die sichtbaren Tabs (Referent*innen-
+    // Einstellung): konzipieren / durchfuehren / verwalten. Fallback = Standard.
+    $usecase = 'durchfuehren';
+    $cm = get_coursemodule_from_id('seminarplaner', $cmid, 0, false, IGNORE_MISSING);
+    if ($cm) {
+        $instance = $DB->get_record('seminarplaner', ['id' => $cm->instance], 'id, usecase');
+        if ($instance && !empty($instance->usecase)) {
+            $usecase = (string)$instance->usecase;
+        }
     }
 
     $canmanageseminarplaner = has_capability('mod/seminarplaner:managemethods', $context)
@@ -263,22 +383,32 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
         ]);
     };
 
+    // D50: die frühere Anlegen-Seite (methods.php) leitet auf die Bibliothek
+    // um; beide Schlüssel markieren denselben Tab.
+    $tabaliases = ['methodlibrary' => 'methods'];
+    $active = $tabaliases[$active] ?? $active;
+
     $tabs = [];
     if ($canmanageseminarplaner) {
+        // Reihenfolge/Benennung D16/D50. Immer sichtbar: Überblick · Sequenz ·
+        // Bibliothek · Import/Export. Nach Nutzungszweck zusätzlich:
+        //  - "durchfuehren": Roter Faden (nach Bibliothek),
+        //  - "verwalten": Einreichen (am Ende).
         $tabs = [
-            'grid' => ['label' => get_string('gridplanning', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/grid.php', 'icon' => 'calendar-range'],
-            'methods' => ['label' => get_string('methodcards', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methods.php', 'icon' => 'layout-grid'],
-            'methodlibrary' => ['label' => get_string('methodlibrary', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methodlibrary.php', 'icon' => 'library'],
-            'planningmode' => ['label' => 'Bausteine', 'path' => '/mod/seminarplaner/planningmode.php', 'icon' => 'blocks'],
-            'importexport' => ['label' => get_string('importexport', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/importexport.php', 'icon' => 'arrow-left-right'],
-            'review' => ['label' => get_string('reviewmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/review.php', 'icon' => 'clipboard-check'],
+            'grid' => ['label' => get_string('ueberblickmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/grid.php', 'icon' => 'calendar-range'],
+            'sequenz' => ['label' => get_string('sequenzmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/sequenz.php', 'icon' => 'list-checks'],
+            'methods' => ['label' => get_string('bibliothekmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methodlibrary.php', 'icon' => 'layout-grid'],
         ];
-        if (has_capability('mod/seminarplaner:viewroterfaden', $context)) {
-            $tabs = ['grid' => $tabs['grid'], 'roterfaden' => [
+        if ($usecase === 'durchfuehren' && has_capability('mod/seminarplaner:viewroterfaden', $context)) {
+            $tabs['roterfaden'] = [
                 'label' => get_string('roterfadenmenu', 'mod_seminarplaner'),
                 'path' => '/mod/seminarplaner/roterfaden.php',
                 'icon' => 'route',
-            ]] + array_diff_key($tabs, ['grid' => true]);
+            ];
+        }
+        $tabs['importexport'] = ['label' => get_string('importexport', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/importexport.php', 'icon' => 'arrow-left-right'];
+        if ($usecase === 'verwalten') {
+            $tabs['review'] = ['label' => get_string('einreichenmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/review.php', 'icon' => 'clipboard-check'];
         }
     } else if (has_capability('mod/seminarplaner:viewroterfaden', $context)) {
         $tabs = [

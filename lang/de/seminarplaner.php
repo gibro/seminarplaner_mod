@@ -31,14 +31,48 @@ $string['addmethodcard'] = 'Seminareinheit hinzufügen';
 $string['clearform'] = 'Formular leeren';
 $string['methodlibrary'] = 'Bibliothek';
 $string['gridplanning'] = 'Seminarplan';
+$string['sequenzmenu'] = 'Sequenz';
+$string['ueberblickmenu'] = 'Überblick';
+$string['einreichenmenu'] = 'Einreichen';
+$string['bibliothekmenu'] = 'Bibliothek';
+$string['bibliothek_create'] = '＋ Neue Seminareinheit anlegen';
+$string['ueberblick_subline'] = 'Der komplette Seminarplan auf einen Blick – schreibgeschützt.';
+$string['ueberblick_readonlynote'] = 'Diese Übersicht zeigt deinen kompletten Plan. Bearbeitet wird im Tab „Sequenz".';
+$string['ueberblick_tosequenz'] = 'Dorthin wechseln';
+$string['sequenz_dramatoggle'] = 'Didaktische Empfehlungen';
+$string['sequenz_dramatoggle_info'] = 'Prüft den Plan nach didaktischen Faustregeln – Einstieg am Morgen, Aktivierung nach der Mittagspause, Abwechslung der Sozialformen, Pausen, Abschluss, Zeitrahmen und Zielabdeckung – und zeigt Hinweise unter dem Tagesplan an. Reine Empfehlungen: Am Plan ändert sich nichts automatisch.';
+$string['sequenz_publishlabel'] = 'Seminarplan veröffentlichen';
+$string['sequenz_publishlabel_info'] = 'Zeigt diesen Seminarplan allen Teilnehmenden im Tab „Roter Faden" als Seminarablauf. Je Aktivität kann nur ein Plan veröffentlicht sein – das Einschalten ersetzt eine bestehende Veröffentlichung, das Ausschalten zieht sie zurück.';
+$string['sequenz_previewnote'] = 'Der Tagesverlauf im Blick – Reihenfolge per Drag & Drop oder mit den Pfeilen ordnen, Alternativen wählen, Überschriften vergeben.';
+$string['sequenz_planlabel'] = 'Seminarplan';
+$string['sequenz_prevday'] = 'Vorheriger Tag';
+$string['sequenz_nextday'] = 'Nächster Tag';
 $string['reviewmenu'] = 'Review';
 $string['importexport'] = 'Import/Export';
+$string['pdflogoheader'] = 'PDF-Logo';
+$string['pdflogo'] = 'Logo für PDF-Exporte';
+$string['pdflogo_help'] = 'Lade ein Logo hoch (PNG, JPG oder GIF), das im Kopf jedes PDF-Exports dieser Aktivität erscheint (ZIM, Konzeptsammlung und Materialliste). Das Logo wird einmal pro Aktivität gespeichert und muss nicht für jeden Export erneut hochgeladen werden.';
+$string['pdflogoposition'] = 'Logo-Position';
+$string['pdflogoposition_right'] = 'Oben rechts';
+$string['pdflogoposition_left'] = 'Oben links';
 $string['roterfadenmenu'] = 'Roter Faden';
+$string['usecaseheader'] = 'Nutzung des Seminarplaners';
+$string['usecase'] = 'Wozu brauchst du den Seminarplaner?';
+$string['usecase_help'] = 'Die Auswahl steuert, welche Tabs in dieser Aktivität angezeigt werden:
+
+* **Ein Seminar konzipieren:** Überblick, Sequenz, Bibliothek, Import/Export
+* **Ein konzipiertes Seminar durchführen:** Überblick, Sequenz, Bibliothek, Roter Faden, Import/Export
+* **Ein globales Seminarkonzept verwalten:** Überblick, Sequenz, Bibliothek, Import/Export, Einreichen
+
+Der Rote Faden erscheint nur mit der entsprechenden Berechtigung.';
+$string['usecase_konzipieren'] = 'Ein Seminar konzipieren';
+$string['usecase_durchfuehren'] = 'Ein konzipiertes Seminar durchführen';
+$string['usecase_verwalten'] = 'Ein globales Seminarkonzept verwalten';
 $string['roterfaden_empty'] = 'Bisher wurde kein Roter Faden veröffentlicht';
 $string['roterfaden_publishlabel'] = 'Seminarplan als roten Faden veröffentlichen';
 $string['roterfaden_theme_label'] = 'Timeline-Stil';
 $string['roterfaden_theme_modern'] = 'Modern';
-$string['roterfaden_theme_clean'] = 'Clean';
+$string['roterfaden_theme_kompakt'] = 'Kompakt';
 $string['timespan'] = 'Zeitfenster';
 $string['stepsize'] = 'Schritt (Minuten)';
 $string['applygrid'] = 'Seminarplan anwenden';

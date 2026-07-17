@@ -1,10 +1,22 @@
-define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
+define(['core/ajax', 'core/notification', 'mod_seminarplaner/lernzieleditor'],
+function(Ajax, Notification, LernzielEditor) {
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
     const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const escapeHtml = (str) => String(str || '').replace(/[&<>"']/g, (ch) => (
         {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch] || ch
     ));
+    // Menü-Icon identisch zum Sequenz-Zeilenmenü (sq-menu__icon), damit das
+    // Karten-Menü der Bibliothek exakt so aussieht wie in der Sequenz.
+    const mlMenuIcon = (paths) => `<svg class="sq-menu__icon" width="15" height="15" viewBox="0 0 24 24" fill="none"`
+        + ` stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"`
+        + ` aria-hidden="true" focusable="false">${paths}</svg>`;
+    const ML_MENU_ICONS = {
+        edit: mlMenuIcon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/>'),
+        replace: mlMenuIcon('<path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 21h14"/>'),
+        lock: mlMenuIcon('<rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V7a4 4 0 018 0v4"/>'),
+        remove: mlMenuIcon('<path d="M6 6l12 12M18 6L6 18"/>'),
+    };
     // Setzt den Änderungszeitstempel (ms) einer Seminareinheit auf "jetzt".
     const touchMethod = (method) => {
         if (method && typeof method === 'object') {
@@ -70,7 +82,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         kurzbeschreibung: '#kg-f-kurzbeschreibung',
         autor: '#kg-f-autor',
         lernziele: '#kg-f-lernziele',
-        komplexitaet: '#kg-f-komplexitaet',
         vorbereitung: '#kg-f-vorbereitung',
         raum: '#kg-f-raum',
         sozialform: '#kg-f-sozialform',
@@ -80,7 +91,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         materialtechnik: '#kg-f-materialtechnik',
         ablauf: '#kg-f-ablauf',
         tags: '#kg-f-tags',
-        kognitive: '#kg-f-kognitive',
         alternativen: '#kg-f-alternativen'
     };
 
@@ -121,15 +131,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             labelAll: 'Alle Zeiten',
             labelSome: 'Zeiten'
         },
-        cognitive: {
-            root: '#ml-filter-cognitive-dropdown',
-            toggle: '#ml-filter-cognitive-toggle',
-            panel: '#ml-filter-cognitive-panel',
-            all: '#ml-filter-cognitive-all',
-            options: '#ml-filter-cognitive-options',
-            labelAll: 'Alle Dimensionen',
-            labelSome: 'Dimensionen'
-        }
     };
 
     const EDIT_FIELD_SELECTORS = [
@@ -139,10 +140,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         '#ml-e-tags',
         '#ml-e-zeitbedarf',
         '#ml-e-gruppengroesse',
-        '#ml-e-kognitive',
         '#ml-e-kurzbeschreibung',
         '#ml-e-ablauf',
-        '#ml-e-komplexitaet',
         '#ml-e-autor',
         '#ml-e-raum',
         '#ml-e-sozialform',
@@ -155,9 +154,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     let methods = [];
     let currentEditId = '';
+    // D50: Anlegen läuft über denselben Editor wie Bearbeiten, nur leer.
+    let creatingNew = false;
     let runtimeCmid = 0;
-    let autosyncSetIds = new Set();
-    let methodsetNames = new Map();
+    // D54: Sets, für die eine aktualisierte globale Version verfügbar ist (kein
+    // Auto-Update mehr - stattdessen ein Hinweis an der betroffenen Karte).
+    let pendingUpdateSetIds = new Set();
     let draggedMethodId = '';
     let selectionMode = false;
     let selectedIds = new Set();
@@ -236,6 +238,52 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
     const joinMulti = (arr) => (Array.isArray(arr) ? arr.join(', ') : '');
 
+    // CD-Handoff: Karten tragen eine 3px-Top-Rule in der Farbe ihrer ersten
+    // Seminarphase (Palette wie in der Sequenzansicht).
+    const PHASE_CLASS_KEYS = [
+        {key: 'orientierung', match: ['orientierung', 'warm-up', 'einstieg']},
+        {key: 'erfahrung', match: ['erfahrung', 'erwartungsabfrage', 'vorwissen']},
+        {key: 'analyse', match: ['analyse']},
+        {key: 'handlung', match: ['handlung', 'aktion', 'praxis']},
+        {key: 'transfer', match: ['transfer', 'abschluss', 'auswertung']},
+    ];
+
+    const phaseKeyOf = (phases) => {
+        const raw = Array.isArray(phases) ? phases.filter(Boolean).join(', ') : String(phases || '');
+        const clean = normalizePhase(raw.split(',')[0] || '').toLowerCase();
+        if (!clean) {
+            return '';
+        }
+        const found = PHASE_CLASS_KEYS.find((candidate) => candidate.match.some((m) => clean.includes(m)));
+        return found ? found.key : '';
+    };
+
+    const phaseClassOf = (phases) => {
+        const key = phaseKeyOf(phases);
+        return key ? ` ml-phase--${key}` : '';
+    };
+
+    // Handoff: neutrale Badges für Dauer und Gruppengröße, das Phasen-Badge
+    // getönt in seiner Phasenfarbe (keine Emojis).
+    const renderCardBadges = (method) => {
+        const phaselabel = Array.isArray(method.seminarphase)
+            ? method.seminarphase.filter(Boolean).join(', ')
+            : String(method.seminarphase || '').trim();
+        const key = phaseKeyOf(method.seminarphase);
+        const badges = [];
+        if (method.zeitbedarf) {
+            badges.push(`<span class="sp-badge">${escapeHtml(method.zeitbedarf)}</span>`);
+        }
+        if (method.gruppengroesse) {
+            badges.push(`<span class="sp-badge">${escapeHtml(method.gruppengroesse)}</span>`);
+        }
+        if (phaselabel) {
+            badges.push(`<span class="sp-badge sp-badge--phase${key ? ` sp-badge--phase-${key}` : ''}">`
+                + `${escapeHtml(phaselabel)}</span>`);
+        }
+        return badges.join('');
+    };
+
     const readMulti = (selector) => {
         const el = bySel(selector);
         if (!el) {
@@ -312,6 +360,27 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const prefix = String(dropdown.getAttribute('data-kg-label-prefix') || 'Auswahl');
         const placeholder = String(dropdown.getAttribute('data-kg-placeholder') || `${prefix} wählen`);
         toggle.textContent = cleanvalues.length ? `${prefix} (${cleanvalues.length})` : placeholder;
+    };
+
+    // D62/D41: der Lernziel-Editor liefert eine Seminarphase (aus der
+    // Bloom-Gruppe des Verbs). Sie wird im Editor-Formular vorbelegt, ohne
+    // bereits Gewähltes zu entfernen.
+    const LZ_PHASE_LABELS = {
+        orientierung: 'Orientierung',
+        erfahrung: 'Erfahrungserhebung',
+        analyse: 'Analyse',
+        handlung: 'Handlungsteil',
+        transfer: 'Transfer',
+    };
+    const suggestEditorPhase = (phasekey) => {
+        const label = LZ_PHASE_LABELS[phasekey];
+        if (!label) {
+            return;
+        }
+        const current = readMulti('#ml-e-seminarphase');
+        if (current.indexOf(label) === -1) {
+            setFormMultiDropdownValues('#ml-e-seminarphase', current.concat([label]));
+        }
     };
 
     const bindFormMultiDropdowns = () => {
@@ -631,7 +700,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             kurzbeschreibung: (bySel(FIELDS.kurzbeschreibung)?.value || '').trim(),
             autor: (bySel(FIELDS.autor)?.value || '').trim(),
             lernziele: (bySel(FIELDS.lernziele)?.value || '').trim(),
-            komplexitaet: (bySel(FIELDS.komplexitaet)?.value || '').trim(),
             vorbereitung: (bySel(FIELDS.vorbereitung)?.value || '').trim(),
             raum: readMulti(FIELDS.raum),
             sozialform: readMulti(FIELDS.sozialform),
@@ -642,7 +710,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             materialtechnik: (bySel(FIELDS.materialtechnik)?.value || '').trim(),
             ablauf: (bySel(FIELDS.ablauf)?.value || '').trim(),
             tags: (bySel(FIELDS.tags)?.value || '').trim(),
-            kognitive: readMulti(FIELDS.kognitive),
             alternativen: readMulti(FIELDS.alternativen)
         };
     };
@@ -754,9 +821,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
         const previous = getSelectedFilterValues(key);
         const origin = bySel('#ml-filter-origin') ? bySel('#ml-filter-origin').value : '';
+        // Die anwählbaren Werte kommen aus dem, was der aktive Tab überhaupt
+        // zeigt - sonst stünden im Konzept-Tab Tags zur Wahl, die dort nie
+        // einen Treffer ergeben.
         const relevant = origin
-            ? methods.filter((m) => (origin === 'local' ? getSyncMethodsetId(m) === 0 : getSyncMethodsetId(m) === Number(origin)))
-            : methods;
+            ? scopedMethods().filter((m) => konzeptSetIdOf(m) === Number(origin))
+            : scopedMethods();
         const tags = new Set();
         relevant.forEach((m) => {
             splitMulti(m.tags).forEach((t) => tags.add(t));
@@ -773,23 +843,21 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         updateFilterToggleLabel(key);
     };
 
-    const loadAutosyncSetIds = (cmid) => {
+    const loadMethodsetSyncStatus = (cmid) => {
         return asCall('mod_seminarplaner_get_methodset_sync_status', {cmid}).then((res) => {
             const links = Array.isArray(res && res.links) ? res.links : [];
-            autosyncSetIds = new Set(
+            // D54: ein Set gilt als "aktualisierbar", wenn eine neuere globale
+            // Version vorliegt (haspending oder currentversion > verknüpfte Version).
+            pendingUpdateSetIds = new Set(
                 links
-                    .filter((link) => !!link && !!link.autosyncenabled)
+                    .filter((link) => !!link
+                        && (!!link.haspending
+                            || (Number(link.currentversionid) || 0) > (Number(link.linkedversionid) || 0)))
                     .map((link) => Number(link.methodsetid) || 0)
                     .filter((id) => id > 0)
             );
-            methodsetNames = new Map(
-                links
-                    .filter((link) => !!link && (Number(link.methodsetid) || 0) > 0)
-                    .map((link) => [Number(link.methodsetid) || 0, String(link.methodsetname || '').trim()])
-            );
         }).catch(() => {
-            autosyncSetIds = new Set();
-            methodsetNames = new Map();
+            pendingUpdateSetIds = new Set();
         });
     };
 
@@ -800,13 +868,48 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return Number(method._kgsync.setid || 0) || 0;
     };
 
-    const shouldShowFreezeLock = (method) => {
+    // D54: Für diese Karte ist eine aktualisierte Version aus ihrer globalen
+    // Sammlung verfügbar. Reiner Hinweis - übernommen wird nur bewusst über
+    // "Ausstehende Updates übernehmen" im Import/Export-Tab.
+    const hasPendingUpdate = (method) => {
         const setid = getSyncMethodsetId(method);
-        return setid > 0 && autosyncSetIds.has(setid);
+        return setid > 0 && pendingUpdateSetIds.has(setid);
     };
 
-    // Blendet den Herkunftsfilter nur ein, wenn mindestens eine Seminareinheit aus einem globalen Konzept importiert wurde.
-    // Listet dabei jedes importierte globale Konzept einzeln mit seinem Namen im Dropdown auf.
+    // Die manuelle Voll-Fixierung ("Lokal fixieren") ist genau dann sinnvoll,
+    // wenn eine Aktualisierung ansteht - so lässt sich eine Karte vor dem
+    // Übernehmen gegen Überschreiben schützen (D54: lokale Änderung hat Vorrang).
+    const shouldShowFreezeLock = (method) => hasPendingUpdate(method);
+
+    // Welcher Bibliothek-Tab die geteilte Liste (#ml-browse) gerade zeigt:
+    // 'local' = eigene Seminareinheiten, 'concepts' = die aus importierten
+    // Seminarkonzepten. Beide sind lokale Kopien und teilen sich Filterleiste,
+    // Liste und Editor - getrennt wird nur, welche Einheiten drin sind.
+    let libraryScope = 'local';
+
+    // Eine Einheit stammt aus einem Konzept, wenn sie dessen Herkunft trägt.
+    // Fallback aufs konzept--Präfix: Karten, die vor der Herkunfts-Ergänzung
+    // importiert wurden, haben nur das Präfix.
+    const isKonzeptCard = (m) => !!(m && (m._kgkonzept || String(m.id || '').indexOf('konzept-') === 0));
+
+    // Aus welchem Konzept eine Einheit stammt. 0, wenn sie es nicht sagt -
+    // dann sammelt der Herkunftsfilter sie unter "Unbekanntes Konzept".
+    const konzeptSetIdOf = (m) => (m && m._kgkonzept ? Number(m._kgkonzept.setid) || 0 : 0);
+
+    // Name des Konzepts, aus dem eine Einheit stammt. Er reist an der Karte
+    // mit, damit die Bibliothek ihn ohne Server-Abfrage zeigen kann.
+    const konzeptNameFor = (setid) => {
+        if (!setid) {
+            return 'Unbekanntes Konzept';
+        }
+        const card = methods.find((m) => konzeptSetIdOf(m) === setid && m._kgkonzept && m._kgkonzept.setname);
+        return card ? String(card._kgkonzept.setname) : `Seminarkonzept #${setid}`;
+    };
+
+    const scopedMethods = () => methods.filter((m) => (libraryScope === 'concepts' ? isKonzeptCard(m) : !isKonzeptCard(m)));
+
+    // Herkunft = aus welchem Seminarkonzept. Nur im Konzept-Tab, und erst ab
+    // dem zweiten Konzept - bei einem einzigen gäbe es nichts zu unterscheiden.
     const updateOriginFilterVisibility = () => {
         const wrap = bySel('#ml-filter-origin-wrap');
         const select = bySel('#ml-filter-origin');
@@ -814,25 +917,22 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return;
         }
         const setids = new Set();
-        methods.forEach((m) => {
-            const setid = getSyncMethodsetId(m);
-            if (setid > 0) {
-                setids.add(setid);
-            }
+        scopedMethods().forEach((m) => {
+            setids.add(konzeptSetIdOf(m));
         });
-        wrap.classList.toggle('kg-hidden', setids.size === 0);
+        wrap.classList.toggle('kg-hidden', libraryScope !== 'concepts' || setids.size < 2);
         if (!select) {
             return;
         }
         const previous = select.value;
         const concepts = Array.from(setids)
-            .map((setid) => ({setid, name: methodsetNames.get(setid) || `Globales Konzept #${setid}`}))
+            .map((setid) => ({setid, name: konzeptNameFor(setid)}))
             .sort((a, b) => a.name.localeCompare(b.name, 'de'));
 
         select.innerHTML = '';
         const allOption = document.createElement('option');
         allOption.value = '';
-        allOption.textContent = 'Alle Seminareinheiten';
+        allOption.textContent = 'Alle Seminarkonzepte';
         select.appendChild(allOption);
         concepts.forEach(({setid, name}) => {
             const option = document.createElement('option');
@@ -840,12 +940,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             option.textContent = name;
             select.appendChild(option);
         });
-        const localOption = document.createElement('option');
-        localOption.value = 'local';
-        localOption.textContent = 'Nur lokale Seminareinheiten';
-        select.appendChild(localOption);
 
-        const validValues = new Set(['', 'local', ...concepts.map((c) => String(c.setid))]);
+        const validValues = new Set(['', ...concepts.map((c) => String(c.setid))]);
         select.value = validValues.has(previous) ? previous : '';
     };
 
@@ -865,7 +961,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const phases = getSelectedFilterValues('phase');
         const groups = getSelectedFilterValues('group');
         const durations = getSelectedFilterValues('duration');
-        const cognitive = getSelectedFilterValues('cognitive').map((v) => normalize(v.split(/[:\-–]/)[0]));
         const origin = bySel('#ml-filter-origin') ? bySel('#ml-filter-origin').value : '';
 
         const host = bySel('#ml-method-list');
@@ -873,11 +968,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return;
         }
 
+        const inscope = scopedMethods();
         const cards = Array.from(host.querySelectorAll('.kg-library-card'));
         let visible = 0;
         cards.forEach((card) => {
             const id = card.getAttribute('data-id');
-            const method = methods.find((m) => String(m.id) === String(id));
+            const method = inscope.find((m) => String(m.id) === String(id));
             if (!method) {
                 card.style.display = 'none';
                 return;
@@ -897,15 +993,13 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const methodphase = splitMulti(method.seminarphase).map((t) => t.toLowerCase());
             const methodgroup = normalize(method.gruppengroesse);
             const methodduration = normalize(method.zeitbedarf);
-            const methodcog = splitMulti(method.kognitive).map((t) => normalize(t.split(/[:\-–]/)[0]));
 
             const match = (!query || hay.includes(query))
                 && (!tags.length || tags.every((t) => methodtags.includes(t)))
                 && (!phases.length || methodphase.some((p) => phases.includes(p)))
                 && (!groups.length || groups.includes(methodgroup))
                 && (!durations.length || durations.includes(methodduration))
-                && (!cognitive.length || methodcog.some((c) => cognitive.includes(c)))
-                && (!origin || (origin === 'local' ? getSyncMethodsetId(method) === 0 : getSyncMethodsetId(method) === Number(origin)));
+                && (!origin || konzeptSetIdOf(method) === Number(origin));
 
             card.style.display = match ? '' : 'none';
             if (match) {
@@ -915,7 +1009,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
         const status = bySel('#ml-filter-status');
         if (status) {
-            status.textContent = `${visible} von ${methods.length} Seminareinheiten angezeigt.`;
+            status.textContent = `${visible} von ${inscope.length} Seminareinheiten angezeigt.`;
         }
     };
 
@@ -933,21 +1027,24 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         host.classList.toggle('kg-library-list--selecting', selectionMode);
         host.innerHTML = '';
 
-        methods.forEach((m, index) => {
+        scopedMethods().forEach((m, index) => {
             if (!m.id) {
                 m.id = `legacy-${index}-${uid()}`;
             }
             const card = document.createElement('div');
             const cognitiveLevel = cognitiveLevelOf(m);
-            card.className = 'kg-library-card sp-card' + (cognitiveLevel ? ` sp-level-${cognitiveLevel}` : '');
+            card.className = 'kg-library-card sp-card' + (cognitiveLevel ? ` sp-level-${cognitiveLevel}` : '') + phaseClassOf(m.seminarphase);
             card.setAttribute('data-id', String(m.id));
             card.draggable = true;
+            const pendingUpdate = hasPendingUpdate(m);
             const showlock = shouldShowFreezeLock(m);
             const frozen = showlock ? isFrozenState(m._kgsync, true) : false;
             const freezeaction = showlock
-                ? `<button type="button" class="ml-card-menu-btn" data-act="freeze" title="Nur sichtbar bei aktivem Auto-Update für dieses Konzept.">${frozen ? '🔒 Fixierung lösen' : '🔓 Lokal fixieren'}</button>`
+                ? `<button type="button" class="sq-menu__item" data-act="freeze" title="Schützt diese Karte beim Übernehmen von Updates vor dem Überschreiben.">${ML_MENU_ICONS.lock}<span>${frozen ? 'Fixierung lösen' : 'Lokal fixieren'}</span></button>`
                 : '';
-            const phaseLabel = Array.isArray(m.seminarphase) ? m.seminarphase.filter(Boolean).join(', ') : String(m.seminarphase || '').trim();
+            const updatehint = pendingUpdate
+                ? `<div class="ml-card-updatehint" title="Übernehmen über &bdquo;Ausstehende Updates übernehmen&ldquo; im Tab Import/Export. Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügbar</div>`
+                : '';
             const tagChips = splitMulti(m.tags)
                 .map((tag) => `<span class="ml-card-tag">${escapeHtml(tag)}</span>`)
                 .join('');
@@ -967,22 +1064,21 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                 </span>
                 <div class="sp-card-title ml-card-title"><strong>${escapeHtml(m.titel || '(ohne Titel)')}</strong></div>
                 <div class="ml-card-head-actions">
-                  <details class="ml-card-menu">
-                    <summary class="ml-card-menu-toggle" aria-label="Aktionen">⋮</summary>
-                    <div class="ml-card-menu-panel">
-                      <button type="button" class="ml-card-menu-btn" data-act="edit">Bearbeiten</button>
-                      <button type="button" class="ml-card-menu-btn" data-act="overwrite-import">Aus Datei ersetzen…</button>
+                  <details class="ml-card-menu sq-menu">
+                    <summary class="sq-menu__btn" aria-label="Aktionen" title="Weitere Aktionen">⋮</summary>
+                    <div class="sq-menu__panel" role="menu">
+                      <button type="button" class="sq-menu__item" data-act="edit">${ML_MENU_ICONS.edit}<span>Bearbeiten</span></button>
+                      <button type="button" class="sq-menu__item" data-act="overwrite-import">${ML_MENU_ICONS.replace}<span>Aus Datei ersetzen…</span></button>
                       ${freezeaction}
-                      <button type="button" class="ml-card-menu-btn ml-card-menu-btn-delete" data-act="delete">Löschen</button>
+                      <button type="button" class="sq-menu__item sq-menu__item--danger" data-act="delete">${ML_MENU_ICONS.remove}<span>Löschen</span></button>
                     </div>
                   </details>
                 </div>
               </div>
+              ${updatehint}
               <div class="sp-card-compact">
                 <div class="sp-card-meta">
-                  <span class="sp-badge">⏱️ ${escapeHtml(m.zeitbedarf || '-')}</span>
-                  <span class="sp-badge">👥 ${escapeHtml(m.gruppengroesse || '-')}</span>
-                  ${phaseLabel ? `<span class="sp-badge sp-badge--phase">🚩 ${escapeHtml(phaseLabel)}</span>` : ''}
+                  ${renderCardBadges(m)}
                 </div>
                 ${tagChips ? `<div class="ml-card-tags">${tagChips}</div>` : ''}
                 <div class="sp-card-description">${sanitizeCardHtml(m.kurzbeschreibung || '')}</div>
@@ -1228,6 +1324,60 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         return Array.from(el.selectedOptions).map((o) => o.value);
     };
 
+    const setEditHeading = (text) => {
+        const heading = bySel('#ml-edit-heading');
+        if (heading) {
+            heading.textContent = text;
+        }
+    };
+
+    const resetEditForm = () => {
+        const form = bySel('#ml-edit-form');
+        if (form && typeof form.reset === 'function') {
+            form.reset();
+        }
+        setFieldValue('#ml-edit-id', '');
+        ['#ml-e-kurzbeschreibung', '#ml-e-ablauf', '#ml-e-lernziele',
+            '#ml-e-risiken', '#ml-e-debrief', '#ml-e-materialtechnik'].forEach((selector) => {
+            setFieldValue(selector, '');
+        });
+        const materialcurrent = bySel('#ml-e-materialien-current');
+        if (materialcurrent) {
+            materialcurrent.textContent = '';
+        }
+    };
+
+    // D50: "Neue Seminareinheit anlegen" öffnet den Bearbeiten-Editor leer –
+    // kein eigener Anlegen-Bereich mehr.
+    const openCreateEditor = () => {
+        creatingNew = true;
+        currentEditId = '';
+        setEditHeading('Neue Seminareinheit anlegen');
+        resetEditForm();
+        setFieldValue('#ml-e-titel', '');
+        setFieldValue('#ml-e-tags', '');
+        setFieldValue('#ml-e-autor', '');
+        setSelectMulti('#ml-e-seminarphase', []);
+        setSelectMulti('#ml-e-raum', []);
+        setSelectMulti('#ml-e-sozialform', []);
+        refreshEditAlternativeOptions('');
+        setSelectMulti('#ml-e-alternativen', []);
+        const editsection = bySel('#ml-edit-section');
+        if (editsection) {
+            editsection.classList.remove('kg-hidden');
+            editsection.scrollIntoView({behavior: 'auto', block: 'start'});
+            window.setTimeout(() => {
+                const top = editsection.getBoundingClientRect().top + window.scrollY;
+                window.scrollTo({top: Math.max(0, top - 80), behavior: 'auto'});
+            }, 0);
+        }
+        const titlefield = bySel('#ml-e-titel');
+        if (titlefield) {
+            titlefield.focus();
+        }
+        setStatus('Neue Seminareinheit – nur der Titel ist Pflicht, alles Weitere kannst du später ergänzen.', false);
+    };
+
     const openEditor = (id) => {
         const method = methods.find((m) => String(m.id) === String(id));
         if (!method) {
@@ -1235,6 +1385,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             return;
         }
         currentEditId = String(id);
+        creatingNew = false;
+        setEditHeading('Seminareinheit bearbeiten');
         const editsection = bySel('#ml-edit-section');
         if (editsection) {
             editsection.classList.remove('kg-hidden');
@@ -1245,7 +1397,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         setFieldValue('#ml-e-zeitbedarf', method.zeitbedarf);
         setFieldValue('#ml-e-gruppengroesse', method.gruppengroesse);
         setFieldValue('#ml-e-kurzbeschreibung', method.kurzbeschreibung);
-        setFieldValue('#ml-e-komplexitaet', method.komplexitaet);
         setFieldValue('#ml-e-vorbereitung', method.vorbereitung);
         setFieldValue('#ml-e-materialtechnik', method.materialtechnik);
         setFieldValue('#ml-e-ablauf', method.ablauf);
@@ -1269,7 +1420,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
 
         setSelectMulti('#ml-e-seminarphase', method.seminarphase);
-        setSelectMulti('#ml-e-kognitive', method.kognitive);
         setSelectMulti('#ml-e-raum', method.raum);
         setSelectMulti('#ml-e-sozialform', method.sozialform);
         refreshEditAlternativeOptions(method.id);
@@ -1313,8 +1463,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         });
     };
 
-    const BULK_MULTI_FIELDS = ['seminarphase', 'raum', 'sozialform', 'kognitive'];
-    const BULK_SELECT_FIELDS = ['zeitbedarf', 'gruppengroesse', 'komplexitaet', 'vorbereitung'];
+    const BULK_MULTI_FIELDS = ['seminarphase', 'raum', 'sozialform'];
+    const BULK_SELECT_FIELDS = ['zeitbedarf', 'gruppengroesse', 'vorbereitung'];
 
     const updateBulkToolbar = () => {
         const toolbar = bySel('#ml-bulk-toolbar');
@@ -1884,7 +2034,60 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             'Seminareinheit wieder für globale Aktualisierung freigegeben.', false);
     };
 
+    // D50: Anlegen-Zweig des Editors – baut eine neue Karte in derselben
+    // Feldform wie methods.js/buildMethod und hängt sie an den Bestand an.
+    const saveNewMethod = async (cmid) => {
+        const title = (bySel('#ml-e-titel') ? bySel('#ml-e-titel').value : '').trim();
+        if (!title) {
+            setStatus('Titel ist erforderlich.', true);
+            return;
+        }
+        const currentdraftitemid = readMaterialDraftItemId();
+        const method = touchMethod({
+            id: uid(),
+            titel: title,
+            seminarphase: getSelectMulti('#ml-e-seminarphase'),
+            zeitbedarf: (bySel('#ml-e-zeitbedarf') ? bySel('#ml-e-zeitbedarf').value : '').trim(),
+            gruppengroesse: (bySel('#ml-e-gruppengroesse') ? bySel('#ml-e-gruppengroesse').value : '').trim(),
+            kurzbeschreibung: getFieldValue('#ml-e-kurzbeschreibung'),
+            autor: (bySel('#ml-e-autor') ? bySel('#ml-e-autor').value : '').trim(),
+            lernziele: getFieldValue('#ml-e-lernziele'),
+            vorbereitung: (bySel('#ml-e-vorbereitung') ? bySel('#ml-e-vorbereitung').value : '').trim(),
+            raum: getSelectMulti('#ml-e-raum'),
+            sozialform: getSelectMulti('#ml-e-sozialform'),
+            risiken: getFieldValue('#ml-e-risiken'),
+            debrief: getFieldValue('#ml-e-debrief'),
+            materialien: [],
+            materialiendraftitemid: currentdraftitemid || 0,
+            materialtechnik: getFieldValue('#ml-e-materialtechnik'),
+            ablauf: getFieldValue('#ml-e-ablauf'),
+            tags: (bySel('#ml-e-tags') ? bySel('#ml-e-tags').value : '').trim(),
+            alternativen: getSelectMulti('#ml-e-alternativen')
+        });
+        methods.push(method);
+        reconcileAlternativesForMethod(method.id, method.alternativen || []);
+        normalizeMethodAlternatives();
+
+        await persist(cmid);
+        await loadMethods(cmid);
+        creatingNew = false;
+        setEditHeading('Seminareinheit bearbeiten');
+        resetEditForm();
+        bySel('#ml-edit-section')?.classList.add('kg-hidden');
+        if (typeof window !== 'undefined' && window.history && window.location) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('create');
+            window.history.replaceState({}, '', url.toString());
+        }
+        suppressLeavePrompt();
+        setStatus(`Seminareinheit "${title}" angelegt und gespeichert.`, false);
+    };
+
     const saveEditor = async (cmid) => {
+        if (creatingNew) {
+            await saveNewMethod(cmid);
+            return;
+        }
         if (!currentEditId) {
             setStatus('Bitte zuerst eine Seminareinheit auswählen.', true);
             return;
@@ -1908,7 +2111,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             zeitbedarf: (bySel('#ml-e-zeitbedarf') ? bySel('#ml-e-zeitbedarf').value : '').trim(),
             gruppengroesse: (bySel('#ml-e-gruppengroesse') ? bySel('#ml-e-gruppengroesse').value : '').trim(),
             kurzbeschreibung: getFieldValue('#ml-e-kurzbeschreibung'),
-            komplexitaet: (bySel('#ml-e-komplexitaet') ? bySel('#ml-e-komplexitaet').value : '').trim(),
             vorbereitung: (bySel('#ml-e-vorbereitung') ? bySel('#ml-e-vorbereitung').value : '').trim(),
             raum: getSelectMulti('#ml-e-raum'),
             sozialform: getSelectMulti('#ml-e-sozialform'),
@@ -1921,7 +2123,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             materialtechnik: getFieldValue('#ml-e-materialtechnik'),
             tags: (bySel('#ml-e-tags') ? bySel('#ml-e-tags').value : '').trim(),
             autor: (bySel('#ml-e-autor') ? bySel('#ml-e-autor').value : '').trim(),
-            kognitive: getSelectMulti('#ml-e-kognitive'),
             alternativen: getSelectMulti('#ml-e-alternativen')
         });
         methods[idx].alternativen = (methods[idx].alternativen || []).filter((id) => String(id) !== String(methods[idx].id));
@@ -2019,6 +2220,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         const params = new URLSearchParams(window.location.search || '');
         const requested = String(params.get('editmethodid') || '').trim();
         if (!requested) {
+            // D50: Link-Einstieg "Neue Seminareinheit anlegen" (create=1).
+            if (String(params.get('create') || '') === '1') {
+                openCreateEditor();
+            }
             return;
         }
         const exists = methods.some((m) => String(m.id) === requested);
@@ -2045,6 +2250,527 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
         }
     };
 
+    // ---- D29/D33: Globale Bibliothek (immer durchsuchbar, ohne Vor-Import) ----
+    // Facetten entstehen dynamisch aus dem freien Tags-Feld (D29); die
+    // endgueltige Facetten-Struktur folgt erst mit weiteren realen Bestaenden.
+    let globalMethods = [];
+    const globalFilter = {query: '', tags: new Set()};
+    const GLOBAL_FACET_LIMIT = 24;
+
+    const setGlobalStatus = (text, iserror) => {
+        const el = bySel('#gl-status');
+        if (el) {
+            el.textContent = text || '';
+            el.classList.toggle('kg-status-error', !!iserror);
+        }
+    };
+
+    // D55: Statuszeile des "Globale Seminarkonzepte"-Tabs.
+    const setKonzepteStatus = (text, iserror) => {
+        const el = bySel('#ml-konzepte-status');
+        if (el) {
+            el.textContent = text || '';
+            el.classList.toggle('kg-status-error', !!iserror);
+        }
+    };
+
+    const matchesGlobalFilter = (m) => {
+        for (const tag of globalFilter.tags) {
+            if (!m.tags.some((t) => t.toLowerCase() === tag)) {
+                return false;
+            }
+        }
+        const q = globalFilter.query.trim().toLowerCase();
+        if (!q) {
+            return true;
+        }
+        const haystack = [m.titel, m.kurzbeschreibung, m.setname, m.tags.join(' ')]
+            .join(' ').toLowerCase();
+        return q.split(/\s+/).every((part) => haystack.includes(part));
+    };
+
+    const renderGlobalFacets = () => {
+        const host = bySel('#gl-facets');
+        if (!host) {
+            return;
+        }
+        const counts = new Map();
+        const labels = new Map();
+        globalMethods.forEach((m) => {
+            m.tags.forEach((tag) => {
+                const key = tag.toLowerCase();
+                counts.set(key, (counts.get(key) || 0) + 1);
+                if (!labels.has(key)) {
+                    labels.set(key, tag);
+                }
+            });
+        });
+        const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'de'));
+        // Meistgenutzte Tags zeigen; aktive Tags bleiben immer sichtbar.
+        const shown = sorted.filter(([key], index) => index < GLOBAL_FACET_LIMIT || globalFilter.tags.has(key));
+        host.innerHTML = shown.map(([key, count]) => {
+            const active = globalFilter.tags.has(key);
+            return `<button type="button" class="gl-facet${active ? ' gl-facet--active' : ''}" data-gl-tag="${escapeHtml(key)}">
+                ${escapeHtml(labels.get(key) || key)} <span class="gl-facet__count">${count}</span></button>`;
+        }).join('');
+    };
+
+    const renderGlobalList = () => {
+        const host = bySel('#gl-list');
+        if (!host) {
+            return;
+        }
+        const visible = globalMethods.filter(matchesGlobalFilter);
+        if (!globalMethods.length) {
+            host.innerHTML = '';
+            return;
+        }
+        setGlobalStatus(`${visible.length} von ${globalMethods.length} Methoden`);
+        host.innerHTML = visible.map((m) => {
+            const tagChips = m.tags.map((tag) => `<span class="ml-card-tag">${escapeHtml(tag)}</span>`).join('');
+            return `
+              <div class="kg-library-card sp-card gl-card${phaseClassOf(m.seminarphase)}" data-gl-methodid="${m.methodid}">
+                <div class="ml-card-head">
+                  <div class="sp-card-title ml-card-title"><strong>${escapeHtml(m.titel)}</strong></div>
+                </div>
+                <div class="sp-card-compact">
+                  <div class="sp-card-meta">
+                    ${renderCardBadges(m)}
+                    ${m.vorbereitung ? `<span class="sp-badge">Vorbereitung: ${escapeHtml(m.vorbereitung)}</span>` : ''}
+                  </div>
+                  ${tagChips ? `<div class="ml-card-tags">${tagChips}</div>` : ''}
+                  ${m.kurzbeschreibung ? `<div class="sp-card-description">${escapeHtml(m.kurzbeschreibung)}</div>` : ''}
+                </div>
+                <div class="ml-card-footer">
+                  <span class="gl-card__source">Aus „${escapeHtml(m.setname)}"</span>
+                  <button type="button" class="kg-btn kg-btn-primary gl-card__adopt" data-gl-adopt="${m.methodid}">
+                    Übernehmen</button>
+                </div>
+              </div>`;
+        }).join('');
+        if (!visible.length) {
+            host.innerHTML = '<div class="sp-filter-status">Keine Methode passt zu Suche und Tags – '
+                + 'setz einen Filter zurück oder such mit anderen Begriffen.</div>';
+        }
+    };
+
+    const adoptGlobalMethod = (cmid, methodid, button) => {
+        if (button) {
+            button.disabled = true;
+            button.textContent = 'Übernehme …';
+        }
+        asCall('mod_seminarplaner_adopt_global_method', {cmid, methodid}).then((result) => {
+            setGlobalStatus(`„${result.titel}" ist jetzt als eigene Kopie in deinem Bestand.`);
+            if (button) {
+                button.textContent = '✓ Übernommen';
+            }
+            // Den lokalen Bestand oben direkt auffrischen, damit die Kopie sichtbar ist.
+            return loadMethods(cmid).then(() => renderList());
+        }).catch((e) => {
+            Notification.exception(e);
+            setGlobalStatus('Übernehmen fehlgeschlagen.', true);
+            if (button) {
+                button.disabled = false;
+                button.textContent = 'Übernehmen';
+            }
+        });
+    };
+
+    // --- Bereichsübergreifende Suche -------------------------------------
+    // Die Suche in der Filterleiste bleibt auf den aktiven Tab beschränkt.
+    // Diese hier sucht in allen drei Bereichen gleichzeitig und zeigt die
+    // Treffer in einer gemeinsamen Liste, jeder mit seinem Herkunfts-Badge.
+
+    const ALLSEARCH_HIDDEN_WHILE_SEARCHING = [
+        '.ml-subtabs', '#ml-filter-block', '#ml-list-block', '#ml-bulk-toolbar', '#ml-konzepte-block',
+    ];
+
+    // Kurzbeschreibungen enthalten Markup (<p>…</p>). In der Trefferzeile steht
+    // nur eine Vorschauzeile, deshalb per stripHtml (oben) die Tags entfernen
+    // statt sie zu escapen - sonst liest man "<p>Die TN ordnen sich…" im
+    // Klartext.
+
+    const allSearchHaystack = (m, extra) => [
+        m.titel, m.kurzbeschreibung,
+        Array.isArray(m.tags) ? m.tags.join(' ') : m.tags,
+        joinMulti(m.seminarphase), m.gruppengroesse, m.zeitbedarf, extra || ''
+    ].join(' ').toLowerCase();
+
+    const collectAllSearchHits = (needle) => {
+        const hits = [];
+        methods.forEach((m) => {
+            if (allSearchHaystack(m).includes(needle)) {
+                hits.push({
+                    kind: isKonzeptCard(m) ? 'konzept' : 'lokal',
+                    badge: isKonzeptCard(m) ? konzeptNameFor(konzeptSetIdOf(m)) : 'Lokale Seminareinheit',
+                    id: String(m.id),
+                    titel: String(m.titel || ''),
+                    kurz: stripHtml(m.kurzbeschreibung),
+                });
+            }
+        });
+        globalMethods.forEach((g) => {
+            if (allSearchHaystack(g, g.setname).includes(needle)) {
+                hits.push({
+                    kind: 'sammlung',
+                    badge: g.setname ? `Methodensammlung: ${g.setname}` : 'Methodensammlung',
+                    id: String(g.methodid),
+                    titel: String(g.titel || ''),
+                    kurz: stripHtml(g.kurzbeschreibung),
+                });
+            }
+        });
+
+        return hits;
+    };
+
+    const renderAllSearch = (cmid) => {
+        const input = bySel('#ml-allsearch');
+        const block = bySel('#ml-allsearch-block');
+        const host = bySel('#ml-allsearch-list');
+        if (!input || !block || !host) {
+            return;
+        }
+        const needle = normalize(input.value);
+        const searching = needle.length > 0;
+
+        block.classList.toggle('kg-hidden', !searching);
+        ALLSEARCH_HIDDEN_WHILE_SEARCHING.forEach((sel) => {
+            const node = bySel(sel);
+            if (node) {
+                node.classList.toggle('kg-hidden', searching);
+            }
+        });
+        if (!searching) {
+            host.innerHTML = '';
+            return;
+        }
+
+        const hits = collectAllSearchHits(needle);
+        const status = bySel('#ml-allsearch-status');
+        if (status) {
+            status.textContent = hits.length
+                ? `${hits.length} ${hits.length === 1 ? 'Treffer' : 'Treffer'} in allen Bereichen.`
+                : 'Keine Seminareinheit gefunden.';
+        }
+        host.innerHTML = hits.map((hit) => {
+            // Methodensammlungen sind noch nicht im eigenen Bestand - sie
+            // werden übernommen, nicht bearbeitet.
+            const action = hit.kind === 'sammlung'
+                ? `<button type="button" class="kg-btn" data-allsearch-adopt="${escapeHtml(hit.id)}">Übernehmen</button>`
+                : `<button type="button" class="kg-btn" data-allsearch-edit="${escapeHtml(hit.id)}">Bearbeiten</button>`;
+            return `<div class="ml-allsearch-row">
+                <div class="ml-allsearch-row__main">
+                  <div class="ml-allsearch-row__title">${escapeHtml(hit.titel)}</div>
+                  ${hit.kurz ? `<div class="ml-allsearch-row__sub">${escapeHtml(hit.kurz)}</div>` : ''}
+                  <span class="ml-allsearch-row__badge ml-allsearch-row__badge--${hit.kind}">${escapeHtml(hit.badge)}</span>
+                </div>
+                ${action}
+              </div>`;
+        }).join('');
+    };
+
+    const bindAllSearch = (cmid) => {
+        const input = bySel('#ml-allsearch');
+        const host = bySel('#ml-allsearch-list');
+        if (input) {
+            input.addEventListener('input', () => renderAllSearch(cmid));
+        }
+        if (host) {
+            host.addEventListener('click', (event) => {
+                const edit = event.target.closest('[data-allsearch-edit]');
+                if (edit) {
+                    openEditor(edit.getAttribute('data-allsearch-edit'));
+                    return;
+                }
+                const adopt = event.target.closest('[data-allsearch-adopt]');
+                if (adopt) {
+                    adoptGlobalMethod(cmid, Number.parseInt(adopt.getAttribute('data-allsearch-adopt'), 10), adopt);
+                }
+            });
+        }
+    };
+
+    const initGlobalLibrary = (cmid) => {
+        const section = bySel('#gl-section');
+        if (!section) {
+            return;
+        }
+        const search = bySel('#gl-search');
+        if (search) {
+            search.addEventListener('input', () => {
+                globalFilter.query = search.value || '';
+                renderGlobalList();
+            });
+        }
+        const facets = bySel('#gl-facets');
+        if (facets) {
+            facets.addEventListener('click', (event) => {
+                const chip = event.target.closest('[data-gl-tag]');
+                if (!chip) {
+                    return;
+                }
+                const tag = chip.getAttribute('data-gl-tag');
+                if (globalFilter.tags.has(tag)) {
+                    globalFilter.tags.delete(tag);
+                } else {
+                    globalFilter.tags.add(tag);
+                }
+                renderGlobalFacets();
+                renderGlobalList();
+            });
+        }
+        const list = bySel('#gl-list');
+        if (list) {
+            list.addEventListener('click', (event) => {
+                const adopt = event.target.closest('[data-gl-adopt]');
+                if (adopt) {
+                    adoptGlobalMethod(cmid, Number.parseInt(adopt.getAttribute('data-gl-adopt'), 10), adopt);
+                }
+            });
+        }
+
+        setGlobalStatus('Globale Bibliothek wird geladen …');
+        asCall('mod_seminarplaner_browse_global_library', {cmid}).then((result) => {
+            if (!result.available) {
+                section.classList.add('kg-hidden');
+                return;
+            }
+            if (result.message) {
+                setGlobalStatus(result.message);
+                return;
+            }
+            globalMethods = (result.methods || []).map((m) => ({
+                methodid: Number(m.methodid),
+                setid: Number(m.setid),
+                setname: String(m.setname || ''),
+                titel: String(m.titel || ''),
+                seminarphase: Array.isArray(m.seminarphase) ? m.seminarphase.map(String) : [],
+                zeitbedarf: String(m.zeitbedarf || ''),
+                gruppengroesse: String(m.gruppengroesse || ''),
+                sozialform: Array.isArray(m.sozialform) ? m.sozialform.map(String) : [],
+                vorbereitung: String(m.vorbereitung || ''),
+                kurzbeschreibung: String(m.kurzbeschreibung || ''),
+                tags: Array.isArray(m.tags) ? m.tags.map(String) : [],
+            }));
+            if (!globalMethods.length) {
+                setGlobalStatus('Noch keine veröffentlichten Methoden-Sammlungen vorhanden.');
+                return;
+            }
+            renderGlobalFacets();
+            renderGlobalList();
+        }).catch((e) => {
+            Notification.exception(e);
+            setGlobalStatus('Die globale Bibliothek konnte nicht geladen werden.', true);
+        });
+    };
+
+    // D55: Bibliothek-Untertabs (lokale Einheiten / Methodensammlungen /
+    // globale Seminarkonzepte). Der Konzept-Tab lädt seine Liste erst beim
+    // ersten Öffnen (lazy).
+    let konzepteLoaded = false;
+
+    const renderKonzepteList = (konzepte) => {
+        const host = bySel('#ml-konzepte-list');
+        if (!host) {
+            return;
+        }
+        if (!konzepte.length) {
+            host.innerHTML = '';
+            // War das letzte Konzept, verschwindet der Tab wieder - er wird
+            // serverseitig nur bei vorhandenen Konzepten ausgegeben, nach einem
+            // Entfernen ohne Reload steht er aber noch da und zeigte ins Leere.
+            const tabbtn = bySel('.ml-subtab[data-ml-tab="concepts"]');
+            if (tabbtn) {
+                tabbtn.classList.add('kg-hidden');
+                if (libraryScope === 'concepts') {
+                    activateSubtab('local', runtimeCmid);
+                }
+            }
+            setKonzepteStatus('Noch keine globalen Seminarkonzepte importiert. '
+                + 'Konzepte holst du über den Tab „Import/Export".');
+            return;
+        }
+        setKonzepteStatus('');
+        host.innerHTML = konzepte.map((k) => {
+            // timeimported kommt als Unix-Sekunden vom Server, der Formatierer
+            // rechnet in Millisekunden - ohne die Umrechnung landet jeder
+            // Import im Januar 1970.
+            const meta = `${k.unitcount} ${k.unitcount === 1 ? 'Seminareinheit' : 'Seminareinheiten'}`
+                + ` · übernommen ${escapeHtml(formatRelativeModified(k.timeimported * 1000))}`;
+            // Drei Zustände, nicht zwei: ein Konzept kann einen Plan haben, es
+            // kann einen gehabt haben (dann ist er gelöscht), oder es hat nie
+            // einen mitgebracht - dann fehlt hier schlicht nichts.
+            let action = '';
+            if (k.planexists) {
+                action = `<a class="kg-btn" href="${escapeHtml(sequenzUrlFor(k.gridid))}">Plan öffnen</a>`;
+            } else if (k.hadplan) {
+                action = `<span class="ml-konzept-card__gone">Zugehöriger Seminarplan wurde gelöscht.</span>`;
+            } else {
+                action = `<span class="ml-konzept-card__gone">Dieses Konzept enthält keinen Seminarplan.</span>`;
+            }
+            // Ohne Plan ist der Titel bereits der Konzeptname - dann waere
+            // "aus X" unter einer Ueberschrift X nur eine Dopplung.
+            const title = k.planname || k.setname || 'Seminarkonzept';
+            const source = (k.setname && k.setname !== title)
+                ? `<span class="ml-konzept-card__source">aus &bdquo;${escapeHtml(k.setname)}&ldquo;</span>`
+                : '';
+            return `<div class="ml-konzept-card">
+                <div class="ml-konzept-card__head">
+                  <strong class="ml-konzept-card__title">${escapeHtml(title)}</strong>
+                  ${source}
+                </div>
+                <div class="ml-konzept-card__meta">${meta}</div>
+                <div class="ml-konzept-card__actions">
+                  ${action}
+                  <button type="button" class="kg-btn" data-konzept-delete="${Number(k.setid)}">Konzept entfernen</button>
+                </div>
+                <div class="ml-konzept-card__warn kg-hidden" data-konzept-warn="${Number(k.setid)}" role="alert"></div>
+              </div>`;
+        }).join('');
+    };
+
+    const sequenzUrlFor = (gridid) => {
+        try {
+            const url = new URL('sequenz.php', window.location.href);
+            url.searchParams.set('id', String(runtimeCmid));
+            url.searchParams.set('grid', String(gridid));
+            return url.toString();
+        } catch (e) {
+            return `sequenz.php?id=${runtimeCmid}&grid=${gridid}`;
+        }
+    };
+
+    // Ein Konzept laesst sich nur entfernen, solange keine seiner Einheiten in
+    // einem Plan liegt - sonst zeigte der Plan auf Einheiten, die es nicht mehr
+    // gibt. Der Server nennt die konkreten Stellen; sie stehen an der Karte,
+    // nicht in einem Dialog, damit man sie beim Aufraeumen ablesen kann.
+    const renderKonzeptBlocked = (setid, usages) => {
+        const warn = bySel(`[data-konzept-warn="${setid}"]`);
+        if (!warn) {
+            return;
+        }
+        const places = usages.map((u) => {
+            const tag = u.tagbezeichnung
+                ? `Tag ${u.tag} (${escapeHtml(u.tagbezeichnung)})`
+                : `Tag ${u.tag}`;
+            return `<li>&bdquo;${escapeHtml(u.einheit)}&ldquo; – Sequenz &bdquo;${escapeHtml(u.planname)}&ldquo;, ${tag}</li>`;
+        }).join('');
+        warn.innerHTML = `<strong>Dieses Seminarkonzept kann nicht entfernt werden</strong>, solange seine `
+            + `Seminareinheiten in einem Seminarplan verwendet werden:<ul>${places}</ul>`
+            + `Nimm die Einheiten dort zuerst aus dem Plan.`;
+        warn.classList.remove('kg-hidden');
+    };
+
+    const deleteImportedKonzept = (cmid, setid, button) => {
+        const warn = bySel(`[data-konzept-warn="${setid}"]`);
+        if (warn) {
+            warn.classList.add('kg-hidden');
+            warn.innerHTML = '';
+        }
+        button.disabled = true;
+        asCall('mod_seminarplaner_delete_imported_konzept', {cmid, setid}).then((res) => {
+            if (!res.deleted) {
+                renderKonzeptBlocked(setid, Array.isArray(res.usages) ? res.usages : []);
+                button.disabled = false;
+
+                return null;
+            }
+            setKonzepteStatus(`Seminarkonzept entfernt, ${res.removedcount} `
+                + `${res.removedcount === 1 ? 'Seminareinheit' : 'Seminareinheiten'} aus dem Bestand genommen.`);
+
+            // Bestand und Liste neu holen: die Einheiten sind weg.
+            return loadMethods(cmid).then(() => {
+                updateOriginFilterVisibility();
+                applyFilters();
+
+                return loadImportedKonzepte(cmid);
+            });
+        }).catch((e) => {
+            Notification.exception(e);
+            button.disabled = false;
+            setKonzepteStatus('Das Seminarkonzept konnte nicht entfernt werden.', true);
+        });
+    };
+
+    const loadImportedKonzepte = (cmid) => {
+        setKonzepteStatus('Seminarkonzepte werden geladen …');
+        return asCall('mod_seminarplaner_list_imported_konzepte', {cmid}).then((res) => {
+            renderKonzepteList(Array.isArray(res && res.konzepte) ? res.konzepte : []);
+        }).catch((e) => {
+            Notification.exception(e);
+            setKonzepteStatus('Die importierten Seminarkonzepte konnten nicht geladen werden.', true);
+        });
+    };
+
+    const activateSubtab = (name, cmid) => {
+        const tabs = document.querySelectorAll('.ml-subtab');
+        tabs.forEach((btn) => {
+            const active = btn.getAttribute('data-ml-tab') === name;
+            btn.classList.toggle('ml-subtab--active', active);
+            btn.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        [['local', '#ml-tab-local'], ['collections', '#ml-tab-collections'], ['concepts', '#ml-tab-concepts']]
+            .forEach(([key, sel]) => {
+                const panel = bySel(sel);
+                if (panel) {
+                    panel.classList.toggle('kg-hidden', key !== name);
+                }
+            });
+
+        // Filterleiste, Liste und Editor gibt es nur einmal - sie wandern in
+        // den aktiven Tab. Bei "collections" bleiben sie stehen, wo sie sind:
+        // das Panel dort bringt seine eigene Oberfläche mit und der Block ist
+        // mit seinem Panel ohnehin ausgeblendet.
+        const browse = bySel('#ml-browse');
+        if (browse && (name === 'local' || name === 'concepts')) {
+            const panel = bySel(name === 'concepts' ? '#ml-tab-concepts' : '#ml-tab-local');
+            if (panel && browse.parentElement !== panel) {
+                panel.appendChild(browse);
+            }
+            libraryScope = name;
+            // Eine hier angelegte Einheit gehörte zu keinem Konzept - der
+            // Anlegen-Button bleibt deshalb dem lokalen Tab vorbehalten. Die
+            // Suche daneben gilt für alle Bereiche und bleibt stehen.
+            const createbtn = bySel('#ml-create-open');
+            if (createbtn) {
+                createbtn.classList.toggle('kg-hidden', name === 'concepts');
+            }
+            // Der Herkunftsfilter zählt nur im Konzept-Tab; beim Verlassen
+            // zurücksetzen, sonst filtert er unsichtbar weiter.
+            const origin = bySel('#ml-filter-origin');
+            if (origin && name !== 'concepts') {
+                origin.value = '';
+            }
+            renderList();
+            updateOriginFilterVisibility();
+            applyFilters();
+        }
+
+        if (name === 'concepts' && !konzepteLoaded) {
+            konzepteLoaded = true;
+            loadImportedKonzepte(cmid);
+        }
+    };
+
+    const bindSubtabs = (cmid) => {
+        document.querySelectorAll('.ml-subtab').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                activateSubtab(btn.getAttribute('data-ml-tab') || 'local', cmid);
+            });
+        });
+        // Die Konzept-Karten werden neu gerendert, deshalb delegiert am Host.
+        const konzepte = bySel('#ml-konzepte-list');
+        if (konzepte) {
+            konzepte.addEventListener('click', (event) => {
+                const del = event.target.closest('[data-konzept-delete]');
+                if (del) {
+                    deleteImportedKonzept(cmid, Number.parseInt(del.getAttribute('data-konzept-delete'), 10), del);
+                }
+            });
+        }
+    };
+
     return {
         init: function(cmid) {
             runtimeCmid = cmid;
@@ -2053,6 +2779,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             bindFormMultiDropdowns();
             bindBulkSelectionUI(cmid);
             refreshEditAlternativeOptions('');
+            initGlobalLibrary(cmid);
+            bindAllSearch(cmid);
+            bindSubtabs(cmid);
 
             const addbtn = bySel('#kg-add-method');
             if (addbtn) {
@@ -2088,28 +2817,59 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     });
                 });
             }
+            // D62: geführter Lernziel-Editor am Lernziele-Feld des Editors –
+            // Satz anhängen und die abgeleitete Seminarphase vorbelegen.
+            const lzopen = bySel('#ml-lz-open-lernziele');
+            if (lzopen) {
+                lzopen.addEventListener('click', () => {
+                    LernzielEditor.open((sentence, phase) => {
+                        const current = getFieldValue('#ml-e-lernziele');
+                        const addition = `<p>${escapeHtml(sentence)}</p>`;
+                        setFieldValue('#ml-e-lernziele', current ? current + addition : addition);
+                        suggestEditorPhase(phase);
+                    });
+                });
+            }
             const cancelbtn = bySel('#ml-cancel');
             if (cancelbtn) {
                 cancelbtn.addEventListener('click', () => {
                     currentEditId = '';
-                    const form = bySel('#ml-edit-form');
-                    if (form && typeof form.reset === 'function') {
-                        form.reset();
-                    }
-                    ['#ml-e-kurzbeschreibung', '#ml-e-ablauf', '#ml-e-lernziele',
-                        '#ml-e-risiken', '#ml-e-debrief', '#ml-e-materialtechnik'].forEach((selector) => {
-                        setFieldValue(selector, '');
-                    });
-                    const materialcurrent = bySel('#ml-e-materialien-current');
-                    if (materialcurrent) {
-                        materialcurrent.textContent = '';
-                    }
+                    creatingNew = false;
+                    setEditHeading('Seminareinheit bearbeiten');
+                    resetEditForm();
                     bySel('#ml-edit-section')?.classList.add('kg-hidden');
+                    if (typeof window !== 'undefined' && window.history && window.location) {
+                        const url = new URL(window.location.href);
+                        url.searchParams.delete('create');
+                        window.history.replaceState({}, '', url.toString());
+                    }
                     suppressLeavePrompt();
                 });
             }
 
-            Promise.all([loadMethods(cmid), loadAutosyncSetIds(cmid)]).then(() => {
+            // D50: Anlegen-Button in der Bibliothek. Wenn die Seite mit einem
+            // editmethodid-Parameter geladen wurde, gehört der vorbereitete
+            // Datei-Entwurfsbereich zu dieser Einheit – dann sauber neu laden,
+            // damit ein leerer Entwurfsbereich entsteht.
+            const createbtn = bySel('#ml-create-open');
+            if (createbtn) {
+                createbtn.addEventListener('click', () => {
+                    const params = new URLSearchParams(window.location.search || '');
+                    if (params.get('editmethodid')) {
+                        suppressLeavePrompt();
+                        const url = new URL(window.location.href);
+                        url.searchParams.delete('editmethodid');
+                        url.searchParams.delete('editmaterialitemid');
+                        url.searchParams.delete('_mlts');
+                        url.searchParams.set('create', '1');
+                        window.location.assign(url.toString());
+                        return;
+                    }
+                    openCreateEditor();
+                });
+            }
+
+            Promise.all([loadMethods(cmid), loadMethodsetSyncStatus(cmid)]).then(() => {
                 renderList();
                 applyRequestedEditFromUrl();
             }).catch((e) => {

@@ -16,7 +16,6 @@ use core_privacy\local\metadata\collection;
 use core_privacy\local\request\approved_contextlist;
 use core_privacy\local\request\approved_userlist;
 use core_privacy\local\request\contextlist;
-use core_privacy\local\request\helper;
 use core_privacy\local\request\plugin\provider as request_provider;
 use core_privacy\local\request\core_userlist_provider;
 use core_privacy\local\request\userlist;
@@ -137,7 +136,12 @@ final class provider implements
 
         $contextids = array_values(array_unique(array_map('intval', $contextids)));
         if (!empty($contextids)) {
-            $contextlist->add_contextids($contextids);
+            // contextlist::add_contextids() gibt es in Moodle nicht - der
+            // Aufruf endete in einem Fatal Error, sobald eine DSGVO-Anfrage
+            // diesen Provider erreichte. Oeffentlich ist nur add_from_sql();
+            // set_contextids() der Basisklasse ist protected.
+            [$insql, $params] = $DB->get_in_or_equal($contextids, SQL_PARAMS_NAMED);
+            $contextlist->add_from_sql("SELECT id FROM {context} WHERE id {$insql}", $params);
         }
         return $contextlist;
     }
@@ -193,27 +197,112 @@ final class provider implements
                 [$insql, $params] = $DB->get_in_or_equal($gridids, SQL_PARAMS_QM);
                 $state = $DB->get_records_select('kgen_grid_user_state', "gridid {$insql} AND userid = ?", array_merge($params, [$userid]));
                 if (!empty($state)) {
-                    writer::with_context($context)->export_data(['grid_user_state'], array_values($state));
+                    // export_data() verlangt ein \stdClass, kein Array (siehe
+                    // moodle_content_writer::export_data). Alle vier Aufrufe in
+                    // dieser Methode uebergaben frueher direkt das Ergebnis von
+                    // array_values() und liefen damit in einen TypeError - der
+                    // Export war also nie funktionsfaehig.
+                    writer::with_context($context)->export_data(['grid_user_state'],
+                        (object)['states' => array_values($state)]);
                 }
                 $locks = $DB->get_records_select('kgen_grid_lock', "gridid {$insql} AND userid = ?", array_merge($params, [$userid]));
                 if (!empty($locks)) {
-                    writer::with_context($context)->export_data(['grid_locks'], array_values($locks));
+                    writer::with_context($context)->export_data(['grid_locks'],
+                        (object)['locks' => array_values($locks)]);
                 }
             }
 
             $filemaps = $DB->get_records('kgen_method_filemap', ['cmid' => $cmid, 'userid' => $userid]);
             if (!empty($filemaps)) {
-                writer::with_context($context)->export_data(['method_filemap'], array_values($filemaps));
+                writer::with_context($context)->export_data(['method_filemap'],
+                    (object)['maps' => array_values($filemaps)]);
+
+                // Zu den oben exportierten Zuordnungen auch die Dateien selbst.
+                // Frueher stand hier helper::export_context_files($context,
+                // $userid, $component, $filearea) - diese Signatur gibt es in
+                // Moodle nicht (der Helfer nimmt nur Kontext + User-Objekt und
+                // exportiert ausschliesslich die intro-Dateien). Der Aufruf
+                // brach den ganzen Export mit einem TypeError ab.
+                //
+                // Exportiert wird bewusst nur, was ueber kgen_method_filemap an
+                // DIESEN Nutzer gebunden ist (cmid + userid, siehe get_metadata)
+                // - nicht der gesamte Dateibereich der Aktivitaet, in dem auch
+                // geteilte Materialien anderer liegen.
+                foreach ($filemaps as $map) {
+                    $itemid = (int)$map->itemid;
+                    $uid = (string)$map->methoduid;
+                    writer::with_context($context)
+                        ->export_area_files(['method_materialien', $uid], 'mod_seminarplaner', 'method_materialien', $itemid);
+                    writer::with_context($context)
+                        ->export_area_files(['method_h5p', $uid], 'mod_seminarplaner', 'method_h5p', $itemid);
+                }
             }
 
             $logs = $DB->get_records('kgen_import_export_log', ['cmid' => $cmid, 'actorid' => $userid]);
             if (!empty($logs)) {
-                writer::with_context($context)->export_data(['import_export_log'], array_values($logs));
+                writer::with_context($context)->export_data(['import_export_log'],
+                    (object)['entries' => array_values($logs)]);
             }
 
-            helper::export_context_files($context, $userid, 'mod_seminarplaner', 'method_materialien');
-            helper::export_context_files($context, $userid, 'mod_seminarplaner', 'method_h5p');
+            // Urheberschaft: was der Nutzer angelegt oder zuletzt geaendert hat.
+            //
+            // Ohne diesen Block widersprach sich der Provider: get_contexts_for_userid
+            // meldet einen Kontext bereits, wenn dort ein Plan von diesem Nutzer
+            // stammt, und delete_data_for_user anonymisiert genau diese Felder —
+            // die Auskunft lieferte dazu aber nichts. Der Nutzer bekam also eine
+            // leere Auskunft zu einem Kurs, zu dem das Plugin sehr wohl etwas
+            // ueber ihn weiss. Seit der Zustand geteilt unter
+            // grid_service::SHARED_STATE_USERID (0) liegt statt pro Nutzer, ist
+            // die Urheberschaft fuer die meisten sogar das EINZIGE, was es gibt.
+            //
+            // Exportiert wird nur, was get_metadata deklariert und was die
+            // Loeschung anfasst — dieselben Tabellen, dieselben Felder.
+            foreach (self::authorship_fields() as $table => $fields) {
+                [$where, $params] = self::authorship_where($table, $fields, $cmid, (int)$userid);
+                $records = $DB->get_records_select($table, $where, $params);
+                if (!empty($records)) {
+                    writer::with_context($context)->export_data([$table],
+                        (object)['records' => array_values($records)]);
+                }
+            }
         }
+    }
+
+    /**
+     * Tables and fields that record who authored something, per context.
+     *
+     * Deckungsgleich mit dem, was get_contexts_for_userid abfragt und
+     * delete_user_from_context anonymisiert bzw. loescht.
+     *
+     * @return array<string, string[]> Tabelle => Urheber-Felder.
+     */
+    private static function authorship_fields(): array {
+        return [
+            'kgen_grid' => ['createdby', 'modifiedby'],
+            'kgen_planning_state' => ['createdby', 'modifiedby'],
+            'kgen_roterfaden_state' => ['publishedby'],
+            'kgen_activity_setlink' => ['createdby'],
+            'kgen_activity_methodovr' => ['createdby', 'modifiedby'],
+        ];
+    }
+
+    /**
+     * Build the "this user authored it in this activity" condition.
+     *
+     * @param string $table Table name (unused, kept for call-site clarity).
+     * @param string[] $fields Author fields to match.
+     * @param int $cmid Course module id.
+     * @param int $userid User id.
+     * @return array [where, params]
+     */
+    private static function authorship_where(string $table, array $fields, int $cmid, int $userid): array {
+        $clauses = [];
+        $params = [$cmid];
+        foreach ($fields as $field) {
+            $clauses[] = "{$field} = ?";
+            $params[] = $userid;
+        }
+        return ['cmid = ? AND (' . implode(' OR ', $clauses) . ')', $params];
     }
 
     /**

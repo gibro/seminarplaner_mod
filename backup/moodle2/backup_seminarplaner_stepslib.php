@@ -25,6 +25,12 @@ class backup_seminarplaner_activity_structure_step extends backup_activity_struc
             'intro',
             'introformat',
             'defaultmethodsetid',
+            // Diese Liste muss alle Spalten der Tabelle seminarplaner fuehren,
+            // die erhalten bleiben sollen — was hier fehlt, ist nach einem
+            // Restore stillschweigend auf dem Default. logoposition (D52) und
+            // usecase (Tab-Nutzungszweck) wurden beim Einbau vergessen.
+            'logoposition',
+            'usecase',
             'timecreated',
             'timemodified',
         ]);
@@ -265,6 +271,10 @@ class backup_seminarplaner_activity_structure_step extends backup_activity_struc
         }
 
         $seminarplaner->annotate_files('mod_seminarplaner', 'intro', null);
+        // D52: das PDF-Logo liegt mit fester itemid 0 an der Aktivitaet (wie
+        // intro), deshalb null statt eines itemid-Mappings. Ohne diese Zeile
+        // wandert die Datei nicht ins Backup und ist nach einem Restore weg.
+        $seminarplaner->annotate_files('mod_seminarplaner', 'logo', null);
 
         return $this->prepare_activity_structure($seminarplaner);
     }
