@@ -146,6 +146,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
 
     const cardTitle = (card) => String((card && (card.titel || card.title)) || '');
 
+    // Eine Einheit stammt aus einem globalen Seminarkonzept, wenn sie dessen
+    // Herkunft trägt. Fallback aufs konzept--Präfix: Karten, die vor der
+    // Herkunfts-Ergänzung importiert wurden, haben nur das Präfix.
+    const isKonzeptCard = (card) => !!(card && (card._kgkonzept || String(card.id || '').indexOf('konzept-') === 0));
+
+    const konzeptSetIdOf = (card) => (card && card._kgkonzept ? Number(card._kgkonzept.setid) || 0 : 0);
+
+    const konzeptNameOf = (card) => String((card && card._kgkonzept && card._kgkonzept.setname) || 'Importiertes Konzept');
+
     // Titel werden direkt in der Sequenz bearbeitet. contenteditable statt
     // <input>, weil ein Eingabefeld EINZEILIG ist: lange Titel wie
     // „Geschichte der Massenmedien - Erstellung von Zeitleisten" wurden darin
@@ -3581,8 +3590,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             this.pickerTarget = targetPid ? {pid: targetPid} : {anker: ankername};
             this.pickerTab = 'lokal';
             // Dritter Tab nur, wenn ein Seminarkonzept in diese Aktivität
-            // importiert wurde - dessen Einheiten tragen das ID-Präfix "konzept-".
-            const hasKonzept = this.methodCardList.some((c) => String((c && c.id) || '').indexOf('konzept-') === 0);
+            // importiert wurde.
+            const hasKonzept = this.methodCardList.some((c) => isKonzeptCard(c));
             const tab = (id, label) => `<button type="button" class="sq-picker__tab${this.pickerTab === id ? ' active' : ''}" data-sq-action="picker-tab" data-tab="${id}">${label}</button>`;
             const root = this.modalRoot();
             root.innerHTML = `
@@ -3595,7 +3604,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     <div class="sq-picker__tabs" role="tablist">
                       ${tab('lokal', 'Lokale Bibliothek')}
                       ${tab('global', 'Methodensammlung')}
-                      ${hasKonzept ? tab('konzept', 'Importiertes Konzept') : ''}
+                      ${hasKonzept ? tab('konzept', 'Globale Seminarkonzepte') : ''}
                     </div>
                     <div class="sq-field">
                       <input type="text" class="kg-input" id="sq-picker-search" placeholder="Suchen …">
@@ -3633,15 +3642,14 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             }
             const needle = String(filter || '').trim().toLowerCase();
             const tab = this.pickerTab || 'lokal';
-            const isKonzept = (c) => String((c && c.id) || '').indexOf('konzept-') === 0;
             let source;
             if (tab === 'global') {
                 source = this.globalMethods || [];
             } else if (tab === 'konzept') {
-                source = this.methodCardList.filter(isKonzept);
+                source = this.methodCardList.filter(isKonzeptCard);
             } else {
                 // Lokale Bibliothek ohne die Konzept-Import-Karten (eigener Tab).
-                source = this.methodCardList.filter((c) => !isKonzept(c));
+                source = this.methodCardList.filter((c) => !isKonzeptCard(c));
             }
             const placedRefs = this.placedCardRefs();
             const unusedOnly = !!this.pickerUnusedOnly;
@@ -3660,7 +3668,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 list.innerHTML = `<div class="sq-empty">${empty}</div>`;
                 return;
             }
-            list.innerHTML = cards.map((card) => {
+            const row = (card) => {
                 const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
                 const phase = this.fieldValue(card, 'seminarphase');
                 const used = placedRefs.has(String(card.id));
@@ -3680,7 +3688,35 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                       <button type="button" class="kg-btn kg-btn-primary" data-sq-action="picker-add"
                         data-cardid="${escapeHtml(String(card.id))}"${globalid ? ` data-global-methodid="${globalid}"` : ''}>Übernehmen</button>
                     </div>`;
-            }).join('');
+            };
+
+            // Konzept-Tab: sind mehrere Konzepte importiert, stehen sie
+            // untereinander, jedes unter seiner Überschrift. Das Modal hat
+            // bewusst keine Filter - die Überschrift ist hier die einzige
+            // Herkunftsanzeige. Bei nur einem Konzept waere sie nur Ballast.
+            if (tab === 'konzept') {
+                const groups = new Map();
+                cards.forEach((card) => {
+                    const setid = konzeptSetIdOf(card);
+                    if (!groups.has(setid)) {
+                        groups.set(setid, []);
+                    }
+                    groups.get(setid).push(card);
+                });
+                if (groups.size > 1) {
+                    list.innerHTML = Array.from(groups.values())
+                        .sort((a, b) => konzeptNameOf(a[0]).localeCompare(konzeptNameOf(b[0]), 'de'))
+                        .map((groupcards) => `
+                            <div class="sq-picker__group">
+                              <div class="sq-picker__grouphead">${escapeHtml(konzeptNameOf(groupcards[0]))}</div>
+                              ${groupcards.map(row).join('')}
+                            </div>`)
+                        .join('');
+                    return;
+                }
+            }
+
+            list.innerHTML = cards.map(row).join('');
         }
 
         uniqueId(prefix, collection) {

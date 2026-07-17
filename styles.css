@@ -5266,6 +5266,20 @@ details[open] > summary .sq-tri,
     border-radius: 0;
     padding: 8px 10px;
 }
+/* Konzept-Tab mit mehreren importierten Konzepten: je Konzept eine Gruppe
+   untereinander. Die Überschrift ist im Modal die einzige Herkunftsanzeige -
+   es gibt hier bewusst keine Filter. */
+.sq-picker__group + .sq-picker__group { margin-top: 14px; }
+.sq-picker__grouphead {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--sq-text-muted);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--sq-border);
+}
 /* Schon im Plan verwendete Einheiten: gedämpft, aber weiter wählbar. */
 .sq-picker__row--used { opacity: .6; }
 .sq-picker__row--used:hover { opacity: 1; }
