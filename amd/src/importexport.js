@@ -2470,7 +2470,7 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
             globalSetImportBtn.addEventListener('click', () => {
                 const setid = Number.parseInt(globalSetSelect ? (globalSetSelect.value || '0') : '0', 10) || 0;
                 if (!setid) {
-                    setGlobalStatus('Bitte zuerst eine Methoden-Sammlung auswählen.', true);
+                    setGlobalStatus('Bitte zuerst ein Seminarkonzept auswählen.', true);
                     return;
                 }
                 asCall('mod_seminarplaner_import_global_methodset', {cmid, methodsetid: setid})
@@ -2484,13 +2484,15 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
                         setGlobalStatus(res.plancreated
                             ? `Import erfolgreich: Seminarkonzept "${res.setname}" als neuer Plan „${res.planname}" angelegt, `
                                 + `${res.importedcount} Seminareinheiten übernommen (insgesamt ${res.totalcount}).`
-                            : `Import erfolgreich: ${res.importedcount} Seminareinheiten aus "${res.setname}" importiert (insgesamt ${res.totalcount}).`,
+                            : `Import erfolgreich: ${res.importedcount} Seminareinheiten aus "${res.setname}" in die Bibliothek `
+                                + `übernommen (insgesamt ${res.totalcount}). Dieses Konzept enthält keinen Seminarplan, `
+                                + `deshalb wurde kein Plan angelegt.`,
                             false
                         );
                     })
                     .catch((e) => {
                         Notification.exception(e);
-                        setGlobalStatus('Import der Methoden-Sammlung fehlgeschlagen.', true);
+                        setGlobalStatus('Übernehmen fehlgeschlagen.', true);
                     });
             });
         }

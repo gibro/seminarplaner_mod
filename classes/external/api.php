@@ -735,9 +735,17 @@ class api extends external_api {
         }
 
         // D32: Seminarkonzepte tragen den Plan im Versions-Snapshot und
-        // werden als kompletter neuer Plan samt Einheiten importiert.
+        // werden als kompletter neuer Plan samt Einheiten importiert. Ein
+        // Seminarkonzept KANN einen Plan tragen, muss aber nicht - massgeblich
+        // ist allein das Label, das die Konzeptverantwortlichen vergeben.
+        // Ohne Plan gibt es nichts zu planen, aber sehr wohl etwas zu
+        // uebernehmen: die Einheiten kommen dann wie bei einer Sammlung in die
+        // Bibliothek (Weg unten), statt den Import scheitern zu lassen.
         if ((string)($set->concepttype ?? 'sammlung') === 'seminarkonzept') {
-            return self::import_global_seminarkonzept($resolved, $set, $repo);
+            $konzept = self::import_global_seminarkonzept($resolved, $set, $repo);
+            if ($konzept !== null) {
+                return $konzept;
+            }
         }
 
         $rows = [];
@@ -809,23 +817,33 @@ class api extends external_api {
      * are rewritten accordingly. `legacy:<uid>` references point into the
      * plan's own day entries and stay untouched.
      *
+     * Ein Seminarkonzept muss keinen Plan tragen - das Label entscheidet, nicht
+     * der Inhalt. Traegt der Snapshot keinen Plan, gibt diese Methode null
+     * zurueck; der Aufrufer uebernimmt dann nur die Einheiten.
+     *
      * @param array $resolved Resolved cm/course/context.
      * @param \stdClass $set Global methodset record (concepttype seminarkonzept).
      * @param \local_seminarplaner\local\repository\methodset_repository $repo Repository.
-     * @return array
+     * @return array|null Import result, or null if the set carries no plan.
      */
     private static function import_global_seminarkonzept(array $resolved, \stdClass $set,
-        \local_seminarplaner\local\repository\methodset_repository $repo): array {
+        \local_seminarplaner\local\repository\methodset_repository $repo): ?array {
         global $DB;
 
         if (empty($set->currentversion)) {
-            throw new invalid_parameter_exception('Dieses Seminarkonzept hat keine veröffentlichte Version');
+            return null;
         }
         $version = $repo->get_version((int)$set->currentversion);
         $payload = $version ? json_decode((string)$version->snapshotjson, true) : null;
         if (!is_array($payload) || (string)($payload['typ'] ?? '') !== 'seminarkonzept'
                 || !is_array($payload['plan'] ?? null)) {
-            throw new invalid_parameter_exception('Seminarkonzept-Daten konnten nicht gelesen werden');
+            // Kein Plan im Snapshot. Das trifft jedes Set, das vor D32
+            // veroeffentlicht wurde (damals blieb der Snapshot leer, die
+            // Einheiten lagen nur in local_kgen_method) und spaeter das Label
+            // "Seminarkonzept" bekam. Kein Fehler, sondern ein Konzept ohne
+            // Plan: der Aufrufer uebernimmt die Einheiten ueber den
+            // Sammlungs-Weg.
+            return null;
         }
         $snapshotmethods = is_array($payload['methods'] ?? null) ? $payload['methods'] : [];
         $plan = $payload['plan'];
