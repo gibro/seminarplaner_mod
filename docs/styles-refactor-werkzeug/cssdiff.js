@@ -3,6 +3,13 @@
 // also genau die Reihenfolge, in der Moodle unser Plugin-CSS in die Theme-Aggregation
 // einbettet. Wir fotografieren die berechneten Stile, tauschen NUR unseren Block gegen
 // den Kandidaten und fotografieren erneut. Unterschiede = Optik-Regression.
+// ACHTUNG: Was hier nicht steht, wird nicht gemessen — eine Regression in einer
+// fehlenden Eigenschaft meldet das Werkzeug als „0 Unterschiede". Die Liste hatte
+// bis 17. Juli fuenf blinde Flecken (outline, flex, list-style, max-width,
+// min-width), obwohl dup2.py genau diese als KONFLIKT meldet: `.sp-slot--over`
+// und `.kg-library-card--selected` kollidieren auf `outline`. Ein Kanarienvogel-
+// Test (absichtliche Aenderung, die auffallen MUSS) deckte das auf.
+// Wer eine Eigenschaft neu in Konflikt sieht, ergaenzt sie hier ZUERST.
 window.__PROPS = [
   'color', 'background-color', 'background-image', 'border-top-color', 'border-right-color',
   'border-bottom-color', 'border-left-color', 'border-top-width', 'border-right-width',
@@ -11,7 +18,17 @@ window.__PROPS = [
   'display', 'position', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
   'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'width', 'height',
   'min-height', 'opacity', 'visibility', 'box-shadow', 'z-index', 'flex-direction',
-  'justify-content', 'align-items', 'gap', 'overflow'
+  'justify-content', 'align-items', 'gap', 'overflow',
+  // Ab 17. Juli ergaenzt — die vormals blinden Flecken:
+  'outline-color', 'outline-width', 'outline-style', 'outline-offset',
+  'flex-grow', 'flex-shrink', 'flex-basis',
+  'list-style-type', 'list-style-position',
+  'max-width', 'min-width', 'max-height',
+  // Randstile (border:none vs. border:1px solid faellt sonst nur ueber die Breite auf,
+  // border-style:dashed vs. solid gar nicht) und weitere sichtbare Groessen:
+  'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
+  'text-align', 'white-space', 'flex-wrap', 'cursor', 'transform', 'float', 'clear',
+  'grid-template-columns', 'grid-template-rows', 'order', 'align-self', 'vertical-align'
 ];
 
 window.__snapshot = () => {
