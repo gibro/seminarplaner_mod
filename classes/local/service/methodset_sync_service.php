@@ -16,7 +16,7 @@ class methodset_sync_service {
     private const TRACKED_FIELDS = [
         'titel', 'seminarphase', 'zeitbedarf', 'gruppengroesse', 'kurzbeschreibung', 'autor',
         'lernziele', 'komplexitaet', 'vorbereitung', 'raum', 'sozialform', 'risiken', 'debrief',
-        'materialtechnik', 'ablauf', 'tags', 'kognitive',
+        'materialtechnik', 'ablauf', 'tags', 'kognitive', 'materialien',
     ];
 
     /**
@@ -334,6 +334,13 @@ class methodset_sync_service {
 
             $isfrozen = !empty($syncmeta['frozen']);
             $sourcehashes = isset($syncmeta['sourcehashes']) && is_array($syncmeta['sourcehashes']) ? $syncmeta['sourcehashes'] : [];
+            // Cards linked before attachments were tracked carry no baseline for them. A
+            // missing baseline counts as "not changed locally" and would let the incoming
+            // list delete locally added files. The baseline is what the set looked like at
+            // the last sync, so the old set version is exactly that - no guessing needed.
+            if (!isset($sourcehashes['materialien'])) {
+                $sourcehashes['materialien'] = $this->value_hash($oldsetmethods[$titlekey]['materialien'] ?? []);
+            }
             $haslocalchanges = $this->has_local_changes($method, $sourcehashes);
 
             if (!isset($newsetmethods[$titlekey])) {
@@ -534,7 +541,9 @@ class methodset_sync_service {
         if (is_array($value)) {
             $parts = [];
             foreach ($value as $entry) {
-                $parts[] = trim((string)$entry);
+                // Attachments arrive as descriptors and are identified by their filename;
+                // the other multi-value fields are plain strings.
+                $parts[] = is_array($entry) ? trim((string)($entry['name'] ?? '')) : trim((string)$entry);
             }
             sort($parts);
             return sha1(implode('||', $parts));

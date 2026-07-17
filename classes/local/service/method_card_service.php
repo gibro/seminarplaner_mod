@@ -359,38 +359,37 @@ class method_card_service {
                 throw new coding_exception('Unable to resolve file itemid');
             }
 
+            // sync_file_area() deletes every file the payload does not list. A payload
+            // without the key means "not touched" and must not wipe the attachments -
+            // only an explicitly empty list removes them.
             $materialentries = (array)($method['materialien'] ?? []);
+            $touchmaterial = array_key_exists('materialien', $method);
             $materialdraftitemid = 0;
             if (isset($method['materialiendraftitemid'])) {
                 $materialdraftitemid = (int)$method['materialiendraftitemid'];
             }
             if ($materialdraftitemid > 0) {
                 $materialentries = [['draftitemid' => $materialdraftitemid]];
+                $touchmaterial = true;
             }
 
             $h5pentries = (array)($method['h5p'] ?? []);
+            $touchh5p = array_key_exists('h5p', $method);
             $h5pdraftitemid = 0;
             if (isset($method['h5pdraftitemid'])) {
                 $h5pdraftitemid = (int)$method['h5pdraftitemid'];
             }
             if ($h5pdraftitemid > 0) {
                 $h5pentries = [['draftitemid' => $h5pdraftitemid]];
+                $touchh5p = true;
             }
 
-            $method['materialien'] = $this->sync_file_area(
-                $contextid,
-                $itemid,
-                self::FILEAREA_MATERIALIEN,
-                $materialentries,
-                $userid
-            );
-            $method['h5p'] = $this->sync_file_area(
-                $contextid,
-                $itemid,
-                self::FILEAREA_H5P,
-                $h5pentries,
-                $userid
-            );
+            $method['materialien'] = $touchmaterial
+                ? $this->sync_file_area($contextid, $itemid, self::FILEAREA_MATERIALIEN, $materialentries, $userid)
+                : $this->list_file_descriptors($contextid, self::FILEAREA_MATERIALIEN, $itemid);
+            $method['h5p'] = $touchh5p
+                ? $this->sync_file_area($contextid, $itemid, self::FILEAREA_H5P, $h5pentries, $userid)
+                : $this->list_file_descriptors($contextid, self::FILEAREA_H5P, $itemid);
             unset($method['materialiendraftitemid'], $method['h5pdraftitemid']);
             $normalized[] = $method;
         }

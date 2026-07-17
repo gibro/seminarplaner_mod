@@ -40,7 +40,7 @@ class api extends external_api {
     private const SYNC_TRACKED_FIELDS = [
         'titel', 'seminarphase', 'zeitbedarf', 'gruppengroesse', 'kurzbeschreibung', 'autor',
         'lernziele', 'komplexitaet', 'vorbereitung', 'raum', 'sozialform', 'risiken', 'debrief',
-        'materialtechnik', 'ablauf', 'tags', 'kognitive',
+        'materialtechnik', 'ablauf', 'tags', 'kognitive', 'materialien',
     ];
     private static function resolve_cm_context(int $cmid): array {
         global $DB;
@@ -116,7 +116,21 @@ class api extends external_api {
         return $out;
     }
 
-    private static function map_global_method_record(\stdClass $row, int $setid = 0, int $versionid = 0): array {
+    /**
+     * Map a global method row to an activity method card.
+     *
+     * Attachments must be passed in rather than added afterwards: the sync baseline in
+     * _kgsync.sourcehashes is built here, and a baseline claiming the set had no files
+     * would make the sync mistake the set's own files for local additions.
+     *
+     * @param \stdClass $row Global method row.
+     * @param int $setid Method set id.
+     * @param int $versionid Method set version id.
+     * @param array $materialien Attachment descriptors of this method.
+     * @return array
+     */
+    private static function map_global_method_record(\stdClass $row, int $setid = 0, int $versionid = 0,
+        array $materialien = []): array {
         $mapped = [
             'id' => 'global-' . (int)$row->id . '-' . time(),
             'titel' => (string)($row->title ?? ''),
@@ -132,7 +146,7 @@ class api extends external_api {
             'sozialform' => self::split_multi_text($row->sozialform ?? ''),
             'risiken' => trim((string)($row->risiken_tipps ?? '')),
             'debrief' => trim((string)($row->debrief ?? '')),
-            'materialien' => [],
+            'materialien' => array_values($materialien),
             'h5p' => [],
             'materialtechnik' => trim((string)($row->material_technik ?? '')),
             'ablauf' => trim((string)($row->ablauf ?? '')),
@@ -176,7 +190,9 @@ class api extends external_api {
         if (is_array($value)) {
             $parts = [];
             foreach ($value as $entry) {
-                $parts[] = trim((string)$entry);
+                // Attachments arrive as descriptors and are identified by their filename;
+                // the other multi-value fields are plain strings.
+                $parts[] = is_array($entry) ? trim((string)($entry['name'] ?? '')) : trim((string)$entry);
             }
             sort($parts);
             return sha1(implode('||', $parts));
@@ -515,9 +531,8 @@ class api extends external_api {
             $rows = $DB->get_records('local_kgen_method', ['methodsetid' => (int)$set->id]);
         }
 
-        // map_global_method_record() leaves 'materialien' empty; without the real
-        // attachments every comparison against an activity unit would report the files
-        // as a difference.
+        // Without the real attachments every comparison against an activity unit would
+        // report the files as a difference.
         $attachments = self::load_global_method_material_names(array_map(static function($row) {
             return (int)$row->id;
         }, array_values($rows)));
@@ -528,10 +543,9 @@ class api extends external_api {
             if ($title === '') {
                 continue;
             }
-            $mapped = self::map_global_method_record($row,
-                (int)$set->id, (int)($row->methodsetversionid ?? $set->currentversion ?? 0));
-            $mapped['materialien'] = $attachments[(int)$row->id] ?? [];
-            $out[self::normalize_method_title($title)] = $mapped;
+            $out[self::normalize_method_title($title)] = self::map_global_method_record($row,
+                (int)$set->id, (int)($row->methodsetversionid ?? $set->currentversion ?? 0),
+                $attachments[(int)$row->id] ?? []);
         }
         return $out;
     }
@@ -862,8 +876,8 @@ class api extends external_api {
         $imported = [];
         foreach ($rows as $row) {
             $mapped = self::map_global_method_record($row, (int)$set->id,
-                (int)($row->methodsetversionid ?? $set->currentversion ?? 0));
-            $mapped['materialien'] = $attachmentsbymethod[(int)$row->id] ?? [];
+                (int)($row->methodsetversionid ?? $set->currentversion ?? 0),
+                $attachmentsbymethod[(int)$row->id] ?? []);
             if (trim((string)$mapped['titel']) !== '') {
                 $imported[] = $mapped;
             }
@@ -1126,13 +1140,13 @@ class api extends external_api {
         $counter = 0;
         foreach ($rows as $row) {
             $mapped = self::map_global_method_record($row, (int)$set->id,
-                (int)($row->methodsetversionid ?? $set->currentversion ?? 0));
+                (int)($row->methodsetversionid ?? $set->currentversion ?? 0),
+                $attachmentsbymethod[(int)$row->id] ?? []);
             if (trim((string)$mapped['titel']) === '') {
                 continue;
             }
             $counter++;
             $mapped['id'] = self::new_konzept_card_id($counter);
-            $mapped['materialien'] = $attachmentsbymethod[(int)$row->id] ?? [];
             $mapped['_kgkonzept'] = self::konzept_origin($set);
             // Unabhaengige Kopie wie im Plan-Weg (D33): kein Live-Link zum
             // globalen Original, sonst zoege eine Sammlungs-Aktualisierung
@@ -1611,9 +1625,8 @@ class api extends external_api {
             throw new invalid_parameter_exception('Keine Berechtigung für die gewählte Sammlung');
         }
 
-        $mapped = self::map_global_method_record($row);
         $attachments = self::load_global_method_material_attachments([(int)$row->id]);
-        $mapped['materialien'] = $attachments[(int)$row->id] ?? [];
+        $mapped = self::map_global_method_record($row, 0, 0, $attachments[(int)$row->id] ?? []);
 
         $service = new method_card_service();
         $existing = $service->get_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id, (int)$resolved['context']->id);
