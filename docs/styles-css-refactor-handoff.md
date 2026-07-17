@@ -8,8 +8,9 @@
 > sich beim Umsetzen als falsch herausgestellt haben — wer hier weiterarbeitet,
 > liest zuerst Abschnitt 10.**
 >
-> Nicht erledigt und weiterhin offen: der Sonderfall in Abschnitt 8
-> (Modal-Tokens) — das ist eine Design-Entscheidung, keine Aufräumarbeit.
+> Auch der Sonderfall aus Abschnitt 8 (Modal-Tokens) ist entschieden und
+> umgesetzt (Commit `9d548cc`) — siehe Abschnitt 11. Damit ist dieses Dokument
+> vollständig abgearbeitet.
 
 Stand: 16. Juli 2026, gemessen an Commit `ce26cc5` (v2026071566).
 Vorgeschichte: sechs Durchgänge sind gelaufen (13.–14. Juli). Dieses Dokument
@@ -301,3 +302,38 @@ Suffix ein `/*` voranstellen — Moodles CSS-Optimierer frisst den Kommentar-
 Öffner des Folge-Plugins). **Achtung:** Die im Aggregat eingebettete Kopie
 unseres CSS ist veraltet; sie wird ohnehin herausgeschnitten und ist kein
 Grund zur Sorge.
+
+---
+
+## 11. Nachtrag 17. Juli: Abschnitt 8 ist entschieden — Modal bekommt die CD-Token
+
+Auftraggeber-Entscheidung: ja, das Modal soll die CD-Werte bekommen. Umgesetzt
+in Commit `9d548cc` — `.sq-modal-overlay` steht jetzt neben `.sq-shell` im
+Selektor der Token-Anhebung. Betroffen sind alle drei Overlays: Editor- und
+Intro-Modal (`sequenz.js`) sowie der Lernziel-Editor (`lernzieleditor.js`,
+`sq-lz-overlay`).
+
+Abschnitt 8 nennt es einen „Geltungsbereichs-Unterschied … der wie Absicht
+aussieht". Nach dem Blick in den Code war es keine: beide Selektoren hängen am
+selben frühen Token-Block, nur die spätere Anhebung ließ das Modal aus. Ein
+vergessener Selektor, kein Design.
+
+**Wie man eine ABSICHTLICHE Optik-Änderung prüft** — hier ist „0 Unterschiede"
+das falsche Kriterium, das war der ganze Punkt:
+
+1. **Eingrenzung analytisch:** Die Regel setzt ausschließlich Custom Properties.
+   Die können per CSS-Semantik nur Nachfahren von `.sq-modal-overlay`
+   erreichen — außerhalb ist eine Wirkung ausgeschlossen, nicht nur unwahr-
+   scheinlich. Zoo und `states2.html` bestätigen es mit 0 Unterschieden.
+2. **Wirkung gezielt gemessen**, an echtem Modal-Markup (1:1 aus `sequenz.js`):
+   alle vier Token wechseln in allen drei Overlays; `.sq-shell` als Gegenprobe
+   bleibt unverändert.
+3. **Lesbarkeit gerechnet** statt geschätzt: Fließtext 13,21 → 11,03 Kontrast
+   auf Weiß (AAA ab 7,0), gedämpfter Text 5,49 → 5,92 — also besser als vorher.
+
+**Der Zoo kann diese Änderung NICHT sehen** (er meldet 0 Unterschiede). Er baut
+ein Element je Selektor, ohne Verschachtelung — vererbte Token wirken aber nur
+auf Nachfahren. Für so etwas braucht es eine Seite mit echtem, verschachteltem
+Markup. Das ist die in 10.4 genannte Grenze, hier konkret geworden.
+
+Rückgängig: `git revert 9d548cc` — die Änderung ist ein einzelner Selektor.
