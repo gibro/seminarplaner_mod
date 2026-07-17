@@ -3190,20 +3190,25 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 return;
             }
             placement.titel = titel;
-            // Eine ueber die Mittagspause geteilte Einheit ist EINE Einheit in
-            // zwei Teilen: splitPlacement kopiert den Titel in die Fortsetzung
-            // (cont.titel = origin.titel), beide Teile tragen dasselbe
-            // splitgroup-Kennzeichen. Ohne das hier hiesse der eine Teil neu und
-            // der andere weiter alt — dieselbe Einheit mit zwei Namen.
-            const geteilt = this.renameSplitGroup(placement, titel);
-            // Die aktive Karte hinter der Platzierung mitziehen (fehlt bei einer
-            // noch unbefuellten Reservierung — dann bleibt es beim Plan-Titel).
+            // Die aktive Karte hinter der Platzierung (fehlt bei einer noch
+            // unbefuellten Reservierung — dann bleibt es beim Plan-Titel).
             const auswahl = this.auswahl(placement);
             const card = auswahl ? this.methodCardForRef(auswahl.aktiv) : null;
+            // JEDE Platzierung derselben Einheit in diesem Plan zieht mit
+            // (Auftraggeber-Entscheidung). Das deckt auch die ueber die
+            // Mittagspause geteilte Einheit ab: splitPlacement kopiert den Titel
+            // in die Fortsetzung, ihre Auswahl-Kopie zeigt aber auf dieselbe
+            // aktive Karte. Ohne das hiesse dieselbe Einheit im selben Plan an
+            // zwei Stellen verschieden.
+            // Ohne Karte gibt es nichts zu vergleichen; dann greift nur das
+            // splitgroup-Kennzeichen.
+            const betroffen = card
+                ? this.renameSameCard(auswahl.aktiv, titel)
+                : this.renameSplitGroup(placement, titel);
             this.setDirty(true);
             this.render();
             if (!card) {
-                this.toast(geteilt > 1 ? 'Titel geändert – in beiden Teilen.' : 'Titel geändert.');
+                this.toast(betroffen > 1 ? 'Titel geändert – in beiden Teilen.' : 'Titel geändert.');
                 return;
             }
             card.titel = titel;
@@ -3212,11 +3217,41 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 cmid: this.cmid,
                 methodsjson: JSON.stringify(this.methodCardList),
             }).then(() => {
-                this.toast(`Titel geändert: „${titel}" – gilt auch in der Bibliothek und in allen Seminarplänen.`);
+                const stellen = betroffen > 1 ? ` – an ${betroffen} Stellen in diesem Plan` : '';
+                this.toast(`Titel geändert: „${titel}"${stellen} und in der Bibliothek.`);
                 return null;
             }).catch(() => {
                 this.setStatus('Der Titel konnte in der Bibliothek nicht gespeichert werden.', true);
             });
+        }
+
+        // Alle Platzierungen dieses Plans, die dieselbe aktive Karte zeigen, auf
+        // denselben Titel bringen. -> Anzahl der betroffenen Stellen.
+        //
+        // Reicht bewusst nur ueber DIESEN Plan: die Titel anderer Seminarplaene
+        // liegen in deren eigenem gespeicherten Zustand, den der Client hier
+        // nicht in der Hand hat. Der Bibliothekseintrag ist umbenannt, ein
+        // anderer Plan zeigt seine Kopie aber weiter unter dem alten Namen, bis
+        // er dort angefasst wird.
+        renameSameCard(cardid, titel) {
+            const ziel = String(cardid || '');
+            if (!ziel) {
+                return 1;
+            }
+            const plat = (this.sequenz && this.sequenz.platzierungen) || {};
+            let n = 0;
+            Object.keys(plat).forEach((pid) => {
+                const p = plat[pid];
+                if (!p || p.typ !== 'einheit') {
+                    return;
+                }
+                const a = this.auswahl(p);
+                if (a && String(a.aktiv || '') === ziel) {
+                    p.titel = titel;
+                    n++;
+                }
+            });
+            return n || 1;
         }
 
         // Alle Teile einer geteilten Einheit auf denselben Titel bringen.
