@@ -4499,7 +4499,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         }
 
         // Insert a unit into a reserved module: the reservation shrinks.
-        addCardToBaustein(cardid, placeholderpid) {
+        addCardToBaustein(cardid, placeholderpid, silent) {
             const placeholder = this.placement(placeholderpid);
             const card = this.methodCardForRef(cardid);
             const found = this.locate(placeholderpid);
@@ -4535,9 +4535,67 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     delete this.sequenz.einheitenauswahlen[auswahlid];
                 }
             }
-            this.setDirty(true);
-            this.render();
-            this.toast(`„${cardTitle(card)}" übernommen.`);
+            // Der stille Modus ist fuer autoFillObviousReservations: das laeuft
+            // AUS render() heraus, ein render() hier waere eine Rekursion und
+            // der Toast eine Lawine. Dirty setzt dort der Aufrufer.
+            if (!silent) {
+                this.setDirty(true);
+                this.render();
+                this.toast(`„${cardTitle(card)}" übernommen.`);
+            }
+        }
+
+        // D43-Nachlese: Die Migration legt fuer jeden Baustein des alten Plans
+        // eine Reservierung an, fuellt sie aber nicht - welche Einheit dort
+        // steht, sagt erst der Themenplan. Nennt der GENAU EINE offene Einheit,
+        // ist das keine Entscheidung, sondern eine Abschrift: der alte Plan hat
+        // sie laengst getroffen. Die fuellen wir selbst, statt dafuer einen
+        // "Platzieren"-Klick zu verlangen.
+        //
+        // Bewusst NICHT automatisch: mehrere offene Kandidaten (das waere eine
+        // echte Wahl - der Button bleibt) und gar keine (der alte Plan hat die
+        // Zeit reserviert und nie gesagt, was hineinkommt - da gibt es nichts
+        // abzuschreiben, die Reservierung bleibt sichtbar offen).
+        autoFillObviousReservations() {
+            let changed = false;
+            Object.keys(this.sequenz.platzierungen || {}).forEach((pid) => {
+                const placement = this.sequenz.platzierungen[pid];
+                if (!placement || placement.typ !== 'einheit' || !this.isUnfilled(placement)) {
+                    return;
+                }
+                const baustein = this.sequenz.bausteine[String(placement.bausteinid || '')];
+                if (!baustein) {
+                    return;
+                }
+                const planningunit = this.planningUnitForBaustein(baustein);
+                const planned = (planningunit && Array.isArray(planningunit.methods) ? planningunit.methods : [])
+                    .map((m) => this.methodCardForRef(m && m.methodid))
+                    .filter((card) => card);
+                if (!planned.length) {
+                    return;
+                }
+                // Karten, die in diesem Baustein schon liegen, sind vergeben.
+                const placed = {};
+                Object.keys(this.sequenz.platzierungen).forEach((otherpid) => {
+                    const other = this.sequenz.platzierungen[otherpid];
+                    if (!other || other.typ !== 'einheit'
+                        || String(other.bausteinid || '') !== String(placement.bausteinid || '')) {
+                        return;
+                    }
+                    const auswahl = this.auswahl(other);
+                    if (auswahl && auswahl.aktiv) {
+                        placed[String(auswahl.aktiv)] = true;
+                    }
+                });
+                const open = planned.filter((card) => !placed[String(card.id)]);
+                if (open.length !== 1) {
+                    return;
+                }
+                this.addCardToBaustein(String(open[0].id), pid, true);
+                changed = true;
+            });
+
+            return changed;
         }
 
         applySuggestTarget(cardid, target) {
@@ -4711,6 +4769,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             // Aufeinanderfolgende Teile derselben zerteilten Einheit vor dem
             // Rendern wieder zusammenführen (heilt auch bestehende Pläne).
             if (this.mergeAdjacentSplitParts()) {
+                this.setDirty(true);
+            }
+
+            // Eindeutige Reservierungen aus der Migration selbst füllen, statt
+            // dafür einen Klick zu verlangen (heilt auch bestehende Pläne).
+            if (this.autoFillObviousReservations()) {
                 this.setDirty(true);
             }
 
