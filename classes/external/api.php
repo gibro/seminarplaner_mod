@@ -734,18 +734,18 @@ class api extends external_api {
             throw new invalid_parameter_exception('Unbekanntes Konzept');
         }
 
-        // D32: Seminarkonzepte tragen den Plan im Versions-Snapshot und
-        // werden als kompletter neuer Plan samt Einheiten importiert. Ein
+        // D32: Seminarkonzepte tragen den Plan im Versions-Snapshot und werden
+        // als kompletter neuer Plan samt Einheiten importiert. Ein
         // Seminarkonzept KANN einen Plan tragen, muss aber nicht - massgeblich
-        // ist allein das Label, das die Konzeptverantwortlichen vergeben.
-        // Ohne Plan gibt es nichts zu planen, aber sehr wohl etwas zu
-        // uebernehmen: die Einheiten kommen dann wie bei einer Sammlung in die
-        // Bibliothek (Weg unten), statt den Import scheitern zu lassen.
+        // ist allein das Label, das die Konzeptverantwortlichen vergeben. Ohne
+        // Plan gibt es nichts zu planen, aber sehr wohl etwas zu uebernehmen:
+        // dann kommen nur die Einheiten. Beide Wege bleiben Konzept-Importe -
+        // sie vergeben konzept--IDs, halten die Konzept-Herkunft an jeder Karte
+        // fest und schreiben den D55-Marker. Der Sammlungs-Weg unten wuerde
+        // beides verlieren und die Einheiten unauffindbar machen.
         if ((string)($set->concepttype ?? 'sammlung') === 'seminarkonzept') {
             $konzept = self::import_global_seminarkonzept($resolved, $set, $repo);
-            if ($konzept !== null) {
-                return $konzept;
-            }
+            return $konzept ?? self::import_konzept_units_only($resolved, $set);
         }
 
         $rows = [];
@@ -881,13 +881,14 @@ class api extends external_api {
                 continue;
             }
             $counter++;
-            $newid = 'konzept-' . time() . '-' . $counter . '-' . random_int(100, 999);
+            $newid = self::new_konzept_card_id($counter);
             $idmap[$oldid] = $newid;
             $copy = $method;
             $copy['id'] = $newid;
             // Independent copy (same principle as D33 adopt): no live link to
             // the global original, no stale sync metadata or draft pointers.
             unset($copy['_kgsync'], $copy['materialiendraftitemid'], $copy['h5pdraftitemid']);
+            $copy['_kgkonzept'] = self::konzept_origin($set);
             $copy['materialien'] = $attachmentsbytitle[self::normalize_method_title($title)] ?? [];
             $imported[] = $copy;
         }
@@ -960,6 +961,115 @@ class api extends external_api {
             'setname' => (string)$set->displayname,
             'plancreated' => true,
             'planname' => $uniquename,
+        ];
+    }
+
+    /**
+     * Fresh id for a card that comes from a global Seminarkonzept.
+     *
+     * The konzept- prefix is what the library and the sequence picker read to
+     * put the card into their concept tab (D55).
+     *
+     * @param int $counter Running number within one import.
+     * @return string
+     */
+    private static function new_konzept_card_id(int $counter): string {
+        return 'konzept-' . time() . '-' . $counter . '-' . random_int(100, 999);
+    }
+
+    /**
+     * Origin marker written onto every card imported from a Seminarkonzept.
+     *
+     * The konzept- prefix alone only says THAT a card came from a concept. To
+     * filter by concept in the library and to group by concept in the picker,
+     * the card has to name WHICH one - so the source set travels with it.
+     *
+     * @param \stdClass $set Global methodset record.
+     * @return array{setid: int, setname: string}
+     */
+    private static function konzept_origin(\stdClass $set): array {
+        return [
+            'setid' => (int)$set->id,
+            'setname' => (string)$set->displayname,
+        ];
+    }
+
+    /**
+     * Import a Seminarkonzept that carries no plan - only its units.
+     *
+     * Every set published before D32 is in this shape: the snapshot stayed
+     * empty and the units live in local_kgen_method alone. Such a set becomes a
+     * Seminarkonzept the moment someone labels it that way in manage.php, and
+     * then it has units but no plan. The units are sourced from the method rows
+     * and still count as concept units.
+     *
+     * @param array $resolved Resolved cm/course/context.
+     * @param \stdClass $set Global methodset record (concepttype seminarkonzept).
+     * @return array
+     */
+    private static function import_konzept_units_only(array $resolved, \stdClass $set): array {
+        global $DB;
+
+        $actorid = (int)$GLOBALS['USER']->id;
+        $rows = [];
+        if (!empty($set->currentversion)) {
+            $rows = $DB->get_records('local_kgen_method', [
+                'methodsetid' => (int)$set->id,
+                'methodsetversionid' => (int)$set->currentversion,
+            ]);
+        }
+        if (!$rows) {
+            $rows = $DB->get_records('local_kgen_method', ['methodsetid' => (int)$set->id]);
+        }
+
+        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function($row) {
+            return (int)$row->id;
+        }, array_values($rows)));
+
+        $imported = [];
+        $counter = 0;
+        foreach ($rows as $row) {
+            $mapped = self::map_global_method_record($row, (int)$set->id,
+                (int)($row->methodsetversionid ?? $set->currentversion ?? 0));
+            if (trim((string)$mapped['titel']) === '') {
+                continue;
+            }
+            $counter++;
+            $mapped['id'] = self::new_konzept_card_id($counter);
+            $mapped['materialien'] = $attachmentsbymethod[(int)$row->id] ?? [];
+            $mapped['_kgkonzept'] = self::konzept_origin($set);
+            // Unabhaengige Kopie wie im Plan-Weg (D33): kein Live-Link zum
+            // globalen Original, sonst zoege eine Sammlungs-Aktualisierung
+            // diese Konzept-Karten mit.
+            unset($mapped['_kgsync']);
+            $imported[] = $mapped;
+        }
+
+        $service = new method_card_service();
+        $existing = $service->get_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id);
+        if (!is_array($existing)) {
+            $existing = [];
+        }
+        $merged = array_merge($existing, $imported);
+        $service->save_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id, $merged);
+
+        // gridid 0 heisst "hatte nie einen Plan" - anders als ein geloeschter.
+        self::record_imported_konzept((int)$resolved['cm']->id, [
+            'setid' => (int)$set->id,
+            'setname' => (string)$set->displayname,
+            'planname' => '',
+            'gridid' => 0,
+            'unitcount' => count($imported),
+            'timeimported' => time(),
+        ]);
+
+        return [
+            'success' => true,
+            'importedcount' => count($imported),
+            'totalcount' => count($merged),
+            'setname' => (string)$set->displayname,
+            'plancreated' => false,
+            'planname' => '',
         ];
     }
 
@@ -1150,7 +1260,11 @@ class api extends external_api {
                 continue;
             }
             $gridid = (int)($entry['gridid'] ?? 0);
-            $planexists = $gridid > 0 && isset($existinggrids[$gridid]);
+            // gridid 0: das Konzept brachte nie einen Plan mit. Das ist etwas
+            // anderes als ein Plan, den es gab und den jemand geloescht hat -
+            // sonst meldet die Bibliothek einen Verlust, den es nie gab.
+            $hadplan = $gridid > 0;
+            $planexists = $hadplan && isset($existinggrids[$gridid]);
             $out[] = [
                 'setid' => (int)($entry['setid'] ?? 0),
                 'setname' => (string)($entry['setname'] ?? ''),
@@ -1158,6 +1272,7 @@ class api extends external_api {
                 // otherwise the name recorded at import time.
                 'planname' => $planexists ? $existinggrids[$gridid] : (string)($entry['planname'] ?? ''),
                 'gridid' => $gridid,
+                'hadplan' => $hadplan,
                 'planexists' => $planexists,
                 'unitcount' => (int)($entry['unitcount'] ?? 0),
                 'timeimported' => (int)($entry['timeimported'] ?? 0),
@@ -1177,7 +1292,8 @@ class api extends external_api {
                 'setid' => new external_value(PARAM_INT, 'Source global set id'),
                 'setname' => new external_value(PARAM_TEXT, 'Source global set name'),
                 'planname' => new external_value(PARAM_TEXT, 'Local plan name created on import'),
-                'gridid' => new external_value(PARAM_INT, 'Local plan (grid) id'),
+                'gridid' => new external_value(PARAM_INT, 'Local plan (grid) id, 0 if the concept brought no plan'),
+                'hadplan' => new external_value(PARAM_BOOL, 'Whether the concept brought a plan at all'),
                 'planexists' => new external_value(PARAM_BOOL, 'Whether the created plan still exists'),
                 'unitcount' => new external_value(PARAM_INT, 'Number of seminar units imported'),
                 'timeimported' => new external_value(PARAM_INT, 'Import timestamp'),

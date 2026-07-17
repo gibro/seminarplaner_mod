@@ -146,11 +146,31 @@ final class mod_seminarplaner_import_global_methodset_test extends advanced_test
         $this->assertFalse($result['plancreated']);
         $this->assertSame('', $result['planname']);
 
-        $titles = array_column($this->get_library(), 'titel');
+        $library = $this->get_library();
+        $titles = array_column($library, 'titel');
         sort($titles);
         $this->assertSame(['Blitzlicht', 'Gruppenarbeit'], $titles);
 
         $this->assertSame([], (new grid_service())->list_grids($this->cmid));
+
+        // Auch ohne Plan bleiben es Konzept-Einheiten: das konzept--Praefix
+        // sortiert sie in den Konzept-Tab, die Herkunft sagt in WELCHES.
+        foreach ($library as $card) {
+            $this->assertStringStartsWith('konzept-', (string)$card['id']);
+            $this->assertSame($setid, (int)$card['_kgkonzept']['setid']);
+            $this->assertSame('Konzept ohne Plan', (string)$card['_kgkonzept']['setname']);
+            // Unabhaengige Kopie - kein Live-Link zum globalen Original.
+            $this->assertArrayNotHasKey('_kgsync', $card);
+        }
+
+        // Ohne Marker erschiene der Konzept-Tab nie, obwohl importiert wurde.
+        $konzepte = api::list_imported_konzepte($this->cmid)['konzepte'];
+        $this->assertCount(1, $konzepte);
+        $this->assertSame($setid, $konzepte[0]['setid']);
+        $this->assertSame(2, $konzepte[0]['unitcount']);
+        // "Hatte nie einen Plan" ist nicht "Plan wurde geloescht".
+        $this->assertFalse($konzepte[0]['hadplan']);
+        $this->assertFalse($konzepte[0]['planexists']);
     }
 
     /**
@@ -217,9 +237,18 @@ final class mod_seminarplaner_import_global_methodset_test extends advanced_test
         foreach ($this->get_library() as $method) {
             $this->assertStringStartsWith('konzept-', (string)$method['id']);
             $this->assertArrayNotHasKey('_kgsync', $method);
+            // Herkunft reist mit - Bibliothek und Picker gruppieren danach.
+            $this->assertSame($setid, (int)$method['_kgkonzept']['setid']);
+            $this->assertSame('Konzept mit Plan', (string)$method['_kgkonzept']['setname']);
             $newids[(string)$method['titel']] = (string)$method['id'];
         }
         $this->assertCount(2, $newids);
+
+        $konzepte = api::list_imported_konzepte($this->cmid)['konzepte'];
+        $this->assertCount(1, $konzepte);
+        $this->assertTrue($konzepte[0]['hadplan']);
+        $this->assertTrue($konzepte[0]['planexists']);
+        $this->assertSame('Einstiegsseminar', $konzepte[0]['planname']);
 
         $state = (new grid_service())->get_user_state((int)$grid->id, (int)$USER->id);
         $auswahl = $state['state'][\mod_seminarplaner\local\sequence\sequence_state::STATE_KEY]
