@@ -4545,12 +4545,52 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             }
         }
 
+        // Welche Karten in diesem Baustein schon liegen - über ALLE Tage.
+        // Ein Baustein laeuft oft ueber mehrere Tage weiter; wer nur den
+        // angezeigten Tag prueft, haelt eine gestern platzierte Einheit fuer
+        // offen und bietet sie ein zweites Mal an.
+        placedCardsInBaustein(bausteinid) {
+            const placed = {};
+            const bid = String(bausteinid || '');
+            if (!bid) {
+                return placed;
+            }
+            Object.keys(this.sequenz.platzierungen || {}).forEach((pid) => {
+                const placement = this.sequenz.platzierungen[pid];
+                if (!placement || placement.typ !== 'einheit'
+                    || String(placement.bausteinid || '') !== bid) {
+                    return;
+                }
+                const auswahl = this.auswahl(placement);
+                if (auswahl && auswahl.aktiv) {
+                    placed[String(auswahl.aktiv)] = true;
+                }
+            });
+
+            return placed;
+        }
+
+        // Die laut Themenplan zu einem Baustein gehoerenden Einheiten, die dort
+        // noch nirgends liegen.
+        openPlannedCardsFor(baustein, bausteinid) {
+            const planningunit = this.planningUnitForBaustein(baustein);
+            const planned = (planningunit && Array.isArray(planningunit.methods) ? planningunit.methods : [])
+                .map((m) => this.methodCardForRef(m && m.methodid))
+                .filter((card) => card);
+            if (!planned.length) {
+                return [];
+            }
+            const placed = this.placedCardsInBaustein(bausteinid);
+
+            return planned.filter((card) => !placed[String(card.id)]);
+        }
+
         // D43-Nachlese: Die Migration legt fuer jeden Baustein des alten Plans
         // eine Reservierung an, fuellt sie aber nicht - welche Einheit dort
-        // steht, sagt erst der Themenplan. Nennt der GENAU EINE offene Einheit,
-        // ist das keine Entscheidung, sondern eine Abschrift: der alte Plan hat
-        // sie laengst getroffen. Die fuellen wir selbst, statt dafuer einen
-        // "Platzieren"-Klick zu verlangen.
+        // steht, sagt erst der Themenplan. Nennt der GENAU EINE noch nirgends
+        // platzierte Einheit, ist das keine Entscheidung, sondern eine
+        // Abschrift: der alte Plan hat sie laengst getroffen. Die fuellen wir
+        // selbst, statt dafuer einen "Platzieren"-Klick zu verlangen.
         //
         // Bewusst NICHT automatisch: mehrere offene Kandidaten (das waere eine
         // echte Wahl - der Button bleibt) und gar keine (der alte Plan hat die
@@ -4563,31 +4603,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 if (!placement || placement.typ !== 'einheit' || !this.isUnfilled(placement)) {
                     return;
                 }
-                const baustein = this.sequenz.bausteine[String(placement.bausteinid || '')];
+                const bausteinid = String(placement.bausteinid || '');
+                const baustein = this.sequenz.bausteine[bausteinid];
                 if (!baustein) {
                     return;
                 }
-                const planningunit = this.planningUnitForBaustein(baustein);
-                const planned = (planningunit && Array.isArray(planningunit.methods) ? planningunit.methods : [])
-                    .map((m) => this.methodCardForRef(m && m.methodid))
-                    .filter((card) => card);
-                if (!planned.length) {
-                    return;
-                }
-                // Karten, die in diesem Baustein schon liegen, sind vergeben.
-                const placed = {};
-                Object.keys(this.sequenz.platzierungen).forEach((otherpid) => {
-                    const other = this.sequenz.platzierungen[otherpid];
-                    if (!other || other.typ !== 'einheit'
-                        || String(other.bausteinid || '') !== String(placement.bausteinid || '')) {
-                        return;
-                    }
-                    const auswahl = this.auswahl(other);
-                    if (auswahl && auswahl.aktiv) {
-                        placed[String(auswahl.aktiv)] = true;
-                    }
-                });
-                const open = planned.filter((card) => !placed[String(card.id)]);
+                const open = this.openPlannedCardsFor(baustein, bausteinid);
                 if (open.length !== 1) {
                     return;
                 }
@@ -4980,25 +5001,14 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (!placeholderpid) {
                 return '';
             }
-            const planningunit = this.planningUnitForBaustein(baustein);
-            const methods = (planningunit && Array.isArray(planningunit.methods) ? planningunit.methods : [])
-                .map((m) => this.methodCardForRef(m && m.methodid))
-                .filter((card) => card);
-            if (!methods.length) {
-                return '';
-            }
-            // Schon in diesem Baustein platzierte Karten herausfiltern.
-            const placed = {};
-            group.items.forEach((item) => {
-                if (this.isUnfilled(item.data)) {
-                    return;
-                }
-                const auswahl = this.auswahl(item.data);
-                if (auswahl && auswahl.aktiv) {
-                    placed[String(auswahl.aktiv)] = true;
-                }
-            });
-            const open = methods.filter((card) => !placed[String(card.id)]);
+            // Schon in diesem Baustein platzierte Karten herausfiltern - ueber
+            // ALLE Tage. Diese Liste prueft nur die Gruppe des angezeigten
+            // Tages, und Bausteine laufen oft ueber mehrere Tage: eine gestern
+            // platzierte Einheit galt hier als offen und wurde erneut
+            // angeboten. Ein Klick haette sie ein zweites Mal in den Plan
+            // gelegt. Was blieb, war nur die Restzeit der Reservierung - und
+            // die ist kein fehlender Inhalt, sondern freie Zeit.
+            const open = this.openPlannedCardsFor(baustein, group.bausteinid);
             if (!open.length) {
                 return '';
             }
