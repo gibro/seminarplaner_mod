@@ -29,6 +29,43 @@
    ohne die betroffenen Komponenten vorher/nachher visuell zu prüfen. Geänderte
    Eigenschaften explizit auf den Zielwert setzen statt nur zu entfernen (die
    aggregierte Theme-CSS kann eine ältere Kopie einer Regel weiter erzwingen).
+
+   --------------------------------------------------------------------------
+   WARUM EINE EIGENSCHAFT HIER NUR NOCH AN EINER STELLE STEHT  (17. Juli 2026)
+   --------------------------------------------------------------------------
+   Die Basis-Blöcke und die CD-Handoff-Schichten haben dieselben Komponenten
+   lange DOPPELT definiert, bei gleicher Spezifität. Das sah nach zwei Ebenen
+   aus, war aber keine: die frühere Deklaration konnte das Ergebnis nie
+   beeinflussen — die spätere gewinnt immer. Sie war schlicht toter Code.
+
+   Der Schaden war real und dreifach belegt (16. Juli): Änderungen am
+   Basis-Block wurden von der CD-Schicht still zurückgedreht (.sq-anchor__head,
+   .sq-baustein, Commit 5ca0441), und eine neue Regel übermalte bei gleicher
+   Spezifität fünf Phasenfarben grau (.sq-phase__dot, 8071ae3). Wer die Datei
+   anfasste, zahlte jedes Mal mit einem Fehler oder einer Suche.
+
+   Am 17. Juli sind daher 311 tote Deklarationen entfernt worden — nur solche,
+   die eine spätere Regel mit demselben (oder einem umfassenderen) Selektorsatz
+   ohnehin überschrieb. Rechnerisch optikneutral, zusätzlich nachgewiesen mit
+   docs/styles-refactor-werkzeug/ (0 Unterschiede über 1.639 Elemente, bei
+   scharfem Kanarienvogel-Gegentest).
+
+   WAS DAS FÜR NEUE ÄNDERUNGEN HEISST: Wenn eine Eigenschaft für einen Selektor
+   nur noch einmal dasteht, ist das kein Versehen und keine Lücke — es ist der
+   Zustand, der verhindert, dass eine Bearbeitung still verpufft. Eine zweite
+   Definition derselben Eigenschaft für denselben Selektor NICHT wieder
+   anlegen; stattdessen den vorhandenen Wert ändern. Neue Werte gehören dorthin,
+   wo die Eigenschaft schon steht.
+
+   Ausnahme, die bewusst bleibt: Gruppenselektoren, von denen nur ein Mitglied
+   später überschrieben wird (z. B. `.sq-goals__summary, …, .sq-gap__summary
+   { list-style: none }`). Die Deklaration lebt dort für die übrigen Mitglieder
+   weiter und darf nicht weg. dup2.py meldet sie trotzdem als KONFLIKT — ein
+   Fehlalarm seines zeilenweisen Lesens, kein offener Punkt.
+
+   Prüfen lässt sich der Zustand mit:
+       python3 docs/styles-refactor-werkzeug/fold.py analyse
+   „0 tote Deklarationen" heißt: die Datei hat keine stille Doppel-Ebene mehr.
    ========================================================================== */
 
 /* CD-Handoff: Tabs als Zeile mit 4px-Unterstrich statt Button-Blöcken. */
@@ -76,21 +113,12 @@
   display: inline-block;
 }
 
-.kg-tab-active {
-  background: transparent;
-  border-bottom-color: var(--ig-red);
-  color: var(--ig-red);
-}
-
 .kg-tab-active .kg-tab-icon {
   opacity: 1;
 }
 
 .kg-shell {
-  border: 1px solid var(--color-border);
   border-radius: 0;
-  background: var(--color-background);
-  padding: 12px;
 }
 
 .kg-input,
@@ -154,8 +182,6 @@ select.kg-input:-moz-focusring {
   min-height: 36px;
   padding: 7px 10px;
   border: 1px solid var(--ig-midgray);
-  background: var(--color-background);
-  color: var(--ig-anthracite);
   border-radius: 0;
   cursor: pointer;
   margin-top: 8px;
@@ -166,12 +192,6 @@ select.kg-input:-moz-focusring {
 .kg-btn:hover {
   border-color: var(--ig-gray);
   background: var(--color-background-light);
-}
-
-.kg-btn-primary {
-  background: var(--ig-red);
-  border-color: var(--ig-red);
-  color: #fff;
 }
 
 .kg-btn-primary:hover {
@@ -202,7 +222,6 @@ select.kg-input:-moz-focusring {
 .kg-row--action .kg-btn {
   margin: 0;
   min-height: 38px;
-  width: 100%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -229,7 +248,6 @@ select.kg-input:-moz-focusring {
 .kg-label {
   display: block;
   margin: 6px 0 4px;
-  font-weight: 600;
 }
 
 .kg-label-content,
@@ -276,10 +294,7 @@ select.kg-input:-moz-focusring {
 }
 
 .kg-ie-block {
-  border: 1px solid var(--color-border);
   border-radius: 0;
-  padding: 10px;
-  background: var(--ig-surface-soft);
 }
 
 .kg-ie-steps {
@@ -294,12 +309,6 @@ select.kg-input:-moz-focusring {
   border-radius: 0;
   border: 1px solid var(--color-border);
   background: var(--color-background-light);
-}
-
-.kg-step-active {
-  border-color: var(--ig-blue);
-  color: var(--ig-blue);
-  background: var(--ig-blue-soft);
 }
 
 /* Wizard-Schrittleiste (Handoff): aktiver Schritt rot mit weisser Ziffernbox,
@@ -503,11 +512,6 @@ select.kg-input:-moz-focusring {
 .kg-ie-hint {
   display: flex;
   gap: 11px;
-  background: #FAFAFA;
-  border: 1px solid #EDEDED;
-  border-left: 3px solid var(--ig-midgray);
-  padding: 12px 13px;
-  margin-bottom: 14px;
 }
 
 .kg-ie-hint__icon {
@@ -763,11 +767,7 @@ select.kg-input:-moz-focusring {
 
 .kg-library-card.sp-card {
   max-width: none;
-  min-height: 180px;
-  height: auto;
-  padding: 12px;
   overflow: visible;
-  background: #fff;
 }
 
 .kg-library-card[draggable="true"] {
@@ -793,8 +793,6 @@ select.kg-input:-moz-focusring {
   content: "";
   position: absolute;
   border-radius: 0;
-  background: var(--ig-blue);
-  box-shadow: 0 0 0 2px var(--ig-blue-soft);
   z-index: 3;
 }
 
@@ -886,12 +884,6 @@ select.kg-input:-moz-focusring {
   grid-row: 2;
 }
 
-.kg-library-card:hover .ml-card-drag-handle,
-.kg-library-card:focus-within .ml-card-drag-handle {
-  color: var(--ig-blue);
-  background: var(--ig-blue-soft);
-}
-
 .ml-card-title strong {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -919,8 +911,6 @@ select.kg-input:-moz-focusring {
 .ml-card-menu-toggle {
   list-style: none;
   border: 0;
-  background: transparent;
-  color: var(--color-text-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -934,10 +924,6 @@ select.kg-input:-moz-focusring {
 
 .ml-card-menu-toggle::-webkit-details-marker {
   display: none;
-}
-
-.ml-card-menu[open] .ml-card-menu-toggle {
-  color: var(--ig-blue);
 }
 
 .ml-card-menu-panel {
@@ -971,11 +957,6 @@ select.kg-input:-moz-focusring {
   cursor: pointer;
 }
 
-.ml-card-menu-btn:hover {
-  border-color: var(--ig-blue);
-  background: var(--ig-blue-soft);
-}
-
 .ml-card-menu-btn-delete {
   color: var(--ig-darkred);
 }
@@ -983,10 +964,6 @@ select.kg-input:-moz-focusring {
 .ml-card-menu-btn-delete:hover {
   border-color: var(--ig-red);
   background: var(--ig-red-soft);
-}
-
-.kg-library-step {
-  margin-bottom: 12px;
 }
 
 .kg-library-step:last-of-type {
@@ -1374,9 +1351,7 @@ select.kg-input:-moz-focusring {
 .sp-wrapper {
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
   --slot-height: 18px;
-  border: 1px solid var(--ig-lightgray);
   border-radius: 0;
-  background: #fff;
   overflow: hidden;
 }
 
@@ -1389,7 +1364,6 @@ select.kg-input:-moz-focusring {
   margin-bottom: 0;
   border-bottom: 1px solid var(--ig-lightgray);
   border-radius: 0;
-  background: var(--ig-surface-soft);
 }
 
 .sp-weekbar__nav {
@@ -1469,8 +1443,6 @@ select.kg-input:-moz-focusring {
 }
 
 .sp-view-switch .kg-btn.is-active {
-  background: var(--ig-blue-soft);
-  color: var(--ig-blue);
   font-weight: 700;
 }
 
@@ -1593,8 +1565,6 @@ select.kg-input:-moz-focusring {
   height: 20px;
   padding: 0 8px;
   border-radius: 0;
-  background: var(--ig-blue-soft);
-  color: var(--ig-blue);
   font-size: 11px;
   font-weight: 600;
 }
@@ -1891,8 +1861,6 @@ select.kg-input:-moz-focusring {
 }
 
 .sp-zoom-coarse .sp-item {
-  margin: 2px 3px;
-  padding: 2px 6px;
   gap: 0;
   min-height: 0;
   overflow: hidden;
@@ -1903,12 +1871,9 @@ select.kg-input:-moz-focusring {
 .sp-zoom-coarse .sp-item .sp-title {
   font-size: 11px;
   line-height: 1.1;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .sp-zoom-coarse .sp-item .sp-meta {
-  font-size: 9px;
   line-height: 1.05;
 }
 
@@ -2004,13 +1969,7 @@ select.kg-input:-moz-focusring {
   box-sizing: border-box;
 }
 
-.sp-unit-method-card:hover {
-  border-color: var(--ig-blue-mid);
-  background: var(--ig-blue-soft);
-}
-
 .sp-unit-method-card:focus-visible {
-  outline: 2px solid var(--ig-blue-mid);
   outline-offset: 1px;
 }
 
@@ -2061,10 +2020,6 @@ select.kg-input:-moz-focusring {
 
 .sp-item--method-clickable {
   cursor: pointer;
-}
-
-.sp-item--method-clickable:hover {
-  box-shadow: 0 0 0 1px var(--ig-blue-mid), var(--shadow-sm);
 }
 
 .sp-item--compact {
@@ -2409,9 +2364,7 @@ body.sp-resizing * {
   display: inline-block;
   font-size: 10px;
   padding: 2px 6px;
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-background);
   margin-left: 6px;
 }
 
@@ -2420,7 +2373,6 @@ body.sp-resizing * {
   padding: 6px 10px;
   border-radius: 0;
   border: 1px solid var(--color-border);
-  background: var(--color-background);
   cursor: pointer;
   transition: var(--transition-fast);
 }
@@ -2510,7 +2462,6 @@ body.sp-resizing * {
 
 .sp-card-description {
   font-size: 11px;
-  color: var(--ig-gray);
   line-height: 1.3;
   margin-top: var(--spacing-xs);
   flex: 1;
@@ -2570,20 +2521,13 @@ body.sp-resizing * {
   border: 1px solid var(--ig-lightgray);
   border-radius: 0;
   background: #fff;
-  color: var(--ig-blue);
   font-size: 11px;
   line-height: 1.2;
   padding: 2px 8px;
   cursor: pointer;
 }
 
-.sp-unit-method-link:hover {
-  background: var(--ig-blue-soft);
-  border-color: var(--ig-blue-mid);
-}
-
 .sp-unit-method-link:focus-visible {
-  outline: 2px solid var(--ig-blue-mid);
   outline-offset: 1px;
 }
 
@@ -2707,7 +2651,6 @@ body.sp-resizing * {
   justify-content: space-between;
   padding: 24px var(--spacing-xl) 20px;
   border-bottom: 2px solid var(--color-border);
-  background: linear-gradient(135deg, var(--ig-surface-soft) 0%, var(--ig-surface-muted) 100%);
   border-radius: 0;
 }
 
@@ -2715,7 +2658,6 @@ body.sp-resizing * {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--ig-anthracite);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2740,11 +2682,9 @@ body.sp-resizing * {
 .sp-modal__close {
   appearance: none;
   border: none;
-  background: transparent;
   font-size: 1.25rem;
   line-height: 1;
   cursor: pointer;
-  color: var(--ig-gray);
   padding: 8px;
   border-radius: 0;
   transition: all 0.2s ease;
@@ -2788,11 +2728,8 @@ body.sp-resizing * {
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  border: 1px solid var(--ig-blue-soft);
   border-radius: 0;
-  background: var(--ig-blue-soft);
   font-size: 12px;
-  color: var(--ig-blue);
 }
 
 .sp-method-detail__section h3 {
@@ -2803,7 +2740,6 @@ body.sp-resizing * {
 .sp-method-detail__text {
   margin: 0;
   line-height: 1.45;
-  color: var(--ig-gray);
 }
 
 .sp-method-detail__text > :first-child {
@@ -2832,7 +2768,6 @@ body.sp-resizing * {
 
 .sp-method-detail__empty {
   margin: 0;
-  color: var(--ig-gray);
 }
 
 .sp-modal__field {
@@ -2843,8 +2778,6 @@ body.sp-resizing * {
 
 .sp-modal__label {
   font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--ig-gray);
   margin: 0 0 8px;
   display: flex;
   align-items: center;
@@ -2860,16 +2793,9 @@ body.sp-resizing * {
   box-shadow: 0 0 0 3px var(--ig-red-soft);
 }
 
-.sp-modal__section:nth-child(even) .sp-modal__label::before {
-  background: var(--ig-blue);
-  box-shadow: 0 0 0 3px var(--ig-blue-soft);
-}
-
 .sp-modal__field input:focus,
 .sp-modal__field select:focus {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(47, 128, 171, .2);
 }
 
 .sp-modal__actions {
@@ -2879,7 +2805,6 @@ body.sp-resizing * {
   margin-top: 24px;
   padding: 20px var(--spacing-xl);
   border-top: 2px solid var(--ig-lightgray);
-  background: linear-gradient(135deg, var(--ig-surface-soft) 0%, var(--ig-surface-muted) 100%);
   position: sticky;
   bottom: 0;
   flex-shrink: 0;
@@ -2892,7 +2817,6 @@ body.sp-resizing * {
   padding: 20px;
   border: 1px solid var(--ig-lightgray);
   border-radius: 0;
-  background: var(--ig-surface-soft);
   transition: all 0.2s ease;
 }
 
@@ -2924,7 +2848,6 @@ body.sp-resizing * {
   padding: 12px 16px;
   border: 2px solid var(--ig-lightgray);
   border-radius: 0;
-  background: #fff;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
@@ -2941,16 +2864,9 @@ body.sp-resizing * {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, var(--ig-blue), var(--ig-blue));
   opacity: 0;
   transition: opacity 0.2s ease;
   border-radius: inherit;
-}
-
-.sp-day-checkbox:hover {
-  border-color: var(--ig-blue);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px var(--ig-blue-soft);
 }
 
 .sp-day-checkbox input[type="checkbox"] {
@@ -2968,12 +2884,6 @@ body.sp-resizing * {
 
 .sp-day-checkbox input[type="checkbox"]:checked + span {
   font-weight: 600;
-  color: #ffffff;
-}
-
-.sp-day-checkbox:has(input:checked) {
-  border-color: var(--ig-blue);
-  background: linear-gradient(135deg, var(--ig-blue), var(--ig-blue));
   color: #ffffff;
 }
 
@@ -3020,13 +2930,10 @@ body.sp-resizing * {
   padding: 16px;
   border: 2px solid var(--ig-lightgray);
   border-radius: 0;
-  background: #ffffff;
   transition: all 0.2s ease;
 }
 
 .sp-break-item:hover {
-  border-color: var(--ig-yellow);
-  box-shadow: 0 4px 12px var(--ig-yellow-soft);
   transform: translateY(-1px);
 }
 
@@ -3099,9 +3006,6 @@ body.sp-resizing * {
   align-items: flex-end;
   overflow: visible;
   margin: var(--spacing-md) 0;
-  padding: var(--spacing-sm);
-  background: var(--ig-surface-soft);
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
 }
 
@@ -3115,7 +3019,6 @@ body.sp-resizing * {
 
 .sp-filter__label {
   font-size: var(--font-size-sm);
-  font-weight: 600;
   color: var(--ig-gray);
 }
 
@@ -3154,12 +3057,6 @@ body.sp-resizing * {
   border-radius: 0;
   background: #fff;
   color: var(--ig-anthracite);
-}
-
-.sp-source-tab.is-active {
-  box-shadow: inset 0 0 0 2px rgba(47, 128, 171, .2);
-  border-color: var(--ig-blue);
-  color: var(--ig-blue);
 }
 
 .sp-tab-panel {
@@ -3277,11 +3174,6 @@ body.sp-resizing * {
   width: 100%;
 }
 
-.sp-unit-slot .sp-unit-method-link {
-  border-left: 3px solid var(--sp-unit-color, var(--ig-blue));
-  padding-left: 10px;
-}
-
 .sp-filterbar .kg-input,
 .sp-filterbar .kg-tag-dropdown-toggle,
 .sp-filterbar .kg-btn {
@@ -3301,7 +3193,6 @@ body.sp-resizing * {
 .sp-filter-status {
   margin: 4px 0 var(--spacing-md);
   font-size: var(--font-size-sm);
-  color: var(--ig-gray);
 }
 
 .sp-zoom-btn {
@@ -3309,17 +3200,12 @@ body.sp-resizing * {
   height: 32px;
   border-radius: var(--radius-full);
   border: 1px solid var(--ig-lightgray);
-  background: var(--color-background);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: var(--spacing-lg);
   cursor: pointer;
   line-height: 1;
-}
-
-.sp-zoom-btn:hover:not(:disabled) {
-  background: var(--ig-surface-muted);
 }
 
 .sp-zoom-btn:disabled {
@@ -3611,15 +3497,6 @@ body.sp-resizing * {
   color: var(--ig-blue);
 }
 
-.kg-btn:focus-visible,
-.sp-btn:focus-visible,
-.sp-zoom-btn:focus-visible,
-.kg-tag-dropdown-toggle:focus-visible,
-.sp-modal__close:focus-visible {
-  outline: 2px solid var(--ig-blue-mid);
-  outline-offset: 2px;
-}
-
 .kg-btn-primary {
   background: var(--ig-red);
   border-color: var(--ig-red);
@@ -3661,11 +3538,6 @@ body.sp-resizing * {
 }
 
 /* Strict IG Metall color overrides for grid UI elements. */
-.kg-step-active {
-  border-color: var(--ig-blue);
-  color: var(--ig-blue);
-  background: rgba(47, 128, 171, .12);
-}
 
 .ml-card-menu-toggle {
   border-color: transparent;
@@ -3674,13 +3546,7 @@ body.sp-resizing * {
 }
 
 .ml-card-menu-toggle:hover {
-  border-color: var(--ig-blue);
-  color: var(--ig-blue);
   background: transparent;
-}
-
-.ml-card-menu-toggle:focus-visible {
-  outline: 2px solid rgba(47, 128, 171, .45);
 }
 
 .sp-modal__header,
@@ -3702,28 +3568,12 @@ body.sp-resizing * {
   color: var(--ig-gray) !important;
 }
 
-.sp-modal__field input:focus,
-.sp-modal__field select:focus {
-  border-color: var(--ig-blue);
-  box-shadow: 0 0 0 3px rgba(47, 128, 171, .2);
-}
-
 .sp-day-checkbox,
 .sp-break-item,
 .sp-modal__section,
 .sp-day-checkbox:has(input:disabled) {
   border-color: var(--color-border);
   background: #fff;
-}
-
-.sp-day-checkbox:hover {
-  border-color: var(--ig-blue);
-  box-shadow: 0 4px 12px rgba(47, 128, 171, .16);
-}
-
-.sp-day-checkbox:has(input:checked) {
-  border-color: var(--ig-blue);
-  background: var(--ig-blue);
 }
 
 .sp-break-item:hover {
@@ -3972,7 +3822,6 @@ body.sp-resizing * {
 }
 
 .sp-slot--over {
-  outline: 2px dashed var(--ig-blue);
   outline-offset: -2px;
 }
 
@@ -4541,8 +4390,6 @@ select.kg-input.rf-select {
 
 /* ---- Seminareinheit / Methoden-Karte ---- */
 .kg-library-card.sp-card {
-  background: #fff;
-  border: 1px solid var(--if-outline-variant);
   border-radius: var(--if-radius);
   padding: 16px;
   height: auto;
@@ -4565,27 +4412,6 @@ select.kg-input.rf-select {
 
 /* Farbcodierung nach kognitiver Dimension (Bloom): farbiger linker Akzent + sanfte Tönung.
    1 Erinnern / 2 Verstehen = Blau · 3 Anwenden = Grün · 4 Analysieren / 5 Bewerten = Gelb · 6 Erschaffen = Rot. */
-.kg-library-card.sp-card.sp-level-1,
-.kg-library-card.sp-card.sp-level-2 {
-  border-left: 4px solid var(--ig-blue);
-  background: var(--ig-blue-soft);
-}
-
-.kg-library-card.sp-card.sp-level-3 {
-  border-left: 4px solid var(--ig-green);
-  background: var(--ig-green-soft);
-}
-
-.kg-library-card.sp-card.sp-level-4,
-.kg-library-card.sp-card.sp-level-5 {
-  border-left: 4px solid var(--ig-yellow);
-  background: var(--ig-yellow-soft);
-}
-
-.kg-library-card.sp-card.sp-level-6 {
-  border-left: 4px solid var(--ig-red);
-  background: var(--ig-red-soft);
-}
 
 /* ---- Mehrfachauswahl / Stapel-Bearbeitung ---- */
 .ml-card-select {
@@ -4605,7 +4431,6 @@ select.kg-input.rf-select {
 }
 
 .kg-library-card--selected {
-  outline: 2px solid var(--ig-blue);
   outline-offset: 2px;
 }
 
@@ -4675,19 +4500,8 @@ select.kg-input.rf-select {
   gap: 4px;
   margin: 0;
   padding: 3px 8px;
-  font-size: 12px;
-  font-weight: 500;
   line-height: 16px;
-  color: var(--if-secondary);
-  background: var(--if-surface-low);
-  border: 1px solid var(--if-outline-variant);
   border-radius: var(--if-radius-sm);
-}
-
-.kg-library-card.sp-card .sp-card-meta .sp-badge--phase {
-  color: var(--if-primary);
-  background: rgba(14, 116, 144, .08);
-  border-color: rgba(14, 116, 144, .25);
 }
 
 .ml-card-tags {
@@ -4700,13 +4514,8 @@ select.kg-input.rf-select {
   display: inline-block;
   padding: 2px 8px;
   font-size: 11px;
-  font-weight: 700;
   line-height: 16px;
-  letter-spacing: .04em;
   text-transform: uppercase;
-  color: var(--if-secondary);
-  background: var(--if-surface-high);
-  border-radius: var(--if-radius-sm);
 }
 
 .kg-library-card.sp-card .sp-card-description {
@@ -4984,11 +4793,7 @@ details[open] > summary .sq-tri,
 /* D45: plan creation/setup panel in the sequence view. */
 .sq-setup {
     margin: 0 0 12px;
-    padding: 12px;
-    border: 1px solid var(--color-border);
     border-radius: 0;
-    background: var(--color-background);
-    max-width: 760px;
 }
 
 .sq-setup .sp-modal__section {
@@ -5023,12 +4828,11 @@ details[open] > summary .sq-tri,
     background: #fff;
     border: 1px solid var(--sq-border);
     border-radius: var(--sq-radius);
-    padding: 10px 14px;
     margin-bottom: 14px;
     box-shadow: var(--sq-shadow);
 }
 .sq-toolbar__nav { display: flex; align-items: center; gap: 8px; }
-.sq-daylabel { font-weight: 600; min-width: 170px; text-align: center; color: var(--sq-text); }
+.sq-daylabel { text-align: center; color: var(--sq-text); }
 /* Handoff-SEQUENZ 3: der Abschnitt ist keine Karte mehr, sondern nur noch ein
    Band ueber der Zeitleiste. Ohne Kasten und Fuellung liest sich der Tag als
    ein durchgehender Fluss statt als zwei gestapelte Container. Damit entfaellt
@@ -5048,10 +4852,6 @@ details[open] > summary .sq-tri,
     gap: 8px;
 }
 .sq-anchor__title {
-    font-family: var(--font-head, inherit);
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: .03em;
     font-size: 15px;
     display: flex;
     align-items: baseline;
@@ -5066,10 +4866,9 @@ details[open] > summary .sq-tri,
     font-size: 12.5px;
 }
 .sq-budget { display: flex; align-items: center; gap: 8px; min-width: 200px; }
-.sq-budget__bar { width: 130px; height: 7px; background: #e1e6ea; border-radius: 0; overflow: hidden; }
+.sq-budget__bar { border-radius: 0; overflow: hidden; }
 .sq-budget__fill { height: 100%; background: var(--sq-accent); }
-.sq-budget__fill--over { background: var(--sq-warn); }
-.sq-budget__label { font-size: 11.5px; color: var(--sq-text-muted); white-space: nowrap; }
+.sq-budget__label { color: var(--sq-text-muted); white-space: nowrap; }
 .sq-anchor__body { padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .sq-empty { color: var(--sq-text-muted); font-size: 12.5px; padding: 4px 2px 4px 76px; }
 
@@ -5110,44 +4909,26 @@ details[open] > summary .sq-tri,
    auf gleicher Ebene wie die Einheiten darin. */
 .sq-row--baustein > .sq-baustein { flex: 1; min-width: 0; }
 .sq-baustein {
-    border: 1.5px dashed #C9A9AD;
     border-radius: var(--sq-radius);
-    background: #FCFAFA;
 }
-.sq-baustein--empty { background: #fff; }
-.sq-baustein--empty .sq-baustein__head { color: var(--sq-text-muted); }
 .sq-baustein__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
     flex-wrap: wrap;
     gap: 6px;
 }
 .sq-baustein__title {
-    font-family: var(--font-head, inherit);
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: .03em;
-    font-size: 15px;
-    color: #882A30;
     display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
 }
 .sq-baustein__units { border-top: 1px solid #E4D3D5; }
-.sq-baustein__units { display: flex; flex-direction: column; gap: 6px; padding: 8px; }
+.sq-baustein__units { display: flex; flex-direction: column; }
 .sq-badge {
-    font-size: 10.5px;
-    background: #e4e9ee;
-    color: var(--sq-text-muted);
     border-radius: 0;
-    padding: 2px 9px;
-    font-weight: 600;
-    letter-spacing: .2px;
 }
-.sq-badge--variant { background: var(--sq-accent-bg); color: var(--sq-accent-dark); }
 /* Handoff-SEQUENZ 3: Zeit-Spalte vor der Einheit. Die Startzeit steht damit
    dort, wo der Blick beim Lesen des Tagesverlaufs ohnehin zuerst hinfaellt —
    frueher hing sie als letztes Badge hinter Dauer und Phase. Feste 64px, damit
@@ -5219,21 +5000,18 @@ details[open] > summary .sq-tri,
 
 .sq-unit {
     display: flex;
-    align-items: center;
-    gap: 10px;
     border: 1px solid var(--sq-border);
     border-radius: 0;
     background: #fff;
-    padding: 8px 10px;
 }
 /* Nur in der Zeitleisten-Zeile fuellt die Karte die Restbreite. Ungescoped
    wuerde flex:1 die Karten in der Migrations-Vorschau (renderIntroSequence)
    vertikal strecken — dort haengt .sq-unit direkt im Spalten-Flex des
    Anker-Bodys, ohne .sq-row dazwischen. */
 .sq-row > .sq-unit { flex: 1; min-width: 0; }
-.sq-unit__phase { width: 5px; align-self: stretch; border-radius: 0; flex: 0 0 5px; background: var(--ig-lightgray); }
+.sq-unit__phase { align-self: stretch; border-radius: 0; background: var(--ig-lightgray); }
 .sq-unit__main { flex: 1; min-width: 0; }
-.sq-unit__title { font-weight: 600; font-size: 12.8px; color: var(--sq-text); }
+.sq-unit__title { font-weight: 600; color: var(--sq-text); }
 .sq-unit__meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 3px; align-items: center; }
 .sq-unit__time { font-size: 11px; color: var(--sq-text-muted); }
 .sq-pause {
@@ -5250,12 +5028,7 @@ details[open] > summary .sq-tri,
 .sq-row > .sq-pause { flex: 1; min-width: 0; }
 .sq-pause__label { font-weight: 600; }
 .sq-overrun {
-    background: var(--sq-warn-bg);
-    border: 1px solid #e8cf9e;
-    color: #6b4a05;
     border-radius: 0;
-    padding: 8px 12px;
-    font-size: 12.5px;
     margin-top: 2px;
 }
 .sq-legend {
@@ -5279,47 +5052,33 @@ details[open] > summary .sq-tri,
    damit im Standard alles in EINER Reihe steht und beim Verkleinern die
    einzelnen Elemente umbrechen statt der ganze Block auf einmal. */
 .sq-toolbar__actions { display: contents; }
-.sq-unit__actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; flex-wrap: wrap; }
+.sq-unit__actions { display: flex; gap: 6px; flex: 0 0 auto; flex-wrap: wrap; }
 .sq-baustein__tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .sq-pause__spacer { flex: 1; }
 .sq-overrun { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .sq-pills { display: flex; gap: 4px; flex-wrap: wrap; }
 .sq-pill {
-    border: 1px solid var(--sq-border-strong);
-    background: #fff;
-    color: var(--sq-text-muted);
     border-radius: 0;
-    padding: 3px 11px;
-    font-size: 11.5px;
     cursor: pointer;
 }
-.sq-pill:hover { border-color: var(--sq-accent); color: var(--sq-accent-dark); }
-.sq-pill.active { background: var(--sq-accent); border-color: var(--sq-accent); color: #fff; font-weight: 600; }
+.sq-pill.active { font-weight: 600; }
 .sq-swap { position: relative; display: inline-block; }
 .sq-swap__chip {
-    border: 1px solid var(--sq-border-strong);
-    background: #fff;
-    color: var(--sq-accent-dark);
     border-radius: 0;
     padding: 3px 9px;
-    font-size: 12px;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 4px;
 }
-.sq-swap__chip:hover { border-color: var(--sq-accent); background: var(--sq-accent-bg); }
 .sq-swap__panel {
     display: none;
     position: absolute;
     top: calc(100% + 4px);
     right: 0;
     background: #fff;
-    border: 1px solid var(--sq-border-strong);
     border-radius: 0;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, .15);
     padding: 6px;
-    min-width: 220px;
     z-index: 20;
 }
 .sq-swap__panel.open { display: block; }
@@ -5443,16 +5202,11 @@ details[open] > summary .sq-tri,
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%) translateY(20px);
-    background: #26313d;
     color: #fff;
-    padding: 9px 16px;
     border-radius: 0;
-    font-size: 12.5px;
     opacity: 0;
     pointer-events: none;
     transition: .25s;
-    z-index: 60;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, .25);
 }
 .sq-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
@@ -5469,22 +5223,21 @@ details[open] > summary .sq-tri,
     overflow: auto;
 }
 .sq-modal-overlay.open { display: flex; }
-.sq-modal { background: #fff; border-radius: 0; max-width: 640px; width: 100%; box-shadow: 0 10px 30px rgba(0, 0, 0, .25); }
+.sq-modal { background: #fff; border-radius: 0; max-width: 640px; width: 100%; }
 .sq-modal__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 18px;
     border-bottom: 1px solid #d7dce2;
 }
-.sq-modal__head h3 { margin: 0; font-size: 15px; }
-.sq-modal__body { padding: 16px 18px; max-height: 70vh; overflow: auto; }
+.sq-modal__head h3 { margin: 0; }
+.sq-modal__body { max-height: 70vh; overflow: auto; }
 .sq-modal__close { border: none; background: transparent; font-size: 18px; cursor: pointer; color: #5b6b79; }
 .sq-modal__footer { padding: 12px 18px; border-top: 1px solid #d7dce2; display: flex; justify-content: flex-end; gap: 8px; }
 .sq-field { margin-bottom: 12px; }
 .sq-field__hint { font-size: 11px; color: #5b6b79; margin-top: 3px; }
 .sq-section { border: 1px solid #d7dce2; border-radius: 0; margin-bottom: 10px; }
-.sq-section summary { padding: 8px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; background: #f6f8fa; }
+.sq-section summary { padding: 8px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
 .sq-section__inner { padding: 12px; }
 .sq-picker { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow-y: auto; }
 /* Quellen-Tabs im „Einheit hinzufügen"-Modal (Lokal · Methodensammlung · Konzept). */
@@ -5684,22 +5437,17 @@ details[open] > summary .sq-tri,
 .sq-drama--visible {
     display: block;
     background: #fff;
-    border: 1px solid #d7dce2;
     border-radius: 0;
-    padding: 12px 14px;
-    box-shadow: 0 1px 2px rgba(20, 30, 40, .06);
     margin-top: 14px;
 }
-.sq-drama h4 { font-size: 13px; margin: 0 0 8px; }
-.sq-drama__item { display: flex; gap: 8px; font-size: 12.5px; align-items: flex-start; padding: 6px 8px; border-radius: 0; margin-bottom: 4px; }
-.sq-drama__item--ok { background: #e8f5ee; color: #215a3b; }
-.sq-drama__item--hint { background: #fbf1e2; color: #6b4a05; }
+.sq-drama h4 { margin: 0 0 8px; }
+.sq-drama__item { display: flex; gap: 8px; align-items: flex-start; border-radius: 0; }
 .sq-drama__icon { flex: 0 0 auto; }
 
 /* === Block 3: Vorschlaege in der Luecke (D14/D41) === */
-.sq-gap { border: 1px dashed #b9c1cb; border-radius: 0; background: #fff; padding: 10px 12px; }
-.sq-suggest { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.sq-suggest__card { border: 1px solid #d7dce2; border-radius: 0; background: #fbfcfd; padding: 8px 10px; width: 240px; display: flex; flex-direction: column; gap: 4px; }
+.sq-gap { border: 1px dashed #b9c1cb; border-radius: 0; background: #fff; }
+.sq-suggest { display: flex; flex-wrap: wrap; margin-bottom: 8px; }
+.sq-suggest__card { border-radius: 0; display: flex; flex-direction: column; gap: 4px; }
 /* Begründung auf 2 Zeilen begrenzen, damit alle Karten gleich hoch bleiben. */
 .sq-suggest__why { font-size: 11px; color: #5b6b79; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 /* Titel ebenfalls auf 2 Zeilen begrenzen (gleiche Kartenhöhe). */
@@ -5958,9 +5706,6 @@ details[open] > summary .sq-tri,
 
 #sq-prev-day,
 #sq-next-day {
-    width: 34px;
-    height: 34px;
-    min-height: 34px;
     padding: 0;
     display: inline-flex;
     align-items: center;
@@ -6191,7 +5936,6 @@ details[open] > summary .sq-tri,
 /* ---- Lücke mit Vorschlägen ---- */
 .sq-gap {
     border-color: var(--ig-midgray);
-    padding: 12px;
 }
 
 .sq-suggest {
@@ -7986,7 +7730,6 @@ details.sq-menu[open] > summary.sq-menu__btn {
   border-color: var(--ig-gray);
   color: #4a4a4a;
 }
-
 
 /* =========================================================
    BUTTONS – die eine massgebliche Stelle (14. Juli 2026)
