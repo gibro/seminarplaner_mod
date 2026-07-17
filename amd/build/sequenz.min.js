@@ -3159,6 +3159,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 return;
             }
             placement.titel = titel;
+            // Eine ueber die Mittagspause geteilte Einheit ist EINE Einheit in
+            // zwei Teilen: splitPlacement kopiert den Titel in die Fortsetzung
+            // (cont.titel = origin.titel), beide Teile tragen dasselbe
+            // splitgroup-Kennzeichen. Ohne das hier hiesse der eine Teil neu und
+            // der andere weiter alt — dieselbe Einheit mit zwei Namen.
+            const geteilt = this.renameSplitGroup(placement, titel);
             // Die aktive Karte hinter der Platzierung mitziehen (fehlt bei einer
             // noch unbefuellten Reservierung — dann bleibt es beim Plan-Titel).
             const auswahl = this.auswahl(placement);
@@ -3166,7 +3172,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             this.setDirty(true);
             this.render();
             if (!card) {
-                this.toast('Titel geändert.');
+                this.toast(geteilt > 1 ? 'Titel geändert – in beiden Teilen.' : 'Titel geändert.');
                 return;
             }
             card.titel = titel;
@@ -3180,6 +3186,24 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             }).catch(() => {
                 this.setStatus('Der Titel konnte in der Bibliothek nicht gespeichert werden.', true);
             });
+        }
+
+        // Alle Teile einer geteilten Einheit auf denselben Titel bringen.
+        // -> Anzahl der betroffenen Teile (1 = war nicht geteilt).
+        renameSplitGroup(placement, titel) {
+            const gruppe = placement.splitgroup;
+            if (!gruppe) {
+                return 1;
+            }
+            const plat = (this.sequenz && this.sequenz.platzierungen) || {};
+            let n = 0;
+            Object.keys(plat).forEach((pid) => {
+                if (plat[pid] && String(plat[pid].splitgroup || '') === String(gruppe)) {
+                    plat[pid].titel = titel;
+                    n++;
+                }
+            });
+            return n || 1;
         }
 
         // Baustein-Titel direkt in der Sequenz (17. Juli 2026). Alle
