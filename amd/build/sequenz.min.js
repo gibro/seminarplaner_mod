@@ -4586,16 +4586,28 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         }
 
         // D43-Nachlese: Die Migration legt fuer jeden Baustein des alten Plans
-        // eine Reservierung an, fuellt sie aber nicht - welche Einheit dort
-        // steht, sagt erst der Themenplan. Nennt der GENAU EINE noch nirgends
-        // platzierte Einheit, ist das keine Entscheidung, sondern eine
-        // Abschrift: der alte Plan hat sie laengst getroffen. Die fuellen wir
-        // selbst, statt dafuer einen "Platzieren"-Klick zu verlangen.
+        // eine Reservierung an, fuellt sie aber nicht - welche Einheiten dort
+        // stehen, sagt erst der Themenplan. Der nennt keine Auswahl, sondern
+        // die Einheiten, die zu diesem Baustein GEHOEREN. Sie alle einzeln per
+        // "Platzieren" anklicken zu lassen, ist Handarbeit fuer eine
+        // Entscheidung, die der alte Plan laengst getroffen hat - also legen
+        // wir sie selbst hinein, in Themenplan-Reihenfolge.
         //
-        // Bewusst NICHT automatisch: mehrere offene Kandidaten (das waere eine
-        // echte Wahl - der Button bleibt) und gar keine (der alte Plan hat die
-        // Zeit reserviert und nie gesagt, was hineinkommt - da gibt es nichts
-        // abzuschreiben, die Reservierung bleibt sichtbar offen).
+        // Die Reservierung wird dafuer auf die Summe der Dauern gesetzt, damit
+        // addCardToBaustein sie Stueck fuer Stueck aufbraucht und am Ende
+        // sauber verschwindet (sonst loescht sie sich nach der ersten Einheit
+        // selbst, und der Rest faende kein Ziel mehr).
+        //
+        // Ist die Summe groesser als die urspruenglich reservierte Zeit, laeuft
+        // der Anker ueber. Das ist Absicht (Auftraggeber-Entscheidung): Dass
+        // der alte Plan mehr vorgesehen hat, als in seine eigene Zeit passt,
+        // ist eine echte Aussage ueber diesen Plan - die soll sichtbar werden,
+        // statt stillschweigend weggerechnet zu werden. Die vorhandene
+        // Ueberlauf-Behandlung greift wie bei jeder anderen vollen Anker-Zeit.
+        //
+        // Ohne vorgesehene Einheit bleibt die Reservierung offen stehen: Dann
+        // hat der alte Plan Zeit reserviert und nie gesagt, was hineinkommt -
+        // da gibt es nichts abzuschreiben, was wir nicht erfinden muessten.
         autoFillObviousReservations() {
             let changed = false;
             Object.keys(this.sequenz.platzierungen || {}).forEach((pid) => {
@@ -4609,10 +4621,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     return;
                 }
                 const open = this.openPlannedCardsFor(baustein, bausteinid);
-                if (open.length !== 1) {
+                if (!open.length) {
                     return;
                 }
-                this.addCardToBaustein(String(open[0].id), pid, true);
+                placement.dauer = open.reduce((sum, card) => sum + (this.cardDuration(card) || 15), 0);
+                open.forEach((card) => {
+                    this.addCardToBaustein(String(card.id), pid, true);
+                });
                 changed = true;
             });
 
