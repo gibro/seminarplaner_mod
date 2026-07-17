@@ -411,6 +411,85 @@ class api extends external_api {
     }
 
     /**
+     * Load the material filenames of global methods.
+     *
+     * Only the names are read - unlike load_global_method_material_attachments(), which
+     * base64-encodes every file content and is far too heavy for comparing a whole set.
+     *
+     * @param int[] $methodids Global method ids.
+     * @return array<int, array<int, array{name: string}>> methodid => name descriptors
+     */
+    private static function load_global_method_material_names(array $methodids): array {
+        global $DB;
+
+        $methodids = array_values(array_unique(array_map('intval', $methodids)));
+        if (!$methodids) {
+            return [];
+        }
+
+        list($insql, $params) = $DB->get_in_or_equal($methodids, SQL_PARAMS_NAMED);
+        $links = $DB->get_records_select('local_kgen_method_file',
+            "methodid {$insql} AND kind = :kind",
+            $params + ['kind' => 'material']);
+        if (!$links) {
+            return [];
+        }
+
+        $methodsbyitem = [];
+        foreach ($links as $link) {
+            $methodsbyitem[(int)$link->fileitemid][] = (int)$link->methodid;
+        }
+        $itemids = array_values(array_filter(array_keys($methodsbyitem)));
+        if (!$itemids) {
+            return [];
+        }
+
+        list($iteminsql, $itemparams) = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
+        $records = $DB->get_records_select('files',
+            "itemid {$iteminsql}
+                 AND component = :component
+                 AND filearea = :filearea
+                 AND filename <> :dot
+                 AND filesize > 0",
+            $itemparams + [
+                'component' => 'local_seminarplaner',
+                'filearea' => 'method_material',
+                'dot' => '.',
+            ]);
+
+        $out = [];
+        foreach ($records as $record) {
+            $name = trim((string)$record->filename);
+            if ($name === '') {
+                continue;
+            }
+            foreach ($methodsbyitem[(int)$record->itemid] ?? [] as $methodid) {
+                $out[$methodid][] = ['name' => $name];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Build the comparison key for a seminar unit's material attachments.
+     *
+     * @param array $method Method card payload.
+     * @return string Sorted filenames, empty string when there are none.
+     */
+    private static function method_material_key(array $method): string {
+        $names = [];
+        foreach ((array)($method['materialien'] ?? []) as $entry) {
+            $name = is_array($entry) ? trim((string)($entry['name'] ?? '')) : trim((string)$entry);
+            if ($name !== '') {
+                $names[] = $name;
+            }
+        }
+        $names = array_values(array_unique($names));
+        sort($names);
+        return implode('||', $names);
+    }
+
+    /**
      * Load current methods of a global method set as title-indexed records.
      *
      * @param int $methodsetid Method set id.
@@ -436,14 +515,23 @@ class api extends external_api {
             $rows = $DB->get_records('local_kgen_method', ['methodsetid' => (int)$set->id]);
         }
 
+        // map_global_method_record() leaves 'materialien' empty; without the real
+        // attachments every comparison against an activity unit would report the files
+        // as a difference.
+        $attachments = self::load_global_method_material_names(array_map(static function($row) {
+            return (int)$row->id;
+        }, array_values($rows)));
+
         $out = [];
         foreach ($rows as $row) {
             $title = trim((string)($row->title ?? ''));
             if ($title === '') {
                 continue;
             }
-            $out[self::normalize_method_title($title)] = self::map_global_method_record($row,
+            $mapped = self::map_global_method_record($row,
                 (int)$set->id, (int)($row->methodsetversionid ?? $set->currentversion ?? 0));
+            $mapped['materialien'] = $attachments[(int)$row->id] ?? [];
+            $out[self::normalize_method_title($title)] = $mapped;
         }
         return $out;
     }
@@ -494,6 +582,14 @@ class api extends external_api {
             if ($normalize($base[$field] ?? '') !== $normalize($candidate[$field] ?? '')) {
                 $changed[] = $label;
             }
+        }
+        // Attachments are part of a seminar unit: adding a handout to a unit whose text
+        // is unchanged is exactly the case this review path exists for. Compared by
+        // filename, since the descriptors differ between activity and set storage.
+        // H5P stays out on purpose - submitting never carries it into the set, so a
+        // difference there could never be resolved.
+        if (self::method_material_key($base) !== self::method_material_key($candidate)) {
+            $changed[] = 'Materialien';
         }
         return $changed;
     }
