@@ -2376,6 +2376,114 @@ function(Ajax, Notification, LernzielEditor) {
         });
     };
 
+    // --- Bereichsübergreifende Suche -------------------------------------
+    // Die Suche in der Filterleiste bleibt auf den aktiven Tab beschränkt.
+    // Diese hier sucht in allen drei Bereichen gleichzeitig und zeigt die
+    // Treffer in einer gemeinsamen Liste, jeder mit seinem Herkunfts-Badge.
+
+    const ALLSEARCH_HIDDEN_WHILE_SEARCHING = ['.ml-subtabs', '#ml-filter-block', '#ml-list-block', '#ml-bulk-toolbar'];
+
+    const allSearchHaystack = (m, extra) => [
+        m.titel, m.kurzbeschreibung,
+        Array.isArray(m.tags) ? m.tags.join(' ') : m.tags,
+        joinMulti(m.seminarphase), m.gruppengroesse, m.zeitbedarf, extra || ''
+    ].join(' ').toLowerCase();
+
+    const collectAllSearchHits = (needle) => {
+        const hits = [];
+        methods.forEach((m) => {
+            if (allSearchHaystack(m).includes(needle)) {
+                hits.push({
+                    kind: isKonzeptCard(m) ? 'konzept' : 'lokal',
+                    badge: isKonzeptCard(m) ? konzeptNameFor(konzeptSetIdOf(m)) : 'Lokale Seminareinheit',
+                    id: String(m.id),
+                    titel: String(m.titel || ''),
+                    kurz: String(m.kurzbeschreibung || ''),
+                });
+            }
+        });
+        globalMethods.forEach((g) => {
+            if (allSearchHaystack(g, g.setname).includes(needle)) {
+                hits.push({
+                    kind: 'sammlung',
+                    badge: g.setname ? `Methodensammlung: ${g.setname}` : 'Methodensammlung',
+                    id: String(g.methodid),
+                    titel: String(g.titel || ''),
+                    kurz: String(g.kurzbeschreibung || ''),
+                });
+            }
+        });
+
+        return hits;
+    };
+
+    const renderAllSearch = (cmid) => {
+        const input = bySel('#ml-allsearch');
+        const block = bySel('#ml-allsearch-block');
+        const host = bySel('#ml-allsearch-list');
+        if (!input || !block || !host) {
+            return;
+        }
+        const needle = normalize(input.value);
+        const searching = needle.length > 0;
+
+        block.classList.toggle('kg-hidden', !searching);
+        ALLSEARCH_HIDDEN_WHILE_SEARCHING.forEach((sel) => {
+            const node = bySel(sel);
+            if (node) {
+                node.classList.toggle('kg-hidden', searching);
+            }
+        });
+        if (!searching) {
+            host.innerHTML = '';
+            return;
+        }
+
+        const hits = collectAllSearchHits(needle);
+        const status = bySel('#ml-allsearch-status');
+        if (status) {
+            status.textContent = hits.length
+                ? `${hits.length} ${hits.length === 1 ? 'Treffer' : 'Treffer'} in allen Bereichen.`
+                : 'Keine Seminareinheit gefunden.';
+        }
+        host.innerHTML = hits.map((hit) => {
+            // Methodensammlungen sind noch nicht im eigenen Bestand - sie
+            // werden übernommen, nicht bearbeitet.
+            const action = hit.kind === 'sammlung'
+                ? `<button type="button" class="kg-btn" data-allsearch-adopt="${escapeHtml(hit.id)}">Übernehmen</button>`
+                : `<button type="button" class="kg-btn" data-allsearch-edit="${escapeHtml(hit.id)}">Bearbeiten</button>`;
+            return `<div class="ml-allsearch-row">
+                <div class="ml-allsearch-row__main">
+                  <div class="ml-allsearch-row__title">${escapeHtml(hit.titel)}</div>
+                  ${hit.kurz ? `<div class="ml-allsearch-row__sub">${escapeHtml(hit.kurz)}</div>` : ''}
+                  <span class="ml-allsearch-row__badge ml-allsearch-row__badge--${hit.kind}">${escapeHtml(hit.badge)}</span>
+                </div>
+                ${action}
+              </div>`;
+        }).join('');
+    };
+
+    const bindAllSearch = (cmid) => {
+        const input = bySel('#ml-allsearch');
+        const host = bySel('#ml-allsearch-list');
+        if (input) {
+            input.addEventListener('input', () => renderAllSearch(cmid));
+        }
+        if (host) {
+            host.addEventListener('click', (event) => {
+                const edit = event.target.closest('[data-allsearch-edit]');
+                if (edit) {
+                    openEditor(edit.getAttribute('data-allsearch-edit'));
+                    return;
+                }
+                const adopt = event.target.closest('[data-allsearch-adopt]');
+                if (adopt) {
+                    adoptGlobalMethod(cmid, Number.parseInt(adopt.getAttribute('data-allsearch-adopt'), 10), adopt);
+                }
+            });
+        }
+    };
+
     const initGlobalLibrary = (cmid) => {
         const section = bySel('#gl-section');
         if (!section) {
@@ -2540,10 +2648,11 @@ function(Ajax, Notification, LernzielEditor) {
             }
             libraryScope = name;
             // Eine hier angelegte Einheit gehörte zu keinem Konzept - der
-            // Anlegen-Button bleibt deshalb dem lokalen Tab vorbehalten.
-            const createrow = bySel('#ml-create-row');
-            if (createrow) {
-                createrow.classList.toggle('kg-hidden', name === 'concepts');
+            // Anlegen-Button bleibt deshalb dem lokalen Tab vorbehalten. Die
+            // Suche daneben gilt für alle Bereiche und bleibt stehen.
+            const createbtn = bySel('#ml-create-open');
+            if (createbtn) {
+                createbtn.classList.toggle('kg-hidden', name === 'concepts');
             }
             // Der Herkunftsfilter zählt nur im Konzept-Tab; beim Verlassen
             // zurücksetzen, sonst filtert er unsichtbar weiter.
@@ -2579,6 +2688,7 @@ function(Ajax, Notification, LernzielEditor) {
             bindBulkSelectionUI(cmid);
             refreshEditAlternativeOptions('');
             initGlobalLibrary(cmid);
+            bindAllSearch(cmid);
             bindSubtabs(cmid);
 
             const addbtn = bySel('#kg-add-method');

@@ -108,9 +108,23 @@ echo html_writer::tag('button', get_string('bibliothek_create', 'mod_seminarplan
     'id' => 'ml-create-open',
     'class' => 'kg-btn kg-btn-primary',
 ]);
+// Sucht über alle drei Bereiche auf einmal - die Suche in der Filterleiste
+// darunter bleibt auf den aktiven Tab beschränkt. Solange hier etwas steht,
+// treten die Tabs samt Filterleiste zurück und es zählt nur die Trefferliste.
+echo '<label class="sp-filter ml-allsearch"><span class="sp-filter__label">Alle Bereiche durchsuchen</span>'
+    . '<input id="ml-allsearch" class="kg-input" type="search" '
+    . 'placeholder="Titel, Beschreibung, Tags – lokal, Methodensammlung und Konzepte"></label>';
 echo html_writer::end_div();
 
-echo html_writer::start_div('kg-ie-block kg-library-step');
+// Trefferliste der bereichsübergreifenden Suche. Liegt bewusst innerhalb von
+// #ml-browse, damit sie mit dem Block in den aktiven Tab wandert.
+echo html_writer::start_div('kg-ie-block kg-library-step kg-hidden', ['id' => 'ml-allsearch-block']);
+echo html_writer::tag('h4', 'Treffer in allen Bereichen');
+echo html_writer::tag('div', '', ['id' => 'ml-allsearch-status', 'class' => 'sp-filter-status']);
+echo html_writer::tag('div', '', ['id' => 'ml-allsearch-list', 'class' => 'kg-library-list']);
+echo html_writer::end_div();
+
+echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'ml-filter-block']);
 echo html_writer::tag('h4', 'Seminareinheit suchen');
 echo html_writer::start_div('sp-filterbar');
 
@@ -176,7 +190,7 @@ echo html_writer::end_div();
 echo html_writer::tag('div', '', ['id' => 'ml-filter-status', 'class' => 'sp-filter-status']);
 echo html_writer::end_div();
 
-echo html_writer::start_div('kg-ie-block kg-library-step');
+echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'ml-list-block']);
 echo html_writer::tag('h4', 'Seminareinheit auswählen');
 echo html_writer::tag('div', '', ['id' => 'ml-method-list', 'class' => 'kg-library-list']);
 echo html_writer::end_div();
