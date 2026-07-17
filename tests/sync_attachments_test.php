@@ -110,7 +110,15 @@ final class mod_seminarplaner_sync_attachments_test extends advanced_testcase {
     private function attach_to_set_unit(int $globalmethodid, string $filename): void {
         global $DB;
 
-        $itemid = $globalmethodid + 700000;
+        // One link per method carrying all its files, the way the importer stores them -
+        // a second link on the same itemid would list every file twice.
+        $itemid = (int)$DB->get_field('local_kgen_method_file', 'fileitemid',
+            ['methodid' => $globalmethodid, 'kind' => 'material'], IGNORE_MULTIPLE);
+        $isnewlink = ($itemid <= 0);
+        if ($isnewlink) {
+            $itemid = $globalmethodid + 700000;
+        }
+
         get_file_storage()->create_file_from_string((object)[
             'contextid' => (int)context_system::instance()->id,
             'component' => 'local_seminarplaner',
@@ -120,12 +128,15 @@ final class mod_seminarplaner_sync_attachments_test extends advanced_testcase {
             'filename' => $filename,
             'userid' => 2,
         ], 'inhalt von ' . $filename);
-        $DB->insert_record('local_kgen_method_file', (object)[
-            'methodid' => $globalmethodid,
-            'kind' => 'material',
-            'fileitemid' => $itemid,
-            'timecreated' => time(),
-        ]);
+
+        if ($isnewlink) {
+            $DB->insert_record('local_kgen_method_file', (object)[
+                'methodid' => $globalmethodid,
+                'kind' => 'material',
+                'fileitemid' => $itemid,
+                'timecreated' => time(),
+            ]);
+        }
     }
 
     /**
