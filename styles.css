@@ -5266,6 +5266,19 @@ details[open] > summary .sq-tri,
     border-radius: 0;
     padding: 8px 10px;
 }
+/* Warnung, wenn ein Seminarkonzept nicht entfernt werden kann, weil seine
+   Einheiten noch in Plänen liegen. Steht an der Karte statt in einem Dialog:
+   die genannten Stellen muss man beim Aufräumen ablesen können. */
+.ml-konzept-card__warn {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--sq-border-strong, #b8c0cc);
+    border-left-width: 3px;
+    font-size: 13px;
+}
+.ml-konzept-card__warn ul { margin: 6px 0; padding-left: 20px; }
+.ml-konzept-card__warn li { margin: 2px 0; }
+
 /* Bereichsübergreifende Suche der Bibliothek: eine gemeinsame Trefferliste
    über lokale Einheiten, Methodensammlung und Konzepte. Das Badge sagt, aus
    welchem Bereich ein Treffer stammt - ohne es waeren die Zeilen nicht

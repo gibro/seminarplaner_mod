@@ -1301,6 +1301,152 @@ class api extends external_api {
         ]);
     }
 
+    public static function delete_imported_konzept_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'setid' => new external_value(PARAM_INT, 'Source global set id of the imported concept'),
+        ]);
+    }
+
+    /**
+     * Remove an imported Seminarkonzept from this activity: its units and the
+     * marker that puts it into the library's concept tab.
+     *
+     * Refuses while any of its units is still placed in a plan. Deleting them
+     * would leave the plan pointing at units that no longer exist - the entry
+     * would silently turn into an empty reservation, and the day would look
+     * planned while its content is gone. The caller gets the concrete places
+     * back (plan and day) so the user can clear them first.
+     *
+     * The plan a concept may have created on import is NOT touched: it is an
+     * independent plan the user may have worked on, and it has its own delete.
+     *
+     * @param int $cmid
+     * @param int $setid
+     * @return array
+     */
+    public static function delete_imported_konzept(int $cmid, int $setid): array {
+        $params = self::validate_parameters(self::delete_imported_konzept_parameters(), [
+            'cmid' => $cmid,
+            'setid' => $setid,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managemethods', $resolved['context']);
+        self::enforce_write_rate_limit('delete_imported_konzept', 20, 60);
+
+        $setid = (int)$params['setid'];
+        $actorid = (int)$GLOBALS['USER']->id;
+        $service = new method_card_service();
+        $existing = $service->get_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id);
+        if (!is_array($existing)) {
+            $existing = [];
+        }
+
+        $cardids = [];
+        foreach ($existing as $card) {
+            if (is_array($card) && (int)($card['_kgkonzept']['setid'] ?? 0) === $setid) {
+                $cardids[(string)$card['id']] = true;
+            }
+        }
+
+        $usages = self::find_konzept_card_usages($resolved, $actorid, $cardids);
+        if ($usages) {
+            return ['deleted' => false, 'removedcount' => 0, 'usages' => $usages];
+        }
+
+        $remaining = [];
+        foreach ($existing as $card) {
+            if (!is_array($card) || !isset($cardids[(string)($card['id'] ?? '')])) {
+                $remaining[] = $card;
+            }
+        }
+        $service->save_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id, $remaining);
+
+        // Marker entfernen - danach steht das Konzept im Import/Export-Tab
+        // wieder zum Import bereit.
+        $configname = 'imported_konzepte_cmid_' . (int)$resolved['cm']->id;
+        $raw = get_config('mod_seminarplaner', $configname);
+        $list = ($raw !== false && $raw !== null && $raw !== '') ? json_decode((string)$raw, true) : [];
+        $kept = [];
+        foreach ((is_array($list) ? $list : []) as $entry) {
+            if (is_array($entry) && (int)($entry['setid'] ?? 0) !== $setid) {
+                $kept[] = $entry;
+            }
+        }
+        set_config($configname, json_encode(array_values($kept)), 'mod_seminarplaner');
+
+        return ['deleted' => true, 'removedcount' => count($cardids), 'usages' => []];
+    }
+
+    /**
+     * Find every place where one of the given cards is actively placed.
+     *
+     * Walks the days in plan order so the reported places read the way the
+     * user sees them. Only the active choice counts as "in use" - a card that
+     * merely sits in an Einheiten-Auswahl as an alternative is not on any day.
+     *
+     * @param array $resolved Resolved cm/course/context.
+     * @param int $userid Whose plans to look at.
+     * @param array<string,bool> $cardids Card ids to look for, as a lookup map.
+     * @return array List of usages (plan name, day, unit title).
+     */
+    private static function find_konzept_card_usages(array $resolved, int $userid, array $cardids): array {
+        if (!$cardids) {
+            return [];
+        }
+
+        $statekey = \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY;
+        $gridservice = new grid_service();
+        $usages = [];
+        foreach ($gridservice->list_grids((int)$resolved['cm']->id) as $grid) {
+            $loaded = $gridservice->get_user_state((int)$grid->id, $userid);
+            $state = is_array($loaded) && is_array($loaded['state'] ?? null) ? $loaded['state'] : [];
+            $sequenz = is_array($state[$statekey] ?? null) ? $state[$statekey] : [];
+            $placements = is_array($sequenz['platzierungen'] ?? null) ? $sequenz['platzierungen'] : [];
+            $auswahlen = is_array($sequenz['einheitenauswahlen'] ?? null) ? $sequenz['einheitenauswahlen'] : [];
+
+            foreach ((is_array($sequenz['tage'] ?? null) ? $sequenz['tage'] : []) as $tag) {
+                if (!is_array($tag)) {
+                    continue;
+                }
+                foreach ((is_array($tag['anker'] ?? null) ? $tag['anker'] : []) as $anker) {
+                    foreach ((is_array($anker['sequenz'] ?? null) ? $anker['sequenz'] : []) as $pid) {
+                        $placement = $placements[(string)$pid] ?? null;
+                        if (!is_array($placement) || (string)($placement['typ'] ?? '') !== 'einheit') {
+                            continue;
+                        }
+                        $auswahl = $auswahlen[(string)($placement['einheitenauswahl'] ?? '')] ?? null;
+                        $aktiv = is_array($auswahl) ? (string)($auswahl['aktiv'] ?? '') : '';
+                        if ($aktiv === '' || !isset($cardids[$aktiv])) {
+                            continue;
+                        }
+                        $usages[] = [
+                            'planname' => (string)$grid->name,
+                            'tag' => (int)($tag['tag'] ?? 0),
+                            'tagbezeichnung' => (string)($tag['bezeichnung'] ?? ''),
+                            'einheit' => (string)($placement['titel'] ?? ''),
+                        ];
+                    }
+                }
+            }
+        }
+
+        return $usages;
+    }
+
+    public static function delete_imported_konzept_returns(): external_single_structure {
+        return new external_single_structure([
+            'deleted' => new external_value(PARAM_BOOL, 'Whether the concept was removed'),
+            'removedcount' => new external_value(PARAM_INT, 'Number of units removed'),
+            'usages' => new external_multiple_structure(new external_single_structure([
+                'planname' => new external_value(PARAM_TEXT, 'Plan the unit is placed in'),
+                'tag' => new external_value(PARAM_INT, 'Day number within that plan'),
+                'tagbezeichnung' => new external_value(PARAM_TEXT, 'Day label'),
+                'einheit' => new external_value(PARAM_TEXT, 'Title of the placed unit'),
+            ])),
+        ]);
+    }
+
     public static function adopt_global_method_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),

@@ -652,11 +652,23 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
         if (!select) {
             return Promise.resolve();
         }
-        return asCall('mod_seminarplaner_list_global_methodsets', {cmid}).then((res) => {
+        // Schon importierte Konzepte gehören nicht mehr in die Auswahl - sonst
+        // holt ein zweiter Klick dieselben Einheiten ein zweites Mal in den
+        // Bestand. Entfernt man ein Konzept in der Bibliothek wieder, steht es
+        // hier automatisch erneut bereit.
+        return Promise.all([
+            asCall('mod_seminarplaner_list_global_methodsets', {cmid}),
+            asCall('mod_seminarplaner_list_imported_konzepte', {cmid}).catch(() => ({konzepte: []})),
+        ]).then(([res, imported]) => {
             const all = Array.isArray(res.methodsets) ? res.methodsets : [];
+            const importedids = new Set(
+                (Array.isArray(imported && imported.konzepte) ? imported.konzepte : [])
+                    .map((k) => Number(k.setid) || 0)
+            );
             // D55: Hier werden nur globale Seminarkonzepte importiert. Methoden-
             // Sammlungen sind ohne Import jederzeit in der Bibliothek durchsuchbar.
-            globalMethodsets = all.filter((set) => String(set.typ) === 'seminarkonzept');
+            const konzepte = all.filter((set) => String(set.typ) === 'seminarkonzept');
+            globalMethodsets = konzepte.filter((set) => !importedids.has(Number(set.id)));
             select.innerHTML = '<option value="">Bitte wählen</option>';
             globalMethodsets.forEach((set) => {
                 const opt = document.createElement('option');
@@ -664,14 +676,21 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
                 opt.textContent = String(set.displayname);
                 select.appendChild(opt);
             });
+            const alreadycount = konzepte.length - globalMethodsets.length;
+            const alreadynote = alreadycount
+                ? ` ${alreadycount} bereits übernommene ${alreadycount === 1 ? 'ist' : 'sind'} ausgeblendet – `
+                    + `entfernen kannst du sie im Tab „Bibliothek" unter „Globale Seminarkonzepte".`
+                : '';
             if (res.available === false) {
                 setGlobalStatus(res.message || 'Local-Plugin nicht verfügbar.', true);
             } else if (res.message) {
                 setGlobalStatus(res.message, true);
             } else if (!globalMethodsets.length) {
-                setGlobalStatus('Keine veröffentlichten globalen Seminarkonzepte gefunden.', false);
+                setGlobalStatus(alreadycount
+                    ? `Alle verfügbaren globalen Seminarkonzepte sind bereits übernommen.${alreadynote}`
+                    : 'Keine veröffentlichten globalen Seminarkonzepte gefunden.', false);
             } else {
-                setGlobalStatus(`${globalMethodsets.length} globale Seminarkonzepte verfügbar.`, false);
+                setGlobalStatus(`${globalMethodsets.length} globale Seminarkonzepte verfügbar.${alreadynote}`, false);
             }
         }).catch((e) => {
             setGlobalStatus(`Globale Seminarkonzepte konnten nicht geladen werden: ${e.message || e}`, true);
@@ -2475,7 +2494,13 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
                 }
                 asCall('mod_seminarplaner_import_global_methodset', {cmid, methodsetid: setid})
                     .then((res) => {
-                        return Promise.all([loadMethods(cmid), loadGlobalSyncStatus(cmid)]).then(() => res);
+                        // loadGlobalMethodsets neu: das eben uebernommene
+                        // Konzept faellt damit aus der Auswahl.
+                        return Promise.all([
+                            loadMethods(cmid),
+                            loadGlobalSyncStatus(cmid),
+                            loadGlobalMethodsets(cmid),
+                        ]).then(() => res);
                     })
                     .then((res) => {
                         refreshGlobalSyncUi();

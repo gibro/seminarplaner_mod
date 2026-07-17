@@ -513,7 +513,7 @@ echo html_writer::end_div(); // Ende Tab 2 (#ml-tab-collections).
 // importiertes Konzept).
 if ($hasimportedkonzepte) {
     echo html_writer::start_div('ml-tabpanel kg-hidden', ['id' => 'ml-tab-concepts', 'role' => 'tabpanel']);
-    echo html_writer::start_div('kg-ie-block kg-library-step');
+    echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'ml-konzepte-block']);
     echo html_writer::tag('h4', 'Globale Seminarkonzepte');
     echo html_writer::tag('p', 'Die Seminareinheiten aus den Seminarkonzepten, die du bereits in deinen '
         . 'Bestand geholt hast. Es sind eigenständige lokale Kopien – du kannst sie hier genauso '

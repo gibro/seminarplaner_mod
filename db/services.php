@@ -46,6 +46,13 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
     ],
+    'mod_seminarplaner_delete_imported_konzept' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'delete_imported_konzept',
+        'description' => 'Remove an imported global seminar concept and its units from this activity.',
+        'type' => 'write',
+        'ajax' => true,
+    ],
     'mod_seminarplaner_adopt_global_method' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'adopt_global_method',

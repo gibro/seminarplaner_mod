@@ -2381,7 +2381,14 @@ function(Ajax, Notification, LernzielEditor) {
     // Diese hier sucht in allen drei Bereichen gleichzeitig und zeigt die
     // Treffer in einer gemeinsamen Liste, jeder mit seinem Herkunfts-Badge.
 
-    const ALLSEARCH_HIDDEN_WHILE_SEARCHING = ['.ml-subtabs', '#ml-filter-block', '#ml-list-block', '#ml-bulk-toolbar'];
+    const ALLSEARCH_HIDDEN_WHILE_SEARCHING = [
+        '.ml-subtabs', '#ml-filter-block', '#ml-list-block', '#ml-bulk-toolbar', '#ml-konzepte-block',
+    ];
+
+    // Kurzbeschreibungen enthalten Markup (<p>…</p>). In der Trefferzeile steht
+    // nur eine Vorschauzeile, deshalb per stripHtml (oben) die Tags entfernen
+    // statt sie zu escapen - sonst liest man "<p>Die TN ordnen sich…" im
+    // Klartext.
 
     const allSearchHaystack = (m, extra) => [
         m.titel, m.kurzbeschreibung,
@@ -2398,7 +2405,7 @@ function(Ajax, Notification, LernzielEditor) {
                     badge: isKonzeptCard(m) ? konzeptNameFor(konzeptSetIdOf(m)) : 'Lokale Seminareinheit',
                     id: String(m.id),
                     titel: String(m.titel || ''),
-                    kurz: String(m.kurzbeschreibung || ''),
+                    kurz: stripHtml(m.kurzbeschreibung),
                 });
             }
         });
@@ -2409,7 +2416,7 @@ function(Ajax, Notification, LernzielEditor) {
                     badge: g.setname ? `Methodensammlung: ${g.setname}` : 'Methodensammlung',
                     id: String(g.methodid),
                     titel: String(g.titel || ''),
-                    kurz: String(g.kurzbeschreibung || ''),
+                    kurz: stripHtml(g.kurzbeschreibung),
                 });
             }
         });
@@ -2570,14 +2577,27 @@ function(Ajax, Notification, LernzielEditor) {
         }
         if (!konzepte.length) {
             host.innerHTML = '';
+            // War das letzte Konzept, verschwindet der Tab wieder - er wird
+            // serverseitig nur bei vorhandenen Konzepten ausgegeben, nach einem
+            // Entfernen ohne Reload steht er aber noch da und zeigte ins Leere.
+            const tabbtn = bySel('.ml-subtab[data-ml-tab="concepts"]');
+            if (tabbtn) {
+                tabbtn.classList.add('kg-hidden');
+                if (libraryScope === 'concepts') {
+                    activateSubtab('local', runtimeCmid);
+                }
+            }
             setKonzepteStatus('Noch keine globalen Seminarkonzepte importiert. '
                 + 'Konzepte holst du über den Tab „Import/Export".');
             return;
         }
         setKonzepteStatus('');
         host.innerHTML = konzepte.map((k) => {
+            // timeimported kommt als Unix-Sekunden vom Server, der Formatierer
+            // rechnet in Millisekunden - ohne die Umrechnung landet jeder
+            // Import im Januar 1970.
             const meta = `${k.unitcount} ${k.unitcount === 1 ? 'Seminareinheit' : 'Seminareinheiten'}`
-                + ` · übernommen ${escapeHtml(formatRelativeModified(k.timeimported))}`;
+                + ` · übernommen ${escapeHtml(formatRelativeModified(k.timeimported * 1000))}`;
             // Drei Zustände, nicht zwei: ein Konzept kann einen Plan haben, es
             // kann einen gehabt haben (dann ist er gelöscht), oder es hat nie
             // einen mitgebracht - dann fehlt hier schlicht nichts.
@@ -2589,13 +2609,23 @@ function(Ajax, Notification, LernzielEditor) {
             } else {
                 action = `<span class="ml-konzept-card__gone">Dieses Konzept enthält keinen Seminarplan.</span>`;
             }
+            // Ohne Plan ist der Titel bereits der Konzeptname - dann waere
+            // "aus X" unter einer Ueberschrift X nur eine Dopplung.
+            const title = k.planname || k.setname || 'Seminarkonzept';
+            const source = (k.setname && k.setname !== title)
+                ? `<span class="ml-konzept-card__source">aus &bdquo;${escapeHtml(k.setname)}&ldquo;</span>`
+                : '';
             return `<div class="ml-konzept-card">
                 <div class="ml-konzept-card__head">
-                  <strong class="ml-konzept-card__title">${escapeHtml(k.planname || k.setname || 'Seminarkonzept')}</strong>
-                  ${k.setname ? `<span class="ml-konzept-card__source">aus &bdquo;${escapeHtml(k.setname)}&ldquo;</span>` : ''}
+                  <strong class="ml-konzept-card__title">${escapeHtml(title)}</strong>
+                  ${source}
                 </div>
                 <div class="ml-konzept-card__meta">${meta}</div>
-                <div class="ml-konzept-card__actions">${action}</div>
+                <div class="ml-konzept-card__actions">
+                  ${action}
+                  <button type="button" class="kg-btn" data-konzept-delete="${Number(k.setid)}">Konzept entfernen</button>
+                </div>
+                <div class="ml-konzept-card__warn kg-hidden" data-konzept-warn="${Number(k.setid)}" role="alert"></div>
               </div>`;
         }).join('');
     };
@@ -2609,6 +2639,58 @@ function(Ajax, Notification, LernzielEditor) {
         } catch (e) {
             return `sequenz.php?id=${runtimeCmid}&grid=${gridid}`;
         }
+    };
+
+    // Ein Konzept laesst sich nur entfernen, solange keine seiner Einheiten in
+    // einem Plan liegt - sonst zeigte der Plan auf Einheiten, die es nicht mehr
+    // gibt. Der Server nennt die konkreten Stellen; sie stehen an der Karte,
+    // nicht in einem Dialog, damit man sie beim Aufraeumen ablesen kann.
+    const renderKonzeptBlocked = (setid, usages) => {
+        const warn = bySel(`[data-konzept-warn="${setid}"]`);
+        if (!warn) {
+            return;
+        }
+        const places = usages.map((u) => {
+            const tag = u.tagbezeichnung
+                ? `Tag ${u.tag} (${escapeHtml(u.tagbezeichnung)})`
+                : `Tag ${u.tag}`;
+            return `<li>&bdquo;${escapeHtml(u.einheit)}&ldquo; – Sequenz &bdquo;${escapeHtml(u.planname)}&ldquo;, ${tag}</li>`;
+        }).join('');
+        warn.innerHTML = `<strong>Dieses Seminarkonzept kann nicht entfernt werden</strong>, solange seine `
+            + `Seminareinheiten in einem Seminarplan verwendet werden:<ul>${places}</ul>`
+            + `Nimm die Einheiten dort zuerst aus dem Plan.`;
+        warn.classList.remove('kg-hidden');
+    };
+
+    const deleteImportedKonzept = (cmid, setid, button) => {
+        const warn = bySel(`[data-konzept-warn="${setid}"]`);
+        if (warn) {
+            warn.classList.add('kg-hidden');
+            warn.innerHTML = '';
+        }
+        button.disabled = true;
+        asCall('mod_seminarplaner_delete_imported_konzept', {cmid, setid}).then((res) => {
+            if (!res.deleted) {
+                renderKonzeptBlocked(setid, Array.isArray(res.usages) ? res.usages : []);
+                button.disabled = false;
+
+                return null;
+            }
+            setKonzepteStatus(`Seminarkonzept entfernt, ${res.removedcount} `
+                + `${res.removedcount === 1 ? 'Seminareinheit' : 'Seminareinheiten'} aus dem Bestand genommen.`);
+
+            // Bestand und Liste neu holen: die Einheiten sind weg.
+            return loadMethods(cmid).then(() => {
+                updateOriginFilterVisibility();
+                applyFilters();
+
+                return loadImportedKonzepte(cmid);
+            });
+        }).catch((e) => {
+            Notification.exception(e);
+            button.disabled = false;
+            setKonzepteStatus('Das Seminarkonzept konnte nicht entfernt werden.', true);
+        });
     };
 
     const loadImportedKonzepte = (cmid) => {
@@ -2677,6 +2759,16 @@ function(Ajax, Notification, LernzielEditor) {
                 activateSubtab(btn.getAttribute('data-ml-tab') || 'local', cmid);
             });
         });
+        // Die Konzept-Karten werden neu gerendert, deshalb delegiert am Host.
+        const konzepte = bySel('#ml-konzepte-list');
+        if (konzepte) {
+            konzepte.addEventListener('click', (event) => {
+                const del = event.target.closest('[data-konzept-delete]');
+                if (del) {
+                    deleteImportedKonzept(cmid, Number.parseInt(del.getAttribute('data-konzept-delete'), 10), del);
+                }
+            });
+        }
     };
 
     return {
