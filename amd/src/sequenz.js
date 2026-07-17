@@ -4427,6 +4427,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 this.openEditor(pid);
             } else if (type === 'add-unit') {
                 this.openPicker(action.getAttribute('data-anker') || 'vormittag');
+            } else if (type === 'create-unit') {
+                // Wie #sq-new-unit in der Werkzeugleiste, aber mit dem Anker
+                // dieser Gruppe statt firstActiveAnker().
+                this.openCreateEditor({anker: action.getAttribute('data-anker') || 'vormittag'});
             } else if (type === 'add-baustein') {
                 this.createEmptyBaustein(action.getAttribute('data-anker') || 'vormittag');
             } else if (type === 'baustein-add-unit') {
@@ -4636,10 +4640,16 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             const offattrs = anchoroff
                 ? ' disabled title="Dieser Abschnitt entfällt an diesem Tag."'
                 : '';
+            // „Neue Einheit anlegen" steht auch hier, nicht nur in der
+            // Werkzeugleiste: der Werkzeugleisten-Button plant immer in den
+            // ERSTEN aktiven Anker des Tages (firstActiveAnker), eine neue
+            // Einheit liess sich damit gar nicht direkt in den Nachmittag
+            // anlegen. Hier kennt der Button seinen Anker.
             const addbutton = `
                 <div class="sq-anchor__add">
                   <button type="button" class="kg-btn" data-sq-action="add-baustein" data-anker="${ankername}"${offattrs}>＋ Baustein</button>
                   <button type="button" class="kg-btn" data-sq-action="add-unit" data-anker="${ankername}"${offattrs}>＋ Einheit hinzufügen</button>
+                  <button type="button" class="kg-btn" data-sq-action="create-unit" data-anker="${ankername}"${offattrs}>＋ Neue Einheit anlegen</button>
                   <button type="button" class="kg-btn" data-sq-action="add-pause" data-anker="${ankername}"${offattrs}>＋ Pause</button>
                 </div>`;
 

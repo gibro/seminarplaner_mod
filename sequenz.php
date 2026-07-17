@@ -201,8 +201,11 @@ echo html_writer::tag('span',
     ['class' => 'sq-info']);
 echo html_writer::end_tag('span');
 // CD-Handoff: Neue Einheiten lassen sich jederzeit aus der Werkzeugleiste
-// heraus gestalten (Quick-Create). Die Anker-Buttons darunter übernehmen
-// weiterhin nur Bestehendes aus der Bibliothek.
+// heraus gestalten (Quick-Create). Dieser Button plant in den ERSTEN aktiven
+// Anker des Tages; seit 17. Juli 2026 steht derselbe Aufruf zusaetzlich in
+// jeder Anker-Gruppe (sequenz.js, data-sq-action="create-unit") und plant
+// dann gezielt dorthin -- vorher war eine neue Einheit direkt im Nachmittag
+// gar nicht anlegbar.
 echo html_writer::tag('button', '＋ Neue Einheit anlegen', [
     'type' => 'button', 'id' => 'sq-new-unit', 'class' => 'kg-btn',
     'title' => 'Neue Seminareinheit anlegen und in den aktuellen Tag einplanen',
