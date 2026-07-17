@@ -619,8 +619,31 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 // Fokus aus dem Feld reissen. So wirkt sie beim Verlassen/Enter.
                 container.addEventListener('change', (event) => {
                     const input = event.target;
-                    if (input && input.hasAttribute && input.hasAttribute('data-sq-duration')) {
+                    if (!input || !input.hasAttribute) {
+                        return;
+                    }
+                    if (input.hasAttribute('data-sq-duration')) {
                         this.setPlacementDuration(input.getAttribute('data-sq-duration'), input.value);
+                    } else if (input.hasAttribute('data-sq-title')) {
+                        this.setPlacementTitle(input.getAttribute('data-sq-title'), input.value);
+                    } else if (input.hasAttribute('data-sq-btitle')) {
+                        this.setBausteinTitle(input.getAttribute('data-sq-btitle'), input.value);
+                    }
+                });
+                // Enter soll uebernehmen, ohne dass man erst herausklicken muss;
+                // Escape verwirft. 'change' feuert danach nicht mehr doppelt,
+                // weil blur()/render() den Wert bereits abgeglichen haben.
+                container.addEventListener('keydown', (event) => {
+                    const input = event.target;
+                    if (!input || !input.classList || !input.classList.contains('sq-titleinput')) {
+                        return;
+                    }
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        input.blur();
+                    } else if (event.key === 'Escape') {
+                        event.preventDefault();
+                        this.render();
                     }
                 });
                 this.initDragAndDrop(container);
@@ -3114,6 +3137,99 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             this.toast('Einheit angepasst – Zeiten sind aktualisiert.');
         }
 
+        // Titel direkt in der Sequenz aendern (17. Juli 2026).
+        //
+        // Anders als die Dauer haengt der Titel NICHT nur an der Platzierung:
+        // Auftraggeber-Entscheidung ist, dass die Umbenennung auch den
+        // Bibliothekseintrag trifft — sonst hiesse dieselbe Einheit in der
+        // Bibliothek weiter anders. Das folgt dem Muster des Phasen-Dropdowns,
+        // das ebenfalls direkt auf die Karte schreibt und die Reichweite im
+        // Toast nennt. Folge, bewusst so: der neue Name erscheint in allen
+        // Seminarplaenen dieser Aktivitaet, die dieselbe Einheit nutzen.
+        setPlacementTitle(pid, raw) {
+            const placement = this.placement(pid);
+            if (!placement) {
+                return;
+            }
+            const titel = String(raw || '').trim();
+            // Leer ist kein Titel: unveraendert lassen und neu rendern, damit
+            // das Feld den alten Wert zurueckbekommt.
+            if (!titel || titel === String(placement.titel || '')) {
+                this.render();
+                return;
+            }
+            placement.titel = titel;
+            // Die aktive Karte hinter der Platzierung mitziehen (fehlt bei einer
+            // noch unbefuellten Reservierung — dann bleibt es beim Plan-Titel).
+            const auswahl = this.auswahl(placement);
+            const card = auswahl ? this.methodCardForRef(auswahl.aktiv) : null;
+            this.setDirty(true);
+            this.render();
+            if (!card) {
+                this.toast('Titel geändert.');
+                return;
+            }
+            card.titel = titel;
+            card.timemodified = Date.now();
+            asCall('mod_seminarplaner_save_method_cards', {
+                cmid: this.cmid,
+                methodsjson: JSON.stringify(this.methodCardList),
+            }).then(() => {
+                this.toast(`Titel geändert: „${titel}" – gilt auch in der Bibliothek und in allen Seminarplänen.`);
+                return null;
+            }).catch(() => {
+                this.setStatus('Der Titel konnte in der Bibliothek nicht gespeichert werden.', true);
+            });
+        }
+
+        // Baustein-Titel direkt in der Sequenz (17. Juli 2026). Alle
+        // Fortsetzungen desselben Bausteins rendern aus DEMSELBEN Objekt — sie
+        // ziehen deshalb ohne Zutun mit, sobald neu gerendert wird.
+        setBausteinTitle(bid, raw) {
+            const host = this.baustein(bid);
+            if (!host) {
+                return;
+            }
+            const titel = String(raw || '').trim();
+            if (!titel || titel === this.bausteinTitle(bid, host)) {
+                this.render();
+                return;
+            }
+            // Dieselbe Regel wie im Baustein-Editor (saveBausteinEditor): der
+            // Titel gilt fuer die aktuell gezeigte Variante, sonst fuer den
+            // schlichten Baustein. Ohne das schriebe man auf host.titel,
+            // waehrend die Ansicht den Variantentitel zeigt — die Aenderung
+            // saehe wirkungslos aus.
+            const active = host.aktivevariante;
+            if (active && host.varianten && host.varianten[active]) {
+                host.varianten[active].titel = titel;
+            } else {
+                host.titel = titel;
+            }
+            this.setDirty(true);
+            this.render();
+            const fortsetzungen = this.countBausteinGroups(bid);
+            this.toast(fortsetzungen > 1
+                ? `Baustein umbenannt: „${titel}" – in allen ${fortsetzungen} Teilen.`
+                : `Baustein umbenannt: „${titel}".`);
+        }
+
+        // Wie oft taucht derselbe Baustein im Plan auf (Original + Fortsetzungen)?
+        // Nur fuer die Rueckmeldung — die Umbenennung wirkt ohnehin ueberall.
+        countBausteinGroups(bid) {
+            const anker = new Set();
+            const plat = (this.sequenz && this.sequenz.platzierungen) || {};
+            ((this.sequenz && this.sequenz.tage) || []).forEach((tag) => {
+                Object.keys((tag && tag.anker) || {}).forEach((ankername) => {
+                    const seq = (tag.anker[ankername] && tag.anker[ankername].sequenz) || [];
+                    if (seq.some((pid) => plat[pid] && String(plat[pid].bausteinid || '') === String(bid))) {
+                        anker.add(tag.tag + ':' + ankername);
+                    }
+                });
+            });
+            return anker.size;
+        }
+
         // Handoff-SEQUENZ „Dauer editieren": Dauer direkt in der Zeit-Spalte.
         // Die Dauer haengt an der Platzierung, nicht an der Bibliotheks-Karte —
         // dieselbe Einheit darf in einem anderen Plan anders lang sein. Alle
@@ -4721,7 +4837,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                       ${this.renderTimeColumn(start, duration)}
                       <div class="sq-baustein${unfilled ? ' sq-baustein--empty' : ''}">
                         <div class="sq-baustein__head">
-                          <div class="sq-baustein__title">${this.renderGrip()}${escapeHtml(this.bausteinTitle(group.bausteinid, baustein))}
+                          <div class="sq-baustein__title">${this.renderGrip()}
+                            <input type="text" class="sq-baustein__name sq-titleinput"
+                              value="${escapeHtml(this.bausteinTitle(group.bausteinid, baustein))}"
+                              data-sq-btitle="${escapeHtml(group.bausteinid)}" draggable="false"
+                              aria-label="Titel des Bausteins"
+                              title="Titel ändern – gilt für alle Fortsetzungen dieses Bausteins">
                             ${continuation ? '<span class="sq-badge sq-badge--variant">Fortsetzung</span>' : ''}
                             ${(unfilled && duration > 0) ? '<span class="sq-badge">reserviert</span>' : ''}
                           </div>
@@ -5072,7 +5193,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     <div class="sq-unit__phase${phase ? ' sq-phase-bg--' + phase : ''}"></div>
                     ${inBaustein ? '' : this.renderGrip()}
                     <div class="sq-unit__main">
-                      <div class="sq-unit__title">${escapeHtml(data.titel || 'Seminareinheit')}</div>
+                      <input type="text" class="sq-unit__title sq-titleinput"
+                        value="${escapeHtml(data.titel || 'Seminareinheit')}"
+                        data-sq-title="${escapeHtml(p.pid)}" draggable="false"
+                        aria-label="Titel der Seminareinheit"
+                        title="Titel ändern – gilt auch für den Bibliothekseintrag">
                       ${meta ? `<div class="sq-unit__meta">${meta}</div>` : ''}
                     </div>
                     <div class="sq-unit__actions">

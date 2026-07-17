@@ -7790,3 +7790,86 @@ details.sq-menu[open] > summary.sq-menu__btn {
   border-color: var(--ig-red);
   color: #fff;
 }
+
+/* =========================================================================
+   Titel direkt in der Sequenz aendern (17. Juli 2026)
+   -------------------------------------------------------------------------
+   Die Titel von Einheiten und Bausteinen sind <input> statt Text. Zwei Dinge,
+   die dabei nicht offensichtlich sind:
+
+   1. ERKENNBARKEIT. Ein randloses Feld, das wie Text aussieht, laedt niemanden
+      zum Klicken ein. Deshalb im Ruhezustand unsichtbar, beim Ueberfahren ein
+      Rahmen, beim Fokus der rote CD-Rahmen — die Zeile bleibt ruhig, das Feld
+      verraet sich beim Hinsteuern.
+   2. SCHRIFT-VERERBUNG. Formularfelder erben Schriftart und -groesse NICHT von
+      selbst (die UA-Stylesheets setzen sie). Ohne `font-family: inherit` faellt
+      der Titel auf die Browser-Schrift zurueck; beim Baustein zusaetzlich
+      font-size/weight/letter-spacing/text-transform, sonst verliert er seine
+      CD-Typografie (Head-Schrift, 900, Versalien).
+
+   Steht am Dateiende, damit die CD-Schichten weiter oben nicht dagegen
+   arbeiten (siehe Kaskaden-Leitplanke im Dateikopf).
+   ========================================================================= */
+.sq-titleinput {
+    box-sizing: border-box;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 0;
+    padding: 1px 4px;
+    margin: 0 -4px;
+    font-family: inherit;
+    min-width: 0;
+}
+
+.sq-titleinput:hover:not(:focus) {
+    border-color: var(--sq-border);
+    background: #fff;
+}
+
+.sq-titleinput:focus {
+    border-color: var(--ig-red);
+    background: #fff;
+    outline: none;
+}
+
+/* Einheit: Gewicht/Groesse/Farbe kommen aus .sq-unit__title selbst. */
+input.sq-unit__title {
+    width: 100%;
+}
+
+/* Baustein: erbt die Kopf-Typografie von .sq-baustein__title und teilt sich
+   die Zeile mit den Badges („Fortsetzung", „reserviert"). */
+.sq-baustein__name {
+    flex: 1 1 220px;
+    min-width: 8ch;
+    font-size: inherit;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
+}
+
+/* Ohne Zutun ist ein <input> fix breit und schneidet laengere Titel ab
+   („KENNENLERNEN UND ORGANISATORI…"), weil .sq-baustein__title als Flex-Item
+   nur inhaltsbreit ist. Der Titelbereich fuellt deshalb den Kopf, damit das
+   Feld wachsen kann. Kostet: die Badges rutschen nach rechts bzw. in die
+   naechste Zeile. */
+.sq-baustein__title {
+    flex: 1 1 auto;
+}
+
+/* Wo der Browser es kann (Chrome/Edge 123+), schrumpft das Feld exakt auf
+   seinen Text — dann sitzt „Fortsetzung" wieder direkt hinter dem Titel wie
+   vor der Umstellung, und der Kopf sieht unveraendert aus. Firefox faellt auf
+   die Regeln darueber zurueck; beide Varianten sind benutzbar. */
+@supports (field-sizing: content) {
+    .sq-baustein__title {
+        flex: 0 1 auto;
+    }
+
+    .sq-baustein__name {
+        field-sizing: content;
+        flex: 0 1 auto;
+        max-width: 100%;
+    }
+}
