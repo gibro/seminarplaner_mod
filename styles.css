@@ -5658,8 +5658,15 @@ details[open] > summary .sq-tri,
    Toggle-Switch, Seitenkopf) nach docs/design_handoff_seminarplaner.
    ========================================================================= */
 
-/* ---- Sequenz-Grautöne auf CD-Grau ---- */
-.sq-shell {
+/* ---- Sequenz-Grautöne auf CD-Grau ----
+   Gilt bewusst AUCH für .sq-modal-overlay (Editor-, Intro- und Lernziel-Modal).
+   Bis 17. Juli 2026 stand hier nur .sq-shell — die Modals behielten dadurch
+   Schrift UND Rahmen auf der alten bläulichen Palette (#26313d/#5b6b79/
+   #d7dce2/#b9c1cb aus dem frühen Token-Block), während die Shell daneben auf
+   CD-Grau lief. Das war kein Vorsatz, sondern ein vergessener Selektor: beide
+   hängen am selben Token-Block, nur diese Anhebung ließ das Modal aus. */
+.sq-shell,
+.sq-modal-overlay {
     --sq-border: var(--ig-lightgray);
     --sq-border-strong: var(--ig-midgray);
     --sq-text: var(--ig-anthracite);

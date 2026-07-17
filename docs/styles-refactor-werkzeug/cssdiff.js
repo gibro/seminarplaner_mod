@@ -70,8 +70,28 @@ window.__ladeCss = (url) => new Promise((resolve, reject) => {
     reject(new Error('__ladeCss: URL ist bereits gesetzt: ' + url));
     return;
   }
-  link.addEventListener('load', () => requestAnimationFrame(
-    () => requestAnimationFrame(() => setTimeout(resolve, 50))), {once: true});
+  const fertig = () => setTimeout(resolve, 50);
+  link.addEventListener('load', () => {
+    // Zwei rAF = ein sicher durchgelaufener Renderzyklus. ABER: rAF wird in
+    // NICHT SICHTBAREN Tabs pausiert -- ohne den Timeout-Notausgang haengt der
+    // Lauf dann bis zum Timeout, ohne dass irgendwas kaputt waere. (17. Juli
+    // mehrfach genau so passiert, sobald das Browser-Fenster in den Hintergrund
+    // rutschte.) Das load-Ereignis allein garantiert bereits, dass das
+    // Stylesheet geparst und angewandt ist; die rAF sind nur Sicherheitsgurt.
+    let gelaufen = false;
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => {
+        gelaufen = true;
+        requestAnimationFrame(fertig);
+      });
+      setTimeout(() => { if (!gelaufen) { fertig(); } }, 250);
+    } else {
+      fertig();
+    }
+  }, {once: true});
+  // Ohne error-Handler haengt ein Tippfehler im Dateinamen still bis zum
+  // Timeout, statt zu sagen, was los ist.
+  link.addEventListener('error', () => reject(new Error('__ladeCss: laedt nicht: ' + url)), {once: true});
   link.setAttribute('href', url);
 });
 
