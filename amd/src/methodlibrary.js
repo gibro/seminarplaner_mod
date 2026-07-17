@@ -160,7 +160,6 @@ function(Ajax, Notification, LernzielEditor) {
     // D54: Sets, für die eine aktualisierte globale Version verfügbar ist (kein
     // Auto-Update mehr - stattdessen ein Hinweis an der betroffenen Karte).
     let pendingUpdateSetIds = new Set();
-    let methodsetNames = new Map();
     let draggedMethodId = '';
     let selectionMode = false;
     let selectedIds = new Set();
@@ -822,9 +821,12 @@ function(Ajax, Notification, LernzielEditor) {
         }
         const previous = getSelectedFilterValues(key);
         const origin = bySel('#ml-filter-origin') ? bySel('#ml-filter-origin').value : '';
+        // Die anwählbaren Werte kommen aus dem, was der aktive Tab überhaupt
+        // zeigt - sonst stünden im Konzept-Tab Tags zur Wahl, die dort nie
+        // einen Treffer ergeben.
         const relevant = origin
-            ? methods.filter((m) => (origin === 'local' ? getSyncMethodsetId(m) === 0 : getSyncMethodsetId(m) === Number(origin)))
-            : methods;
+            ? scopedMethods().filter((m) => konzeptSetIdOf(m) === Number(origin))
+            : scopedMethods();
         const tags = new Set();
         relevant.forEach((m) => {
             splitMulti(m.tags).forEach((t) => tags.add(t));
@@ -854,14 +856,8 @@ function(Ajax, Notification, LernzielEditor) {
                     .map((link) => Number(link.methodsetid) || 0)
                     .filter((id) => id > 0)
             );
-            methodsetNames = new Map(
-                links
-                    .filter((link) => !!link && (Number(link.methodsetid) || 0) > 0)
-                    .map((link) => [Number(link.methodsetid) || 0, String(link.methodsetname || '').trim()])
-            );
         }).catch(() => {
             pendingUpdateSetIds = new Set();
-            methodsetNames = new Map();
         });
     };
 
@@ -885,8 +881,35 @@ function(Ajax, Notification, LernzielEditor) {
     // Übernehmen gegen Überschreiben schützen (D54: lokale Änderung hat Vorrang).
     const shouldShowFreezeLock = (method) => hasPendingUpdate(method);
 
-    // Blendet den Herkunftsfilter nur ein, wenn mindestens eine Seminareinheit aus einem globalen Konzept importiert wurde.
-    // Listet dabei jedes importierte globale Konzept einzeln mit seinem Namen im Dropdown auf.
+    // Welcher Bibliothek-Tab die geteilte Liste (#ml-browse) gerade zeigt:
+    // 'local' = eigene Seminareinheiten, 'concepts' = die aus importierten
+    // Seminarkonzepten. Beide sind lokale Kopien und teilen sich Filterleiste,
+    // Liste und Editor - getrennt wird nur, welche Einheiten drin sind.
+    let libraryScope = 'local';
+
+    // Eine Einheit stammt aus einem Konzept, wenn sie dessen Herkunft trägt.
+    // Fallback aufs konzept--Präfix: Karten, die vor der Herkunfts-Ergänzung
+    // importiert wurden, haben nur das Präfix.
+    const isKonzeptCard = (m) => !!(m && (m._kgkonzept || String(m.id || '').indexOf('konzept-') === 0));
+
+    // Aus welchem Konzept eine Einheit stammt. 0, wenn sie es nicht sagt -
+    // dann sammelt der Herkunftsfilter sie unter "Unbekanntes Konzept".
+    const konzeptSetIdOf = (m) => (m && m._kgkonzept ? Number(m._kgkonzept.setid) || 0 : 0);
+
+    // Name des Konzepts, aus dem eine Einheit stammt. Er reist an der Karte
+    // mit, damit die Bibliothek ihn ohne Server-Abfrage zeigen kann.
+    const konzeptNameFor = (setid) => {
+        if (!setid) {
+            return 'Unbekanntes Konzept';
+        }
+        const card = methods.find((m) => konzeptSetIdOf(m) === setid && m._kgkonzept && m._kgkonzept.setname);
+        return card ? String(card._kgkonzept.setname) : `Seminarkonzept #${setid}`;
+    };
+
+    const scopedMethods = () => methods.filter((m) => (libraryScope === 'concepts' ? isKonzeptCard(m) : !isKonzeptCard(m)));
+
+    // Herkunft = aus welchem Seminarkonzept. Nur im Konzept-Tab, und erst ab
+    // dem zweiten Konzept - bei einem einzigen gäbe es nichts zu unterscheiden.
     const updateOriginFilterVisibility = () => {
         const wrap = bySel('#ml-filter-origin-wrap');
         const select = bySel('#ml-filter-origin');
@@ -894,25 +917,22 @@ function(Ajax, Notification, LernzielEditor) {
             return;
         }
         const setids = new Set();
-        methods.forEach((m) => {
-            const setid = getSyncMethodsetId(m);
-            if (setid > 0) {
-                setids.add(setid);
-            }
+        scopedMethods().forEach((m) => {
+            setids.add(konzeptSetIdOf(m));
         });
-        wrap.classList.toggle('kg-hidden', setids.size === 0);
+        wrap.classList.toggle('kg-hidden', libraryScope !== 'concepts' || setids.size < 2);
         if (!select) {
             return;
         }
         const previous = select.value;
         const concepts = Array.from(setids)
-            .map((setid) => ({setid, name: methodsetNames.get(setid) || `Globales Konzept #${setid}`}))
+            .map((setid) => ({setid, name: konzeptNameFor(setid)}))
             .sort((a, b) => a.name.localeCompare(b.name, 'de'));
 
         select.innerHTML = '';
         const allOption = document.createElement('option');
         allOption.value = '';
-        allOption.textContent = 'Alle Seminareinheiten';
+        allOption.textContent = 'Alle Seminarkonzepte';
         select.appendChild(allOption);
         concepts.forEach(({setid, name}) => {
             const option = document.createElement('option');
@@ -920,12 +940,8 @@ function(Ajax, Notification, LernzielEditor) {
             option.textContent = name;
             select.appendChild(option);
         });
-        const localOption = document.createElement('option');
-        localOption.value = 'local';
-        localOption.textContent = 'Nur lokale Seminareinheiten';
-        select.appendChild(localOption);
 
-        const validValues = new Set(['', 'local', ...concepts.map((c) => String(c.setid))]);
+        const validValues = new Set(['', ...concepts.map((c) => String(c.setid))]);
         select.value = validValues.has(previous) ? previous : '';
     };
 
@@ -952,11 +968,12 @@ function(Ajax, Notification, LernzielEditor) {
             return;
         }
 
+        const inscope = scopedMethods();
         const cards = Array.from(host.querySelectorAll('.kg-library-card'));
         let visible = 0;
         cards.forEach((card) => {
             const id = card.getAttribute('data-id');
-            const method = methods.find((m) => String(m.id) === String(id));
+            const method = inscope.find((m) => String(m.id) === String(id));
             if (!method) {
                 card.style.display = 'none';
                 return;
@@ -982,7 +999,7 @@ function(Ajax, Notification, LernzielEditor) {
                 && (!phases.length || methodphase.some((p) => phases.includes(p)))
                 && (!groups.length || groups.includes(methodgroup))
                 && (!durations.length || durations.includes(methodduration))
-                && (!origin || (origin === 'local' ? getSyncMethodsetId(method) === 0 : getSyncMethodsetId(method) === Number(origin)));
+                && (!origin || konzeptSetIdOf(method) === Number(origin));
 
             card.style.display = match ? '' : 'none';
             if (match) {
@@ -992,7 +1009,7 @@ function(Ajax, Notification, LernzielEditor) {
 
         const status = bySel('#ml-filter-status');
         if (status) {
-            status.textContent = `${visible} von ${methods.length} Seminareinheiten angezeigt.`;
+            status.textContent = `${visible} von ${inscope.length} Seminareinheiten angezeigt.`;
         }
     };
 
@@ -1010,7 +1027,7 @@ function(Ajax, Notification, LernzielEditor) {
         host.classList.toggle('kg-library-list--selecting', selectionMode);
         host.innerHTML = '';
 
-        methods.forEach((m, index) => {
+        scopedMethods().forEach((m, index) => {
             if (!m.id) {
                 m.id = `legacy-${index}-${uid()}`;
             }
@@ -2453,9 +2470,17 @@ function(Ajax, Notification, LernzielEditor) {
         host.innerHTML = konzepte.map((k) => {
             const meta = `${k.unitcount} ${k.unitcount === 1 ? 'Seminareinheit' : 'Seminareinheiten'}`
                 + ` · übernommen ${escapeHtml(formatRelativeModified(k.timeimported))}`;
-            const action = k.planexists
-                ? `<a class="kg-btn" href="${escapeHtml(sequenzUrlFor(k.gridid))}">Plan öffnen</a>`
-                : `<span class="ml-konzept-card__gone">Zugehöriger Seminarplan wurde gelöscht.</span>`;
+            // Drei Zustände, nicht zwei: ein Konzept kann einen Plan haben, es
+            // kann einen gehabt haben (dann ist er gelöscht), oder es hat nie
+            // einen mitgebracht - dann fehlt hier schlicht nichts.
+            let action = '';
+            if (k.planexists) {
+                action = `<a class="kg-btn" href="${escapeHtml(sequenzUrlFor(k.gridid))}">Plan öffnen</a>`;
+            } else if (k.hadplan) {
+                action = `<span class="ml-konzept-card__gone">Zugehöriger Seminarplan wurde gelöscht.</span>`;
+            } else {
+                action = `<span class="ml-konzept-card__gone">Dieses Konzept enthält keinen Seminarplan.</span>`;
+            }
             return `<div class="ml-konzept-card">
                 <div class="ml-konzept-card__head">
                   <strong class="ml-konzept-card__title">${escapeHtml(k.planname || k.setname || 'Seminarkonzept')}</strong>
@@ -2502,6 +2527,35 @@ function(Ajax, Notification, LernzielEditor) {
                     panel.classList.toggle('kg-hidden', key !== name);
                 }
             });
+
+        // Filterleiste, Liste und Editor gibt es nur einmal - sie wandern in
+        // den aktiven Tab. Bei "collections" bleiben sie stehen, wo sie sind:
+        // das Panel dort bringt seine eigene Oberfläche mit und der Block ist
+        // mit seinem Panel ohnehin ausgeblendet.
+        const browse = bySel('#ml-browse');
+        if (browse && (name === 'local' || name === 'concepts')) {
+            const panel = bySel(name === 'concepts' ? '#ml-tab-concepts' : '#ml-tab-local');
+            if (panel && browse.parentElement !== panel) {
+                panel.appendChild(browse);
+            }
+            libraryScope = name;
+            // Eine hier angelegte Einheit gehörte zu keinem Konzept - der
+            // Anlegen-Button bleibt deshalb dem lokalen Tab vorbehalten.
+            const createrow = bySel('#ml-create-row');
+            if (createrow) {
+                createrow.classList.toggle('kg-hidden', name === 'concepts');
+            }
+            // Der Herkunftsfilter zählt nur im Konzept-Tab; beim Verlassen
+            // zurücksetzen, sonst filtert er unsichtbar weiter.
+            const origin = bySel('#ml-filter-origin');
+            if (origin && name !== 'concepts') {
+                origin.value = '';
+            }
+            renderList();
+            updateOriginFilterVisibility();
+            applyFilters();
+        }
+
         if (name === 'concepts' && !konzepteLoaded) {
             konzepteLoaded = true;
             loadImportedKonzepte(cmid);

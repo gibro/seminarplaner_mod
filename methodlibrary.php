@@ -92,9 +92,17 @@ echo html_writer::end_div();
 // ---- Tab 1: Lokale Seminareinheiten (Standard-Ansicht) ------------------
 echo html_writer::start_div('ml-tabpanel', ['id' => 'ml-tab-local', 'role' => 'tabpanel']);
 
+// Filterleiste, Liste, Mehrfachbearbeitung und Editor sind für lokale
+// Seminareinheiten und für Konzept-Einheiten dasselbe - Konzept-Einheiten SIND
+// lokale Kopien, nur mit Herkunft. Deshalb gibt es diesen Block genau einmal;
+// beim Tab-Wechsel wandert er in das aktive Panel und die JS-Seite tauscht nur
+// aus, welche Einheiten er zeigt (siehe activateSubtab). Eine zweite Kopie
+// hätte Drag-and-drop, Auswahl und Editor doppelt verdrahtet.
+echo html_writer::start_div('', ['id' => 'ml-browse']);
+
 // D50: Anlegen ist kein eigener Bereich mehr, sondern ein Button in der
 // Bibliothek, der den Editor unten öffnet (leer, im Anlegen-Modus).
-echo html_writer::start_div('kg-row kg-row--action');
+echo html_writer::start_div('kg-row kg-row--action', ['id' => 'ml-create-row']);
 echo html_writer::tag('button', get_string('bibliothek_create', 'mod_seminarplaner'), [
     'type' => 'button',
     'id' => 'ml-create-open',
@@ -149,10 +157,13 @@ foreach (['5', '10', '20', '30', '45', '60', '90', '120', '150', '180', 'mehr al
 }
 echo '</div></div></div></label>';
 
+// Herkunft = aus welchem Seminarkonzept. Nur im Konzept-Tab sinnvoll, und dort
+// erst ab dem zweiten importierten Konzept - bei einem einzigen gäbe es nichts
+// zu unterscheiden. Im lokalen Tab liegen keine Konzept-Einheiten mehr (die
+// haben ihren eigenen Tab), deshalb ist der Filter dort entfallen.
 echo '<label class="sp-filter kg-hidden" id="ml-filter-origin-wrap"><span class="sp-filter__label">Herkunft</span>';
 echo '<select id="ml-filter-origin" class="kg-input">';
-echo '<option value="">Alle Seminareinheiten</option>';
-echo '<option value="local">Nur lokale Seminareinheiten</option>';
+echo '<option value="">Alle Seminarkonzepte</option>';
 echo '</select>';
 echo '</label>';
 
@@ -460,6 +471,8 @@ echo html_writer::end_div();
 
 echo html_writer::tag('div', '', ['id' => 'ml-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
 
+echo html_writer::end_div(); // Ende #ml-browse (wandert zwischen den Tabs).
+
 echo html_writer::end_div(); // Ende Tab 1 (#ml-tab-local).
 
 // ---- Tab 2: Methodensammlungen (globale Bibliothek, immer durchsuchbar) --
@@ -488,11 +501,14 @@ if ($hasimportedkonzepte) {
     echo html_writer::start_div('ml-tabpanel kg-hidden', ['id' => 'ml-tab-concepts', 'role' => 'tabpanel']);
     echo html_writer::start_div('kg-ie-block kg-library-step');
     echo html_writer::tag('h4', 'Globale Seminarkonzepte');
-    echo html_writer::tag('p', 'Diese globalen Seminarkonzepte hast du bereits in deinen Bestand geholt. '
-        . 'Jedes Konzept ist als eigener Seminarplan angelegt; die enthaltenen Seminareinheiten '
-        . 'liegen als eigenständige lokale Kopien im Tab „Lokale Seminareinheiten". '
+    echo html_writer::tag('p', 'Die Seminareinheiten aus den Seminarkonzepten, die du bereits in deinen '
+        . 'Bestand geholt hast. Es sind eigenständige lokale Kopien – du kannst sie hier genauso '
+        . 'bearbeiten wie deine übrigen Seminareinheiten, das globale Original bleibt unberührt. '
         . 'Neue Konzepte holst du über den Tab „Import/Export".');
     echo html_writer::tag('div', '', ['id' => 'ml-konzepte-status', 'class' => 'sp-filter-status']);
+    // Kopfzeile je Konzept: Herkunft auf einen Blick und der Absprung in den
+    // Plan, falls das Konzept einen mitgebracht hat. Die Einheiten selbst
+    // rendert darunter der geteilte Block (#ml-browse).
     echo html_writer::tag('div', '', ['id' => 'ml-konzepte-list', 'class' => 'ml-konzepte-list']);
     echo html_writer::end_div();
     echo html_writer::end_div(); // Ende Tab 3 (#ml-tab-concepts).
