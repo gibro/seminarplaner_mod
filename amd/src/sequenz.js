@@ -146,6 +146,23 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
 
     const cardTitle = (card) => String((card && (card.titel || card.title)) || '');
 
+    // Titel werden direkt in der Sequenz bearbeitet. contenteditable statt
+    // <input>, weil ein Eingabefeld EINZEILIG ist: lange Titel wie
+    // „Geschichte der Massenmedien - Erstellung von Zeitleisten" wurden darin
+    // abgeschnitten, waehrend sie als Text ueber zwei Zeilen umbrechen. Ein
+    // contenteditable-Element bricht um, erbt Schrift und Groesse von selbst
+    // und braucht keine Breiten-Akrobatik.
+    // 'plaintext-only' haelt eingefuegte Formatierung heraus; wo der Browser es
+    // nicht kennt, faellt es auf 'true' zurueck — gelesen wird ohnehin nur
+    // textContent, formatierter Einfuege-Inhalt landet also nie im Titel.
+    const EDITABLE = (() => {
+        const probe = document.createElement('div');
+        probe.setAttribute('contenteditable', 'plaintext-only');
+        return probe.contentEditable === 'plaintext-only'
+            ? 'contenteditable="plaintext-only"'
+            : 'contenteditable="true"';
+    })();
+
     // ---- Statischer Einheiten-Editor (D17 + Rich-Text) --------------------
     // Feldliste des Modals in sequenz.php; die sechs Rich-Text-Felder tragen
     // den Moodle-Editor (Tiny), der beim Seitenladen an die festen IDs
@@ -619,30 +636,44 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 // Fokus aus dem Feld reissen. So wirkt sie beim Verlassen/Enter.
                 container.addEventListener('change', (event) => {
                     const input = event.target;
-                    if (!input || !input.hasAttribute) {
-                        return;
-                    }
-                    if (input.hasAttribute('data-sq-duration')) {
+                    if (input && input.hasAttribute && input.hasAttribute('data-sq-duration')) {
                         this.setPlacementDuration(input.getAttribute('data-sq-duration'), input.value);
-                    } else if (input.hasAttribute('data-sq-title')) {
-                        this.setPlacementTitle(input.getAttribute('data-sq-title'), input.value);
-                    } else if (input.hasAttribute('data-sq-btitle')) {
-                        this.setBausteinTitle(input.getAttribute('data-sq-btitle'), input.value);
                     }
                 });
-                // Enter soll uebernehmen, ohne dass man erst herausklicken muss;
-                // Escape verwirft. 'change' feuert danach nicht mehr doppelt,
-                // weil blur()/render() den Wert bereits abgeglichen haben.
+                // Titel: contenteditable feuert KEIN 'change'. 'focusout' statt
+                // 'blur', weil nur focusout aufsteigt und damit delegierbar ist.
+                container.addEventListener('focusout', (event) => {
+                    const el = event.target;
+                    if (!el || !el.classList || !el.classList.contains('sq-titleedit')) {
+                        return;
+                    }
+                    if (this.escapedTitle) {
+                        this.escapedTitle = false;
+                        return;
+                    }
+                    const text = String(el.textContent || '').replace(/\s+/g, ' ').trim();
+                    if (el.hasAttribute('data-sq-title')) {
+                        this.setPlacementTitle(el.getAttribute('data-sq-title'), text);
+                    } else if (el.hasAttribute('data-sq-btitle')) {
+                        this.setBausteinTitle(el.getAttribute('data-sq-btitle'), text);
+                    }
+                });
                 container.addEventListener('keydown', (event) => {
-                    const input = event.target;
-                    if (!input || !input.classList || !input.classList.contains('sq-titleinput')) {
+                    const el = event.target;
+                    if (!el || !el.classList || !el.classList.contains('sq-titleedit')) {
                         return;
                     }
                     if (event.key === 'Enter') {
+                        // Ohne das setzt contenteditable einen Zeilenumbruch in
+                        // den Titel, statt ihn zu uebernehmen.
                         event.preventDefault();
-                        input.blur();
+                        el.blur();
                     } else if (event.key === 'Escape') {
+                        // Verwerfen: focusout darf danach NICHT auch noch
+                        // speichern, sonst landet der verworfene Text doch drin.
                         event.preventDefault();
+                        this.escapedTitle = true;
+                        el.blur();
                         this.render();
                     }
                 });
@@ -4861,12 +4892,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                       ${this.renderTimeColumn(start, duration)}
                       <div class="sq-baustein${unfilled ? ' sq-baustein--empty' : ''}">
                         <div class="sq-baustein__head">
-                          <div class="sq-baustein__title">${this.renderGrip()}
-                            <input type="text" class="sq-baustein__name sq-titleinput"
-                              value="${escapeHtml(this.bausteinTitle(group.bausteinid, baustein))}"
+                          <div class="sq-baustein__title">${this.renderGrip()}<span
+                              class="sq-baustein__name sq-titleedit" ${EDITABLE}
                               data-sq-btitle="${escapeHtml(group.bausteinid)}" draggable="false"
-                              aria-label="Titel des Bausteins"
-                              title="Titel ändern – gilt für alle Fortsetzungen dieses Bausteins">
+                              role="textbox" aria-label="Titel des Bausteins"
+                              title="Titel ändern – gilt für alle Fortsetzungen dieses Bausteins"
+                              >${escapeHtml(this.bausteinTitle(group.bausteinid, baustein))}</span>
                             ${continuation ? '<span class="sq-badge sq-badge--variant">Fortsetzung</span>' : ''}
                             ${(unfilled && duration > 0) ? '<span class="sq-badge">reserviert</span>' : ''}
                           </div>
@@ -5217,11 +5248,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     <div class="sq-unit__phase${phase ? ' sq-phase-bg--' + phase : ''}"></div>
                     ${inBaustein ? '' : this.renderGrip()}
                     <div class="sq-unit__main">
-                      <input type="text" class="sq-unit__title sq-titleinput"
-                        value="${escapeHtml(data.titel || 'Seminareinheit')}"
+                      <div class="sq-unit__title sq-titleedit" ${EDITABLE}
                         data-sq-title="${escapeHtml(p.pid)}" draggable="false"
-                        aria-label="Titel der Seminareinheit"
-                        title="Titel ändern – gilt auch für den Bibliothekseintrag">
+                        role="textbox" aria-label="Titel der Seminareinheit"
+                        title="Titel ändern – gilt auch für den Bibliothekseintrag"
+                        >${escapeHtml(data.titel || 'Seminareinheit')}</div>
                       ${meta ? `<div class="sq-unit__meta">${meta}</div>` : ''}
                     </div>
                     <div class="sq-unit__actions">
