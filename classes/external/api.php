@@ -1,5 +1,26 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * Api.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 namespace mod_seminarplaner\external;
 
@@ -17,8 +38,6 @@ use mod_seminarplaner\local\service\import_export_service;
 use mod_seminarplaner\local\service\method_card_service;
 use mod_seminarplaner\local\service\planning_state_service;
 use mod_seminarplaner\local\service\soft_lock_service;
-
-defined('MOODLE_INTERNAL') || die();
 
 /**
  * External API endpoints for Seminarplaner.
@@ -42,6 +61,13 @@ class api extends external_api {
         'lernziele', 'komplexitaet', 'vorbereitung', 'raum', 'sozialform', 'risiken', 'debrief',
         'materialtechnik', 'ablauf', 'tags', 'kognitive', 'materialien',
     ];
+    /**
+     * Ermittelt Kursmodul, Kurs und Modulkontext zur übergebenen Kursmodul-ID und prüft den Zugriff.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     *
+     * @return array Array mit den Schlüsseln cm, course und context.
+     */
     private static function resolve_cm_context(int $cmid): array {
         global $DB;
 
@@ -55,10 +81,22 @@ class api extends external_api {
         return ['cm' => $cm, 'course' => $course, 'context' => $context];
     }
 
+    /**
+     * Prüft, ob das globale Plugin local_seminarplaner installiert und nutzbar ist.
+     *
+     * @return bool True, wenn das globale Plugin verfügbar ist.
+     */
     private static function global_plugin_available(): bool {
         return class_exists('\\local_seminarplaner\\local\\repository\\methodset_repository');
     }
 
+    /**
+     * Prüft, ob die aufrufende Person globale Methodensets im übergebenen Modulkontext einsehen darf.
+     *
+     * @param context_module $modulecontext Modulkontext der Aktivität, in dem die Berechtigung geprüft wird.
+     *
+     * @return bool True, wenn globale Methodensets sichtbar sind.
+     */
     private static function can_view_global_methodsets(context_module $modulecontext): bool {
         if (!self::global_plugin_available()) {
             return false;
@@ -70,6 +108,13 @@ class api extends external_api {
         return has_capability('local/seminarplaner:viewglobalsets', $modulecontext);
     }
 
+    /**
+     * Normalisiert eine Seminarphasen-Bezeichnung auf die kanonische Schreibweise (Alias-Auflösung).
+     *
+     * @param string $phase Rohe Phasenbezeichnung aus Import oder Eingabe.
+     *
+     * @return string Normalisierte Phasenbezeichnung oder leerer String.
+     */
     private static function normalize_phase(string $phase): string {
         $phase = trim(strip_tags($phase));
         if ($phase === '') {
@@ -92,6 +137,14 @@ class api extends external_api {
         return $aliases[$key] ?? $phase;
     }
 
+    /**
+     * Zerlegt einen Mehrfachwert-Text in eine bereinigte, duplikatfreie Liste von Einzelwerten.
+     *
+     * @param mixed $value Rohwert, der an ##, Zeilenumbrüchen, Komma oder Semikolon getrennt wird.
+     * @param bool $normalizephase Ob die Einzelteile zusätzlich als Seminarphase normalisiert werden.
+     *
+     * @return array Liste der bereinigten Einzelwerte.
+     */
     private static function split_multi_text($value, bool $normalizephase = false): array {
         if ($value === null) {
             return [];
@@ -129,8 +182,12 @@ class api extends external_api {
      * @param array $materialien Attachment descriptors of this method.
      * @return array
      */
-    private static function map_global_method_record(\stdClass $row, int $setid = 0, int $versionid = 0,
-        array $materialien = []): array {
+    private static function map_global_method_record(
+        \stdClass $row,
+        int $setid = 0,
+        int $versionid = 0,
+        array $materialien = []
+    ): array {
         $mapped = [
             'id' => 'global-' . (int)$row->id . '-' . time(),
             'titel' => (string)($row->title ?? ''),
@@ -214,10 +271,12 @@ class api extends external_api {
             return [];
         }
 
-        list($insql, $params) = $DB->get_in_or_equal($methodids, SQL_PARAMS_NAMED);
-        $links = $DB->get_records_select('local_kgen_method_file',
+        [$insql, $params] = $DB->get_in_or_equal($methodids, SQL_PARAMS_NAMED);
+        $links = $DB->get_records_select(
+            'local_kgen_method_file',
             "methodid {$insql} AND kind = :kind",
-            $params + ['kind' => 'material']);
+            $params + ['kind' => 'material']
+        );
         if (!$links) {
             return [];
         }
@@ -231,8 +290,9 @@ class api extends external_api {
             return [];
         }
 
-        list($iteminsql, $itemparams) = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
-        $records = $DB->get_records_select('files',
+        [$iteminsql, $itemparams] = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
+        $records = $DB->get_records_select(
+            'files',
             "itemid {$iteminsql}
                  AND component = :component
                  AND filearea = :filearea
@@ -242,7 +302,8 @@ class api extends external_api {
                 'component' => 'local_seminarplaner',
                 'filearea' => 'method_material',
                 'dot' => '.',
-            ]);
+            ]
+        );
         if (!$records) {
             return [];
         }
@@ -294,8 +355,13 @@ class api extends external_api {
      * @param bool $fromactivity True when the payload originates from the activity (not carried over).
      * @return void
      */
-    private static function copy_method_material_files_to_global(array $method, int $globalmethodid,
-        int $modulecontextid, int $actorid, bool $fromactivity): void {
+    private static function copy_method_material_files_to_global(
+        array $method,
+        int $globalmethodid,
+        int $modulecontextid,
+        int $actorid,
+        bool $fromactivity
+    ): void {
         global $CFG, $DB;
 
         require_once($CFG->dirroot . '/local/seminarplaner/locallib.php');
@@ -305,8 +371,10 @@ class api extends external_api {
 
         $sourceitemid = 0;
         foreach ((array)($method['materialien'] ?? []) as $entry) {
-            if (is_array($entry) && !empty($entry['stored'])
-                    && (string)($entry['filearea'] ?? '') === 'method_materialien') {
+            if (
+                is_array($entry) && !empty($entry['stored'])
+                    && (string)($entry['filearea'] ?? '') === 'method_materialien'
+            ) {
                 $sourceitemid = (int)($entry['itemid'] ?? 0);
                 break;
             }
@@ -314,18 +382,33 @@ class api extends external_api {
 
         $sourcefiles = [];
         if ($sourceitemid > 0) {
-            $sourcefiles = array_values($fs->get_area_files($modulecontextid, 'mod_seminarplaner',
-                'method_materialien', $sourceitemid, 'id ASC', false));
+            $sourcefiles = array_values($fs->get_area_files(
+                $modulecontextid,
+                'mod_seminarplaner',
+                'method_materialien',
+                $sourceitemid,
+                'id ASC',
+                false
+            ));
         }
 
         if (!$sourcefiles && !$fromactivity) {
             $sourcemethodid = (int)($method['_kgsync']['sourcemethodid'] ?? 0);
             if ($sourcemethodid > 0) {
-                $links = $DB->get_records('local_kgen_method_file',
-                    ['methodid' => $sourcemethodid, 'kind' => 'material'], 'id ASC');
+                $links = $DB->get_records(
+                    'local_kgen_method_file',
+                    ['methodid' => $sourcemethodid, 'kind' => 'material'],
+                    'id ASC'
+                );
                 foreach ($links as $link) {
-                    $areafiles = $fs->get_area_files($systemcontextid, 'local_seminarplaner',
-                        'method_material', (int)$link->fileitemid, 'id ASC', false);
+                    $areafiles = $fs->get_area_files(
+                        $systemcontextid,
+                        'local_seminarplaner',
+                        'method_material',
+                        (int)$link->fileitemid,
+                        'id ASC',
+                        false
+                    );
                     foreach ($areafiles as $areafile) {
                         $sourcefiles[] = $areafile;
                     }
@@ -345,8 +428,16 @@ class api extends external_api {
             if ($filename === '' || $filename === '.') {
                 continue;
             }
-            if ($fs->get_file($systemcontextid, 'local_seminarplaner', 'method_material',
-                    $newitemid, $filepath, $filename)) {
+            if (
+                $fs->get_file(
+                    $systemcontextid,
+                    'local_seminarplaner',
+                    'method_material',
+                    $newitemid,
+                    $filepath,
+                    $filename
+                )
+            ) {
                 continue;
             }
             $fs->create_file_from_storedfile((object)[
@@ -377,7 +468,7 @@ class api extends external_api {
      * @return array<string, mixed>
      */
     private static function map_activity_method_to_global_record(array $method): array {
-        $splitmulti = static function($value): string {
+        $splitmulti = static function ($value): string {
             if (is_array($value)) {
                 $parts = [];
                 foreach ($value as $entry) {
@@ -443,10 +534,12 @@ class api extends external_api {
             return [];
         }
 
-        list($insql, $params) = $DB->get_in_or_equal($methodids, SQL_PARAMS_NAMED);
-        $links = $DB->get_records_select('local_kgen_method_file',
+        [$insql, $params] = $DB->get_in_or_equal($methodids, SQL_PARAMS_NAMED);
+        $links = $DB->get_records_select(
+            'local_kgen_method_file',
             "methodid {$insql} AND kind = :kind",
-            $params + ['kind' => 'material']);
+            $params + ['kind' => 'material']
+        );
         if (!$links) {
             return [];
         }
@@ -460,8 +553,9 @@ class api extends external_api {
             return [];
         }
 
-        list($iteminsql, $itemparams) = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
-        $records = $DB->get_records_select('files',
+        [$iteminsql, $itemparams] = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
+        $records = $DB->get_records_select(
+            'files',
             "itemid {$iteminsql}
                  AND component = :component
                  AND filearea = :filearea
@@ -471,7 +565,8 @@ class api extends external_api {
                 'component' => 'local_seminarplaner',
                 'filearea' => 'method_material',
                 'dot' => '.',
-            ]);
+            ]
+        );
 
         $out = [];
         foreach ($records as $record) {
@@ -552,7 +647,7 @@ class api extends external_api {
 
         // Without the real attachments every comparison against an activity unit would
         // report the files as a difference.
-        $attachments = self::load_global_method_material_names(array_map(static function($row) {
+        $attachments = self::load_global_method_material_names(array_map(static function ($row) {
             return (int)$row->id;
         }, array_values($rows)));
 
@@ -562,9 +657,12 @@ class api extends external_api {
             if ($title === '') {
                 continue;
             }
-            $out[self::normalize_method_title($title)] = self::map_global_method_record($row,
-                (int)$set->id, (int)($row->methodsetversionid ?? $set->currentversion ?? 0),
-                $attachments[(int)$row->id] ?? []);
+            $out[self::normalize_method_title($title)] = self::map_global_method_record(
+                $row,
+                (int)$set->id,
+                (int)($row->methodsetversionid ?? $set->currentversion ?? 0),
+                $attachments[(int)$row->id] ?? []
+            );
         }
         return $out;
     }
@@ -596,14 +694,14 @@ class api extends external_api {
             'tags' => 'Tags',
             'kognitive' => 'Kognitive Dimension',
         ];
-        $normalize = static function($value): string {
+        $normalize = static function ($value): string {
             if (is_array($value)) {
                 $parts = [];
                 foreach ($value as $entry) {
                     $parts[] = trim(strip_tags((string)$entry));
                 }
                 sort($parts);
-                return implode('||', array_filter($parts, static function($entry) {
+                return implode('||', array_filter($parts, static function ($entry) {
                     return $entry !== '';
                 }));
             }
@@ -687,24 +785,38 @@ class api extends external_api {
             $entries = [];
         }
 
-        $entries = array_values(array_filter($entries, static function($ts) use ($windowstart) {
+        $entries = array_values(array_filter($entries, static function ($ts) use ($windowstart) {
             return is_int($ts) && $ts >= $windowstart;
         }));
 
         if (count($entries) >= $maxrequests) {
-            throw new invalid_parameter_exception('Zu viele Schreibanfragen in kurzer Zeit. Bitte kurz warten und erneut versuchen.');
+            throw new invalid_parameter_exception(
+                'Zu viele Schreibanfragen in kurzer Zeit. Bitte kurz warten und erneut versuchen.'
+            );
         }
 
         $entries[] = $now;
         $SESSION->mod_seminarplaner_ratelimit[$action] = $entries;
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Auslesen der Methodenkarten einer Aktivität.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function get_method_cards_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
         ]);
     }
 
+    /**
+     * Liefert alle Methodenkarten (Seminareinheiten) der Aktivität als JSON.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     *
+     * @return array Array mit dem Schlüssel methodsjson.
+     */
     public static function get_method_cards(int $cmid): array {
         $params = self::validate_parameters(self::get_method_cards_parameters(), ['cmid' => $cmid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
@@ -719,12 +831,22 @@ class api extends external_api {
         return ['methodsjson' => json_encode($methods, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Methodenkarten-Abfrage (Einheiten als JSON).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function get_method_cards_returns(): external_single_structure {
         return new external_single_structure([
             'methodsjson' => new external_value(PARAM_RAW, 'Seminar units as JSON'),
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Speichern der Methodenkarten.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function save_method_cards_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -732,6 +854,14 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Speichert die übergebenen Methodenkarten der Aktivität und ersetzt dabei den bisherigen Bestand.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param string $methodsjson Seminareinheiten als JSON-Array.
+     *
+     * @return array Array mit den Schlüsseln success und count.
+     */
     public static function save_method_cards(int $cmid, string $methodsjson): array {
         $params = self::validate_parameters(self::save_method_cards_parameters(), [
             'cmid' => $cmid,
@@ -756,6 +886,11 @@ class api extends external_api {
         return ['success' => true, 'count' => count($decoded)];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur des Speichervorgangs (Erfolg und Anzahl gespeicherter Einheiten).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function save_method_cards_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Save result'),
@@ -763,12 +898,24 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Auflisten der globalen Methodensets.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function list_global_methodsets_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
         ]);
     }
 
+    /**
+     * Listet die für diese Aktivität sichtbaren globalen Methodensets des Plugins local_seminarplaner auf.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     *
+     * @return array Array mit den Schlüsseln available, message und methodsets.
+     */
     public static function list_global_methodsets(int $cmid): array {
         global $DB;
 
@@ -817,6 +964,11 @@ class api extends external_api {
         return ['available' => true, 'message' => '', 'methodsets' => array_values($out)];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Methodenset-Liste (Verfügbarkeit, Statusmeldung und Sets).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function list_global_methodsets_returns(): external_single_structure {
         return new external_single_structure([
             'available' => new external_value(PARAM_BOOL, 'Local plugin available'),
@@ -832,6 +984,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für den Import eines globalen Methodensets.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function import_global_methodset_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -839,6 +996,14 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Importiert ein globales Methodenset in die Aktivität und legt bei Seminarkonzepten zusätzlich einen Plan an.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $methodsetid ID des globalen Methodensets.
+     *
+     * @return array Array mit Importergebnis, Anzahlen sowie Set- und Plannamen.
+     */
     public static function import_global_methodset(int $cmid, int $methodsetid): array {
         global $DB;
 
@@ -889,15 +1054,18 @@ class api extends external_api {
             $rows = $DB->get_records('local_kgen_method', ['methodsetid' => (int)$set->id]);
         }
 
-        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function($row) {
+        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function ($row) {
             return (int)$row->id;
         }, array_values($rows)));
 
         $imported = [];
         foreach ($rows as $row) {
-            $mapped = self::map_global_method_record($row, (int)$set->id,
+            $mapped = self::map_global_method_record(
+                $row,
+                (int)$set->id,
                 (int)($row->methodsetversionid ?? $contentversionid),
-                $attachmentsbymethod[(int)$row->id] ?? []);
+                $attachmentsbymethod[(int)$row->id] ?? []
+            );
             if (trim((string)$mapped['titel']) !== '') {
                 $imported[] = $mapped;
             }
@@ -912,8 +1080,13 @@ class api extends external_api {
         $service->save_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id, (int)$resolved['context']->id, $merged);
         if ($contentversionid > 0) {
             $syncservice = new \mod_seminarplaner\local\service\methodset_sync_service();
-            $syncservice->upsert_activity_set_link((int)$resolved['cm']->id, (int)$set->id, $contentversionid,
-                (int)$GLOBALS['USER']->id, false);
+            $syncservice->upsert_activity_set_link(
+                (int)$resolved['cm']->id,
+                (int)$set->id,
+                $contentversionid,
+                (int)$GLOBALS['USER']->id,
+                false
+            );
         }
 
         return [
@@ -926,6 +1099,11 @@ class api extends external_api {
         ];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur des Set-Imports (Anzahlen, Setname und ggf. angelegter Plan).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function import_global_methodset_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Import result'),
@@ -956,8 +1134,11 @@ class api extends external_api {
      * @param \local_seminarplaner\local\repository\methodset_repository $repo Repository.
      * @return array|null Import result, or null if the set carries no plan.
      */
-    private static function import_global_seminarkonzept(array $resolved, \stdClass $set,
-        \local_seminarplaner\local\repository\methodset_repository $repo): ?array {
+    private static function import_global_seminarkonzept(
+        array $resolved,
+        \stdClass $set,
+        \local_seminarplaner\local\repository\methodset_repository $repo
+    ): ?array {
         global $DB;
 
         $contentversionid = self::resolve_set_content_versionid($set);
@@ -966,8 +1147,10 @@ class api extends external_api {
         }
         $version = $repo->get_version($contentversionid);
         $payload = $version ? json_decode((string)$version->snapshotjson, true) : null;
-        if (!is_array($payload) || (string)($payload['typ'] ?? '') !== 'seminarkonzept'
-                || !is_array($payload['plan'] ?? null)) {
+        if (
+            !is_array($payload) || (string)($payload['typ'] ?? '') !== 'seminarkonzept'
+                || !is_array($payload['plan'] ?? null)
+        ) {
             // Kein Plan im Snapshot. Das trifft jedes Set, das vor D32
             // veroeffentlicht wurde (damals blieb der Snapshot leer, die
             // Einheiten lagen nur in local_kgen_method) und spaeter das Label
@@ -987,7 +1170,7 @@ class api extends external_api {
             'methodsetid' => (int)$set->id,
             'methodsetversionid' => $contentversionid,
         ]);
-        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function($row) {
+        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function ($row) {
             return (int)$row->id;
         }, array_values($rows)));
         $attachmentsbytitle = [];
@@ -1026,8 +1209,10 @@ class api extends external_api {
 
         // Rewrite the sequence's card references onto the fresh ids.
         $statekey = \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY;
-        if (isset($state[$statekey]) && is_array($state[$statekey])
-                && isset($state[$statekey]['einheitenauswahlen']) && is_array($state[$statekey]['einheitenauswahlen'])) {
+        if (
+            isset($state[$statekey]) && is_array($state[$statekey])
+                && isset($state[$statekey]['einheitenauswahlen']) && is_array($state[$statekey]['einheitenauswahlen'])
+        ) {
             foreach ($state[$statekey]['einheitenauswahlen'] as $eaid => $auswahl) {
                 if (!is_array($auswahl)) {
                     continue;
@@ -1068,8 +1253,12 @@ class api extends external_api {
             $uniquename = $planname . ' (' . $suffix . ')';
             $suffix++;
         }
-        $newgridid = $gridservice->create_grid((int)$resolved['cm']->id, $uniquename, $actorid,
-            trim((string)($plan['description'] ?? '')) !== '' ? (string)$plan['description'] : null);
+        $newgridid = $gridservice->create_grid(
+            (int)$resolved['cm']->id,
+            $uniquename,
+            $actorid,
+            trim((string)($plan['description'] ?? '')) !== '' ? (string)$plan['description'] : null
+        );
         $gridservice->save_user_state($newgridid, $actorid, $state);
 
         // D55: importierte Seminarkonzepte im Bibliothek-Tab "Globale
@@ -1154,16 +1343,19 @@ class api extends external_api {
             $rows = $DB->get_records('local_kgen_method', ['methodsetid' => (int)$set->id]);
         }
 
-        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function($row) {
+        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function ($row) {
             return (int)$row->id;
         }, array_values($rows)));
 
         $imported = [];
         $counter = 0;
         foreach ($rows as $row) {
-            $mapped = self::map_global_method_record($row, (int)$set->id,
+            $mapped = self::map_global_method_record(
+                $row,
+                (int)$set->id,
                 (int)($row->methodsetversionid ?? $contentversionid),
-                $attachmentsbymethod[(int)$row->id] ?? []);
+                $attachmentsbymethod[(int)$row->id] ?? []
+            );
             if (trim((string)$mapped['titel']) === '') {
                 continue;
             }
@@ -1185,7 +1377,7 @@ class api extends external_api {
         $merged = array_merge($existing, $imported);
         $service->save_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id, $merged);
 
-        // gridid 0 heisst "hatte nie einen Plan" - anders als ein geloeschter.
+        // Gridid 0 heisst "hatte nie einen Plan" - anders als ein geloeschter.
         self::record_imported_konzept((int)$resolved['cm']->id, [
             'setid' => (int)$set->id,
             'setname' => (string)$set->displayname,
@@ -1288,6 +1480,11 @@ class api extends external_api {
         return ['sets' => $sets, 'rows' => $rows];
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Durchsuchen der globalen Methodenbibliothek.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function browse_global_library_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -1342,6 +1539,11 @@ class api extends external_api {
         return ['available' => true, 'message' => '', 'methods' => array_values($out)];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Bibliotheksabfrage (Verfügbarkeit, Meldung und Einzelmethoden).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function browse_global_library_returns(): external_single_structure {
         return new external_single_structure([
             'available' => new external_value(PARAM_BOOL, 'Local plugin available'),
@@ -1364,6 +1566,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Auflisten der importierten Seminarkonzepte.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function list_imported_konzepte_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -1415,7 +1622,7 @@ class api extends external_api {
         $out = [];
         foreach ($byset as $entry) {
             $gridid = (int)($entry['gridid'] ?? 0);
-            // gridid 0: das Konzept brachte nie einen Plan mit. Das ist etwas
+            // Gridid 0: das Konzept brachte nie einen Plan mit. Das ist etwas
             // anderes als ein Plan, den es gab und den jemand geloescht hat -
             // sonst meldet die Bibliothek einen Verlust, den es nie gab.
             $hadplan = $gridid > 0;
@@ -1434,13 +1641,18 @@ class api extends external_api {
             ];
         }
         // Newest import first.
-        usort($out, static function($a, $b) {
+        usort($out, static function ($a, $b) {
             return $b['timeimported'] <=> $a['timeimported'];
         });
 
         return ['konzepte' => array_values($out)];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der importierten Seminarkonzepte samt Plan- und Zählangaben.
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function list_imported_konzepte_returns(): external_single_structure {
         return new external_single_structure([
             'konzepte' => new external_multiple_structure(new external_single_structure([
@@ -1456,6 +1668,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Entfernen eines importierten Seminarkonzepts.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function delete_imported_konzept_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -1589,6 +1806,11 @@ class api extends external_api {
         return $usages;
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur des Löschvorgangs (Ergebnis, Anzahl entfernter Einheiten, blockierende Verwendungen).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function delete_imported_konzept_returns(): external_single_structure {
         return new external_single_structure([
             'deleted' => new external_value(PARAM_BOOL, 'Whether the concept was removed'),
@@ -1602,6 +1824,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für die Übernahme einer einzelnen globalen Methode.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function adopt_global_method_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -1667,6 +1894,11 @@ class api extends external_api {
         ];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Methodenübernahme (neue lokale ID, Titel und Gesamtzahl).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function adopt_global_method_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Adoption result'),
@@ -1676,12 +1908,24 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für die Abfrage des Sync-Status verknüpfter Methodensets.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function get_methodset_sync_status_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
         ]);
     }
 
+    /**
+     * Liefert den Synchronisationsstatus aller mit dieser Aktivität verknüpften globalen Methodensets.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     *
+     * @return array Array mit dem Schlüssel links.
+     */
     public static function get_methodset_sync_status(int $cmid): array {
         $params = self::validate_parameters(self::get_methodset_sync_status_parameters(), ['cmid' => $cmid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
@@ -1691,6 +1935,11 @@ class api extends external_api {
         return ['links' => $syncservice->list_activity_links((int)$resolved['cm']->id)];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur des Sync-Status je verknüpftem Methodenset.
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function get_methodset_sync_status_returns(): external_single_structure {
         return new external_single_structure([
             'links' => new external_multiple_structure(new external_single_structure([
@@ -1707,6 +1956,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Anwenden ausstehender Methodenset-Updates.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function apply_methodset_updates_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -1714,6 +1968,14 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Übernimmt eine ausstehende globale Aktualisierung des Methodensets in die Aktivität.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $methodsetid ID des globalen Methodensets.
+     *
+     * @return array Array mit dem Schlüssel updated.
+     */
     public static function apply_methodset_updates(int $cmid, int $methodsetid): array {
         $params = self::validate_parameters(self::apply_methodset_updates_parameters(), [
             'cmid' => $cmid,
@@ -1724,23 +1986,43 @@ class api extends external_api {
         self::enforce_write_rate_limit('apply_methodset_updates', 30, 60);
 
         $syncservice = new \mod_seminarplaner\local\service\methodset_sync_service();
-        $updated = $syncservice->apply_pending_update_for_activity((int)$resolved['cm']->id, (int)$params['methodsetid'],
-            (int)$GLOBALS['USER']->id);
+        $updated = $syncservice->apply_pending_update_for_activity(
+            (int)$resolved['cm']->id,
+            (int)$params['methodsetid'],
+            (int)$GLOBALS['USER']->id
+        );
         return ['updated' => (bool)$updated];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Update-Übernahme (Aktualisierungsstatus).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function apply_methodset_updates_returns(): external_single_structure {
         return new external_single_structure([
             'updated' => new external_value(PARAM_BOOL, 'Update status'),
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Auflisten möglicher Review-Ziele.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function list_review_targets_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
         ]);
     }
 
+    /**
+     * Listet die globalen Methodensets auf, in die aus dieser Aktivität heraus zum Review eingereicht werden darf.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     *
+     * @return array Array mit den Schlüsseln available, message und methodsets.
+     */
     public static function list_review_targets(int $cmid): array {
         global $DB;
 
@@ -1785,6 +2067,11 @@ class api extends external_api {
         return ['available' => true, 'message' => '', 'methodsets' => array_values($out)];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Review-Ziele (Verfügbarkeit, Meldung und einreichbare Sets).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function list_review_targets_returns(): external_single_structure {
         return new external_single_structure([
             'available' => new external_value(PARAM_BOOL, 'Local plugin available'),
@@ -1802,12 +2089,24 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Auflisten möglicher Konzeptverantwortlicher.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function list_reviewer_candidates_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
         ]);
     }
 
+    /**
+     * Listet die Personen auf, die als Konzeptverantwortliche einer Einreichung zugeordnet werden können.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     *
+     * @return array Array mit den Schlüsseln available, message und reviewers.
+     */
     public static function list_reviewer_candidates(int $cmid): array {
         $params = self::validate_parameters(self::list_reviewer_candidates_parameters(), ['cmid' => $cmid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
@@ -1824,8 +2123,12 @@ class api extends external_api {
 
         $users = [];
         foreach ($scopecontexts as $scopectx) {
-            $candidates = get_users_by_capability($scopectx, 'local/seminarplaner:reviewset',
-                'u.id,u.firstname,u.lastname,u.email,u.deleted,u.suspended', 'u.lastname ASC, u.firstname ASC');
+            $candidates = get_users_by_capability(
+                $scopectx,
+                'local/seminarplaner:reviewset',
+                'u.id,u.firstname,u.lastname,u.email,u.deleted,u.suspended',
+                'u.lastname ASC, u.firstname ASC'
+            );
             foreach ($candidates as $candidate) {
                 if (!empty($candidate->deleted) || !empty($candidate->suspended)) {
                     continue;
@@ -1841,6 +2144,11 @@ class api extends external_api {
         return ['available' => true, 'message' => '', 'reviewers' => array_values($users)];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Reviewer-Kandidaten (Verfügbarkeit, Meldung und Personenliste).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function list_reviewer_candidates_returns(): external_single_structure {
         return new external_single_structure([
             'available' => new external_value(PARAM_BOOL, 'Local plugin available'),
@@ -1853,6 +2161,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für die öffentliche Liste der Konzeptverantwortlichen.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function list_public_reviewers_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -1894,8 +2207,12 @@ class api extends external_api {
         $users = [];
         $caniopt = false;
         foreach ($scopecontexts as $scopectx) {
-            $candidates = get_users_by_capability($scopectx, 'local/seminarplaner:reviewset',
-                'u.id,u.firstname,u.lastname,u.deleted,u.suspended', 'u.lastname ASC, u.firstname ASC');
+            $candidates = get_users_by_capability(
+                $scopectx,
+                'local/seminarplaner:reviewset',
+                'u.id,u.firstname,u.lastname,u.deleted,u.suspended',
+                'u.lastname ASC, u.firstname ASC'
+            );
             foreach ($candidates as $candidate) {
                 if (!empty($candidate->deleted) || !empty($candidate->suspended)) {
                     continue;
@@ -1915,7 +2232,7 @@ class api extends external_api {
         }
 
         $reviewers = array_values($users);
-        usort($reviewers, function($a, $b) {
+        usort($reviewers, function ($a, $b) {
             return strcasecmp($a['fullname'], $b['fullname']);
         });
 
@@ -1928,6 +2245,11 @@ class api extends external_api {
         ];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der öffentlichen Reviewer-Liste inklusive Opt-in-Status der aufrufenden Person.
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function list_public_reviewers_returns(): external_single_structure {
         return new external_single_structure([
             'available' => new external_value(PARAM_BOOL, 'Local plugin available'),
@@ -1941,6 +2263,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für die Abfrage einreichbarer Einheiten eines Sets.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function get_review_method_candidates_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -1948,6 +2275,14 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Ermittelt, welche Einheiten der Aktivität gegenüber dem gewählten globalen Set neu oder geändert sind.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $methodsetid ID des globalen Methodensets.
+     *
+     * @return array Array mit dem Schlüssel candidates.
+     */
     public static function get_review_method_candidates(int $cmid, int $methodsetid): array {
         $params = self::validate_parameters(self::get_review_method_candidates_parameters(), [
             'cmid' => $cmid,
@@ -1967,15 +2302,18 @@ class api extends external_api {
         }
 
         $scopecontexts = self::resolve_submit_scope_contexts($resolved['course']);
-        $allowedscopeids = array_map(static function($ctx) {
+        $allowedscopeids = array_map(static function ($ctx) {
             return (int)$ctx->id;
         }, $scopecontexts);
         if (!in_array((int)$set->scopecontextid, $allowedscopeids, true)) {
             throw new invalid_parameter_exception('Keine Berechtigung für das gewählte Konzept');
         }
 
-        $activitymethods = (new method_card_service())->get_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id,
-            (int)$resolved['context']->id);
+        $activitymethods = (new method_card_service())->get_methods(
+            (int)$resolved['cm']->id,
+            (int)$GLOBALS['USER']->id,
+            (int)$resolved['context']->id
+        );
         $setmethods = self::load_set_methods_by_title((int)$set->id);
 
         $candidates = [];
@@ -2011,6 +2349,11 @@ class api extends external_api {
         return ['candidates' => $candidates];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der einreichbaren Einheiten (Status und geänderte Felder je Einheit).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function get_review_method_candidates_returns(): external_single_structure {
         return new external_single_structure([
             'candidates' => new external_multiple_structure(new external_single_structure([
@@ -2022,18 +2365,41 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Einreichen von Einheiten in ein bestehendes Methodenset.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function submit_methodset_for_review_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
             'methodsetid' => new external_value(PARAM_INT, 'Existing method set id'),
             'changelog' => new external_value(PARAM_TEXT, 'Update note', VALUE_DEFAULT, ''),
-            'methodids' => new external_multiple_structure(new external_value(PARAM_RAW, 'Method ids from activity'),
-                'Methods to submit', VALUE_DEFAULT, []),
+            'methodids' => new external_multiple_structure(
+                new external_value(PARAM_RAW, 'Method ids from activity'),
+                'Methods to submit',
+                VALUE_DEFAULT,
+                []
+            ),
         ]);
     }
 
-    public static function submit_methodset_for_review(int $cmid, int $methodsetid, string $changelog = '',
-        array $methodids = []): array {
+    /**
+     * Reicht ausgewählte Einheiten der Aktivität als neue Version eines bestehenden globalen Methodensets zum Review ein.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $methodsetid ID des globalen Methodensets.
+     * @param string $changelog Begleitende Änderungsnotiz zur eingereichten Version.
+     * @param array $methodids IDs der einzureichenden Einheiten; leer bedeutet alle Kandidaten.
+     *
+     * @return array Array mit Einreichungsstatus, Set- und Versions-ID sowie Anzahlen.
+     */
+    public static function submit_methodset_for_review(
+        int $cmid,
+        int $methodsetid,
+        string $changelog = '',
+        array $methodids = []
+    ): array {
         global $DB;
 
         $params = self::validate_parameters(self::submit_methodset_for_review_parameters(), [
@@ -2060,7 +2426,7 @@ class api extends external_api {
         if (!$scopecontexts) {
             throw new invalid_parameter_exception('Keine Berechtigung zum Einreichen für Review');
         }
-        $allowedscopeids = array_map(static function($ctx) {
+        $allowedscopeids = array_map(static function ($ctx) {
             return (int)$ctx->id;
         }, $scopecontexts);
 
@@ -2148,8 +2514,12 @@ class api extends external_api {
         if (!$assignedreviewers) {
             // Fallback for legacy sets without explicit reviewer assignment:
             // auto-assign active users that currently hold review capability in scope.
-            $autocandidates = get_users_by_capability($scopecontext, 'local/seminarplaner:reviewset',
-                'u.id,u.deleted,u.suspended', 'u.id ASC');
+            $autocandidates = get_users_by_capability(
+                $scopecontext,
+                'local/seminarplaner:reviewset',
+                'u.id,u.deleted,u.suspended',
+                'u.id ASC'
+            );
             $autorreviewerids = [];
             foreach ($autocandidates as $candidate) {
                 if (!empty($candidate->deleted) || !empty($candidate->suspended)) {
@@ -2164,8 +2534,12 @@ class api extends external_api {
             $reviewerrepo->replace_reviewers((int)$set->id, $autorreviewerids, $actorid);
             $assignedreviewers = $autorreviewerids;
         }
-        $reviewerswithcap = get_users_by_capability($scopecontext, 'local/seminarplaner:reviewset',
-            'u.id,u.deleted,u.suspended', 'u.id ASC');
+        $reviewerswithcap = get_users_by_capability(
+            $scopecontext,
+            'local/seminarplaner:reviewset',
+            'u.id,u.deleted,u.suspended',
+            'u.id ASC'
+        );
         $allowedreviewers = [];
         foreach ($reviewerswithcap as $capuser) {
             if (!empty($capuser->deleted) || !empty($capuser->suspended)) {
@@ -2175,7 +2549,9 @@ class api extends external_api {
         }
         foreach ($assignedreviewers as $reviewerid) {
             if (empty($allowedreviewers[(int)$reviewerid])) {
-                throw new invalid_parameter_exception('Mindestens ein zugeordneter Konzeptverantwortliche hat keine Review-Berechtigung mehr');
+                throw new invalid_parameter_exception(
+                    'Mindestens ein zugeordneter Konzeptverantwortliche hat keine Review-Berechtigung mehr'
+                );
             }
         }
 
@@ -2201,11 +2577,18 @@ class api extends external_api {
             $newmethodid = (int)$DB->insert_record('local_kgen_method', $record);
             $savedcount++;
             $fromactivity = !empty($selectedtitles[self::normalize_method_title((string)$mapped['title'])]);
-            self::copy_method_material_files_to_global($method, $newmethodid,
-                (int)$resolved['context']->id, $actorid, $fromactivity);
+            self::copy_method_material_files_to_global(
+                $method,
+                $newmethodid,
+                (int)$resolved['context']->id,
+                $actorid,
+                $fromactivity
+            );
         }
 
-        $comment = trim((string)$params['changelog']) !== '' ? trim((string)$params['changelog']) : 'Submitted from mod_seminarplaner';
+        $comment = trim((string)$params['changelog']) !== ''
+            ? trim((string)$params['changelog'])
+            : 'Submitted from mod_seminarplaner';
         $workflow->transition((int)$set->id, (int)$versionid, 'review', $actorid, $comment);
 
         return [
@@ -2217,6 +2600,11 @@ class api extends external_api {
         ];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Einreichung (Status, Set- und Versions-ID, gespeicherte Einheiten, Reviewer-Anzahl).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function submit_methodset_for_review_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Submit status'),
@@ -2227,6 +2615,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Anlegen und Einreichen eines neuen Methodensets.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function create_methodset_for_review_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -2234,13 +2627,35 @@ class api extends external_api {
             'displayname' => new external_value(PARAM_TEXT, 'New method set displayname'),
             'description' => new external_value(PARAM_RAW, 'New method set description', VALUE_DEFAULT, ''),
             'changelog' => new external_value(PARAM_TEXT, 'Update note', VALUE_DEFAULT, ''),
-            'methodids' => new external_multiple_structure(new external_value(PARAM_RAW, 'Method ids from activity'),
-                'Methods for new set', VALUE_DEFAULT, []),
+            'methodids' => new external_multiple_structure(
+                new external_value(PARAM_RAW, 'Method ids from activity'),
+                'Methods for new set',
+                VALUE_DEFAULT,
+                []
+            ),
         ]);
     }
 
-    public static function create_methodset_for_review(int $cmid, string $shortname, string $displayname, string $description = '',
-        string $changelog = '', array $methodids = []): array {
+    /**
+     * Legt ein neues globales Methodenset aus Einheiten der Aktivität an und reicht dessen erste Version zum Review ein.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param string $shortname Kurzname des neuen Methodensets.
+     * @param string $displayname Anzeigename des neuen Methodensets.
+     * @param string $description Beschreibungstext des neuen Methodensets.
+     * @param string $changelog Begleitende Änderungsnotiz zur eingereichten Version.
+     * @param array $methodids IDs der einzureichenden Einheiten; leer bedeutet alle Kandidaten.
+     *
+     * @return array Array mit Einreichungsstatus, Set- und Versions-ID sowie Anzahlen.
+     */
+    public static function create_methodset_for_review(
+        int $cmid,
+        string $shortname,
+        string $displayname,
+        string $description = '',
+        string $changelog = '',
+        array $methodids = []
+    ): array {
         global $DB;
 
         $params = self::validate_parameters(self::create_methodset_for_review_parameters(), [
@@ -2311,8 +2726,13 @@ class api extends external_api {
         $reviewerrepo = new \local_seminarplaner\local\repository\reviewer_repository();
         $workflow = new \local_seminarplaner\local\service\workflow_service();
 
-        $newsetid = $repo->create_methodset_draft((string)$params['shortname'], (string)$params['displayname'],
-            (string)$params['description'], (int)$targetscope->id, $actorid);
+        $newsetid = $repo->create_methodset_draft(
+            (string)$params['shortname'],
+            (string)$params['displayname'],
+            (string)$params['description'],
+            (int)$targetscope->id,
+            $actorid
+        );
 
         $snapshotjson = json_encode($selectedmethods, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($snapshotjson === false) {
@@ -2351,11 +2771,18 @@ class api extends external_api {
             ]);
             $newmethodid = (int)$DB->insert_record('local_kgen_method', $record);
             $savedcount++;
-            self::copy_method_material_files_to_global($method, $newmethodid,
-                (int)$resolved['context']->id, $actorid, true);
+            self::copy_method_material_files_to_global(
+                $method,
+                $newmethodid,
+                (int)$resolved['context']->id,
+                $actorid,
+                true
+            );
         }
 
-        $comment = trim((string)$params['changelog']) !== '' ? trim((string)$params['changelog']) : 'Submitted from mod_seminarplaner';
+        $comment = trim((string)$params['changelog']) !== ''
+            ? trim((string)$params['changelog'])
+            : 'Submitted from mod_seminarplaner';
         $workflow->transition((int)$newsetid, (int)$versionid, 'review', $actorid, $comment);
 
         return [
@@ -2367,6 +2794,11 @@ class api extends external_api {
         ];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Neuanlage (Status, Set- und Versions-ID, gespeicherte Einheiten, Reviewer-Anzahl).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function create_methodset_for_review_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Submit status'),
@@ -2407,16 +2839,33 @@ class api extends external_api {
         return array_keys($refs);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Einreichen eines Seminarplans als globales Seminarkonzept.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function submit_seminarkonzept_for_review_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
             'gridid' => new external_value(PARAM_INT, 'Seminarplan id'),
-            'methodsetid' => new external_value(PARAM_INT, 'Existing Seminarkonzept set id (0 = create new)',
-                VALUE_DEFAULT, 0),
-            'shortname' => new external_value(PARAM_ALPHANUMEXT, 'New set shortname (only for new sets)',
-                VALUE_DEFAULT, ''),
-            'displayname' => new external_value(PARAM_TEXT, 'New set displayname (only for new sets)',
-                VALUE_DEFAULT, ''),
+            'methodsetid' => new external_value(
+                PARAM_INT,
+                'Existing Seminarkonzept set id (0 = create new)',
+                VALUE_DEFAULT,
+                0
+            ),
+            'shortname' => new external_value(
+                PARAM_ALPHANUMEXT,
+                'New set shortname (only for new sets)',
+                VALUE_DEFAULT,
+                ''
+            ),
+            'displayname' => new external_value(
+                PARAM_TEXT,
+                'New set displayname (only for new sets)',
+                VALUE_DEFAULT,
+                ''
+            ),
             'description' => new external_value(PARAM_RAW, 'New set description', VALUE_DEFAULT, ''),
             'changelog' => new external_value(PARAM_TEXT, 'Update note', VALUE_DEFAULT, ''),
         ]);
@@ -2432,8 +2881,15 @@ class api extends external_api {
      * rebuild the plan 1:1). The referenced units are also written as
      * local_kgen_method rows, so they stay browsable in the global library.
      */
-    public static function submit_seminarkonzept_for_review(int $cmid, int $gridid, int $methodsetid = 0,
-        string $shortname = '', string $displayname = '', string $description = '', string $changelog = ''): array {
+    public static function submit_seminarkonzept_for_review(
+        int $cmid,
+        int $gridid,
+        int $methodsetid = 0,
+        string $shortname = '',
+        string $displayname = '',
+        string $description = '',
+        string $changelog = ''
+    ): array {
         global $DB;
 
         $params = self::validate_parameters(self::submit_seminarkonzept_for_review_parameters(), [
@@ -2464,7 +2920,7 @@ class api extends external_api {
         if (!$scopecontexts) {
             throw new invalid_parameter_exception('Keine Berechtigung zum Einreichen für Review');
         }
-        $allowedscopeids = array_map(static function($ctx) {
+        $allowedscopeids = array_map(static function ($ctx) {
             return (int)$ctx->id;
         }, $scopecontexts);
         $actorid = (int)$GLOBALS['USER']->id;
@@ -2481,7 +2937,8 @@ class api extends external_api {
         $sequenz = $state[\mod_seminarplaner\local\sequence\sequence_state::STATE_KEY] ?? null;
         if (!$sequenz) {
             throw new invalid_parameter_exception(
-                'Dieser Seminarplan hat noch keine Sequenz – bitte einmal in der Sequenzansicht öffnen.');
+                'Dieser Seminarplan hat noch keine Sequenz – bitte einmal in der Sequenzansicht öffnen.'
+            );
         }
 
         // The plan's units travel inside the snapshot with their original ids,
@@ -2539,8 +2996,14 @@ class api extends external_api {
                 throw new invalid_parameter_exception('Bitte Name und Kurzbezeichnung angeben');
             }
             $targetscope = $scopecontexts[0];
-            $setid = $repo->create_methodset_draft($newshortname, $newdisplayname,
-                (string)$params['description'], (int)$targetscope->id, $actorid, 'seminarkonzept');
+            $setid = $repo->create_methodset_draft(
+                $newshortname,
+                $newdisplayname,
+                (string)$params['description'],
+                (int)$targetscope->id,
+                $actorid,
+                'seminarkonzept'
+            );
             $versionnum = 1;
         }
 
@@ -2567,8 +3030,12 @@ class api extends external_api {
         $scopecontext = \context::instance_by_id((int)$set->scopecontextid, MUST_EXIST);
         $assignedreviewers = $reviewerrepo->get_reviewer_userids($setid);
         if (!$assignedreviewers) {
-            $autocandidates = get_users_by_capability($scopecontext, 'local/seminarplaner:reviewset',
-                'u.id,u.deleted,u.suspended', 'u.id ASC');
+            $autocandidates = get_users_by_capability(
+                $scopecontext,
+                'local/seminarplaner:reviewset',
+                'u.id,u.deleted,u.suspended',
+                'u.id ASC'
+            );
             $autorreviewerids = [];
             foreach ($autocandidates as $candidate) {
                 if (!empty($candidate->deleted) || !empty($candidate->suspended)) {
@@ -2604,8 +3071,13 @@ class api extends external_api {
             ]);
             $newmethodid = (int)$DB->insert_record('local_kgen_method', $record);
             $savedcount++;
-            self::copy_method_material_files_to_global($method, $newmethodid,
-                (int)$resolved['context']->id, $actorid, true);
+            self::copy_method_material_files_to_global(
+                $method,
+                $newmethodid,
+                (int)$resolved['context']->id,
+                $actorid,
+                true
+            );
         }
 
         $comment = trim((string)$params['changelog']) !== ''
@@ -2623,6 +3095,11 @@ class api extends external_api {
         ];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Konzept-Einreichung (Status, IDs, Anzahlen und eingereichter Planname).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function submit_seminarkonzept_for_review_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Submit status'),
@@ -2634,6 +3111,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Anlegen eines Seminarplans.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function create_grid_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -2642,6 +3124,15 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Legt einen neuen Seminarplan in der Aktivität an.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param string $name Name des neuen Seminarplans.
+     * @param string $description Beschreibungstext des Seminarplans.
+     *
+     * @return array Array mit den Schlüsseln gridid und name.
+     */
     public static function create_grid(int $cmid, string $name, string $description = ''): array {
         $params = self::validate_parameters(self::create_grid_parameters(), [
             'cmid' => $cmid,
@@ -2654,12 +3145,21 @@ class api extends external_api {
         self::enforce_write_rate_limit('create_grid', 40, 60);
 
         $service = new grid_service();
-        $gridid = $service->create_grid((int)$resolved['cm']->id, (string)$params['name'], (int)$GLOBALS['USER']->id,
-            (string)$params['description']);
+        $gridid = $service->create_grid(
+            (int)$resolved['cm']->id,
+            (string)$params['name'],
+            (int)$GLOBALS['USER']->id,
+            (string)$params['description']
+        );
 
         return ['gridid' => $gridid, 'name' => (string)$params['name']];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Plananlage (ID und Name des neuen Seminarplans).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function create_grid_returns(): external_single_structure {
         return new external_single_structure([
             'gridid' => new external_value(PARAM_INT, 'New grid id'),
@@ -2667,6 +3167,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Löschen eines Seminarplans.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function delete_grid_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -2674,6 +3179,14 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Löscht den angegebenen Seminarplan der Aktivität.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $gridid ID des Seminarplans (Grid).
+     *
+     * @return array Array mit dem Schlüssel deleted.
+     */
     public static function delete_grid(int $cmid, int $gridid): array {
         $params = self::validate_parameters(self::delete_grid_parameters(), [
             'cmid' => $cmid,
@@ -2689,18 +3202,35 @@ class api extends external_api {
         return ['deleted' => (bool)$deleted];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur des Löschvorgangs (Löschstatus).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function delete_grid_returns(): external_single_structure {
         return new external_single_structure([
             'deleted' => new external_value(PARAM_BOOL, 'Delete status'),
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Auflisten der Seminarpläne.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function list_grids_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
         ]);
     }
 
+    /**
+     * Listet alle Seminarpläne der Aktivität mit Namen, Beschreibung und Statusangaben auf.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     *
+     * @return array Array mit dem Schlüssel grids.
+     */
     public static function list_grids(int $cmid): array {
         $params = self::validate_parameters(self::list_grids_parameters(), ['cmid' => $cmid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
@@ -2723,6 +3253,11 @@ class api extends external_api {
         return ['grids' => $out];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Planliste (ID, Name, Beschreibung, Archivflag und Änderungszeit).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function list_grids_returns(): external_single_structure {
         return new external_single_structure([
             'grids' => new external_multiple_structure(new external_single_structure([
@@ -2735,12 +3270,24 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für die Abfrage des veröffentlichten Roten Fadens.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function get_roterfaden_state_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
         ]);
     }
 
+    /**
+     * Liefert den veröffentlichten Roten Faden der Aktivität inklusive Sichtbarkeit und Planzustand.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     *
+     * @return array Array mit den Schlüsseln ispublished, gridid und statejson.
+     */
     public static function get_roterfaden_state(int $cmid): array {
         $params = self::validate_parameters(self::get_roterfaden_state_parameters(), ['cmid' => $cmid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
@@ -2755,6 +3302,11 @@ class api extends external_api {
         ];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur des Roten Fadens (Sichtbarkeit, Plan-ID und Zustands-JSON).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function get_roterfaden_state_returns(): external_single_structure {
         return new external_single_structure([
             'ispublished' => new external_value(PARAM_BOOL, 'Whether Common Thread is visible'),
@@ -2763,6 +3315,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Veröffentlichen des Roten Fadens.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function publish_roterfaden_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -2771,6 +3328,15 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Veröffentlicht den angegebenen Seminarplan als Roten Faden für die Teilnehmenden.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $gridid ID des Seminarplans (Grid).
+     * @param string $statejson Zu veröffentlichender Planzustand als JSON.
+     *
+     * @return array Array mit dem Schlüssel success.
+     */
     public static function publish_roterfaden(int $cmid, int $gridid, string $statejson): array {
         $params = self::validate_parameters(self::publish_roterfaden_parameters(), [
             'cmid' => $cmid,
@@ -2794,18 +3360,35 @@ class api extends external_api {
         return ['success' => $ok];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Veröffentlichung (Erfolgsstatus).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function publish_roterfaden_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Publish result'),
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Zurückziehen des Roten Fadens.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function unpublish_roterfaden_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
         ]);
     }
 
+    /**
+     * Nimmt den veröffentlichten Roten Faden der Aktivität wieder aus der Anzeige.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     *
+     * @return array Array mit dem Schlüssel success.
+     */
     public static function unpublish_roterfaden(int $cmid): array {
         $params = self::validate_parameters(self::unpublish_roterfaden_parameters(), ['cmid' => $cmid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
@@ -2817,12 +3400,22 @@ class api extends external_api {
         return ['success' => $ok];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur des Zurückziehens (Erfolgsstatus).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function unpublish_roterfaden_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Unpublish result'),
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für die Abfrage des persönlichen Planzustands.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function get_user_state_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -2830,6 +3423,14 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Liefert den persönlichen Bearbeitungszustand der aufrufenden Person zu einem Seminarplan.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $gridid ID des Seminarplans (Grid).
+     *
+     * @return array Array mit den Schlüsseln statejson und versionhash.
+     */
     public static function get_user_state(int $cmid, int $gridid): array {
         $params = self::validate_parameters(self::get_user_state_parameters(), ['cmid' => $cmid, 'gridid' => $gridid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
@@ -2844,6 +3445,11 @@ class api extends external_api {
         ];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur des Planzustands (Zustands-JSON und Versions-Hash).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function get_user_state_returns(): external_single_structure {
         return new external_single_structure([
             'statejson' => new external_value(PARAM_RAW, 'State JSON'),
@@ -2851,6 +3457,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für die Abfrage des Sequenz-Intro-Markers.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function get_sequenz_intro_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -2858,6 +3469,14 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Prüft, ob die aufrufende Person die einmalige Einführung der Sequenzansicht für diesen Plan bereits gesehen hat.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $gridid ID des Seminarplans (Grid).
+     *
+     * @return array Array mit dem Schlüssel seen.
+     */
     public static function get_sequenz_intro(int $cmid, int $gridid): array {
         $params = self::validate_parameters(self::get_sequenz_intro_parameters(), ['cmid' => $cmid, 'gridid' => $gridid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
@@ -2867,12 +3486,22 @@ class api extends external_api {
         return ['seen' => $service->get_intro_seen((int)$params['gridid'], (int)$GLOBALS['USER']->id)];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Intro-Abfrage (ob die Einführung bereits gesehen wurde).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function get_sequenz_intro_returns(): external_single_structure {
         return new external_single_structure([
             'seen' => new external_value(PARAM_BOOL, 'Whether the one-time sequence intro was already seen'),
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Setzen des Sequenz-Intro-Markers.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function mark_sequenz_intro_seen_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -2880,6 +3509,14 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Merkt für die aufrufende Person, dass die einmalige Einführung der Sequenzansicht gesehen wurde.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $gridid ID des Seminarplans (Grid).
+     *
+     * @return array Array mit dem Schlüssel success.
+     */
     public static function mark_sequenz_intro_seen(int $cmid, int $gridid): array {
         $params = self::validate_parameters(self::mark_sequenz_intro_seen_parameters(), ['cmid' => $cmid, 'gridid' => $gridid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
@@ -2890,12 +3527,22 @@ class api extends external_api {
         return ['success' => $service->mark_intro_seen((int)$params['gridid'], (int)$GLOBALS['USER']->id)];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur des Markervorgangs (Erfolgsstatus).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function mark_sequenz_intro_seen_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Marker result'),
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Speichern des persönlichen Planzustands.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function save_user_state_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -2905,6 +3552,16 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Speichert den persönlichen Bearbeitungszustand zu einem Seminarplan mit optionaler Konfliktprüfung.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $gridid ID des Seminarplans (Grid).
+     * @param string $statejson Zu speichernder Planzustand als JSON.
+     * @param string $expectedhash Erwarteter Versions-Hash zur Erkennung paralleler Änderungen.
+     *
+     * @return array Array mit dem Schlüssel versionhash.
+     */
     public static function save_user_state(int $cmid, int $gridid, string $statejson, string $expectedhash = ''): array {
         $params = self::validate_parameters(self::save_user_state_parameters(), [
             'cmid' => $cmid,
@@ -2926,24 +3583,45 @@ class api extends external_api {
         }
 
         $service = new grid_service();
-        $newhash = $service->save_user_state((int)$params['gridid'], (int)$GLOBALS['USER']->id, $decoded,
-            (string)$params['expectedhash']);
+        $newhash = $service->save_user_state(
+            (int)$params['gridid'],
+            (int)$GLOBALS['USER']->id,
+            $decoded,
+            (string)$params['expectedhash']
+        );
 
         return ['versionhash' => $newhash];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur des Speichervorgangs (neuer Versions-Hash).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function save_user_state_returns(): external_single_structure {
         return new external_single_structure([
             'versionhash' => new external_value(PARAM_RAW, 'New version hash'),
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für die Abfrage des Planungszustands der Aktivität.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function get_planning_state_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
         ]);
     }
 
+    /**
+     * Liefert den aktivitätsweiten Planungszustand inklusive aktuellem Versions-Hash.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     *
+     * @return array Array mit den Schlüsseln statejson und versionhash.
+     */
     public static function get_planning_state(int $cmid): array {
         $params = self::validate_parameters(self::get_planning_state_parameters(), ['cmid' => $cmid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
@@ -2957,6 +3635,11 @@ class api extends external_api {
         ];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur des Planungszustands (Zustands-JSON und Versions-Hash).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function get_planning_state_returns(): external_single_structure {
         return new external_single_structure([
             'statejson' => new external_value(PARAM_RAW, 'Planning state JSON'),
@@ -2964,6 +3647,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Speichern des Planungszustands der Aktivität.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function save_planning_state_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -2972,6 +3660,15 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Speichert den aktivitätsweiten Planungszustand mit optionaler Konfliktprüfung über den Versions-Hash.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param string $statejson Zu speichernder Planungszustand als JSON.
+     * @param string $expectedhash Erwarteter Versions-Hash zur Erkennung paralleler Änderungen.
+     *
+     * @return array Array mit dem Schlüssel versionhash.
+     */
     public static function save_planning_state(int $cmid, string $statejson, string $expectedhash = ''): array {
         $params = self::validate_parameters(self::save_planning_state_parameters(), [
             'cmid' => $cmid,
@@ -2990,16 +3687,31 @@ class api extends external_api {
             throw new invalid_parameter_exception('statejson must decode to an object/array');
         }
         $service = new planning_state_service();
-        $newhash = $service->save_state((int)$resolved['cm']->id, $decoded, (int)$GLOBALS['USER']->id, (string)$params['expectedhash']);
+        $newhash = $service->save_state(
+            (int)$resolved['cm']->id,
+            $decoded,
+            (int)$GLOBALS['USER']->id,
+            (string)$params['expectedhash']
+        );
         return ['versionhash' => $newhash];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur des Speichervorgangs (neuer Versions-Hash).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function save_planning_state_returns(): external_single_structure {
         return new external_single_structure([
             'versionhash' => new external_value(PARAM_RAW, 'New version hash'),
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für die Prüfung einer Importdatenmenge.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function validate_import_payload_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -3008,6 +3720,15 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Prüft eine Importdatenmenge aus dem Alt-Datenformat und liefert Fehler, Warnungen und die gemappten Zeilen.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param string $payloadjson Zu prüfende Alt-Datenzeilen als JSON-Array.
+     * @param bool $strict Ob die Prüfung im strengen Modus erfolgt.
+     *
+     * @return array Array mit errors, warnings, rowcount und mappedjson.
+     */
     public static function validate_import_payload(int $cmid, string $payloadjson, bool $strict = false): array {
         $params = self::validate_parameters(self::validate_import_payload_parameters(), [
             'cmid' => $cmid,
@@ -3028,8 +3749,13 @@ class api extends external_api {
         }
 
         $service = new import_export_service();
-        $result = $service->validate_import_rows((int)$resolved['cm']->id, (int)$resolved['context']->id,
-            (int)$GLOBALS['USER']->id, $payload, (bool)$params['strict']);
+        $result = $service->validate_import_rows(
+            (int)$resolved['cm']->id,
+            (int)$resolved['context']->id,
+            (int)$GLOBALS['USER']->id,
+            $payload,
+            (bool)$params['strict']
+        );
 
         return [
             'errors' => $result['errors'],
@@ -3039,6 +3765,11 @@ class api extends external_api {
         ];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Importprüfung (Fehler, Warnungen, Zeilenzahl und gemappte Zeilen).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function validate_import_payload_returns(): external_single_structure {
         return new external_single_structure([
             'errors' => new external_multiple_structure(new external_value(PARAM_TEXT, 'Error')),
@@ -3048,6 +3779,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für die Prüfung einer Exportdatenmenge.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function validate_export_payload_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -3056,6 +3792,15 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Prüft eine Exportdatenmenge der Aktivität und liefert Fehler, Warnungen und die erzeugten Alt-Datenzeilen.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param string $payloadjson Zu prüfende interne Datenzeilen als JSON-Array.
+     * @param bool $strictlegacy Ob streng gegen das Alt-Datenformat geprüft wird.
+     *
+     * @return array Array mit errors, warnings, rowcount und legacyjson.
+     */
     public static function validate_export_payload(int $cmid, string $payloadjson, bool $strictlegacy = false): array {
         $params = self::validate_parameters(self::validate_export_payload_parameters(), [
             'cmid' => $cmid,
@@ -3076,8 +3821,13 @@ class api extends external_api {
         }
 
         $service = new import_export_service();
-        $result = $service->validate_export_rows((int)$resolved['cm']->id, (int)$resolved['context']->id,
-            (int)$GLOBALS['USER']->id, $payload, (bool)$params['strictlegacy']);
+        $result = $service->validate_export_rows(
+            (int)$resolved['cm']->id,
+            (int)$resolved['context']->id,
+            (int)$GLOBALS['USER']->id,
+            $payload,
+            (bool)$params['strictlegacy']
+        );
 
         return [
             'errors' => $result['errors'],
@@ -3087,6 +3837,11 @@ class api extends external_api {
         ];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Exportprüfung (Fehler, Warnungen, Zeilenzahl und Alt-Datenzeilen).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function validate_export_payload_returns(): external_single_structure {
         return new external_single_structure([
             'errors' => new external_multiple_structure(new external_value(PARAM_TEXT, 'Error')),
@@ -3097,6 +3852,11 @@ class api extends external_api {
     }
 
     // Lock endpoints kept for backward compatibility with previous UI.
+    /**
+     * Definiert die Eingabeparameter für das Anfordern einer Bearbeitungssperre.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function acquire_lock_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -3105,6 +3865,15 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Fordert eine weiche Bearbeitungssperre für den angegebenen Seminarplan an.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $gridid ID des Seminarplans (Grid).
+     * @param int $ttlseconds Gültigkeitsdauer der Sperre in Sekunden.
+     *
+     * @return array Array mit acquired, token, holder und expiresat.
+     */
     public static function acquire_lock(int $cmid, int $gridid, int $ttlseconds = 300): array {
         $params = self::validate_parameters(self::acquire_lock_parameters(), [
             'cmid' => $cmid,
@@ -3127,6 +3896,11 @@ class api extends external_api {
         ];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Sperranforderung (Erfolg, Token, Inhaber und Ablaufzeitpunkt).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function acquire_lock_returns(): external_single_structure {
         return new external_single_structure([
             'acquired' => new external_value(PARAM_BOOL, 'Whether lock was acquired'),
@@ -3136,6 +3910,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Verlängern einer Bearbeitungssperre.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function refresh_lock_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -3145,6 +3924,16 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Verlängert eine bestehende Bearbeitungssperre für den angegebenen Seminarplan.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $gridid ID des Seminarplans (Grid).
+     * @param string $token Zuvor ausgegebenes Sperr-Token.
+     * @param int $ttlseconds Gültigkeitsdauer der Sperre in Sekunden.
+     *
+     * @return array Array mit dem Schlüssel success.
+     */
     public static function refresh_lock(int $cmid, int $gridid, string $token, int $ttlseconds = 300): array {
         $params = self::validate_parameters(self::refresh_lock_parameters(), [
             'cmid' => $cmid,
@@ -3158,17 +3947,31 @@ class api extends external_api {
         self::enforce_write_rate_limit('refresh_lock', 240, 60);
 
         $service = new soft_lock_service();
-        $ok = $service->refresh((int)$params['gridid'], (int)$GLOBALS['USER']->id, (string)$params['token'],
-            (int)$params['ttlseconds']);
+        $ok = $service->refresh(
+            (int)$params['gridid'],
+            (int)$GLOBALS['USER']->id,
+            (string)$params['token'],
+            (int)$params['ttlseconds']
+        );
         return ['success' => $ok];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Sperrverlängerung (Erfolgsstatus).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function refresh_lock_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Refresh result'),
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Freigeben einer Bearbeitungssperre.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function release_lock_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -3177,6 +3980,15 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Gibt eine gehaltene Bearbeitungssperre für den angegebenen Seminarplan wieder frei.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $gridid ID des Seminarplans (Grid).
+     * @param string $token Zuvor ausgegebenes Sperr-Token.
+     *
+     * @return array Array mit dem Schlüssel success.
+     */
     public static function release_lock(int $cmid, int $gridid, string $token): array {
         $params = self::validate_parameters(self::release_lock_parameters(), [
             'cmid' => $cmid,
@@ -3193,12 +4005,22 @@ class api extends external_api {
         return ['success' => $ok];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Sperrfreigabe (Erfolgsstatus).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function release_lock_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Release result'),
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für die Abfrage des Sperrstatus.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function lock_status_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -3206,6 +4028,14 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Liefert den aktuellen Sperrstatus des angegebenen Seminarplans.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $gridid ID des Seminarplans (Grid).
+     *
+     * @return array Array mit locked, holder und expiresat.
+     */
     public static function lock_status(int $cmid, int $gridid): array {
         $params = self::validate_parameters(self::lock_status_parameters(), ['cmid' => $cmid, 'gridid' => $gridid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
@@ -3221,6 +4051,11 @@ class api extends external_api {
         ];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur des Sperrstatus (Sperrzustand, Inhaber und Ablaufzeitpunkt).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function lock_status_returns(): external_single_structure {
         return new external_single_structure([
             'locked' => new external_value(PARAM_BOOL, 'Lock status'),
@@ -3229,6 +4064,11 @@ class api extends external_api {
         ]);
     }
 
+    /**
+     * Definiert die Eingabeparameter für das Speichern der ZIM-PDF-Spaltenwahl.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
     public static function set_pdf_columns_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -3282,6 +4122,11 @@ class api extends external_api {
         return ['success' => true];
     }
 
+    /**
+     * Beschreibt die Rückgabestruktur der Spaltenspeicherung (Erfolgsstatus).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
     public static function set_pdf_columns_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Save result'),

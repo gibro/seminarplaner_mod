@@ -5,10 +5,24 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * Provider.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 namespace mod_seminarplaner\privacy;
-
-defined('MOODLE_INTERNAL') || die();
 
 use context;
 use context_module;
@@ -24,13 +38,12 @@ use core_privacy\local\request\writer;
 /**
  * Privacy provider implementation for mod_seminarplaner.
  */
-final class provider implements
-    \core_privacy\local\metadata\provider,
-    request_provider,
-    core_userlist_provider {
-
+final class provider implements \core_privacy\local\metadata\provider, core_userlist_provider, request_provider {
     /**
-     * @inheritDoc
+     * Meldet, welche Daten dieses Plugin zu einer Person speichert.
+     *
+     * @param collection $items Sammlung, in die die Metadaten eingetragen werden.
+     * @return collection Die um die Tabellen und Subsystem-Verweise ergaenzte Sammlung.
      */
     public static function get_metadata(collection $items): collection {
         $items->add_database_table('kgen_grid_user_state', [
@@ -99,7 +112,10 @@ final class provider implements
     }
 
     /**
-     * @inheritDoc
+     * Sammelt alle Modul-Kontexte, in denen zu dieser Person Daten liegen.
+     *
+     * @param int $userid Id der Person, deren Kontexte gesucht werden.
+     * @return contextlist Liste der Kontexte mit Zustaenden, Dateizuordnungen, Protokollen oder Urheberschaft.
      */
     public static function get_contexts_for_userid(int $userid): contextlist {
         global $DB;
@@ -121,7 +137,9 @@ final class provider implements
         $cmids = $DB->get_fieldset_select('kgen_import_export_log', 'DISTINCT cmid', 'actorid = ?', [$userid]);
         $contextids = array_merge($contextids, self::contextids_from_cmids($cmids));
 
-        foreach (['kgen_grid', 'kgen_planning_state', 'kgen_roterfaden_state', 'kgen_activity_setlink', 'kgen_activity_methodovr'] as $table) {
+        $authortables = ['kgen_grid', 'kgen_planning_state', 'kgen_roterfaden_state',
+            'kgen_activity_setlink', 'kgen_activity_methodovr'];
+        foreach ($authortables as $table) {
             $field = 'createdby';
             if ($table === 'kgen_roterfaden_state') {
                 $field = 'publishedby';
@@ -136,7 +154,7 @@ final class provider implements
 
         $contextids = array_values(array_unique(array_map('intval', $contextids)));
         if (!empty($contextids)) {
-            // contextlist::add_contextids() gibt es in Moodle nicht - der
+            // Contextlist::add_contextids() gibt es in Moodle nicht - der
             // Aufruf endete in einem Fatal Error, sobald eine DSGVO-Anfrage
             // diesen Provider erreichte. Oeffentlich ist nur add_from_sql();
             // set_contextids() der Basisklasse ist protected.
@@ -147,7 +165,10 @@ final class provider implements
     }
 
     /**
-     * @inheritDoc
+     * Sammelt alle Personen, zu denen in diesem Modul-Kontext Daten liegen.
+     *
+     * @param userlist $userlist Nutzerliste des Kontexts, die ergaenzt wird.
+     * @return void
      */
     public static function get_users_in_context(userlist $userlist): void {
         global $DB;
@@ -179,7 +200,10 @@ final class provider implements
     }
 
     /**
-     * @inheritDoc
+     * Exportiert alle Daten einer Person aus den freigegebenen Kontexten.
+     *
+     * @param approved_contextlist $contextlist Freigegebene Kontexte samt betroffener Person.
+     * @return void
      */
     public static function export_user_data(approved_contextlist $contextlist): void {
         global $DB;
@@ -195,27 +219,41 @@ final class provider implements
 
             if (!empty($gridids)) {
                 [$insql, $params] = $DB->get_in_or_equal($gridids, SQL_PARAMS_QM);
-                $state = $DB->get_records_select('kgen_grid_user_state', "gridid {$insql} AND userid = ?", array_merge($params, [$userid]));
+                $state = $DB->get_records_select(
+                    'kgen_grid_user_state',
+                    "gridid {$insql} AND userid = ?",
+                    array_merge($params, [$userid])
+                );
                 if (!empty($state)) {
-                    // export_data() verlangt ein \stdClass, kein Array (siehe
+                    // Export_data() verlangt ein \stdClass, kein Array (siehe
                     // moodle_content_writer::export_data). Alle vier Aufrufe in
                     // dieser Methode uebergaben frueher direkt das Ergebnis von
                     // array_values() und liefen damit in einen TypeError - der
                     // Export war also nie funktionsfaehig.
-                    writer::with_context($context)->export_data(['grid_user_state'],
-                        (object)['states' => array_values($state)]);
+                    writer::with_context($context)->export_data(
+                        ['grid_user_state'],
+                        (object)['states' => array_values($state)]
+                    );
                 }
-                $locks = $DB->get_records_select('kgen_grid_lock', "gridid {$insql} AND userid = ?", array_merge($params, [$userid]));
+                $locks = $DB->get_records_select(
+                    'kgen_grid_lock',
+                    "gridid {$insql} AND userid = ?",
+                    array_merge($params, [$userid])
+                );
                 if (!empty($locks)) {
-                    writer::with_context($context)->export_data(['grid_locks'],
-                        (object)['locks' => array_values($locks)]);
+                    writer::with_context($context)->export_data(
+                        ['grid_locks'],
+                        (object)['locks' => array_values($locks)]
+                    );
                 }
             }
 
             $filemaps = $DB->get_records('kgen_method_filemap', ['cmid' => $cmid, 'userid' => $userid]);
             if (!empty($filemaps)) {
-                writer::with_context($context)->export_data(['method_filemap'],
-                    (object)['maps' => array_values($filemaps)]);
+                writer::with_context($context)->export_data(
+                    ['method_filemap'],
+                    (object)['maps' => array_values($filemaps)]
+                );
 
                 // Zu den oben exportierten Zuordnungen auch die Dateien selbst.
                 // Frueher stand hier helper::export_context_files($context,
@@ -240,8 +278,10 @@ final class provider implements
 
             $logs = $DB->get_records('kgen_import_export_log', ['cmid' => $cmid, 'actorid' => $userid]);
             if (!empty($logs)) {
-                writer::with_context($context)->export_data(['import_export_log'],
-                    (object)['entries' => array_values($logs)]);
+                writer::with_context($context)->export_data(
+                    ['import_export_log'],
+                    (object)['entries' => array_values($logs)]
+                );
             }
 
             // Urheberschaft: was der Nutzer angelegt oder zuletzt geaendert hat.
@@ -261,8 +301,10 @@ final class provider implements
                 [$where, $params] = self::authorship_where($table, $fields, $cmid, (int)$userid);
                 $records = $DB->get_records_select($table, $where, $params);
                 if (!empty($records)) {
-                    writer::with_context($context)->export_data([$table],
-                        (object)['records' => array_values($records)]);
+                    writer::with_context($context)->export_data(
+                        [$table],
+                        (object)['records' => array_values($records)]
+                    );
                 }
             }
         }
@@ -306,7 +348,10 @@ final class provider implements
     }
 
     /**
-     * @inheritDoc
+     * Loescht saemtliche Plugin-Daten eines Modul-Kontexts fuer alle Personen.
+     *
+     * @param context $context Kontext, dessen Daten vollstaendig geloescht werden.
+     * @return void
      */
     public static function delete_data_for_all_users_in_context(context $context): void {
         global $DB;
@@ -336,7 +381,10 @@ final class provider implements
     }
 
     /**
-     * @inheritDoc
+     * Loescht oder anonymisiert die Daten einer Person in den freigegebenen Kontexten.
+     *
+     * @param approved_contextlist $contextlist Freigegebene Kontexte samt betroffener Person.
+     * @return void
      */
     public static function delete_data_for_user(approved_contextlist $contextlist): void {
         $userid = (int)$contextlist->get_user()->id;
@@ -346,7 +394,10 @@ final class provider implements
     }
 
     /**
-     * @inheritDoc
+     * Loescht oder anonymisiert die Daten mehrerer freigegebener Personen in einem Kontext.
+     *
+     * @param approved_userlist $userlist Freigegebene Personen samt Kontext.
+     * @return void
      */
     public static function delete_data_for_users(approved_userlist $userlist): void {
         $context = $userlist->get_context();
@@ -436,7 +487,11 @@ final class provider implements
         }
         $cmids = array_values(array_unique(array_map('intval', $cmids)));
         [$insql, $params] = $DB->get_in_or_equal($cmids, SQL_PARAMS_QM);
-        return $DB->get_fieldset_select('context', 'id', "contextlevel = ? AND instanceid {$insql}",
-            array_merge([CONTEXT_MODULE], $params));
+        return $DB->get_fieldset_select(
+            'context',
+            'id',
+            "contextlevel = ? AND instanceid {$insql}",
+            array_merge([CONTEXT_MODULE], $params)
+        );
     }
 }

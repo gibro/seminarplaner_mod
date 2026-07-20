@@ -1,7 +1,26 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Unit tests for review candidates.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 use mod_seminarplaner\external\api;
 use mod_seminarplaner\local\service\method_card_service;
@@ -13,7 +32,7 @@ use mod_seminarplaner\local\service\method_card_service;
  * compared to an existing global method set. Attachments are part of a unit:
  * adding a handout to a unit whose text stayed the same must offer it for review.
  */
-final class mod_seminarplaner_review_candidates_test extends advanced_testcase {
+final class review_candidates_test extends advanced_testcase {
     /** @var int Course module id of the activity the units live in. */
     private int $cmid = 0;
 

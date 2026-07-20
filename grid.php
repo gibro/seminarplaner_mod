@@ -1,5 +1,26 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * Grid.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 require_once(__DIR__ . '/bootstrap.php');
 require_once(__DIR__ . '/locallib.php');
@@ -16,7 +37,7 @@ $grids = $gridservice->list_grids((int)$cm->id);
 seminarplaner_prepare_page('/mod/seminarplaner/grid.php', $cm, $course, $seminarplaner, 'grid');
 
 $lucidebaseurl = $CFG->wwwroot . '/mod/seminarplaner/pix/lucide';
-$renderlucide = static function(string $name, string $sizeclass = 'kg-lucide--sm') use ($lucidebaseurl): string {
+$renderlucide = static function (string $name, string $sizeclass = 'kg-lucide--sm') use ($lucidebaseurl): string {
     return html_writer::empty_tag('img', [
         'src' => $lucidebaseurl . '/' . $name . '.svg',
         'class' => trim('kg-lucide ' . $sizeclass),
@@ -26,18 +47,23 @@ $renderlucide = static function(string $name, string $sizeclass = 'kg-lucide--sm
         'decoding' => 'async',
     ]);
 };
-$rendericontext = static function(string $icon, string $text, string $wrapperclass = 'kg-label-content') use ($renderlucide): string {
-    return html_writer::tag('span',
+$rendericontext = static function (
+    string $icon,
+    string $text,
+    string $wrapperclass = 'kg-label-content'
+) use ($renderlucide): string {
+    return html_writer::tag(
+        'span',
         $renderlucide($icon) . html_writer::tag('span', s($text)),
         ['class' => $wrapperclass]
     );
 };
-$renderbuttonlabel = static function(string $text, string $icon) use ($rendericontext): string {
+$renderbuttonlabel = static function (string $text, string $icon) use ($rendericontext): string {
     return $rendericontext($icon, $text, 'kg-btn-content');
 };
 
 // Inline-SVG-Icons (Meta-Line, dekorativ) für die Überblick-Export-Leiste.
-$icon = static function(string $paths, float $size = 16, float $stroke = 2.0): string {
+$icon = static function (string $paths, float $size = 16, float $stroke = 2.0): string {
     return '<svg width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24" fill="none" '
         . 'stroke="currentColor" stroke-width="' . $stroke . '" aria-hidden="true" focusable="false">'
         . $paths . '</svg>';
@@ -47,10 +73,12 @@ $icDownload = $icon('<path d="M12 3v12M8 11l4 4 4-4M5 21h14"/>', 14, 2.2);
 
 // PDF-Export-Buttons für den Überblick: lösen per Deep-Link denselben Export-Flow
 // im Import/Export-Tab aus (kein zweiter Mechanismus).
-$pdfbtn = static function(string $id, string $label) use ($icDownload): string {
-    return html_writer::tag('button',
+$pdfbtn = static function (string $id, string $label) use ($icDownload): string {
+    return html_writer::tag(
+        'button',
         '<span class="kg-btn-content">' . $icDownload . html_writer::tag('span', s($label)) . '</span>',
-        ['type' => 'button', 'id' => $id, 'class' => 'kg-btn kg-btn--outline-red kg-ov-pdfbtn']);
+        ['type' => 'button', 'id' => $id, 'class' => 'kg-btn kg-btn--outline-red kg-ov-pdfbtn']
+    );
 };
 
 echo $OUTPUT->header();
@@ -94,10 +122,12 @@ echo html_writer::end_tag('select');
 echo html_writer::tag('button', 'Laden', ['type' => 'button', 'id' => 'kg-load-grid', 'class' => 'kg-btn kg-btn-primary']);
 echo html_writer::tag('button', 'Löschen', ['type' => 'button', 'id' => 'kg-grid-delete', 'class' => 'kg-btn kg-btn--outline-red']);
 echo html_writer::end_div();
-echo html_writer::tag('span',
+echo html_writer::tag(
+    'span',
     $icon('<rect x="5" y="11" width="14" height="9"/><path d="M8 11V8a4 4 0 018 0v3"/>', 14, 2)
     . html_writer::tag('span', 'Nur Ansicht'),
-    ['class' => 'kg-ov-badge']);
+    ['class' => 'kg-ov-badge']
+);
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ov-toolbar__row kg-ov-toolbar__row--second kg-hidden', ['id' => 'kg-grid-step-2']);
@@ -118,9 +148,11 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_div();
 
-echo html_writer::tag('p',
+echo html_writer::tag(
+    'p',
     'Neue Seminarpläne legst du im Tab „Sequenz" an – dort sitzt auch die Einrichtung (Tage und Seminarzeiten).',
-    ['class' => 'kg-ov-toolbar__hint']);
+    ['class' => 'kg-ov-toolbar__hint']
+);
 
 ?>
 <div class="sp-wrapper">
@@ -149,7 +181,7 @@ echo html_writer::tag('p',
         <div class="kg-tag-dropdown-panel kg-hidden" id="sp-filter-phase-panel">
           <label class="kg-tag-option"><input type="checkbox" id="sp-filter-phase-all" checked><span>Alle</span></label>
           <div id="sp-filter-phase-options">
-            <?php foreach (array_keys(seminarplaner_phase_options()) as $phase): ?>
+            <?php foreach (array_keys(seminarplaner_phase_options()) as $phase) : ?>
             <label class="kg-tag-option"><input type="checkbox" value="<?= s($phase) ?>"><span><?= s($phase) ?></span></label>
             <?php endforeach; ?>
           </div>
@@ -187,7 +219,8 @@ echo html_writer::tag('p',
             <label class="kg-tag-option"><input type="checkbox" value="120"><span>120</span></label>
             <label class="kg-tag-option"><input type="checkbox" value="150"><span>150</span></label>
             <label class="kg-tag-option"><input type="checkbox" value="180"><span>180</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="mehr als 180 Minuten"><span>mehr als 180 Minuten</span></label>
+            <label class="kg-tag-option"
+              ><input type="checkbox" value="mehr als 180 Minuten"><span>mehr als 180 Minuten</span></label>
           </div>
         </div>
       </div>
@@ -199,12 +232,24 @@ echo html_writer::tag('p',
         <div class="kg-tag-dropdown-panel kg-hidden" id="sp-filter-cognitive-panel">
           <label class="kg-tag-option"><input type="checkbox" id="sp-filter-cognitive-all" checked><span>Alle</span></label>
           <div id="sp-filter-cognitive-options">
-            <label class="kg-tag-option"><input type="checkbox" value="Erinnern"><span>Erinnern: Wissen wiedergeben oder abrufen (z.B. benennen, definieren)</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="Verstehen"><span>Verstehen: Informationen interpretieren oder erklären (z.B. zusammenfassen, vergleichen)</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="Anwenden"><span>Anwenden: Wissen in neuen Situationen umsetzen (z.B. ausführen, verallgemeinern)</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="Analysieren"><span>Analysieren: Informationen in ihre Bestandteile zerlegen (z.B. unterscheiden, klassifizieren)</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="Bewerten"><span>Bewerten: Urteile fällen und Kriterien anwenden (z.B. überprüfen, kritisch bewerten)</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="Erschaffen"><span>Erschaffen: Neues Wissen oder neue Produkte entwickeln (z.B. planen, erzeugen, bauen)</span></label>
+            <label class="kg-tag-option"
+              ><input type="checkbox" value="Erinnern"
+              ><span>Erinnern: Wissen wiedergeben oder abrufen (z.B. benennen, definieren)</span></label>
+            <label class="kg-tag-option"
+              ><input type="checkbox" value="Verstehen"
+              ><span>Verstehen: Informationen interpretieren oder erklären (z.B. zusammenfassen, vergleichen)</span></label>
+            <label class="kg-tag-option"
+              ><input type="checkbox" value="Anwenden"
+              ><span>Anwenden: Wissen in neuen Situationen umsetzen (z.B. ausführen, verallgemeinern)</span></label>
+            <label class="kg-tag-option"
+              ><input type="checkbox" value="Analysieren"
+              ><span>Analysieren: Informationen in ihre Bestandteile zerlegen (z.B. unterscheiden, klassifizieren)</span></label>
+            <label class="kg-tag-option"
+              ><input type="checkbox" value="Bewerten"
+              ><span>Bewerten: Urteile fällen und Kriterien anwenden (z.B. überprüfen, kritisch bewerten)</span></label>
+            <label class="kg-tag-option"
+              ><input type="checkbox" value="Erschaffen"
+              ><span>Erschaffen: Neues Wissen oder neue Produkte entwickeln (z.B. planen, erzeugen, bauen)</span></label>
           </div>
         </div>
       </div>
@@ -225,8 +270,10 @@ echo html_writer::tag('p',
   <div class="sp-layout">
     <aside class="sp-sidebar">
       <div class="sp-sidebar-tabs" id="sp-source-tabs" role="tablist" aria-label="Quellenanzeige">
-        <span class="sp-source-tab is-active" id="sp-source-tab-methods" data-tab-value="#sp-tab-methods" data-source="methods" role="tab" aria-selected="true" tabindex="0">Seminareinheiten</span>
-        <span class="sp-source-tab" id="sp-source-tab-units" data-tab-value="#sp-tab-units" data-source="units" role="tab" aria-selected="false" tabindex="0">Bausteine</span>
+        <span class="sp-source-tab is-active" id="sp-source-tab-methods" data-tab-value="#sp-tab-methods"
+              data-source="methods" role="tab" aria-selected="true" tabindex="0">Seminareinheiten</span>
+        <span class="sp-source-tab" id="sp-source-tab-units" data-tab-value="#sp-tab-units"
+              data-source="units" role="tab" aria-selected="false" tabindex="0">Bausteine</span>
       </div>
       <div class="sp-tab-content">
         <div class="sp-tab-panel active" id="sp-tab-methods" data-tab-info>
@@ -242,16 +289,20 @@ echo html_writer::tag('p',
       <div class="sp-weekbar" role="toolbar" aria-label="Ansicht und Zeitraster">
         <div class="sp-weekbar__nav">
           <div class="sp-view-switch" role="group" aria-label="Ansicht wechseln">
-            <button class="kg-btn is-active" id="sp-view-week" type="button"><?php echo $renderbuttonlabel('Woche', 'calendar-range'); ?></button>
+            <button class="kg-btn is-active" id="sp-view-week" type="button"
+            ><?php echo $renderbuttonlabel('Woche', 'calendar-range'); ?></button>
             <button class="kg-btn" id="sp-view-day" type="button"><?php echo $renderbuttonlabel('Tag', 'calendar-days'); ?></button>
           </div>
           <div class="sp-day-switch" role="group" aria-label="Tag wechseln">
             <select id="sp-day-select" class="kg-input kg-grid-select" aria-label="Tag auswählen"></select>
           </div>
           <div class="sp-weekbar__actions" role="group" aria-label="Plan Aktionen">
-            <button type="button" id="sp-addbreak" class="kg-btn"><?php echo $renderbuttonlabel('Pause hinzufügen', 'plus'); ?></button>
-            <button type="button" id="sp-clear" class="kg-btn"><?php echo $renderbuttonlabel('Seminarplan löschen', 'trash-2'); ?></button>
-            <span id="sp-saved-state" class="sp-saved-state" aria-live="polite"><?php echo $rendericontext('clipboard-check', 'Gespeichert: -', 'kg-btn-content'); ?></span>
+            <button type="button" id="sp-addbreak" class="kg-btn"
+            ><?php echo $renderbuttonlabel('Pause hinzufügen', 'plus'); ?></button>
+            <button type="button" id="sp-clear" class="kg-btn"
+            ><?php echo $renderbuttonlabel('Seminarplan löschen', 'trash-2'); ?></button>
+            <span id="sp-saved-state" class="sp-saved-state" aria-live="polite"
+            ><?php echo $rendericontext('clipboard-check', 'Gespeichert: -', 'kg-btn-content'); ?></span>
           </div>
         </div>
         <div class="sp-weekbar__meta">
@@ -299,8 +350,10 @@ echo html_writer::tag('p',
         echo html_writer::start_div('sq-legend kg-ov-legend kg-hidden', ['id' => 'sp-phase-legend']);
         echo html_writer::tag('span', 'Seminarphasen', ['class' => 'kg-ov-legend__label']);
         foreach ($phases as $key => $label) {
-            echo html_writer::tag('span',
-                html_writer::tag('i', '', ['class' => 'sq-legend__dot sq-phase-bg--' . $key]) . s($label));
+            echo html_writer::tag(
+                'span',
+                html_writer::tag('i', '', ['class' => 'sq-legend__dot sq-phase-bg--' . $key]) . s($label)
+            );
         }
         echo html_writer::tag('span', '⇄ Alternative hinterlegt', ['class' => 'kg-ov-legend__alt']);
         echo html_writer::end_div();

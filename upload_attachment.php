@@ -1,14 +1,38 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * Upload attachment.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 require_once(__DIR__ . '/bootstrap.php');
 
-const MOD_SEMINARPLANER_UPLOAD_MAX_BYTES = 10485760; // 10 MB.
+/** @var int Maximale Groesse eines hochgeladenen Anhangs in Bytes (10 MB). */
+const MOD_SEMINARPLANER_UPLOAD_MAX_BYTES = 10485760;
+/** @var string[] Dateiendungen, die als Anhang nicht hochgeladen werden duerfen. */
 const MOD_SEMINARPLANER_UPLOAD_BLOCKED_EXTENSIONS = [
     'php', 'php3', 'php4', 'php5', 'phtml', 'phar', 'cgi', 'pl', 'py', 'rb',
     'sh', 'bash', 'bat', 'cmd', 'com', 'exe', 'msi', 'jsp', 'asp', 'aspx',
     'htaccess', 'shtml',
 ];
+/** @var string[] Dateiendungen, die fuer H5P-Anhaenge erlaubt sind. */
 const MOD_SEMINARPLANER_UPLOAD_ALLOWED_H5P_EXTENSIONS = ['h5p'];
 
 try {

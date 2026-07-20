@@ -1,7 +1,26 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Unit tests for published version import.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 use mod_seminarplaner\external\api;
 use mod_seminarplaner\local\service\method_card_service;
@@ -14,7 +33,7 @@ use mod_seminarplaner\local\service\method_card_service;
  * re-submission creates one), so importing from it could pull unreviewed content into
  * activities. These tests pin the "published version wins" behaviour.
  */
-final class mod_seminarplaner_published_version_import_test extends advanced_testcase {
+final class published_version_import_test extends advanced_testcase {
     /** @var int Course module id. */
     private int $cmid = 0;
 
@@ -74,7 +93,7 @@ final class mod_seminarplaner_published_version_import_test extends advanced_tes
             'timecreated' => $now,
             'timemodified' => $now,
         ]);
-        // create_version() always moves currentversion to the newest version, even a draft.
+        // Create_version() always moves currentversion to the newest version, even a draft.
         $DB->set_field('local_kgen_methodset', 'currentversion', $versionid, ['id' => $this->setid]);
 
         return $versionid;
@@ -110,7 +129,7 @@ final class mod_seminarplaner_published_version_import_test extends advanced_tes
         global $USER;
 
         $methods = (new method_card_service())->get_methods($this->cmid, (int)$USER->id, $this->contextid);
-        $titles = array_map(static function($method) {
+        $titles = array_map(static function ($method) {
             return (string)($method['titel'] ?? '');
         }, is_array($methods) ? $methods : []);
         sort($titles);
@@ -143,7 +162,7 @@ final class mod_seminarplaner_published_version_import_test extends advanced_tes
         $v2 = $this->add_version(2, 'published');
         $this->add_unit($v2, 'Neu');
 
-        // currentversion happens to match the latest published version here.
+        // Currentversion happens to match the latest published version here.
         $result = api::import_global_methodset($this->cmid, $this->setid);
         $this->assertTrue($result['success']);
 

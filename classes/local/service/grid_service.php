@@ -1,5 +1,26 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * Grid service.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 namespace mod_seminarplaner\local\service;
 
@@ -7,8 +28,6 @@ use coding_exception;
 use mod_seminarplaner\local\repository\grid_repository;
 use mod_seminarplaner\local\sequence\grid_to_sequence_converter;
 use mod_seminarplaner\local\sequence\sequence_state;
-
-defined('MOODLE_INTERNAL') || die();
 
 /**
  * Grid domain service.
@@ -151,7 +170,8 @@ class grid_service {
                 'days' => array_values($days),
                 'count' => count($overlaps),
             ];
-            throw new \invalid_parameter_exception(self::CONFLICT_MARKER . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            throw new \invalid_parameter_exception(self::CONFLICT_MARKER
+                . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         }
 
         // Empty sequence maps must stay JSON objects across the
@@ -197,11 +217,17 @@ class grid_service {
         }
 
         $currentdays = [];
-        if (isset($current['plan']) && is_array($current['plan']) && isset($current['plan']['days']) && is_array($current['plan']['days'])) {
+        if (
+            isset($current['plan']) && is_array($current['plan'])
+            && isset($current['plan']['days']) && is_array($current['plan']['days'])
+        ) {
             $currentdays = $current['plan']['days'];
         }
         $incomingdays = [];
-        if (isset($incoming['plan']) && is_array($incoming['plan']) && isset($incoming['plan']['days']) && is_array($incoming['plan']['days'])) {
+        if (
+            isset($incoming['plan']) && is_array($incoming['plan'])
+            && isset($incoming['plan']['days']) && is_array($incoming['plan']['days'])
+        ) {
             $incomingdays = $incoming['plan']['days'];
         }
 
@@ -230,7 +256,10 @@ class grid_service {
      */
     private function find_time_overlaps(array $state): array {
         $days = [];
-        if (isset($state['plan']) && is_array($state['plan']) && isset($state['plan']['days']) && is_array($state['plan']['days'])) {
+        if (
+            isset($state['plan']) && is_array($state['plan'])
+            && isset($state['plan']['days']) && is_array($state['plan']['days'])
+        ) {
             $days = $state['plan']['days'];
         }
         if (!$days) {
@@ -257,7 +286,7 @@ class grid_service {
                     'end' => $end,
                 ];
             }
-            usort($normalized, static function(array $a, array $b): int {
+            usort($normalized, static function (array $a, array $b): int {
                 if ($a['start'] !== $b['start']) {
                     return $a['start'] <=> $b['start'];
                 }
@@ -332,7 +361,7 @@ class grid_service {
             $merged[] = $entry;
         }
 
-        usort($merged, static function(array $a, array $b): int {
+        usort($merged, static function (array $a, array $b): int {
             $astart = (int)($a['startMin'] ?? 0);
             $bstart = (int)($b['startMin'] ?? 0);
             if ($astart !== $bstart) {
@@ -487,9 +516,11 @@ class grid_service {
      */
     private static function derive_ankerzeiten(array $config): array {
         $az = $config['ankerzeiten'] ?? null;
-        if (is_array($az) && isset($az['vormittag']['start'], $az['nachmittag']['start'])
+        if (
+            is_array($az) && isset($az['vormittag']['start'], $az['nachmittag']['start'])
                 && self::parse_clock($az['vormittag']['start']) !== null
-                && self::parse_clock($az['nachmittag']['start']) !== null) {
+                && self::parse_clock($az['nachmittag']['start']) !== null
+        ) {
             return $az;
         }
         $range = $config['timeRange'] ?? [];
@@ -506,8 +537,11 @@ class grid_service {
             }
         }
         $vmend = $best ? $best['start'] : '12:30';
-        $nmstart = $best ? sprintf('%02d:%02d', intdiv(self::parse_clock($best['start']) + $best['duration'], 60),
-            (self::parse_clock($best['start']) + $best['duration']) % 60) : '12:30';
+        $nmstart = $best ? sprintf(
+            '%02d:%02d',
+            intdiv(self::parse_clock($best['start']) + $best['duration'], 60),
+            (self::parse_clock($best['start']) + $best['duration']) % 60
+        ) : '12:30';
         return [
             'vormittag' => ['start' => $start, 'end' => $vmend],
             'nachmittag' => ['start' => $nmstart, 'end' => $end],
@@ -609,6 +643,15 @@ class grid_service {
         return $days;
     }
 
+    /**
+     * Veroeffentlicht den Roten Faden eines Seminarplans fuer die Teilnehmenden.
+     *
+     * @param int $cmid Kurs-Modul-Id der Aktivitaet.
+     * @param int $gridid Id des Seminarplans, dessen Roter Faden veroeffentlicht wird.
+     * @param array $state Zu veroeffentlichender Zustand; plan.days wird aus der Sequenz neu projiziert.
+     * @param int $userid Id der handelnden Nutzerin.
+     * @return bool True, wenn der Rote Faden gespeichert wurde.
+     */
     public function publish_roterfaden(int $cmid, int $gridid, array $state, int $userid): bool {
         if ($cmid <= 0 || $gridid <= 0 || $userid <= 0) {
             throw new coding_exception('Invalid input for publish_roterfaden');

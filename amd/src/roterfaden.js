@@ -140,7 +140,8 @@ define([
                     </header>
                     <div class="rf-block__body">
                         <div class="rf-block__meta">
-                            <span class="rf-pill">${ICONS.clock()}<span>Uhrzeit: ${escapeHtml(Model.clockLabel(block.startMin))}</span></span>
+                            <span class="rf-pill">${ICONS.clock()}\
+<span>Uhrzeit: ${escapeHtml(Model.clockLabel(block.startMin))}</span></span>
                             <span class="rf-dur">${escapeHtml(Model.durationLabel(block.minutes))}</span>
                             <button type="button" class="rf-toggle" data-rf-toggle="${escapeHtml(block.id)}"
                                 aria-expanded="${open ? 'true' : 'false'}" aria-controls="rf-themen-${escapeHtml(block.id)}">

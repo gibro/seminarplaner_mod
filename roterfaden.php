@@ -1,5 +1,26 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * Roterfaden.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 require_once(__DIR__ . '/bootstrap.php');
 require_once(__DIR__ . '/locallib.php');
@@ -30,7 +51,9 @@ echo seminarplaner_render_tabs((int)$cm->id, 'roterfaden', $context);
 $vendorbase = $CFG->wwwroot . '/mod/seminarplaner/thirdparty';
 echo '<script>window.__kg_prev_define = window.define; try { window.define = undefined; } catch (e) {}</script>';
 echo '<script src="' . s($vendorbase . '/jspdf/jspdf.umd.min.js') . '"></script>';
-echo '<script>try { if (window.__kg_prev_define !== undefined) { window.define = window.__kg_prev_define; } else { delete window.define; } } catch (e) {} delete window.__kg_prev_define;</script>';
+echo '<script>try { if (window.__kg_prev_define !== undefined) { '
+    . 'window.define = window.__kg_prev_define; } else { delete window.define; } } '
+    . 'catch (e) {} delete window.__kg_prev_define;</script>';
 
 echo html_writer::start_div('kg-shell kg-rf-shell');
 
@@ -75,7 +98,12 @@ echo html_writer::tag(
 );
 echo html_writer::end_div();
 
-echo html_writer::tag('div', '', ['id' => 'kg-roterfaden-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
+echo html_writer::tag('div', '', [
+    'id' => 'kg-roterfaden-status',
+    'class' => 'kg-status',
+    'role' => 'status',
+    'aria-live' => 'polite',
+]);
 echo html_writer::tag('div', '', [
     'id' => 'kg-roterfaden-empty',
     'class' => 'sp-filter-status kg-hidden',

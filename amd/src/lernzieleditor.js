@@ -33,13 +33,20 @@ define([], function() {
         {
             cat: 'denken',
             title: 'Denkoperation',
-            hint: 'Was tun die Teilnehmenden geistig? Steht im Lernziel als Infinitiv – je höher die Stufe, desto anspruchsvoller die Aufgabe.',
+            hint: 'Was tun die Teilnehmenden geistig? Steht im Lernziel als Infinitiv – '
+                + 'je höher die Stufe, desto anspruchsvoller die Aufgabe.',
             groups: [
                 {label: 'Kennen', items: ['benennen', 'aufzählen', 'wiedergeben', 'zuordnen', 'kennenlernen']},
-                {label: 'Verstehen', items: ['erklären', 'erläutern', 'einordnen', 'zusammenfassen', 'unterscheiden', 'in eigene Worte fassen']},
+                {label: 'Verstehen', items: [
+                    'erklären', 'erläutern', 'einordnen', 'zusammenfassen', 'unterscheiden', 'in eigene Worte fassen',
+                ]},
                 {label: 'Anwenden', items: ['anwenden', 'prüfen', 'übertragen', 'umsetzen', 'strukturieren', 'berechnen']},
-                {label: 'Analysieren', items: ['analysieren', 'untersuchen', 'durchschauen', 'vergleichen', 'hinterfragen', 'aufdecken']},
-                {label: 'Bewerten', items: ['bewerten', 'einschätzen', 'beurteilen', 'abwägen', 'begründen', 'reflektieren', 'diskutieren']},
+                {label: 'Analysieren', items: [
+                    'analysieren', 'untersuchen', 'durchschauen', 'vergleichen', 'hinterfragen', 'aufdecken',
+                ]},
+                {label: 'Bewerten', items: [
+                    'bewerten', 'einschätzen', 'beurteilen', 'abwägen', 'begründen', 'reflektieren', 'diskutieren',
+                ]},
                 {label: 'Erarbeiten und durchsetzen', items: [
                     'erarbeiten', 'entwickeln', 'formulieren', 'gestalten', 'aushandeln',
                     'verhandeln', 'durchsetzen', 'organisieren', 'mobilisieren', 'moderieren', 'präsentieren',
@@ -49,7 +56,8 @@ define([], function() {
         {
             cat: 'inhalt',
             title: 'Inhalt',
-            hint: 'Nicht das Thema selbst, sondern die Linse darauf. Dieselbe Frage unter einer anderen Linse ergibt ein anderes Seminar.',
+            hint: 'Nicht das Thema selbst, sondern die Linse darauf. '
+                + 'Dieselbe Frage unter einer anderen Linse ergibt ein anderes Seminar.',
             groups: [
                 {label: 'Recht und Regelwerk', items: [
                     'den gesetzlichen Rahmen', 'die Beteiligungsrechte', 'die Zuständigkeiten',
@@ -76,7 +84,8 @@ define([], function() {
         {
             cat: 'quelle',
             title: 'Quelle',
-            hint: 'Woher kommt das Material? Erfahrung und betriebliche Beispiele sind hier keine Zutat, sondern der Ausgangspunkt.',
+            hint: 'Woher kommt das Material? '
+                + 'Erfahrung und betriebliche Beispiele sind hier keine Zutat, sondern der Ausgangspunkt.',
             groups: [
                 {label: 'Erfahrung und Betrieb', items: [
                     'die eigene Erfahrung', 'die Erfahrungen der Kolleg*innen', 'ein betriebliches Beispiel',
@@ -168,8 +177,14 @@ define([], function() {
     const diffT = (text) => ({text});
     const diffS = (cat) => ({cat});
 
-    // Das Objekt des Satzes ist die inhaltliche Linse. Fehlt sie, springt das
-    // Thema ein („das Thema Arbeitszeit analysieren") und wird nicht doppelt genannt.
+    /**
+     * Baut das Objekt des Satzes: die inhaltliche Linse. Fehlt sie, springt das
+     * Thema ein („das Thema Arbeitszeit analysieren") und wird dann nicht
+     * doppelt genannt — darüber gibt das Flag themaVerbraucht Auskunft.
+     *
+     * @param {Object} v Aktuelle Auswahl des Editors (inhalt, thema, …).
+     * @returns {{teile: Array, themaVerbraucht: boolean}} Satzteile und ob das Thema aufgebraucht ist.
+     */
     function diffObjekt(v) {
         if (v.inhalt) {
             return {teile: [diffS('inhalt')], themaVerbraucht: false};
@@ -180,7 +195,13 @@ define([], function() {
         return {teile: [diffS('inhalt')], themaVerbraucht: false};
     }
 
-    // Reiht Klauseln: eine allein steht für sich, mehrere mit Komma, die letzte mit „und".
+    /**
+     * Reiht Klauseln aneinander: eine allein steht für sich, mehrere mit Komma,
+     * die letzte mit „und".
+     *
+     * @param {Array} klauseln Die zu reihenden Klauseln, je eine Liste von Satzteilen.
+     * @returns {Array} Die zusammengesetzten Satzteile inklusive der Trennzeichen.
+     */
     function diffReihen(klauseln) {
         const teile = [];
         klauseln.forEach((k, i) => {
@@ -192,7 +213,13 @@ define([], function() {
         return teile;
     }
 
-    // Zusatzklauseln nach dem Hauptsatz: „, dafür X nutzen und daraus Y erstellen".
+    /**
+     * Zusatzklauseln nach dem Hauptsatz: „, dafür X nutzen und daraus Y erstellen".
+     *
+     * @param {Object} v Aktuelle Auswahl des Editors (quelle, produkt, …).
+     * @param {boolean} nachNebensatz Ob die Klausel einem Nebensatz folgt (ändert die Einleitung).
+     * @returns {Array} Die Satzteile der Zusatzklausel, leer wenn nichts gewählt ist.
+     */
     function diffZusatz(v, nachNebensatz) {
         if (v.quelle && v.produkt) {
             return [diffT(', dafür '), diffS('quelle'), diffT(' nutzen und daraus '), diffS('produkt'), diffT(' erstellen')];
@@ -235,7 +262,9 @@ define([], function() {
             }
             p.push(diffT(' '), diffS('denken'));
             if (v.quelle && v.produkt) {
-                p.push(diffT(', indem ich '), diffS('quelle'), diffT(' auswerte und daraus '), diffS('produkt'), diffT(' erstelle'));
+                p.push(
+                    diffT(', indem ich '), diffS('quelle'), diffT(' auswerte und daraus '), diffS('produkt'), diffT(' erstelle')
+                );
             } else if (v.quelle) {
                 p.push(diffT(', indem ich '), diffS('quelle'), diffT(' auswerte'));
             } else if (v.produkt) {
@@ -329,12 +358,24 @@ define([], function() {
         (v) => Boolean(v.produkt || v.quelle),
     ];
 
+    /**
+     * Die Satzmuster, die zur aktuellen Auswahl passen. Passt keines, bleibt es
+     * beim Grundmuster 0, damit immer ein Satz entsteht.
+     *
+     * @param {Object} v Aktuelle Auswahl des Editors.
+     * @returns {Array<number>} Indizes der passenden Muster in DIFF_TEMPLATES.
+     */
     function diffPassendeMuster(v) {
         const passend = DIFF_TEMPLATES.map((_, i) => i).filter((i) => DIFF_TAUGT[i](v));
         return passend.length ? passend : [0];
     }
 
-    // Die Seminarphase (D41) der gewählten Denkoperation – über ihre Bloom-Gruppe.
+    /**
+     * Die Seminarphase (D41) der gewählten Denkoperation – über ihre Bloom-Gruppe.
+     *
+     * @param {string} verb Die gewählte Denkoperation.
+     * @returns {string} Die zugehörige Seminarphase, leer wenn keine ermittelbar ist.
+     */
     function diffPhaseForVerb(verb) {
         if (!verb) {
             return '';
@@ -344,7 +385,11 @@ define([], function() {
         return group ? (DIFF_PHASE_BY_GROUP[group.label] || '') : '';
     }
 
-    // Das offene Editor-Overlay schließen (Singleton über die feste ID).
+    /**
+     * Das offene Editor-Overlay schließen (Singleton über die feste ID).
+     *
+     * @returns {void}
+     */
     function close() {
         const overlay = document.getElementById('sq-lz-overlay');
         if (overlay) {
@@ -352,6 +397,13 @@ define([], function() {
         }
     }
 
+    /**
+     * Den Lernziel-Editor als Overlay öffnen. Ein bereits offenes Overlay wird
+     * zuvor geschlossen, damit immer nur eines existiert.
+     *
+     * @param {Function} onAccept Wird beim Übernehmen mit dem fertigen Lernzielsatz aufgerufen.
+     * @returns {void}
+     */
     function open(onAccept) {
             close();
             const acceptCb = typeof onAccept === "function" ? onAccept : null;
@@ -479,7 +531,8 @@ define([], function() {
             const columnHtml = (col) => {
                 const groups = col.groups.map((group) => {
                     const chips = group.items.map((item) =>
-                        `<button type="button" class="sq-lz-chip" data-cat="${col.cat}" data-value="${escapeHtml(item)}" aria-pressed="false">${escapeHtml(item)}</button>`).join('');
+                        `<button type="button" class="sq-lz-chip" data-cat="${col.cat}"`
+                        + ` data-value="${escapeHtml(item)}" aria-pressed="false">${escapeHtml(item)}</button>`).join('');
                     return `<div class="sq-lz-group">
                               <div class="sq-lz-group__label">${escapeHtml(group.label)}</div>
                               <div class="sq-lz-chips">${chips}</div>
@@ -488,7 +541,8 @@ define([], function() {
                 return `<section class="sq-lz-col" data-cat="${col.cat}">
                           <div class="sq-lz-col__head">
                             <span class="sq-lz-col__title">${escapeHtml(col.title)}</span>
-                            <button type="button" class="sq-lz-dice" data-roll="${col.cat}" title="${escapeHtml(col.title)} zufällig wählen">würfeln</button>
+                            <button type="button" class="sq-lz-dice" data-roll="${col.cat}"
+                              title="${escapeHtml(col.title)} zufällig wählen">würfeln</button>
                           </div>
                           <p class="sq-lz-col__hint">${escapeHtml(col.hint)}</p>
                           <div class="sq-lz-options">${groups}</div>
@@ -503,13 +557,16 @@ define([], function() {
                     <button type="button" class="sq-modal__close" data-lz="close">✕</button>
                   </div>
                   <div class="sq-modal__body">
-                    <p class="sq-lz-lede">Baue ein Lernziel in der Ich-kann-Form: Denkoperation, inhaltliche Linse, Quelle, Produkt und Arbeitsform. Du musst nicht aus jeder Liste etwas wählen – der Satz lässt weg, was du offenlässt. Würfeln ist erlaubt.</p>
+                    <p class="sq-lz-lede">Baue ein Lernziel in der Ich-kann-Form: Denkoperation, inhaltliche Linse, \
+Quelle, Produkt und Arbeitsform. Du musst nicht aus jeder Liste etwas wählen – der Satz lässt weg, was du \
+offenlässt. Würfeln ist erlaubt.</p>
                     <div class="sq-field sq-lz-thema-field">
                       <div class="sq-lz-thema-head">
                         <label class="kg-label" for="sq-lz-thema">Thema (optional)</label>
                         <button type="button" class="sq-lz-dice" data-roll="thema" title="Thema würfeln">würfeln</button>
                       </div>
-                      <input type="text" class="kg-input" id="sq-lz-thema" list="sq-lz-themen" placeholder="z. B. Arbeitszeit" autocomplete="off">
+                      <input type="text" class="kg-input" id="sq-lz-thema" list="sq-lz-themen"
+                        placeholder="z. B. Arbeitszeit" autocomplete="off">
                       <datalist id="sq-lz-themen">${themenOptions}</datalist>
                     </div>
                     <div class="sq-field">

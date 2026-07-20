@@ -1,5 +1,26 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * Internal library functions.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 /**
  * Resolve activity context and core records for Seminarplaner pages.
@@ -137,7 +158,7 @@ function seminarplaner_install_unserialize_notice_guard(int $userid = 0): void {
     }
     $installed = true;
 
-    set_error_handler(static function($errno, $errstr) use ($userid) {
+    set_error_handler(static function ($errno, $errstr) use ($userid) {
         global $DB, $USER;
 
         $message = (string)$errstr;
@@ -180,8 +201,13 @@ function seminarplaner_install_unserialize_notice_guard(int $userid = 0): void {
  * @param string|null $amdmodule Optional AMD module suffix.
  * @return void
  */
-function seminarplaner_prepare_page(string $script, stdClass $cm, stdClass $course, stdClass $seminarplaner,
-    ?string $amdmodule = null): void {
+function seminarplaner_prepare_page(
+    string $script,
+    stdClass $cm,
+    stdClass $course,
+    stdClass $seminarplaner,
+    ?string $amdmodule = null
+): void {
     global $PAGE;
 
     $PAGE->set_url($script, ['id' => (int)$cm->id]);
@@ -237,7 +263,7 @@ function seminarplaner_cleanup_invalid_fileprefs(int $userid): void {
             continue;
         }
         $notice = false;
-        set_error_handler(static function($errno, $errstr) use (&$notice) {
+        set_error_handler(static function ($errno, $errstr) use (&$notice) {
             $notice = true;
             return true;
         });
@@ -369,7 +395,7 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
         || has_capability('mod/seminarplaner:importfrommoddata', $context)
         || has_capability('mod/seminarplaner:exporttomoddata', $context);
 
-    $rendericon = static function(string $name): string {
+    $rendericon = static function (string $name): string {
         if ($name === '') {
             return '';
         }
@@ -392,12 +418,24 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
     if ($canmanageseminarplaner) {
         // Reihenfolge/Benennung D16/D50. Immer sichtbar: Überblick · Sequenz ·
         // Bibliothek · Import/Export. Nach Nutzungszweck zusätzlich:
-        //  - "durchfuehren": Roter Faden (nach Bibliothek),
-        //  - "verwalten": Einreichen (am Ende).
+        // - "durchfuehren": Roter Faden (nach Bibliothek),
+        // - "verwalten": Einreichen (am Ende).
         $tabs = [
-            'grid' => ['label' => get_string('ueberblickmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/grid.php', 'icon' => 'calendar-range'],
-            'sequenz' => ['label' => get_string('sequenzmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/sequenz.php', 'icon' => 'list-checks'],
-            'methods' => ['label' => get_string('bibliothekmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methodlibrary.php', 'icon' => 'layout-grid'],
+            'grid' => [
+                'label' => get_string('ueberblickmenu', 'mod_seminarplaner'),
+                'path' => '/mod/seminarplaner/grid.php',
+                'icon' => 'calendar-range',
+            ],
+            'sequenz' => [
+                'label' => get_string('sequenzmenu', 'mod_seminarplaner'),
+                'path' => '/mod/seminarplaner/sequenz.php',
+                'icon' => 'list-checks',
+            ],
+            'methods' => [
+                'label' => get_string('bibliothekmenu', 'mod_seminarplaner'),
+                'path' => '/mod/seminarplaner/methodlibrary.php',
+                'icon' => 'layout-grid',
+            ],
         ];
         if ($usecase === 'durchfuehren' && has_capability('mod/seminarplaner:viewroterfaden', $context)) {
             $tabs['roterfaden'] = [
@@ -406,20 +444,33 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
                 'icon' => 'route',
             ];
         }
-        $tabs['importexport'] = ['label' => get_string('importexport', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/importexport.php', 'icon' => 'arrow-left-right'];
+        $tabs['importexport'] = [
+            'label' => get_string('importexport', 'mod_seminarplaner'),
+            'path' => '/mod/seminarplaner/importexport.php',
+            'icon' => 'arrow-left-right',
+        ];
         if ($usecase === 'verwalten') {
-            $tabs['review'] = ['label' => get_string('einreichenmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/review.php', 'icon' => 'clipboard-check'];
+            $tabs['review'] = [
+                'label' => get_string('einreichenmenu', 'mod_seminarplaner'),
+                'path' => '/mod/seminarplaner/review.php',
+                'icon' => 'clipboard-check',
+            ];
         }
     } else if (has_capability('mod/seminarplaner:viewroterfaden', $context)) {
         $tabs = [
-            'roterfaden' => ['label' => get_string('roterfadenmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/roterfaden.php', 'icon' => 'route'],
+            'roterfaden' => [
+                'label' => get_string('roterfadenmenu', 'mod_seminarplaner'),
+                'path' => '/mod/seminarplaner/roterfaden.php',
+                'icon' => 'route',
+            ],
         ];
     }
 
     $out = html_writer::start_div('kg-tabs');
     foreach ($tabs as $key => $tab) {
         $classes = 'kg-tab' . ($key === $active ? ' kg-tab-active' : '');
-        $content = html_writer::tag('span',
+        $content = html_writer::tag(
+            'span',
             $rendericon((string)($tab['icon'] ?? ''))
             . html_writer::tag('span', s((string)$tab['label']), ['class' => 'kg-tab-label']),
             ['class' => 'kg-tab-content']

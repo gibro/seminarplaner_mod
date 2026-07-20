@@ -31,8 +31,6 @@ define(['core/ajax', 'core/notification', 'core_user/repository'], function(Ajax
         return Number.parseInt(select ? (select.value || '0') : '0', 10) || 0;
     };
 
-    const normalizeTitle = (title) => String(title || '').trim().toLowerCase();
-
     const renderExistingCandidates = () => {
         const host = bySel('#kg-review-existing-candidates');
         if (!host) {
@@ -367,7 +365,8 @@ define(['core/ajax', 'core/notification', 'core_user/repository'], function(Ajax
             const rows = Array.isArray(res.candidates) ? res.candidates : [];
             existingCandidates = rows.map((row) => Object.assign({}, row, {selected: false}));
             renderExistingCandidates();
-            setStatus('#kg-review-existing-status', `${existingCandidates.length} neue/geänderte Seminareinheiten gefunden.`, false);
+            setStatus('#kg-review-existing-status',
+                `${existingCandidates.length} neue/geänderte Seminareinheiten gefunden.`, false);
         }).catch((e) => {
             existingCandidates = [];
             renderExistingCandidates();
@@ -397,7 +396,8 @@ define(['core/ajax', 'core/notification', 'core_user/repository'], function(Ajax
             methodids: selected
         }).then((res) => {
             setStatus('#kg-review-existing-status',
-                `Erfolgreich eingereicht (Sammlung #${res.methodsetid}, Version #${res.versionid}, ${res.savedcount} Seminareinheiten in der Sammlung).`,
+                `Erfolgreich eingereicht (Sammlung #${res.methodsetid}, Version #${res.versionid}, `
+                    + `${res.savedcount} Seminareinheiten in der Sammlung).`,
                 false
             );
             return loadExistingCandidates(cmid);
@@ -434,7 +434,8 @@ define(['core/ajax', 'core/notification', 'core_user/repository'], function(Ajax
             methodids: selectedids
         }).then((res) => {
             setStatus('#kg-review-new-status',
-                `Methoden-Sammlung eingereicht (Sammlung #${res.methodsetid}, Version #${res.versionid}, ${res.savedcount} Seminareinheiten).`,
+                `Methoden-Sammlung eingereicht (Sammlung #${res.methodsetid}, Version #${res.versionid}, `
+                    + `${res.savedcount} Seminareinheiten).`,
                 false
             );
             return loadReviewTargets(cmid).then(() => loadChangedMethodsForNewSet(cmid));

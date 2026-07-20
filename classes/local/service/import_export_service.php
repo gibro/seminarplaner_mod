@@ -1,11 +1,30 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * Import export service.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 namespace mod_seminarplaner\local\service;
 
 use coding_exception;
-
-defined('MOODLE_INTERNAL') || die();
 
 /**
  * Orchestrates manual import/export validation and audit logging.
@@ -98,8 +117,13 @@ class import_export_service {
      * @param bool $strictlegacy Strict legacy mode.
      * @return array{errors: string[], warnings: string[], legacyrows: array}
      */
-    public function validate_export_rows(?int $cmid, int $contextid, int $actorid, array $internalrows,
-        bool $strictlegacy = false): array {
+    public function validate_export_rows(
+        ?int $cmid,
+        int $contextid,
+        int $actorid,
+        array $internalrows,
+        bool $strictlegacy = false
+    ): array {
         if ($contextid <= 0 || $actorid <= 0) {
             throw new coding_exception('Invalid context or actor for validate_export_rows');
         }

@@ -1,7 +1,26 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Unit tests for privacy provider.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 use core_privacy\local\request\approved_contextlist;
 use core_privacy\local\request\userlist;
@@ -12,7 +31,7 @@ use mod_seminarplaner\privacy\provider;
 /**
  * Privacy provider tests for mod_seminarplaner.
  */
-final class mod_seminarplaner_privacy_provider_test extends advanced_testcase {
+final class privacy_provider_test extends advanced_testcase {
     /** @var \stdClass */
     private $user;
     /** @var \context_module */
@@ -42,7 +61,7 @@ final class mod_seminarplaner_privacy_provider_test extends advanced_testcase {
 
     public function test_get_contexts_for_userid_includes_activity(): void {
         $contextlist = provider::get_contexts_for_userid((int)$this->user->id);
-        // get_contextids() ist als int[] dokumentiert, liefert die IDs aber roh
+        // Get_contextids() ist als int[] dokumentiert, liefert die IDs aber roh
         // aus der DB — unter MariaDB also Strings. assertContains vergleicht
         // strikt, deshalb hier casten statt auf den Docblock zu vertrauen.
         $contextids = array_map('intval', $contextlist->get_contextids());

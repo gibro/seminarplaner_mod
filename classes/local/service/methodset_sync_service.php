@@ -1,12 +1,31 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * Methodset sync service.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 namespace mod_seminarplaner\local\service;
 
 use coding_exception;
 use context_module;
-
-defined('MOODLE_INTERNAL') || die();
 
 /**
  * Synchronizes linked activity seminar units with published global method set versions.
@@ -29,8 +48,13 @@ class methodset_sync_service {
      * @param bool $isdefault
      * @return void
      */
-    public function upsert_activity_set_link(int $cmid, int $methodsetid, int $methodsetversionid, int $userid,
-        bool $isdefault = false): void {
+    public function upsert_activity_set_link(
+        int $cmid,
+        int $methodsetid,
+        int $methodsetversionid,
+        int $userid,
+        bool $isdefault = false
+    ): void {
         global $DB;
 
         if ($cmid <= 0 || $methodsetid <= 0 || $methodsetversionid <= 0 || $userid <= 0) {
@@ -82,8 +106,12 @@ class methodset_sync_service {
         $links = $DB->get_records('kgen_activity_setlink', ['cmid' => $cmid], 'id ASC');
         $out = [];
         foreach ($links as $link) {
-            $set = $DB->get_record('local_kgen_methodset', ['id' => (int)$link->methodsetid],
-                'id,shortname,displayname,status,currentversion', IGNORE_MISSING);
+            $set = $DB->get_record(
+                'local_kgen_methodset',
+                ['id' => (int)$link->methodsetid],
+                'id,shortname,displayname,status,currentversion',
+                IGNORE_MISSING
+            );
             if (!$set) {
                 continue;
             }
@@ -232,8 +260,12 @@ class methodset_sync_service {
      * @param array $existinglinks
      * @return void
      */
-    private function backfill_links_from_activity_defaults(int $methodsetid, int $newversionid, int $actorid,
-        array $existinglinks): void {
+    private function backfill_links_from_activity_defaults(
+        int $methodsetid,
+        int $newversionid,
+        int $actorid,
+        array $existinglinks
+    ): void {
         global $DB;
 
         $linkedcmids = [];
@@ -246,7 +278,12 @@ class methodset_sync_service {
             return;
         }
 
-        $newversion = $DB->get_record('local_kgen_methodset_ver', ['id' => $newversionid], 'id,methodsetid,versionnum', IGNORE_MISSING);
+        $newversion = $DB->get_record(
+            'local_kgen_methodset_ver',
+            ['id' => $newversionid],
+            'id,methodsetid,versionnum',
+            IGNORE_MISSING
+        );
         $fallbackoldversion = 0;
         if ($newversion && (int)$newversion->methodsetid === $methodsetid) {
             $previous = $DB->get_record_sql(
@@ -275,8 +312,13 @@ class methodset_sync_service {
             if ($cmid <= 0 || !empty($linkedcmids[$cmid])) {
                 continue;
             }
-            $this->upsert_activity_set_link($cmid, $methodsetid,
-                $fallbackoldversion > 0 ? $fallbackoldversion : $newversionid, $actorid, true);
+            $this->upsert_activity_set_link(
+                $cmid,
+                $methodsetid,
+                $fallbackoldversion > 0 ? $fallbackoldversion : $newversionid,
+                $actorid,
+                true
+            );
         }
     }
 
@@ -315,8 +357,13 @@ class methodset_sync_service {
      * @param int $newversionid
      * @return array
      */
-    private function merge_methods_for_sync(array $existing, int $methodsetid, array $oldsetmethods, array $newsetmethods,
-        int $newversionid): array {
+    private function merge_methods_for_sync(
+        array $existing,
+        int $methodsetid,
+        array $oldsetmethods,
+        array $newsetmethods,
+        int $newversionid
+    ): array {
         $updated = [];
         $usednew = [];
 
@@ -335,7 +382,8 @@ class methodset_sync_service {
             }
 
             $isfrozen = !empty($syncmeta['frozen']);
-            $sourcehashes = isset($syncmeta['sourcehashes']) && is_array($syncmeta['sourcehashes']) ? $syncmeta['sourcehashes'] : [];
+            $sourcehashes = isset($syncmeta['sourcehashes']) && is_array($syncmeta['sourcehashes'])
+                ? $syncmeta['sourcehashes'] : [];
             // Cards linked before attachments were tracked carry no baseline for them. A
             // missing baseline counts as "not changed locally" and would let the incoming
             // list delete locally added files. The baseline is what the set looked like at
@@ -482,7 +530,7 @@ class methodset_sync_service {
             return [];
         }
 
-        $attachmentsbymethod = $this->load_global_method_material_attachments(array_map(static function($row) {
+        $attachmentsbymethod = $this->load_global_method_material_attachments(array_map(static function ($row) {
             return (int)$row->id;
         }, array_values($rows)));
 
@@ -603,6 +651,13 @@ class methodset_sync_service {
         return $aliases[$key] ?? $phase;
     }
 
+    /**
+     * Zerlegt ein Mehrfachfeld in eine Liste eindeutiger, bereinigter Einzelwerte.
+     *
+     * @param string|null $value Rohwert, getrennt durch ##, Zeilenumbrueche, Kommas oder Semikola.
+     * @param bool $normalizephase True, wenn die Einzelwerte als Seminarphase normalisiert werden sollen.
+     * @return array Liste der bereinigten Werte ohne Leereintraege und ohne Dubletten.
+     */
     private function split_multi_text(?string $value, bool $normalizephase = false): array {
         if ($value === null) {
             return [];
@@ -651,10 +706,12 @@ class methodset_sync_service {
             return [];
         }
 
-        list($insql, $params) = $DB->get_in_or_equal($methodids, SQL_PARAMS_NAMED);
-        $links = $DB->get_records_select('local_kgen_method_file',
+        [$insql, $params] = $DB->get_in_or_equal($methodids, SQL_PARAMS_NAMED);
+        $links = $DB->get_records_select(
+            'local_kgen_method_file',
             "methodid {$insql} AND kind = :kind",
-            $params + ['kind' => 'material']);
+            $params + ['kind' => 'material']
+        );
         if (!$links) {
             return [];
         }
@@ -668,8 +725,9 @@ class methodset_sync_service {
             return [];
         }
 
-        list($iteminsql, $itemparams) = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
-        $records = $DB->get_records_select('files',
+        [$iteminsql, $itemparams] = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
+        $records = $DB->get_records_select(
+            'files',
             "itemid {$iteminsql}
                  AND component = :component
                  AND filearea = :filearea
@@ -679,7 +737,8 @@ class methodset_sync_service {
                 'component' => 'local_seminarplaner',
                 'filearea' => 'method_material',
                 'dot' => '.',
-            ]);
+            ]
+        );
         if (!$records) {
             return [];
         }

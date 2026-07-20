@@ -1,7 +1,26 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Unit tests for import global methodset.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 use mod_seminarplaner\external\api;
 use mod_seminarplaner\local\service\grid_service;
@@ -15,7 +34,7 @@ use mod_seminarplaner\local\service\method_card_service;
  * D32 that later got the Seminarkonzept label - the units then come in like a
  * collection, see Workflow 12 in TEST_WORKFLOWS.md).
  */
-final class mod_seminarplaner_import_global_methodset_test extends advanced_testcase {
+final class import_global_methodset_test extends advanced_testcase {
     /** @var int Course module id of the activity units are imported into. */
     private int $cmid = 0;
 
@@ -53,8 +72,11 @@ final class mod_seminarplaner_import_global_methodset_test extends advanced_test
      * @param string $displayname
      * @return array{0:int,1:int} Set id and version id.
      */
-    private function create_published_set(string $concepttype, array $snapshot,
-        string $displayname = 'Globales Konzept'): array {
+    private function create_published_set(
+        string $concepttype,
+        array $snapshot,
+        string $displayname = 'Globales Konzept'
+    ): array {
         global $DB;
 
         $now = time();
@@ -168,7 +190,7 @@ final class mod_seminarplaner_import_global_methodset_test extends advanced_test
         $this->assertCount(1, $konzepte);
         $this->assertSame($setid, $konzepte[0]['setid']);
         $this->assertSame(2, $konzepte[0]['unitcount']);
-        // "Hatte nie einen Plan" ist nicht "Plan wurde geloescht".
+        // Wichtig: "Hatte nie einen Plan" ist nicht "Plan wurde geloescht".
         $this->assertFalse($konzepte[0]['hadplan']);
         $this->assertFalse($konzepte[0]['planexists']);
     }
@@ -194,7 +216,7 @@ final class mod_seminarplaner_import_global_methodset_test extends advanced_test
                 'description' => 'Aus dem Konzept',
                 'state' => [
                     \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY => [
-                        // 'version' ist Pflicht: ohne sie gilt der Abschnitt als
+                        // Das Feld 'version' ist Pflicht: ohne sie gilt der Abschnitt als
                         // nicht vorhanden (sequence_state::has_sequence) und
                         // save_user_state ersetzt ihn beim Anlegen des Plans
                         // durch einen frisch konvertierten, leeren.
@@ -204,7 +226,7 @@ final class mod_seminarplaner_import_global_methodset_test extends advanced_test
                         'bausteine' => [],
                         'einheitenauswahlen' => [
                             'ea-1' => [
-                                // legacy:-Referenzen zeigen in die Tageseintraege
+                                // Legacy:-Referenzen zeigen in die Tageseintraege
                                 // des Plans und bleiben unangetastet.
                                 'kandidaten' => ['alt-1', 'alt-2', 'legacy:tag-eintrag'],
                                 'aktiv' => 'alt-2',
@@ -251,8 +273,7 @@ final class mod_seminarplaner_import_global_methodset_test extends advanced_test
         $this->assertSame('Einstiegsseminar', $konzepte[0]['planname']);
 
         $state = (new grid_service())->get_user_state((int)$grid->id, (int)$USER->id);
-        $auswahl = $state['state'][\mod_seminarplaner\local\sequence\sequence_state::STATE_KEY]
-            ['einheitenauswahlen']['ea-1'];
+        $auswahl = $state['state'][\mod_seminarplaner\local\sequence\sequence_state::STATE_KEY]['einheitenauswahlen']['ea-1'];
 
         $this->assertSame([
             $newids['Blitzlicht'],

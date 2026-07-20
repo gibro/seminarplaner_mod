@@ -1,12 +1,31 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * Method card service.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 namespace mod_seminarplaner\local\service;
 
 use coding_exception;
 use moodle_url;
-
-defined('MOODLE_INTERNAL') || die();
 
 /**
  * Persists seminar units shared per activity.
@@ -289,8 +308,10 @@ class method_card_service {
         unset($method);
 
         $normalizedalts = $this->normalize_method_alternatives($decoded);
-        if (json_encode($normalizedalts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-            !== json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) {
+        if (
+            json_encode($normalizedalts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            !== json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        ) {
             $decoded = $normalizedalts;
             $jsonchanged = true;
         }
@@ -359,7 +380,7 @@ class method_card_service {
                 throw new coding_exception('Unable to resolve file itemid');
             }
 
-            // sync_file_area() deletes every file the payload does not list. A payload
+            // Sync_file_area() deletes every file the payload does not list. A payload
             // without the key means "not touched" and must not wipe the attachments -
             // only an explicitly empty list removes them.
             $materialentries = (array)($method['materialien'] ?? []);
@@ -688,7 +709,8 @@ class method_card_service {
             'component' => 'mod_seminarplaner',
             'filearea' => $filearea,
         ], $inparams);
-        $records = $DB->get_records_select('files',
+        $records = $DB->get_records_select(
+            'files',
             'contextid = :contextid
              AND component = :component
              AND filearea = :filearea
@@ -696,7 +718,8 @@ class method_card_service {
              AND filename ' . $insql,
             $params,
             '',
-            'itemid, filename');
+            'itemid, filename'
+        );
         if (!$records) {
             return null;
         }

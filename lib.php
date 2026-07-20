@@ -1,7 +1,26 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Library functions.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 /**
  * Moodle core feature support declaration.
@@ -119,7 +138,7 @@ function seminarplaner_delete_instance($id) {
     if (!empty($cmid)) {
         $gridids = $DB->get_fieldset_select('kgen_grid', 'id', 'cmid = ?', [$cmid]);
         if (!empty($gridids)) {
-            list($insql, $inparams) = $DB->get_in_or_equal($gridids, SQL_PARAMS_QM);
+            [$insql, $inparams] = $DB->get_in_or_equal($gridids, SQL_PARAMS_QM);
             $DB->delete_records_select('kgen_grid_user_state', "gridid $insql", $inparams);
             $DB->delete_records_select('kgen_grid_lock', "gridid $insql", $inparams);
         }

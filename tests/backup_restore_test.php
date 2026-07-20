@@ -1,5 +1,26 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * Unit tests for backup restore.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -16,7 +37,7 @@ use mod_seminarplaner\local\service\grid_service;
  * survive a course backup/restore (also triggered by activity duplication and
  * course import). See Workflow 21/22 in TEST_WORKFLOWS.md.
  */
-final class mod_seminarplaner_backup_restore_test extends advanced_testcase {
+final class backup_restore_test extends advanced_testcase {
     public function test_backup_restore_preserves_grid_and_roterfaden(): void {
         global $USER;
 
@@ -113,7 +134,7 @@ final class mod_seminarplaner_backup_restore_test extends advanced_testcase {
         $element = $xml->seminarplaner;
         $this->assertNotNull($element, 'Das Backup enthaelt kein <seminarplaner>-Element.');
 
-        // 'id' ist der Schluessel des Elements und steht als Attribut, nicht als
+        // Das Feld 'id' ist der Schluessel des Elements und steht als Attribut, nicht als
         // Kindelement - alle uebrigen Spalten muessen als Kindelement auftauchen.
         $exempt = ['id'];
         $missing = [];
@@ -171,8 +192,10 @@ final class mod_seminarplaner_backup_restore_test extends advanced_testcase {
         $restoredcmid = $this->roundtrip_activity($sourcecmid, (int)$generator->create_course()->id, (int)$USER->id);
         $this->assertNotSame($sourcecmid, $restoredcmid);
 
-        $restored = $DB->get_record('seminarplaner',
-            ['id' => get_coursemodule_from_id('seminarplaner', $restoredcmid)->instance]);
+        $restored = $DB->get_record(
+            'seminarplaner',
+            ['id' => get_coursemodule_from_id('seminarplaner', $restoredcmid)->instance]
+        );
         $this->assertSame('left', $restored->logoposition, 'Die Logo-Position hat den Restore nicht ueberlebt.');
         $this->assertSame('verwalten', $restored->usecase, 'Der Nutzungszweck hat den Restore nicht ueberlebt.');
 

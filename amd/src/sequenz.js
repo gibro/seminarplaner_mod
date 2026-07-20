@@ -29,9 +29,24 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         letzterTagNurVormittag: false
     };
     const GRID_PRESETS = {
-        'standard-week': {days: ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
-        'sunday-to-friday': {days: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
-        'weekend-seminar': {days: ['Freitag', 'Samstag', 'Sonntag'], granularity: 15, ankerzeiten: Object.assign({}, DEFAULT_ANKERZEITEN, {ersterTagNurNachmittag: true, letzterTagNurVormittag: true})},
+        'standard-week': {
+            days: ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'],
+            granularity: 15,
+            ankerzeiten: DEFAULT_ANKERZEITEN
+        },
+        'sunday-to-friday': {
+            days: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'],
+            granularity: 15,
+            ankerzeiten: DEFAULT_ANKERZEITEN
+        },
+        'weekend-seminar': {
+            days: ['Freitag', 'Samstag', 'Sonntag'],
+            granularity: 15,
+            ankerzeiten: Object.assign({}, DEFAULT_ANKERZEITEN, {
+                ersterTagNurNachmittag: true,
+                letzterTagNurVormittag: true
+            })
+        },
         'half-week-mo-mi': {days: ['Montag', 'Dienstag', 'Mittwoch'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
         'half-week-mi-fr': {days: ['Mittwoch', 'Donnerstag', 'Freitag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
         'compact-day': {days: ['Montag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN}
@@ -87,7 +102,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             }
             if (!best || duration > best.duration
                 || (duration === best.duration
-                    && Math.abs(parseTimeToMinutes(brk.start) - DEFAULT_BOUNDARY_MIN) < Math.abs(parseTimeToMinutes(best.start) - DEFAULT_BOUNDARY_MIN))) {
+                    && Math.abs(parseTimeToMinutes(brk.start) - DEFAULT_BOUNDARY_MIN)
+                        < Math.abs(parseTimeToMinutes(best.start) - DEFAULT_BOUNDARY_MIN))) {
                 best = {start: brk.start, duration};
             }
         });
@@ -370,7 +386,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             .replace(/<li[^>]*>/gi, '\n• ')
             .replace(/<br[^>]*>/gi, '\n')
             .replace(/<\/p>/gi, '\n');
-        return doc.textContent.replace(/ /g, ' ').split('\n')
+        return doc.textContent.replace(/\u00a0/g, ' ').split('\n')
             .map((line) => line.trim()).filter(Boolean).join('\n');
     };
 
@@ -460,9 +476,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
     // deliberately excluded - it is only found via keyword matching).
     const BLOOM_PHASES = [
         {phase: 'orientierung', stems: ['benenn', 'defini', 'nenn', 'aufzähl', 'wiedergeb']},
-        {phase: 'analyse', stems: ['erklär', 'zusammenfass', 'vergleich', 'unterscheid', 'klassifizier', 'zerleg', 'analysier', 'einordn']},
+        {phase: 'analyse', stems: ['erklär', 'zusammenfass', 'vergleich', 'unterscheid', 'klassifizier',
+            'zerleg', 'analysier', 'einordn']},
         {phase: 'handlung', stems: ['anwend', 'ausführ', 'umsetz', 'durchführ', 'erprob', 'anleit']},
-        {phase: 'transfer', stems: ['bewert', 'beurteil', 'einschätz', 'entwickel', 'gestalt', 'konzipier', 'reflektier', 'übertrag']},
+        {phase: 'transfer', stems: ['bewert', 'beurteil', 'einschätz', 'entwickel', 'gestalt',
+            'konzipier', 'reflektier', 'übertrag']},
     ];
 
     const STOPWORDS = ['eine', 'einer', 'eines', 'einem', 'einen', 'der', 'die', 'das', 'den', 'dem', 'des',
@@ -624,7 +642,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 select.addEventListener('change', () => {
                     const gridid = Number.parseInt(select.value, 10);
                     if (Number.isFinite(gridid) && gridid > 0) {
-                        this.confirmDiscard() && this.loadState(gridid);
+                        if (this.confirmDiscard()) {
+                            this.loadState(gridid);
+                        }
                     }
                 });
             }
@@ -669,6 +689,18 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 });
                 container.addEventListener('keydown', (event) => {
                     const el = event.target;
+                    // Alternativen-Paar: die Karten sind role="radio" und per
+                    // Tab erreichbar, also muessen Enter und Leertaste sie
+                    // auch auswaehlen koennen.
+                    if (el && el.classList && el.classList.contains('sq-alt__option')
+                        && (event.key === 'Enter' || event.key === ' ')) {
+                        event.preventDefault();
+                        this.chooseCandidate(
+                            el.getAttribute('data-pid') || '',
+                            el.getAttribute('data-ref') || ''
+                        );
+                        return;
+                    }
                     if (!el || !el.classList || !el.classList.contains('sq-titleedit')) {
                         return;
                     }
@@ -1491,6 +1523,101 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             });
         }
 
+        // D21 (Nachtrag): Alternativen sind bisher eine Momentaufnahme beim
+        // Einfuegen - wer die Verknuepfung erst danach in der Bibliothek setzt,
+        // sah sie im Plan nie. Dieser Abgleich laeuft bei jedem render() und
+        // holt zweierlei nach:
+        //
+        //   1. Kandidaten nachziehen: was die Bibliothek als Alternative der
+        //      aktiven Karte kennt, wird Kandidat der Auswahl.
+        //   2. Benachbarte Platzierungen zusammenfuehren, die laut Bibliothek
+        //      Alternativen voneinander sind. Sie standen sonst als zwei
+        //      getrennte Programmpunkte im Tag und zaehlten beide in die
+        //      Zeitbilanz, obwohl im Seminar nur eine davon laeuft.
+        //
+        // Idempotent: nach dem Durchlauf findet der naechste nichts mehr.
+        // -> true, wenn sich etwas geaendert hat (Aufrufer speichert dann).
+        reconcileAlternatives() {
+            const seq = this.sequenz;
+            if (!seq || !this.methodCardList.length) {
+                return false;
+            }
+            let changed = false;
+
+            const altsOf = (ref) => {
+                const card = this.methodCards[String(ref || '')];
+                if (!card || !Array.isArray(card.alternativen)) {
+                    return [];
+                }
+                return card.alternativen.map(String).filter((r) => this.methodCards[r]);
+            };
+
+            Object.keys(seq.einheitenauswahlen).forEach((eaid) => {
+                const auswahl = seq.einheitenauswahlen[eaid];
+                if (!auswahl || !Array.isArray(auswahl.kandidaten)) {
+                    return;
+                }
+                const known = auswahl.kandidaten.map(String);
+                altsOf(auswahl.aktiv).forEach((ref) => {
+                    if (!known.includes(ref)) {
+                        auswahl.kandidaten.push(ref);
+                        known.push(ref);
+                        changed = true;
+                    }
+                });
+            });
+
+            // Geteilte Einheiten (splitgroup) bleiben aussen vor: ihre Teile
+            // teilen sich eine Identitaet, ein Zusammenfuehren wuerde sie
+            // entkoppeln - dieselbe Begruendung wie in renderSwap.
+            const mergeable = (pid) => {
+                const p = seq.platzierungen[String(pid)];
+                if (!p || p.typ !== 'einheit' || p.splitgroup || p.fortsetzung) {
+                    return null;
+                }
+                const auswahl = seq.einheitenauswahlen[p.einheitenauswahl];
+                if (!auswahl || !auswahl.aktiv) {
+                    return null;
+                }
+                return {p, auswahl};
+            };
+
+            (Array.isArray(seq.tage) ? seq.tage : []).forEach((day) => {
+                ANCHORS.forEach((ankername) => {
+                    const anker = (day && day.anker) ? day.anker[ankername] : null;
+                    if (!anker || !Array.isArray(anker.sequenz)) {
+                        return;
+                    }
+                    for (let i = 0; i < anker.sequenz.length - 1; i++) {
+                        const a = mergeable(anker.sequenz[i]);
+                        const b = mergeable(anker.sequenz[i + 1]);
+                        if (!a || !b || a.p.bausteinid !== b.p.bausteinid) {
+                            continue;
+                        }
+                        const arefs = altsOf(a.auswahl.aktiv);
+                        if (!arefs.includes(String(b.auswahl.aktiv))) {
+                            continue;
+                        }
+                        // b geht in a auf: alle Kandidaten von b uebernehmen,
+                        // b samt Auswahl entfernen. Aktiv bleibt die Karte von a.
+                        b.auswahl.kandidaten.map(String).forEach((ref) => {
+                            if (!a.auswahl.kandidaten.map(String).includes(ref)) {
+                                a.auswahl.kandidaten.push(ref);
+                            }
+                        });
+                        const bpid = String(anker.sequenz[i + 1]);
+                        delete seq.einheitenauswahlen[b.p.einheitenauswahl];
+                        delete seq.platzierungen[bpid];
+                        anker.sequenz.splice(i + 1, 1);
+                        changed = true;
+                        i--;
+                    }
+                });
+            });
+
+            return changed;
+        }
+
         // D45: a plan freshly created via the setup templates has anchor
         // times but no sequence section yet - scaffold empty days from the
         // config so planning can start right away. Plans with legacy grid
@@ -1593,7 +1720,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     ? `<span class="sq-intro__blocktime">${minutesToLabel(start)}–${minutesToLabel(end)}</span>`
                     : '';
                 return `
-                    <div class="${classes.join(' ')}" title="${escapeHtml(`${minutesToLabel(start)}–${minutesToLabel(end)} ${title}`)}"
+                    <div class="${classes.join(' ')}"
+                      title="${escapeHtml(`${minutesToLabel(start)}–${minutesToLabel(end)} ${title}`)}"
                       style="top:${(start - daystart) * scale}px; height:${height}px">
                       ${timeline}
                       <span class="sq-intro__blocktitle">${escapeHtml(title)}</span>
@@ -1642,11 +1770,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             const middaytimes = frame.midday.end > frame.midday.start
                 ? ` · ${minutesToLabel(frame.midday.start)}–${minutesToLabel(frame.midday.end)}`
                 : '';
+            const middayspan = middaytimes
+                ? `<span class="sq-break-divider__time">`
+                    + `${minutesToLabel(frame.midday.start)}–${minutesToLabel(frame.midday.end)}</span>`
+                : '';
             const divider = `
                 <div class="sq-break-divider">
                   ${CLOCK_ICON}
                   <span>Mittagspause</span>
-                  ${middaytimes ? `<span class="sq-break-divider__time">${minutesToLabel(frame.midday.start)}–${minutesToLabel(frame.midday.end)}</span>` : ''}
+                  ${middayspan}
                 </div>`;
             return `<div class="sq-intro__preview">${anchors[0]}${divider}${anchors[1]}</div>`;
         }
@@ -1716,7 +1848,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     <div class="sq-unit__title">${escapeHtml(title)}</div>
                     <div class="sq-unit__meta">
                       <span class="sq-badge">${duration} Min.</span>
-                      ${phasetext ? `<span class="sq-badge${phase ? ' sq-badge--phase-' + phase : ''}">${escapeHtml(phasetext)}</span>` : ''}
+                      ${phasetext
+                        ? `<span class="sq-badge${phase ? ' sq-badge--phase-' + phase : ''}">`
+                            + `${escapeHtml(phasetext)}</span>`
+                        : ''}
                       <span class="sq-unit__time">${timelabel}</span>
                     </div>
                   </div>
@@ -1752,7 +1887,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                       Es ist nichts verloren gegangen – du kannst direkt weiterplanen.</p>
                   </div>
                   <div class="sq-modal__footer">
-                    <button type="button" class="kg-btn kg-btn-primary" data-sq-action="intro-done">Alles klar, weiter zur Planung</button>
+                    <button type="button" class="kg-btn kg-btn-primary"
+                      data-sq-action="intro-done">Alles klar, weiter zur Planung</button>
                   </div>
                 </div>`;
             root.classList.add('open');
@@ -2007,7 +2143,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     nextSeq.push(pid);
                 }
                 const targetDay = this.sequenz.tage[anchors[nextAnchorIdx].dayIdx];
-                this.setStatus(`Verschoben: jetzt am ${anchors[nextAnchorIdx].ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag'} von Tag ${targetDay.tag}.`);
+                const targetAnkerName = anchors[nextAnchorIdx].ankername === 'vormittag'
+                    ? 'Vormittag'
+                    : 'Nachmittag';
+                this.setStatus(`Verschoben: jetzt am ${targetAnkerName} von Tag ${targetDay.tag}.`);
             }
             this.setDirty(true);
             this.render();
@@ -2154,7 +2293,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             dstSeq.splice(insertAt, 0, ...pids);
             if (found.anchorIdx !== dstAnchorIdx) {
                 const targetDay = this.sequenz.tage[anchors[dstAnchorIdx].dayIdx];
-                this.setStatus(`Verschoben: jetzt am ${target.ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag'} von Tag ${targetDay.tag}.`);
+                const targetAnkerName = target.ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag';
+                this.setStatus(`Verschoben: jetzt am ${targetAnkerName} von Tag ${targetDay.tag}.`);
             }
             this.setDirty(true);
             this.render();
@@ -2210,9 +2350,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (didsplit && !movedwhole) {
                 msg = `Einheit geteilt – der Rest läuft am ${targetname} von Tag ${targetday.tag} als Fortsetzung weiter.`;
             } else if (didsplit) {
-                msg = `${movedwhole === 1 ? 'Eine Einheit' : movedwhole + ' Einheiten'} verschoben und eine geteilt – Fortsetzung am ${targetname} von Tag ${targetday.tag}.`;
+                msg = `${movedwhole === 1 ? 'Eine Einheit' : movedwhole + ' Einheiten'} verschoben und eine geteilt`
+                    + ` – Fortsetzung am ${targetname} von Tag ${targetday.tag}.`;
             } else {
-                msg = `${movedwhole === 1 ? 'Eine Einheit' : movedwhole + ' Einheiten'} verschoben – läuft jetzt am ${targetname} von Tag ${targetday.tag} weiter.`;
+                msg = `${movedwhole === 1 ? 'Eine Einheit' : movedwhole + ' Einheiten'} verschoben`
+                    + ` – läuft jetzt am ${targetname} von Tag ${targetday.tag} weiter.`;
             }
             this.setStatus(msg);
             this.setDirty(true);
@@ -3133,7 +3275,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             const body = `
                 ${text('Titel', 'titel', placement.titel || '')}
                 ${text('Dauer (Minuten)', 'zeitbedarf', String(placement.dauer || ''))}
-                ${ispause ? '' : '<div class="sq-field__hint">Diese Einheit hat noch keinen Bibliothekseintrag – nur Titel und Dauer sind änderbar.</div>'}`;
+                ${ispause ? '' : '<div class="sq-field__hint">Diese Einheit hat noch keinen '
+                    + 'Bibliothekseintrag – nur Titel und Dauer sind änderbar.</div>'}`;
 
             root.innerHTML = `
                 <div class="sq-modal">
@@ -3446,18 +3589,25 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     </div>`;
             }
             const opts = options.map((o) =>
-                `<label class="kg-tag-option"><input type="checkbox" value="${escapeHtml(o.value)}" data-kg-form-multi-option="1"><span>${escapeHtml(o.label)}</span></label>`
+                `<label class="kg-tag-option">`
+                    + `<input type="checkbox" value="${escapeHtml(o.value)}" data-kg-form-multi-option="1">`
+                    + `<span>${escapeHtml(o.label)}</span></label>`
             ).join('');
+            const althint = 'Gewählte Bausteine werden geparkt und über den '
+                + '„⇄ Alternative"-Schalter am Baustein umgeschaltet.';
             return `
                 <div class="sq-field">
                   <label class="kg-label" for="sq-b-alternativen">Alternative Bausteine</label>
                   <div class="kg-tag-dropdown" id="sq-b-alternativen-dropdown" data-kg-form-multi-dropdown="1"
-                    data-kg-field="#sq-b-alternativen" data-kg-label-prefix="Alternativen" data-kg-placeholder="Alternative Bausteine wählen">
-                    <button type="button" class="kg-input kg-tag-dropdown-toggle" id="sq-b-alternativen-toggle" data-kg-form-multi-toggle="1">Alternative Bausteine wählen</button>
-                    <div class="kg-tag-dropdown-panel kg-hidden" id="sq-b-alternativen-panel" data-kg-form-multi-panel="1">${opts}</div>
+                    data-kg-field="#sq-b-alternativen" data-kg-label-prefix="Alternativen"
+                    data-kg-placeholder="Alternative Bausteine wählen">
+                    <button type="button" class="kg-input kg-tag-dropdown-toggle"
+                      id="sq-b-alternativen-toggle" data-kg-form-multi-toggle="1">Alternative Bausteine wählen</button>
+                    <div class="kg-tag-dropdown-panel kg-hidden" id="sq-b-alternativen-panel"
+                      data-kg-form-multi-panel="1">${opts}</div>
                   </div>
                   <input type="hidden" id="sq-b-alternativen" value="">
-                  <div class="sq-field__hint">Gewählte Bausteine werden geparkt und über den „⇄ Alternative"-Schalter am Baustein umgeschaltet.</div>
+                  <div class="sq-field__hint">${althint}</div>
                 </div>`;
         }
 
@@ -3478,11 +3628,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                   <div class="sq-modal__body">
                     <div class="sq-field">
                       <label class="kg-label">Überschrift</label>
-                      <input type="text" class="kg-input" data-sq-field="titel" value="${escapeHtml(this.bausteinTitle(bid, baustein))}">
+                      <input type="text" class="kg-input" data-sq-field="titel"
+                        value="${escapeHtml(this.bausteinTitle(bid, baustein))}">
                     </div>
                     <div class="sq-field">
                       <label class="kg-label">Unterthemen</label>
-                      <textarea class="kg-input" rows="5" data-sq-field="unterthemen">${escapeHtml(htmlToLines(baustein.unterthemen))}</textarea>
+                      <textarea class="kg-input" rows="5"
+                        data-sq-field="unterthemen">${escapeHtml(htmlToLines(baustein.unterthemen))}</textarea>
                       <div class="sq-field__hint">Eine Zeile je Unterthema.</div>
                     </div>
                     ${this.renderBausteinAltField(bid, baustein)}
@@ -3493,7 +3645,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     </div>` : ''}
                   </div>
                   <div class="sq-modal__footer sq-modal__footer--split">
-                    <button type="button" class="kg-btn sq-danger" data-sq-action="baustein-dissolve" data-bid="${escapeHtml(bid)}">Überschrift auflösen</button>
+                    <button type="button" class="kg-btn sq-danger" data-sq-action="baustein-dissolve"
+                      data-bid="${escapeHtml(bid)}">Überschrift auflösen</button>
                     <span class="sq-modal__footer-gap"></span>
                     <button type="button" class="kg-btn" data-sq-action="modal-close">Abbrechen</button>
                     <button type="button" class="kg-btn kg-btn-primary" data-sq-action="baustein-save">Übernehmen</button>
@@ -3592,7 +3745,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             // Dritter Tab nur, wenn ein Seminarkonzept in diese Aktivität
             // importiert wurde.
             const hasKonzept = this.methodCardList.some((c) => isKonzeptCard(c));
-            const tab = (id, label) => `<button type="button" class="sq-picker__tab${this.pickerTab === id ? ' active' : ''}" data-sq-action="picker-tab" data-tab="${id}">${label}</button>`;
+            const tab = (id, label) =>
+                `<button type="button" class="sq-picker__tab${this.pickerTab === id ? ' active' : ''}"`
+                + ` data-sq-action="picker-tab" data-tab="${id}">${label}</button>`;
             const root = this.modalRoot();
             root.innerHTML = `
                 <div class="sq-modal">
@@ -3686,7 +3841,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                         </div>
                       </div>
                       <button type="button" class="kg-btn kg-btn-primary" data-sq-action="picker-add"
-                        data-cardid="${escapeHtml(String(card.id))}"${globalid ? ` data-global-methodid="${globalid}"` : ''}>Übernehmen</button>
+                        data-cardid="${escapeHtml(String(card.id))}"${globalid
+                            ? ` data-global-methodid="${globalid}"`
+                            : ''}>Übernehmen</button>
                     </div>`;
             };
 
@@ -3820,7 +3977,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 if (!missing.length) {
                     findings.push({ok: true, text: 'Alle fünf Phasen sind im Seminar vertreten.'});
                 } else {
-                    findings.push({ok: false, text: `Im Seminar ist noch Raum für: ${missing.map((k) => PHASE_LABELS[k]).join(', ')}.`});
+                    findings.push({
+                        ok: false,
+                        text: `Im Seminar ist noch Raum für: ${missing.map((k) => PHASE_LABELS[k]).join(', ')}.`
+                    });
                 }
             }
 
@@ -3845,7 +4005,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 if (sozialform) {
                     const inputlike = /vortrag|input|präsentation/.test(sozialform);
                     findings.push(inputlike
-                        ? {ok: false, text: 'Nach der Mittagspause könnte etwas Aktivierendes guttun – die erste Einheit ist gerade eher Input.'}
+                        ? {ok: false, text: 'Nach der Mittagspause könnte etwas Aktivierendes guttun'
+                            + ' – die erste Einheit ist gerade eher Input.'}
                         : {ok: true, text: 'Nach der Mittagspause geht es aktivierend weiter.'});
                 }
             }
@@ -3860,7 +4021,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 if (key || closing) {
                     findings.push(closing
                         ? {ok: true, text: `${daylabel} endet mit einer abschließenden Einheit.`}
-                        : {ok: false, text: `${daylabel} könnte mit etwas Abschließendem enden (Blitzlicht, Feedback, Ausblick).`});
+                        : {ok: false,
+                            text: `${daylabel} könnte mit etwas Abschließendem enden (Blitzlicht, Feedback, Ausblick).`});
                 }
             }
 
@@ -3891,7 +4053,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 }
             });
             if (monotonie) {
-                findings.push({ok: false, text: `Mehr als zwei Stunden am Stück in derselben Sozialform (${monotonie}) – ein Wechsel könnte beleben.`});
+                findings.push({
+                    ok: false,
+                    text: `Mehr als zwei Stunden am Stück in derselben Sozialform (${monotonie})`
+                        + ` – ein Wechsel könnte beleben.`
+                });
             }
 
             // Regel 7 (Tag): Pausenhinweis - länger als 1,5 Std. ohne Pause (D23).
@@ -3909,7 +4075,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     }
                     streak += Math.max(0, Number(placement.dauer) || 0);
                     if (streak > 90) {
-                        findings.push({ok: false, text: `Am ${ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag'} läuft es länger als 1,5 Stunden ohne Pause – eine kurze Pause könnte guttun.`});
+                        findings.push({
+                            ok: false,
+                            text: `Am ${ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag'} läuft es`
+                                + ` länger als 1,5 Stunden ohne Pause – eine kurze Pause könnte guttun.`
+                        });
                         hinted = true;
                     }
                 });
@@ -3944,11 +4114,23 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 const usedlabel = fmtDuration(frameused);
                 const capacitylabel = fmtDuration(framecapacity);
                 if (frameused > framecapacity + 10) {
-                    findings.push({ok: false, text: `Insgesamt ist etwas mehr geplant, als der Zeitrahmen hergibt (${usedlabel} von ${capacitylabel}) – vielleicht lässt sich etwas kürzen oder auf einen anderen Tag legen.`});
+                    findings.push({
+                        ok: false,
+                        text: `Insgesamt ist etwas mehr geplant, als der Zeitrahmen hergibt`
+                            + ` (${usedlabel} von ${capacitylabel})`
+                            + ` – vielleicht lässt sich etwas kürzen oder auf einen anderen Tag legen.`
+                    });
                 } else if (framecapacity - frameused > 60 && frameused < framecapacity * 0.75) {
-                    findings.push({ok: false, text: `Im Zeitrahmen ist noch reichlich Platz (${usedlabel} von ${capacitylabel} verplant) – hier ist Raum für weitere Einheiten oder großzügigere Zeitfenster.`});
+                    findings.push({
+                        ok: false,
+                        text: `Im Zeitrahmen ist noch reichlich Platz (${usedlabel} von ${capacitylabel} verplant)`
+                            + ` – hier ist Raum für weitere Einheiten oder großzügigere Zeitfenster.`
+                    });
                 } else {
-                    findings.push({ok: true, text: `Die geplanten Einheiten passen gut in den Zeitrahmen (${usedlabel} von ${capacitylabel}).`});
+                    findings.push({
+                        ok: true,
+                        text: `Die geplanten Einheiten passen gut in den Zeitrahmen (${usedlabel} von ${capacitylabel}).`
+                    });
                 }
             }
 
@@ -3980,9 +4162,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 if (!offen.length) {
                     findings.push({ok: true, text: 'Alle Seminarziele sind mit mindestens einer Seminareinheit verknüpft.'});
                 } else if (offen.length === 1) {
-                    findings.push({ok: false, text: `Das Seminarziel „${offen[0].text.trim()}" ist noch mit keiner Seminareinheit verknüpft.`});
+                    findings.push({
+                        ok: false,
+                        text: `Das Seminarziel „${offen[0].text.trim()}" ist noch mit keiner Seminareinheit verknüpft.`
+                    });
                 } else {
-                    findings.push({ok: false, text: `${offen.length} Seminarziele sind noch mit keiner Seminareinheit verknüpft.`});
+                    findings.push({
+                        ok: false,
+                        text: `${offen.length} Seminarziele sind noch mit keiner Seminareinheit verknüpft.`
+                    });
                 }
             }
 
@@ -4097,19 +4285,23 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             const linkedcount = units.filter((unit) => linked[unit.cardid]).length;
             const options = units.map((unit) => `
                 <label class="sq-goal-link">
-                  <input type="checkbox" class="sq-goal-link__cb" data-goalid="${escapeHtml(ziel.id)}" data-cardid="${escapeHtml(unit.cardid)}"${linked[unit.cardid] ? ' checked' : ''}>
+                  <input type="checkbox" class="sq-goal-link__cb" data-goalid="${escapeHtml(ziel.id)}"
+                    data-cardid="${escapeHtml(unit.cardid)}"${linked[unit.cardid] ? ' checked' : ''}>
                   <span>${escapeHtml(unit.titel)}</span>
                 </label>`).join('');
             const emptyunits = units.length ? '' : '<div class="sq-field__hint">Noch keine Einheiten im Plan platziert.</div>';
             const linksopen = this.openGoalLinks[ziel.id] ? ' open' : '';
+            const linklabel = `${linkedcount}${units.length ? '/' + units.length : ''}`;
             return `
                 <div class="sq-goal" data-goalid="${escapeHtml(ziel.id)}">
                   <div class="sq-goal__head">
-                    <input type="text" class="kg-input sq-goal-text" data-goalid="${escapeHtml(ziel.id)}" value="${escapeHtml(ziel.text)}" placeholder="Seminarziel …">
-                    <button type="button" class="kg-btn sq-goal__del" data-sq-goal="delete" data-goalid="${escapeHtml(ziel.id)}" title="Ziel löschen">✕</button>
+                    <input type="text" class="kg-input sq-goal-text" data-goalid="${escapeHtml(ziel.id)}"
+                      value="${escapeHtml(ziel.text)}" placeholder="Seminarziel …">
+                    <button type="button" class="kg-btn sq-goal__del" data-sq-goal="delete"
+                      data-goalid="${escapeHtml(ziel.id)}" title="Ziel löschen">✕</button>
                   </div>
                   <details class="sq-goal-links" data-goalid="${escapeHtml(ziel.id)}"${linksopen}>
-                    <summary><span class="sq-tri" aria-hidden="true">▸</span> Verknüpfte Einheiten (${linkedcount}${units.length ? '/' + units.length : ''})</summary>
+                    <summary><span class="sq-tri" aria-hidden="true">▸</span> Verknüpfte Einheiten (${linklabel})</summary>
                     <div class="sq-goal-links__list">${options || emptyunits}</div>
                   </details>
                 </div>`;
@@ -4128,15 +4320,20 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             const units = this.allPlacedUnits();
             const rows = ziele.map((ziel) => this.renderGoalRow(ziel, units)).join('');
             const open = this.goalsOpen ? ' open' : '';
+            const zielecount = ziele.length ? ` (${ziele.length})` : '';
+            const goalshint = 'Formuliere die übergeordneten Ziele des Seminars und hake je Ziel ab,'
+                + ' welche Einheiten es adressieren.';
             host.innerHTML = `
                 <details class="sq-goals__box"${open}>
-                  <summary class="sq-goals__summary"><span class="sq-tri" aria-hidden="true">▸</span> 🎯 Seminarziele${ziele.length ? ` (${ziele.length})` : ''}</summary>
+                  <summary class="sq-goals__summary"><span class="sq-tri"
+                    aria-hidden="true">▸</span> 🎯 Seminarziele${zielecount}</summary>
                   <div class="sq-goals__body">
-                    <p class="sq-goals__hint">Formuliere die übergeordneten Ziele des Seminars und hake je Ziel ab, welche Einheiten es adressieren.</p>
+                    <p class="sq-goals__hint">${goalshint}</p>
                     <div class="sq-goals__list">${rows}</div>
                     <div class="sq-goals__add">
                       <input type="text" class="kg-input" id="sq-goal-new" placeholder="Neues Seminarziel …">
-                      <button type="button" class="kg-btn sq-lz-trigger" data-sq-goal="editor" title="Geführt formulieren">✎ Formulieren</button>
+                      <button type="button" class="kg-btn sq-lz-trigger" data-sq-goal="editor"
+                        title="Geführt formulieren">✎ Formulieren</button>
                       <button type="button" class="kg-btn kg-btn-primary" data-sq-goal="add">＋ Ziel hinzufügen</button>
                     </div>
                   </div>
@@ -4171,7 +4368,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             host.addEventListener('change', (event) => {
                 const checkbox = event.target.closest('.sq-goal-link__cb');
                 if (checkbox) {
-                    this.toggleGoalLink(checkbox.getAttribute('data-goalid') || '', checkbox.getAttribute('data-cardid') || '', checkbox.checked);
+                    this.toggleGoalLink(
+                        checkbox.getAttribute('data-goalid') || '',
+                        checkbox.getAttribute('data-cardid') || '',
+                        checkbox.checked
+                    );
                     return;
                 }
                 const textinput = event.target.closest('.sq-goal-text');
@@ -4388,12 +4589,20 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             const keywords = this.contextKeywords(baustein);
             const topicwords = this.topicKeywords(baustein);
             const bloomphases = baustein ? this.bloomPhasesFor(baustein.themenplanreferenz) : [];
-            const suggestions = this.suggestFor(gapminutes, keywords, topicwords, bloomphases, this.plannedRefsForBaustein(baustein));
+            const suggestions = this.suggestFor(
+                gapminutes,
+                keywords,
+                topicwords,
+                bloomphases,
+                this.plannedRefsForBaustein(baustein)
+            );
 
             const cards = suggestions.map((entry) => {
                 const pkey = phaseKey(entry.card.seminarphase);
                 return `
-                <div class="sq-suggest__card${pkey ? ' sq-suggest__card--' + pkey : ''}${entry.used ? ' sq-suggest__card--used' : ''}">
+                <div class="sq-suggest__card${pkey ? ' sq-suggest__card--' + pkey : ''}${entry.used
+                    ? ' sq-suggest__card--used'
+                    : ''}">
                   <div class="sq-unit__title">${escapeHtml(cardTitle(entry.card))}</div>
                   <div class="sq-suggest__why">${escapeHtml(entry.reason)}</div>
                   ${this.suggestButton(entry.card, targetattrs)}
@@ -4788,6 +4997,18 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (!container) {
                 return;
             }
+            // Der Abgleich laeuft vor dem Zeichnen, damit zusammengefuehrte
+            // Einheiten sofort richtig dastehen. Das Flag verhindert, dass der
+            // durch setDirty ausgeloeste Autosave-Rendervorgang erneut abgleicht.
+            if (!this.reconciling) {
+                this.reconciling = true;
+                const merged = this.reconcileAlternatives();
+                this.reconciling = false;
+                if (merged) {
+                    this.setDirty(true);
+                    this.toast('Alternativen aus der Bibliothek übernommen.');
+                }
+            }
             this.renderHead();
             this.renderPlanInfo();
             this.renderGoals();
@@ -4826,11 +5047,16 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 ? ` · ${minutesToLabel(frame.midday.start)}–${minutesToLabel(frame.midday.end)}`
                 : '';
             const breakminutes = Math.max(0, frame.midday.end - frame.midday.start);
+            const middayspan = middaytimes
+                ? `<span class="sq-break-divider__time">`
+                    + `${minutesToLabel(frame.midday.start)}–${minutesToLabel(frame.midday.end)}`
+                    + ` · ${breakminutes} Min.</span>`
+                : '';
             const divider = `
                 <div class="sq-break-divider">
                   ${CLOCK_ICON}
                   <span>Mittagspause</span>
-                  ${middaytimes ? `<span class="sq-break-divider__time">${minutesToLabel(frame.midday.start)}–${minutesToLabel(frame.midday.end)} · ${breakminutes} Min.</span>` : ''}
+                  ${middayspan}
                   <span class="sq-break-divider__next">Nachmittag ↓</span>
                 </div>`;
             const afternoon = this.renderAnchor(day, 'nachmittag', frame, seenBausteine);
@@ -4893,8 +5119,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             const overrun = over > 0
                 ? `<div class="sq-overrun">
                      <span><strong>+${over} Min. über ${overtarget}.</strong>
-                       Die letzte Einheit wird ${movetarget} verschoben – oder geteilt und als Fortsetzung weitergeführt, wenn beide Teile sinnvoll bleiben.</span>
-                     ${hasNext ? `<button type="button" class="kg-btn kg-btn-primary" data-sq-action="overflow" data-anker="${ankername}">
+                       Die letzte Einheit wird ${movetarget} verschoben – oder geteilt und als Fortsetzung
+                       weitergeführt, wenn beide Teile sinnvoll bleiben.</span>
+                     ${hasNext ? `<button type="button" class="kg-btn kg-btn-primary"
+                       data-sq-action="overflow" data-anker="${ankername}">
                        ${isMorning ? 'Auf den Nachmittag verschieben' : 'Auf den nächsten Tag verschieben'}</button>` : ''}
                    </div>`
                 : '';
@@ -4919,18 +5147,25 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             // anlegen. Hier kennt der Button seinen Anker.
             const addbutton = `
                 <div class="sq-anchor__add">
-                  <button type="button" class="kg-btn" data-sq-action="add-baustein" data-anker="${ankername}"${offattrs}>＋ Baustein</button>
-                  <button type="button" class="kg-btn" data-sq-action="create-unit" data-anker="${ankername}"${offattrs}>＋ Neue Einheit anlegen</button>
-                  <button type="button" class="kg-btn" data-sq-action="add-unit" data-anker="${ankername}"${offattrs}>＋ Einheit hinzufügen</button>
-                  <button type="button" class="kg-btn" data-sq-action="add-pause" data-anker="${ankername}"${offattrs}>＋ Pause</button>
+                  <button type="button" class="kg-btn" data-sq-action="add-baustein"
+                    data-anker="${ankername}"${offattrs}>＋ Baustein</button>
+                  <button type="button" class="kg-btn" data-sq-action="create-unit"
+                    data-anker="${ankername}"${offattrs}>＋ Neue Einheit anlegen</button>
+                  <button type="button" class="kg-btn" data-sq-action="add-unit"
+                    data-anker="${ankername}"${offattrs}>＋ Einheit hinzufügen</button>
+                  <button type="button" class="kg-btn" data-sq-action="add-pause"
+                    data-anker="${ankername}"${offattrs}>＋ Pause</button>
                 </div>`;
 
             return `
-                <div class="sq-anchor${anchoroff ? ' sq-anchor--off' : ''}" data-anker="${ankername}"${anchoroff ? ' data-off="1"' : ''}>
+                <div class="sq-anchor${anchoroff ? ' sq-anchor--off' : ''}"
+                  data-anker="${ankername}"${anchoroff ? ' data-off="1"' : ''}>
                   <div class="sq-anchor__head">
                     <div class="sq-anchor__title">${title} <span class="sq-anchor__time">${timespan}</span></div>
                     <div class="sq-budget">
-                      <div class="sq-budget__bar"><div class="sq-budget__fill${over > 0 ? ' sq-budget__fill--over' : ''}" style="width:${fillpct}%"></div></div>
+                      <div class="sq-budget__bar"><div class="sq-budget__fill${over > 0
+                        ? ' sq-budget__fill--over'
+                        : ''}" style="width:${fillpct}%"></div></div>
                       <div class="sq-budget__label${over > 0 ? ' sq-budget__label--over' : ''}">${escapeHtml(budgetlabel)}</div>
                     </div>
                   </div>
@@ -5031,7 +5266,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
                 const pkey = phaseKey(card.seminarphase);
                 const placebtn = placeholderpid
-                    ? `<button type="button" class="kg-btn kg-btn-primary sq-unit__place" data-sq-action="suggest-add" data-cardid="${escapeHtml(String(card.id))}" data-pid="${escapeHtml(placeholderpid)}">＋ Platzieren</button>`
+                    ? `<button type="button" class="kg-btn kg-btn-primary sq-unit__place"`
+                        + ` data-sq-action="suggest-add" data-cardid="${escapeHtml(String(card.id))}"`
+                        + ` data-pid="${escapeHtml(placeholderpid)}">＋ Platzieren</button>`
                     : '';
                 // Noch nicht platziert, also gibt es keine Startzeit: die
                 // Zeit-Spalte bleibt leer und haelt nur die gemeinsame Kante.
@@ -5044,7 +5281,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                           <div class="sq-unit__title">${escapeHtml(cardTitle(card))}</div>
                           <div class="sq-unit__meta">
                             ${Number.isFinite(duration) && duration > 0 ? `<span class="sq-badge">${duration} Min.</span>` : ''}
-                            ${card.seminarphase ? `<span class="sq-badge${pkey ? ' sq-badge--phase-' + pkey : ''}">${escapeHtml(String(card.seminarphase))}</span>` : ''}
+                            ${card.seminarphase
+                                ? `<span class="sq-badge${pkey ? ' sq-badge--phase-' + pkey : ''}">`
+                                    + `${escapeHtml(String(card.seminarphase))}</span>`
+                                : ''}
                             <span class="sq-badge sq-badge--planned">geplant, noch nicht platziert</span>
                           </div>
                         </div>
@@ -5080,7 +5320,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     <div class="sq-baustein__units">
                       <div class="sq-baustein__empty">
                         <span class="sq-baustein__emptyhint">Noch keine Einheit in diesem Baustein.</span>
-                        <button type="button" class="kg-btn kg-btn-primary" data-sq-action="baustein-add-unit" data-pid="${escapeHtml(target)}">＋ Einheit hinzufügen</button>
+                        <button type="button" class="kg-btn kg-btn-primary" data-sq-action="baustein-add-unit"
+                          data-pid="${escapeHtml(target)}">＋ Einheit hinzufügen</button>
                       </div>
                     </div>`;
             }
@@ -5121,7 +5362,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             }).join('');
             return `
                 <span class="sq-swap sq-swap--baustein">
-                  <button type="button" class="sq-swap__chip" data-sq-action="bswap-toggle" data-bid="${escapeHtml(bid)}">⇄ Alternative</button>
+                  <button type="button" class="sq-swap__chip" data-sq-action="bswap-toggle"
+                    data-bid="${escapeHtml(bid)}">⇄ Alternative</button>
                   <div class="sq-swap__panel${open ? ' open' : ''}">${options}</div>
                 </span>`;
         }
@@ -5130,7 +5372,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         // design handoff; the whole row is draggable).
         renderGrip() {
             return `<span class="sq-grip" title="Ziehen, um zu verschieben" aria-hidden="true">
-                <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="2.5" cy="3" r="1.4"/><circle cx="7.5" cy="3" r="1.4"/><circle cx="2.5" cy="8" r="1.4"/><circle cx="7.5" cy="8" r="1.4"/><circle cx="2.5" cy="13" r="1.4"/><circle cx="7.5" cy="13" r="1.4"/></svg></span>`;
+                <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor">`
+                + `<circle cx="2.5" cy="3" r="1.4"/><circle cx="7.5" cy="3" r="1.4"/>`
+                + `<circle cx="2.5" cy="8" r="1.4"/><circle cx="7.5" cy="8" r="1.4"/>`
+                + `<circle cx="2.5" cy="13" r="1.4"/><circle cx="7.5" cy="13" r="1.4"/></svg></span>`;
         }
 
         // Handoff: sichtbar bleiben nur „⇄ Alternative" und „Bearbeiten". Alle
@@ -5184,6 +5429,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (!auswahl || !Array.isArray(auswahl.kandidaten) || auswahl.kandidaten.length < 2) {
                 return '';
             }
+            // Genau zwei Alternativen stehen nebeneinander in der Zeile
+            // (renderAlternativePair) - dort waehlt man direkt, der Chip
+            // waere doppelt. Ab drei bleibt es beim Popover.
+            if (auswahl.kandidaten.length === 2) {
+                return '';
+            }
             const open = this.openSwapPid === p.pid;
             const options = auswahl.kandidaten.map((ref) => {
                 const active = String(auswahl.aktiv) === String(ref);
@@ -5193,7 +5444,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             }).join('');
             return `
                 <span class="sq-swap">
-                  <button type="button" class="sq-swap__chip" data-sq-action="swap-toggle" data-pid="${escapeHtml(p.pid)}">⇄ Alternative</button>
+                  <button type="button" class="sq-swap__chip" data-sq-action="swap-toggle"
+                    data-pid="${escapeHtml(p.pid)}">⇄ Alternative</button>
                   <div class="sq-swap__panel${open ? ' open' : ''}">${options}</div>
                 </span>`;
         }
@@ -5248,7 +5500,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             return `
                 <div class="sq-heading-inline">
                   <input type="text" id="sq-heading-input" class="kg-input" placeholder="z. B. Ankommen und Einstieg">
-                  <button type="button" class="kg-btn kg-btn-primary" data-sq-action="heading-save" data-pid="${escapeHtml(p.pid)}">Baustein anlegen</button>
+                  <button type="button" class="kg-btn kg-btn-primary" data-sq-action="heading-save"
+                    data-pid="${escapeHtml(p.pid)}">Baustein anlegen</button>
                   <button type="button" class="kg-btn" data-sq-action="heading-cancel">Abbrechen</button>
                 </div>`;
         }
@@ -5271,6 +5524,67 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 </div>`;
         }
 
+        // Zwei Alternativen als gleichwertiges Paar, je 50 % der Breite.
+        // Klick auf die inaktive Karte macht sie aktiv (derselbe Weg wie im
+        // ⇄-Popover, damit Titel und Dauer mitziehen). Gibt '' zurueck, wenn
+        // die Platzierung kein Zweier-Paar ist - dann zeichnet der Aufrufer
+        // die normale Zeile.
+        renderAlternativePair(p, inBaustein) {
+            const data = p.data;
+            if (data.splitgroup) {
+                return '';
+            }
+            const auswahl = this.auswahl(data);
+            if (!auswahl || !Array.isArray(auswahl.kandidaten) || auswahl.kandidaten.length !== 2) {
+                return '';
+            }
+            const options = auswahl.kandidaten.map((ref) => {
+                const card = this.methodCardForRef(ref);
+                const active = String(auswahl.aktiv) === String(ref);
+                const phase = (card && card.seminarphase) ? phaseKey(card.seminarphase) : '';
+                const groupsize = card ? this.fieldValue(card, 'gruppengroesse').trim() : '';
+                // Die Dauer steht nur an der NICHT gewaehlten Karte: fuer die
+                // gewaehlte zeigt die Zeit-Spalte links die tatsaechlich
+                // geplante Dauer, die von der Bibliotheksangabe abweichen darf
+                // (von Hand angepasst). Beides nebeneinander widerspraeche sich.
+                // An der Alternative ist es dagegen eine echte Vorschau: beim
+                // Wechsel uebernimmt chooseCandidate genau diesen Wert.
+                const dauer = card ? this.cardDuration(card) : 0;
+                const badges = [
+                    (!active && dauer)
+                        ? `<span class="sq-badge" title="Beim Wechsel wird die Dauer auf ${dauer} Min. gesetzt">`
+                            + `→ ${dauer} Min.</span>`
+                        : '',
+                    groupsize ? `<span class="sq-badge">${escapeHtml(groupsize)}</span>` : '',
+                ].filter((b) => b).join('');
+                return `
+                    <div class="sq-alt__option${active ? ' is-active' : ''}"
+                      data-sq-action="swap-choose" data-pid="${escapeHtml(p.pid)}"
+                      data-ref="${escapeHtml(String(ref))}"
+                      role="radio" aria-checked="${active ? 'true' : 'false'}" tabindex="0"
+                      title="${active ? 'Diese Alternative ist gewählt' : 'Diese Alternative wählen'}">
+                      <div class="sq-unit__phase${phase ? ' sq-phase-bg--' + phase : ''}"></div>
+                      <div class="sq-alt__body">
+                        <div class="sq-alt__title">${escapeHtml(this.candidateLabel(ref))}</div>
+                        ${badges ? `<div class="sq-unit__meta">${badges}</div>` : ''}
+                      </div>
+                      <span class="sq-alt__mark" aria-hidden="true"></span>
+                    </div>`;
+            }).join('<span class="sq-alt__or">oder</span>');
+
+            return `
+                <div class="sq-alt${inBaustein ? '' : ' sq-alt--standalone'}" role="radiogroup"
+                  aria-label="Zwei Alternativen – eine davon wird durchgeführt">
+                  ${inBaustein ? '' : this.renderGrip()}
+                  <div class="sq-alt__options">${options}</div>
+                  <div class="sq-unit__actions">
+                    <button type="button" class="kg-btn" data-sq-action="edit"
+                      data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
+                    ${this.renderRowMenu(p, inBaustein)}
+                  </div>
+                </div>`;
+        }
+
         renderPlacement(p, startMin, inBaustein) {
             const data = p.data;
             const duration = Math.max(0, Number(data.dauer) || 0);
@@ -5284,7 +5598,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                         ${this.renderGrip()}
                         <span class="sq-pause__label">${escapeHtml(data.titel || 'Pause')}</span>
                         <span class="sq-pause__spacer"></span>
-                        <button type="button" class="kg-btn sq-membership" data-sq-action="edit" data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
+                        <button type="button" class="kg-btn sq-membership" data-sq-action="edit"
+                          data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
                         ${this.renderRowMenu(p, false)}
                       </div>
                     </div>`;
@@ -5313,6 +5628,19 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
 
             const phase = this.placementPhase(data);
             const groupsize = this.placementGroupSize(data);
+
+            // Genau zwei Alternativen: beide nebeneinander, je halbe Breite.
+            // Nur die aktive zaehlt in die Zeitbilanz - im Seminar laeuft nur
+            // eine davon. Die Zeit-Spalte steht deshalb einmal davor, nicht
+            // je Karte.
+            const pair = this.renderAlternativePair(p, inBaustein);
+            if (pair) {
+                return `
+                    <div class="sq-row"${inBaustein ? '' : ` draggable="true" data-sq-drag="${escapeHtml(p.pid)}"`}>
+                      ${this.renderTimeColumn(startMin, duration, p.pid)}
+                      ${pair}
+                    </div>`;
+            }
 
             // Dauer und Startzeit stehen jetzt in der Zeit-Spalte links, nicht
             // mehr als Badges hinter dem Titel. Zurueck bleibt in der Meta-Zeile

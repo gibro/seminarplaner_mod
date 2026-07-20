@@ -1,7 +1,26 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Backup and restore support: restore seminarplaner stepslib.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 /**
  * Restore structure step for mod_seminarplaner.
@@ -25,7 +44,10 @@ class restore_seminarplaner_activity_structure_step extends restore_activity_str
         $paths[] = new restore_path_element('activity_methodovr', '/activity/seminarplaner/activity_methodovrs/activity_methodovr');
         $paths[] = new restore_path_element('planning_state', '/activity/seminarplaner/planning_states/planning_state');
         $paths[] = new restore_path_element('grid', '/activity/seminarplaner/grids/grid');
-        $paths[] = new restore_path_element('grid_user_state', '/activity/seminarplaner/grids/grid/grid_user_states/grid_user_state');
+        $paths[] = new restore_path_element(
+            'grid_user_state',
+            '/activity/seminarplaner/grids/grid/grid_user_states/grid_user_state'
+        );
         $paths[] = new restore_path_element('roterfaden_state', '/activity/seminarplaner/roterfaden_states/roterfaden_state');
         $paths[] = new restore_path_element('method_filemap', '/activity/seminarplaner/method_filemaps/method_filemap');
         return $this->prepare_activity_structure($paths);
@@ -125,7 +147,7 @@ class restore_seminarplaner_activity_structure_step extends restore_activity_str
         $data->modifiedby = $this->map_userid_or_zero((int)($data->modifiedby ?? 0));
 
         $newid = (int)$DB->insert_record('kgen_grid', $data);
-        // "grid" mapping is used by child path resolution via get_new_parentid('grid').
+        // Das Mapping "grid" wird von der Kindpfad-Aufloesung ueber get_new_parentid('grid') genutzt.
         $this->set_mapping('grid', $oldid, $newid);
         // Keep explicit alias for direct lookup in map_gridid_or_zero().
         $this->set_mapping('kgen_grid', $oldid, $newid);

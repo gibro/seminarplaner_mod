@@ -1,14 +1,33 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Unit tests for grid service.
+ *
+ * @package    mod_seminarplaner
+ * @copyright  2026 Guido Brombach <gibro@posteo.de>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 use mod_seminarplaner\local\service\grid_service;
 
 /**
  * DB-backed tests for grid service.
  */
-final class mod_seminarplaner_grid_service_test extends advanced_testcase {
+final class grid_service_test extends advanced_testcase {
     public function test_create_and_list_grid(): void {
         $this->resetAfterTest(true);
 
@@ -122,10 +141,10 @@ final class mod_seminarplaner_grid_service_test extends advanced_testcase {
                     ],
                 ]],
                 'platzierungen' => [
-                    // Zwei Einheiten desselben Bausteins (45 + 60 Minuten) …
+                    // Zwei Einheiten desselben Bausteins (45 + 60 Minuten) ….
                     'p1' => ['typ' => 'einheit', 'bausteinid' => 'b1', 'titel' => 'Teil 1', 'dauer' => 45],
                     'p2' => ['typ' => 'einheit', 'bausteinid' => 'b1', 'titel' => 'Teil 2', 'dauer' => 60],
-                    // … gefolgt von einer freien Einheit.
+                    // ... gefolgt von einer freien Einheit.
                     'p3' => ['typ' => 'einheit', 'titel' => 'Fallbeispiel', 'dauer' => 30],
                 ],
                 'bausteine' => ['b1' => ['titel' => 'Grundlagen', 'unterthemen' => '']],
