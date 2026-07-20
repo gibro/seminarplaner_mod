@@ -669,6 +669,18 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 });
                 container.addEventListener('keydown', (event) => {
                     const el = event.target;
+                    // Alternativen-Paar: die Karten sind role="radio" und per
+                    // Tab erreichbar, also muessen Enter und Leertaste sie
+                    // auch auswaehlen koennen.
+                    if (el && el.classList && el.classList.contains('sq-alt__option')
+                        && (event.key === 'Enter' || event.key === ' ')) {
+                        event.preventDefault();
+                        this.chooseCandidate(
+                            el.getAttribute('data-pid') || '',
+                            el.getAttribute('data-ref') || ''
+                        );
+                        return;
+                    }
                     if (!el || !el.classList || !el.classList.contains('sq-titleedit')) {
                         return;
                     }
@@ -1489,6 +1501,101 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     });
                 });
             });
+        }
+
+        // D21 (Nachtrag): Alternativen sind bisher eine Momentaufnahme beim
+        // Einfuegen - wer die Verknuepfung erst danach in der Bibliothek setzt,
+        // sah sie im Plan nie. Dieser Abgleich laeuft bei jedem render() und
+        // holt zweierlei nach:
+        //
+        //   1. Kandidaten nachziehen: was die Bibliothek als Alternative der
+        //      aktiven Karte kennt, wird Kandidat der Auswahl.
+        //   2. Benachbarte Platzierungen zusammenfuehren, die laut Bibliothek
+        //      Alternativen voneinander sind. Sie standen sonst als zwei
+        //      getrennte Programmpunkte im Tag und zaehlten beide in die
+        //      Zeitbilanz, obwohl im Seminar nur eine davon laeuft.
+        //
+        // Idempotent: nach dem Durchlauf findet der naechste nichts mehr.
+        // -> true, wenn sich etwas geaendert hat (Aufrufer speichert dann).
+        reconcileAlternatives() {
+            const seq = this.sequenz;
+            if (!seq || !this.methodCardList.length) {
+                return false;
+            }
+            let changed = false;
+
+            const altsOf = (ref) => {
+                const card = this.methodCards[String(ref || '')];
+                if (!card || !Array.isArray(card.alternativen)) {
+                    return [];
+                }
+                return card.alternativen.map(String).filter((r) => this.methodCards[r]);
+            };
+
+            Object.keys(seq.einheitenauswahlen).forEach((eaid) => {
+                const auswahl = seq.einheitenauswahlen[eaid];
+                if (!auswahl || !Array.isArray(auswahl.kandidaten)) {
+                    return;
+                }
+                const known = auswahl.kandidaten.map(String);
+                altsOf(auswahl.aktiv).forEach((ref) => {
+                    if (!known.includes(ref)) {
+                        auswahl.kandidaten.push(ref);
+                        known.push(ref);
+                        changed = true;
+                    }
+                });
+            });
+
+            // Geteilte Einheiten (splitgroup) bleiben aussen vor: ihre Teile
+            // teilen sich eine Identitaet, ein Zusammenfuehren wuerde sie
+            // entkoppeln - dieselbe Begruendung wie in renderSwap.
+            const mergeable = (pid) => {
+                const p = seq.platzierungen[String(pid)];
+                if (!p || p.typ !== 'einheit' || p.splitgroup || p.fortsetzung) {
+                    return null;
+                }
+                const auswahl = seq.einheitenauswahlen[p.einheitenauswahl];
+                if (!auswahl || !auswahl.aktiv) {
+                    return null;
+                }
+                return {p, auswahl};
+            };
+
+            (Array.isArray(seq.tage) ? seq.tage : []).forEach((day) => {
+                ANCHORS.forEach((ankername) => {
+                    const anker = (day && day.anker) ? day.anker[ankername] : null;
+                    if (!anker || !Array.isArray(anker.sequenz)) {
+                        return;
+                    }
+                    for (let i = 0; i < anker.sequenz.length - 1; i++) {
+                        const a = mergeable(anker.sequenz[i]);
+                        const b = mergeable(anker.sequenz[i + 1]);
+                        if (!a || !b || a.p.bausteinid !== b.p.bausteinid) {
+                            continue;
+                        }
+                        const arefs = altsOf(a.auswahl.aktiv);
+                        if (!arefs.includes(String(b.auswahl.aktiv))) {
+                            continue;
+                        }
+                        // b geht in a auf: alle Kandidaten von b uebernehmen,
+                        // b samt Auswahl entfernen. Aktiv bleibt die Karte von a.
+                        b.auswahl.kandidaten.map(String).forEach((ref) => {
+                            if (!a.auswahl.kandidaten.map(String).includes(ref)) {
+                                a.auswahl.kandidaten.push(ref);
+                            }
+                        });
+                        const bpid = String(anker.sequenz[i + 1]);
+                        delete seq.einheitenauswahlen[b.p.einheitenauswahl];
+                        delete seq.platzierungen[bpid];
+                        anker.sequenz.splice(i + 1, 1);
+                        changed = true;
+                        i--;
+                    }
+                });
+            });
+
+            return changed;
         }
 
         // D45: a plan freshly created via the setup templates has anchor
@@ -4788,6 +4895,18 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (!container) {
                 return;
             }
+            // Der Abgleich laeuft vor dem Zeichnen, damit zusammengefuehrte
+            // Einheiten sofort richtig dastehen. Das Flag verhindert, dass der
+            // durch setDirty ausgeloeste Autosave-Rendervorgang erneut abgleicht.
+            if (!this.reconciling) {
+                this.reconciling = true;
+                const merged = this.reconcileAlternatives();
+                this.reconciling = false;
+                if (merged) {
+                    this.setDirty(true);
+                    this.toast('Alternativen aus der Bibliothek übernommen.');
+                }
+            }
             this.renderHead();
             this.renderPlanInfo();
             this.renderGoals();
@@ -5184,6 +5303,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (!auswahl || !Array.isArray(auswahl.kandidaten) || auswahl.kandidaten.length < 2) {
                 return '';
             }
+            // Genau zwei Alternativen stehen nebeneinander in der Zeile
+            // (renderAlternativePair) - dort waehlt man direkt, der Chip
+            // waere doppelt. Ab drei bleibt es beim Popover.
+            if (auswahl.kandidaten.length === 2) {
+                return '';
+            }
             const open = this.openSwapPid === p.pid;
             const options = auswahl.kandidaten.map((ref) => {
                 const active = String(auswahl.aktiv) === String(ref);
@@ -5271,6 +5396,58 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 </div>`;
         }
 
+        // Zwei Alternativen als gleichwertiges Paar, je 50 % der Breite.
+        // Klick auf die inaktive Karte macht sie aktiv (derselbe Weg wie im
+        // ⇄-Popover, damit Titel und Dauer mitziehen). Gibt '' zurueck, wenn
+        // die Platzierung kein Zweier-Paar ist - dann zeichnet der Aufrufer
+        // die normale Zeile.
+        renderAlternativePair(p, inBaustein) {
+            const data = p.data;
+            if (data.splitgroup) {
+                return '';
+            }
+            const auswahl = this.auswahl(data);
+            if (!auswahl || !Array.isArray(auswahl.kandidaten) || auswahl.kandidaten.length !== 2) {
+                return '';
+            }
+            const options = auswahl.kandidaten.map((ref) => {
+                const card = this.methodCardForRef(ref);
+                const active = String(auswahl.aktiv) === String(ref);
+                const phase = (card && card.seminarphase) ? phaseKey(card.seminarphase) : '';
+                const groupsize = card ? this.fieldValue(card, 'gruppengroesse').trim() : '';
+                const dauer = card ? this.cardDuration(card) : 0;
+                const badges = [
+                    dauer ? `<span class="sq-badge">${dauer} Min.</span>` : '',
+                    groupsize ? `<span class="sq-badge">${escapeHtml(groupsize)}</span>` : '',
+                ].filter((b) => b).join('');
+                return `
+                    <div class="sq-alt__option${active ? ' is-active' : ''}"
+                      data-sq-action="swap-choose" data-pid="${escapeHtml(p.pid)}"
+                      data-ref="${escapeHtml(String(ref))}"
+                      role="radio" aria-checked="${active ? 'true' : 'false'}" tabindex="0"
+                      title="${active ? 'Diese Alternative ist gewählt' : 'Diese Alternative wählen'}">
+                      <div class="sq-unit__phase${phase ? ' sq-phase-bg--' + phase : ''}"></div>
+                      <div class="sq-alt__body">
+                        <div class="sq-alt__title">${escapeHtml(this.candidateLabel(ref))}</div>
+                        ${badges ? `<div class="sq-unit__meta">${badges}</div>` : ''}
+                      </div>
+                      <span class="sq-alt__mark" aria-hidden="true"></span>
+                    </div>`;
+            }).join('<span class="sq-alt__or">oder</span>');
+
+            return `
+                <div class="sq-alt${inBaustein ? '' : ' sq-alt--standalone'}" role="radiogroup"
+                  aria-label="Zwei Alternativen – eine davon wird durchgeführt">
+                  ${inBaustein ? '' : this.renderGrip()}
+                  <div class="sq-alt__options">${options}</div>
+                  <div class="sq-unit__actions">
+                    <button type="button" class="kg-btn" data-sq-action="edit"
+                      data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
+                    ${this.renderRowMenu(p, inBaustein)}
+                  </div>
+                </div>`;
+        }
+
         renderPlacement(p, startMin, inBaustein) {
             const data = p.data;
             const duration = Math.max(0, Number(data.dauer) || 0);
@@ -5313,6 +5490,19 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
 
             const phase = this.placementPhase(data);
             const groupsize = this.placementGroupSize(data);
+
+            // Genau zwei Alternativen: beide nebeneinander, je halbe Breite.
+            // Nur die aktive zaehlt in die Zeitbilanz - im Seminar laeuft nur
+            // eine davon. Die Zeit-Spalte steht deshalb einmal davor, nicht
+            // je Karte.
+            const pair = this.renderAlternativePair(p, inBaustein);
+            if (pair) {
+                return `
+                    <div class="sq-row"${inBaustein ? '' : ` draggable="true" data-sq-drag="${escapeHtml(p.pid)}"`}>
+                      ${this.renderTimeColumn(startMin, duration, p.pid)}
+                      ${pair}
+                    </div>`;
+            }
 
             // Dauer und Startzeit stehen jetzt in der Zeit-Spalte links, nicht
             // mehr als Badges hinter dem Titel. Zurueck bleibt in der Meta-Zeile

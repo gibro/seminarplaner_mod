@@ -7895,3 +7895,123 @@ details.sq-menu[open] > summary.sq-menu__btn {
 .sq-baustein__name {
     min-width: 0;
 }
+
+/* ---- Alternativen-Paar: zwei gleichwertige Einheiten nebeneinander ----
+
+   Genau zwei Alternativen stehen als Paar in der Zeile, jede mit der halben
+   Breite; ab drei bleibt es beim ⇄-Popover (sq-swap). Die Zeit-Spalte steht
+   einmal davor, nicht je Karte: in die Zeitbilanz zaehlt nur die gewaehlte
+   Einheit, weil im Seminar nur eine davon laeuft.
+
+   Das „oder" zwischen den Karten macht das Entweder-Oder sichtbar — ohne den
+   Trenner lesen sich zwei nebeneinanderliegende Karten wie zwei aufeinander
+   folgende Programmpunkte, also genau das Missverstaendnis, das die
+   Darstellung aufloesen soll. */
+.sq-alt {
+    display: flex;
+    align-items: stretch;
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--sq-border);
+    background: #fff;
+}
+
+.sq-alt__options {
+    display: flex;
+    align-items: stretch;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Beide Karten teilen sich die Breite strikt haelftig. flex-basis: 0 statt
+   auto, damit ein langer Titel die andere Karte nicht schmaler macht. */
+.sq-alt__option {
+    display: flex;
+    align-items: stretch;
+    flex: 1 1 0;
+    min-width: 0;
+    cursor: pointer;
+    background: #FAFAFA;
+    border: 1px solid transparent;
+}
+
+.sq-alt__option:hover {
+    background: #F2F2F2;
+}
+
+.sq-alt__option:focus-visible {
+    outline: 2px solid var(--ig-red);
+    outline-offset: -2px;
+}
+
+/* Die gewaehlte Alternative steht im Vordergrund: weisser Grund wie eine
+   normale Einheit, die verworfene bleibt gedaempft. */
+.sq-alt__option.is-active {
+    background: #fff;
+    border-color: var(--sq-border);
+}
+
+.sq-alt__option:not(.is-active) .sq-alt__title,
+.sq-alt__option:not(.is-active) .sq-unit__meta {
+    opacity: 0.55;
+}
+
+.sq-alt__body {
+    flex: 1;
+    min-width: 0;
+    padding: 9px 6px 9px 10px;
+}
+
+.sq-alt__title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--sq-text);
+}
+
+/* Radio-Punkt rechts oben in der Karte. */
+.sq-alt__mark {
+    align-self: flex-start;
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    margin: 10px 10px 0 0;
+    border: 2px solid var(--ig-lightgray);
+    border-radius: 50%;
+    background: #fff;
+}
+
+.sq-alt__option.is-active .sq-alt__mark {
+    border-color: var(--ig-red);
+    box-shadow: inset 0 0 0 3px var(--ig-red);
+}
+
+/* Trenner zwischen den beiden Karten. */
+.sq-alt__or {
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--sq-text-muted);
+    background: #fff;
+    border-left: 1px solid var(--sq-border);
+    border-right: 1px solid var(--sq-border);
+}
+
+/* Unter 700px untereinander statt nebeneinander — bei halber Breite bliebe
+   sonst kein lesbarer Titel uebrig. Der Trenner wandert mit. */
+@media (max-width: 700px) {
+    .sq-alt__options {
+        flex-direction: column;
+    }
+
+    .sq-alt__or {
+        border-left: 0;
+        border-right: 0;
+        border-top: 1px solid var(--sq-border);
+        border-bottom: 1px solid var(--sq-border);
+        padding: 4px 10px;
+    }
+}
