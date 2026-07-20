@@ -21,8 +21,6 @@
  * @category   test
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Seminarplaner activity generator.
  *

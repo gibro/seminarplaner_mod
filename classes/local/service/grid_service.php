@@ -29,8 +29,6 @@ use mod_seminarplaner\local\repository\grid_repository;
 use mod_seminarplaner\local\sequence\grid_to_sequence_converter;
 use mod_seminarplaner\local\sequence\sequence_state;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Grid domain service.
  */

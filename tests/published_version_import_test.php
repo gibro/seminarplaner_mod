@@ -22,8 +22,6 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 use mod_seminarplaner\external\api;
 use mod_seminarplaner\local\service\method_card_service;
 
@@ -95,7 +93,7 @@ final class published_version_import_test extends advanced_testcase {
             'timecreated' => $now,
             'timemodified' => $now,
         ]);
-        // create_version() always moves currentversion to the newest version, even a draft.
+        // Create_version() always moves currentversion to the newest version, even a draft.
         $DB->set_field('local_kgen_methodset', 'currentversion', $versionid, ['id' => $this->setid]);
 
         return $versionid;
@@ -164,7 +162,7 @@ final class published_version_import_test extends advanced_testcase {
         $v2 = $this->add_version(2, 'published');
         $this->add_unit($v2, 'Neu');
 
-        // currentversion happens to match the latest published version here.
+        // Currentversion happens to match the latest published version here.
         $result = api::import_global_methodset($this->cmid, $this->setid);
         $this->assertTrue($result['success']);
 

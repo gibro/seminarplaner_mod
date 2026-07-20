@@ -24,8 +24,6 @@
 
 namespace mod_seminarplaner\local\sequence;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Deterministic conversion of legacy grid states to the D20 sequence model.
  *

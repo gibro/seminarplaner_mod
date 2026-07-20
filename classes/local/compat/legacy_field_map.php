@@ -24,8 +24,6 @@
 
 namespace mod_seminarplaner\local\compat;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Legacy mod_data to plugin field mapping helpers.
  */

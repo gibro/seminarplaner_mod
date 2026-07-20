@@ -26,8 +26,6 @@ namespace mod_seminarplaner\local\service;
 
 use mod_seminarplaner\local\compat\legacy_field_map;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Validates import/export payloads for legacy compatibility.
  */

@@ -22,8 +22,6 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 use mod_seminarplaner\external\api;
 use mod_seminarplaner\local\service\grid_service;
 use mod_seminarplaner\local\service\method_card_service;
@@ -228,7 +226,7 @@ final class import_global_methodset_test extends advanced_testcase {
                         'bausteine' => [],
                         'einheitenauswahlen' => [
                             'ea-1' => [
-                                // legacy:-Referenzen zeigen in die Tageseintraege
+                                // Legacy:-Referenzen zeigen in die Tageseintraege
                                 // des Plans und bleiben unangetastet.
                                 'kandidaten' => ['alt-1', 'alt-2', 'legacy:tag-eintrag'],
                                 'aktiv' => 'alt-2',

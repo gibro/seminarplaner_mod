@@ -27,8 +27,6 @@ namespace mod_seminarplaner\local\service;
 use coding_exception;
 use mod_seminarplaner\local\repository\planning_state_repository;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Shared planning mode state service.
  */

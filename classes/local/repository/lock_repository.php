@@ -24,8 +24,6 @@
 
 namespace mod_seminarplaner\local\repository;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Repository for grid soft locks.
  */

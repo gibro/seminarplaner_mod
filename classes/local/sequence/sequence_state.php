@@ -24,8 +24,6 @@
 
 namespace mod_seminarplaner\local\sequence;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Canonical structure helpers for the D20 sequence data model.
  *

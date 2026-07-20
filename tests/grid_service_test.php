@@ -22,8 +22,6 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 use mod_seminarplaner\local\service\grid_service;
 
 /**
@@ -143,7 +141,7 @@ final class grid_service_test extends advanced_testcase {
                     ],
                 ]],
                 'platzierungen' => [
-                    // Zwei Einheiten desselben Bausteins (45 + 60 Minuten) …
+                    // Zwei Einheiten desselben Bausteins (45 + 60 Minuten) ….
                     'p1' => ['typ' => 'einheit', 'bausteinid' => 'b1', 'titel' => 'Teil 1', 'dauer' => 45],
                     'p2' => ['typ' => 'einheit', 'bausteinid' => 'b1', 'titel' => 'Teil 2', 'dauer' => 60],
                     // … gefolgt von einer freien Einheit.

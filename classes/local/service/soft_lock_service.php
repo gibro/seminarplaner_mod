@@ -27,8 +27,6 @@ namespace mod_seminarplaner\local\service;
 use coding_exception;
 use mod_seminarplaner\local\repository\lock_repository;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Soft lock service for collaborative grid editing.
  */

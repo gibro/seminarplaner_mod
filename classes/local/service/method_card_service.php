@@ -27,8 +27,6 @@ namespace mod_seminarplaner\local\service;
 use coding_exception;
 use moodle_url;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Persists seminar units shared per activity.
  */
@@ -382,7 +380,7 @@ class method_card_service {
                 throw new coding_exception('Unable to resolve file itemid');
             }
 
-            // sync_file_area() deletes every file the payload does not list. A payload
+            // Sync_file_area() deletes every file the payload does not list. A payload
             // without the key means "not touched" and must not wipe the attachments -
             // only an explicitly empty list removes them.
             $materialentries = (array)($method['materialien'] ?? []);

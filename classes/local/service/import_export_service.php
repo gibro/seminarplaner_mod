@@ -26,8 +26,6 @@ namespace mod_seminarplaner\local\service;
 
 use coding_exception;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Orchestrates manual import/export validation and audit logging.
  */

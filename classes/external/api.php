@@ -39,8 +39,6 @@ use mod_seminarplaner\local\service\method_card_service;
 use mod_seminarplaner\local\service\planning_state_service;
 use mod_seminarplaner\local\service\soft_lock_service;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * External API endpoints for Seminarplaner.
  */
@@ -1273,7 +1271,7 @@ class api extends external_api {
         $merged = array_merge($existing, $imported);
         $service->save_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id, $merged);
 
-        // gridid 0 heisst "hatte nie einen Plan" - anders als ein geloeschter.
+        // Gridid 0 heisst "hatte nie einen Plan" - anders als ein geloeschter.
         self::record_imported_konzept((int)$resolved['cm']->id, [
             'setid' => (int)$set->id,
             'setname' => (string)$set->displayname,
@@ -1503,7 +1501,7 @@ class api extends external_api {
         $out = [];
         foreach ($byset as $entry) {
             $gridid = (int)($entry['gridid'] ?? 0);
-            // gridid 0: das Konzept brachte nie einen Plan mit. Das ist etwas
+            // Gridid 0: das Konzept brachte nie einen Plan mit. Das ist etwas
             // anderes als ein Plan, den es gab und den jemand geloescht hat -
             // sonst meldet die Bibliothek einen Verlust, den es nie gab.
             $hadplan = $gridid > 0;

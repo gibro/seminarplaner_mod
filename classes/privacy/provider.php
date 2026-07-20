@@ -24,8 +24,6 @@
 
 namespace mod_seminarplaner\privacy;
 
-defined('MOODLE_INTERNAL') || die();
-
 use context;
 use context_module;
 use core_privacy\local\metadata\collection;
@@ -148,7 +146,7 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
 
         $contextids = array_values(array_unique(array_map('intval', $contextids)));
         if (!empty($contextids)) {
-            // contextlist::add_contextids() gibt es in Moodle nicht - der
+            // Contextlist::add_contextids() gibt es in Moodle nicht - der
             // Aufruf endete in einem Fatal Error, sobald eine DSGVO-Anfrage
             // diesen Provider erreichte. Oeffentlich ist nur add_from_sql();
             // set_contextids() der Basisklasse ist protected.
@@ -209,7 +207,7 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
                 [$insql, $params] = $DB->get_in_or_equal($gridids, SQL_PARAMS_QM);
                 $state = $DB->get_records_select('kgen_grid_user_state', "gridid {$insql} AND userid = ?", array_merge($params, [$userid]));
                 if (!empty($state)) {
-                    // export_data() verlangt ein \stdClass, kein Array (siehe
+                    // Export_data() verlangt ein \stdClass, kein Array (siehe
                     // moodle_content_writer::export_data). Alle vier Aufrufe in
                     // dieser Methode uebergaben frueher direkt das Ergebnis von
                     // array_values() und liefen damit in einen TypeError - der

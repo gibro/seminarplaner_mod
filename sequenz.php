@@ -294,7 +294,7 @@ echo html_writer::tag('div', '', ['id' => 'sq-toast', 'class' => 'sq-toast', 'ro
 // liegt dieses Modal im Seitenmarkup statt im dynamisch gebauten #sq-modal.
 // Bearbeiten (openEditor) und Anlegen (openCreateEditor, D50) teilen es sich;
 // sequenz.js füllt die Felder und schaltet Überschrift/Speichern-Button um.
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------.
 $sqtext = static function (string $label, string $key, string $hint = ''): string {
     $out = html_writer::start_div('sq-field');
     $out .= html_writer::tag('label', s($label), ['class' => 'kg-label', 'for' => 'sq-e-' . $key]);

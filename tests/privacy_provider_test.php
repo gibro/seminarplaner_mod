@@ -22,8 +22,6 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 use core_privacy\local\request\approved_contextlist;
 use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
@@ -63,7 +61,7 @@ final class privacy_provider_test extends advanced_testcase {
 
     public function test_get_contexts_for_userid_includes_activity(): void {
         $contextlist = provider::get_contexts_for_userid((int)$this->user->id);
-        // get_contextids() ist als int[] dokumentiert, liefert die IDs aber roh
+        // Get_contextids() ist als int[] dokumentiert, liefert die IDs aber roh
         // aus der DB — unter MariaDB also Strings. assertContains vergleicht
         // strikt, deshalb hier casten statt auf den Docblock zu vertrauen.
         $contextids = array_map('intval', $contextlist->get_contextids());

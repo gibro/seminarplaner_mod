@@ -27,8 +27,6 @@ namespace mod_seminarplaner\local\service;
 use coding_exception;
 use context_module;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Synchronizes linked activity seminar units with published global method set versions.
  */

@@ -64,7 +64,7 @@ echo '<script>try { if (window.__kg_prev_define !== undefined) { window.define =
 // ---------------------------------------------------------------------------
 // Inline-SVG-Icons (Handoff: Meta-Line, stroke-width 2 / 2.2). Rein dekorativ,
 // daher aria-hidden. Ausgabe als rohes HTML, da html_writer kein SVG kann.
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------.
 $icon = function (string $paths, float $size = 16, float $stroke = 2.0, string $extra = ''): string {
     return '<svg width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24" fill="none" '
         . 'stroke="currentColor" stroke-width="' . $stroke . '" aria-hidden="true" focusable="false"'

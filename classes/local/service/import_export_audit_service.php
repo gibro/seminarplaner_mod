@@ -26,8 +26,6 @@ namespace mod_seminarplaner\local\service;
 
 use mod_seminarplaner\local\repository\import_export_log_repository;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Audit helper for manual import/export operations.
  */

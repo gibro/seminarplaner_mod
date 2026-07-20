@@ -27,8 +27,6 @@ namespace mod_seminarplaner\form;
 use context;
 use moodleform;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Lightweight form wrapper to render a Moodle file manager element.
  */
