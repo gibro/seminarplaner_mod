@@ -5415,9 +5415,17 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 const active = String(auswahl.aktiv) === String(ref);
                 const phase = (card && card.seminarphase) ? phaseKey(card.seminarphase) : '';
                 const groupsize = card ? this.fieldValue(card, 'gruppengroesse').trim() : '';
+                // Die Dauer steht nur an der NICHT gewaehlten Karte: fuer die
+                // gewaehlte zeigt die Zeit-Spalte links die tatsaechlich
+                // geplante Dauer, die von der Bibliotheksangabe abweichen darf
+                // (von Hand angepasst). Beides nebeneinander widerspraeche sich.
+                // An der Alternative ist es dagegen eine echte Vorschau: beim
+                // Wechsel uebernimmt chooseCandidate genau diesen Wert.
                 const dauer = card ? this.cardDuration(card) : 0;
                 const badges = [
-                    dauer ? `<span class="sq-badge">${dauer} Min.</span>` : '',
+                    (!active && dauer)
+                        ? `<span class="sq-badge" title="Beim Wechsel wird die Dauer auf ${dauer} Min. gesetzt">→ ${dauer} Min.</span>`
+                        : '',
                     groupsize ? `<span class="sq-badge">${escapeHtml(groupsize)}</span>` : '',
                 ].filter((b) => b).join('');
                 return `
