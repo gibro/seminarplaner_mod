@@ -177,8 +177,14 @@ define([], function() {
     const diffT = (text) => ({text});
     const diffS = (cat) => ({cat});
 
-    // Das Objekt des Satzes ist die inhaltliche Linse. Fehlt sie, springt das
-    // Thema ein („das Thema Arbeitszeit analysieren") und wird nicht doppelt genannt.
+    /**
+     * Baut das Objekt des Satzes: die inhaltliche Linse. Fehlt sie, springt das
+     * Thema ein („das Thema Arbeitszeit analysieren") und wird dann nicht
+     * doppelt genannt — darüber gibt das Flag themaVerbraucht Auskunft.
+     *
+     * @param {Object} v Aktuelle Auswahl des Editors (inhalt, thema, …).
+     * @returns {{teile: Array, themaVerbraucht: boolean}} Satzteile und ob das Thema aufgebraucht ist.
+     */
     function diffObjekt(v) {
         if (v.inhalt) {
             return {teile: [diffS('inhalt')], themaVerbraucht: false};
@@ -189,7 +195,13 @@ define([], function() {
         return {teile: [diffS('inhalt')], themaVerbraucht: false};
     }
 
-    // Reiht Klauseln: eine allein steht für sich, mehrere mit Komma, die letzte mit „und".
+    /**
+     * Reiht Klauseln aneinander: eine allein steht für sich, mehrere mit Komma,
+     * die letzte mit „und".
+     *
+     * @param {Array} klauseln Die zu reihenden Klauseln, je eine Liste von Satzteilen.
+     * @returns {Array} Die zusammengesetzten Satzteile inklusive der Trennzeichen.
+     */
     function diffReihen(klauseln) {
         const teile = [];
         klauseln.forEach((k, i) => {
@@ -201,7 +213,13 @@ define([], function() {
         return teile;
     }
 
-    // Zusatzklauseln nach dem Hauptsatz: „, dafür X nutzen und daraus Y erstellen".
+    /**
+     * Zusatzklauseln nach dem Hauptsatz: „, dafür X nutzen und daraus Y erstellen".
+     *
+     * @param {Object} v Aktuelle Auswahl des Editors (quelle, produkt, …).
+     * @param {boolean} nachNebensatz Ob die Klausel einem Nebensatz folgt (ändert die Einleitung).
+     * @returns {Array} Die Satzteile der Zusatzklausel, leer wenn nichts gewählt ist.
+     */
     function diffZusatz(v, nachNebensatz) {
         if (v.quelle && v.produkt) {
             return [diffT(', dafür '), diffS('quelle'), diffT(' nutzen und daraus '), diffS('produkt'), diffT(' erstellen')];
@@ -340,12 +358,24 @@ define([], function() {
         (v) => Boolean(v.produkt || v.quelle),
     ];
 
+    /**
+     * Die Satzmuster, die zur aktuellen Auswahl passen. Passt keines, bleibt es
+     * beim Grundmuster 0, damit immer ein Satz entsteht.
+     *
+     * @param {Object} v Aktuelle Auswahl des Editors.
+     * @returns {Array<number>} Indizes der passenden Muster in DIFF_TEMPLATES.
+     */
     function diffPassendeMuster(v) {
         const passend = DIFF_TEMPLATES.map((_, i) => i).filter((i) => DIFF_TAUGT[i](v));
         return passend.length ? passend : [0];
     }
 
-    // Die Seminarphase (D41) der gewählten Denkoperation – über ihre Bloom-Gruppe.
+    /**
+     * Die Seminarphase (D41) der gewählten Denkoperation – über ihre Bloom-Gruppe.
+     *
+     * @param {string} verb Die gewählte Denkoperation.
+     * @returns {string} Die zugehörige Seminarphase, leer wenn keine ermittelbar ist.
+     */
     function diffPhaseForVerb(verb) {
         if (!verb) {
             return '';
@@ -355,7 +385,11 @@ define([], function() {
         return group ? (DIFF_PHASE_BY_GROUP[group.label] || '') : '';
     }
 
-    // Das offene Editor-Overlay schließen (Singleton über die feste ID).
+    /**
+     * Das offene Editor-Overlay schließen (Singleton über die feste ID).
+     *
+     * @returns {void}
+     */
     function close() {
         const overlay = document.getElementById('sq-lz-overlay');
         if (overlay) {
@@ -363,6 +397,13 @@ define([], function() {
         }
     }
 
+    /**
+     * Den Lernziel-Editor als Overlay öffnen. Ein bereits offenes Overlay wird
+     * zuvor geschlossen, damit immer nur eines existiert.
+     *
+     * @param {Function} onAccept Wird beim Übernehmen mit dem fertigen Lernzielsatz aufgerufen.
+     * @returns {void}
+     */
     function open(onAccept) {
             close();
             const acceptCb = typeof onAccept === "function" ? onAccept : null;
