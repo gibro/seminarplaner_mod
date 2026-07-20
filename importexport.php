@@ -65,7 +65,7 @@ echo '<script>try { if (window.__kg_prev_define !== undefined) { window.define =
 // Inline-SVG-Icons (Handoff: Meta-Line, stroke-width 2 / 2.2). Rein dekorativ,
 // daher aria-hidden. Ausgabe als rohes HTML, da html_writer kein SVG kann.
 // ---------------------------------------------------------------------------
-$icon = function(string $paths, float $size = 16, float $stroke = 2.0, string $extra = ''): string {
+$icon = function (string $paths, float $size = 16, float $stroke = 2.0, string $extra = ''): string {
     return '<svg width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24" fill="none" '
         . 'stroke="currentColor" stroke-width="' . $stroke . '" aria-hidden="true" focusable="false"'
         . ($extra !== '' ? ' ' . $extra : '') . '>' . $paths . '</svg>';
@@ -84,7 +84,7 @@ $icCheck      = $icon('<path d="M20 6L9 17l-5-5"/>', 10, 3.6, 'stroke="#fff"');
 // Scope-Chip (wiederverwendbares Toggle statt nackter Checkbox). Enthaelt eine
 // echte Checkbox mit der bestehenden ID, damit das AMD-Modul unveraendert den
 // Zustand liest; die Optik uebernimmt CSS ueber :has(input:checked).
-$scopechip = function(string $inputid, string $label, bool $checked) use ($icCheck): string {
+$scopechip = function (string $inputid, string $label, bool $checked) use ($icCheck): string {
     return '<label class="kg-scope-chip">'
         . '<input type="checkbox" id="' . s($inputid) . '"' . ($checked ? ' checked' : '') . '>'
         . '<span class="kg-scope-chip__box">' . $icCheck . '</span>'
@@ -139,12 +139,15 @@ echo '<div class="kg-ie-hint__body">'
     . '<p class="kg-ie-hint__text">Du startest mit einem <strong>Themenplan</strong> (Word-Datei)? '
     . 'Die <strong>Seminarschmiede</strong> wandelt ihn in eine Import-Datei für den Seminarplaner um. '
     . 'Lade den Themenplan dort hoch und importiere die erzeugte Datei anschließend hier.</p>';
-echo html_writer::link('https://igmetall-seminarschmiede.de',
-    'Zur Seminarschmiede ' . $icExternal, [
+echo html_writer::link(
+    'https://igmetall-seminarschmiede.de',
+    'Zur Seminarschmiede ' . $icExternal,
+    [
         'class' => 'kg-btn kg-ie-hint__btn',
         'target' => '_blank',
         'rel' => 'noopener',
-    ]);
+    ]
+);
 echo '</div></div>';
 
 // Was soll importiert werden? – In diesem Plugin wird der Umfang pro Eintrag in
@@ -259,12 +262,14 @@ echo html_writer::tag('option', 'Bitte wählen', ['value' => '']);
 echo html_writer::end_tag('select');
 
 echo '<div class="kg-ie-metagrid">';
-foreach ([
+foreach (
+    [
     'kg-pdf-title' => 'Seminartitel',
     'kg-pdf-date' => 'Datum',
     'kg-pdf-number' => 'Seminarnummer',
     'kg-pdf-contact' => 'Kontakt',
-] as $fid => $flabel) {
+    ] as $fid => $flabel
+) {
     echo '<div class="kg-ie-metafield">'
         . '<label class="kg-ie-fieldlabel" for="' . s($fid) . '">' . s($flabel) . '</label>'
         . '<input type="text" id="' . s($fid) . '" class="kg-input">'
@@ -282,7 +287,8 @@ echo '<label class="kg-tag-option"><input type="checkbox" id="kg-pdf-columns-all
 // PDF nebeneinander) und wird pro Aktivität dauerhaft gespeichert.
 echo '<p class="kg-pdf-columns-hint sp-filter-status">Reihenfolge mit ◄ ► ändern – so stehen die Spalten im PDF.</p>';
 echo '<div id="kg-pdf-columns-options">';
-foreach ([
+foreach (
+    [
     'uhrzeit' => 'Uhrzeit',
     'titel' => 'Titel',
     'seminarphase' => 'Seminarphase',
@@ -293,7 +299,8 @@ foreach ([
     'risiken' => 'Risiken/Tipps',
     'materialtechnik' => 'Material/Technik',
     'sonstiges' => 'Sonstiges',
-] as $key => $label) {
+    ] as $key => $label
+) {
     echo '<div class="kg-tag-option kg-pdf-col-row" data-col="' . s($key) . '">'
         . '<label class="kg-pdf-col-check"><input type="checkbox" value="' . s($key) . '"><span>' . s($label) . '</span></label>'
         . '<span class="kg-pdf-col-move">'

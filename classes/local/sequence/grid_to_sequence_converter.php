@@ -158,7 +158,7 @@ class grid_to_sequence_converter {
         }
 
         $stray = array_diff(array_map('strval', array_keys($this->plan_days($gridstate))), $days);
-        usort($stray, function(string $a, string $b): int {
+        usort($stray, function (string $a, string $b): int {
             $posa = array_search($a, self::WEEKDAYS, true);
             $posb = array_search($b, self::WEEKDAYS, true);
             $posa = $posa === false ? PHP_INT_MAX : $posa;
@@ -212,10 +212,12 @@ class grid_to_sequence_converter {
             }
             $duration = max(0, (int)($break['duration'] ?? 0));
             $candidate = ['start' => $start, 'end' => $start + $duration, 'duration' => $duration];
-            if ($best === null
+            if (
+                $best === null
                 || $duration > $best['duration']
                 || ($duration === $best['duration']
-                    && abs($start - self::DEFAULT_BOUNDARY_MIN) < abs($best['start'] - self::DEFAULT_BOUNDARY_MIN))) {
+                    && abs($start - self::DEFAULT_BOUNDARY_MIN) < abs($best['start'] - self::DEFAULT_BOUNDARY_MIN))
+            ) {
                 $best = $candidate;
             }
         }
@@ -247,7 +249,7 @@ class grid_to_sequence_converter {
             $entry['endMin'] = $end;
             $normalized[] = $entry;
         }
-        usort($normalized, static function(array $a, array $b): int {
+        usort($normalized, static function (array $a, array $b): int {
             if ($a['startMin'] !== $b['startMin']) {
                 return $a['startMin'] <=> $b['startMin'];
             }
@@ -296,11 +298,13 @@ class grid_to_sequence_converter {
         foreach ($entries as $entry) {
             $previous = $merged ? $merged[count($merged) - 1] : null;
             $flowid = trim((string)($entry['flowid'] ?? ''));
-            if ($previous !== null
+            if (
+                $previous !== null
                 && $flowid !== ''
                 && $flowid === trim((string)($previous['flowid'] ?? ''))
                 && (string)($entry['kind'] ?? '') !== 'break'
-                && (string)($previous['kind'] ?? '') === (string)($entry['kind'] ?? '')) {
+                && (string)($previous['kind'] ?? '') === (string)($entry['kind'] ?? '')
+            ) {
                 $previous['endMin'] = max($previous['endMin'], $entry['endMin']);
                 $previous['mergeduids'][] = (string)($entry['uid'] ?? '');
                 $previous['mergedduration'] += $entry['endMin'] - $entry['startMin'];
@@ -400,8 +404,10 @@ class grid_to_sequence_converter {
                     'slotkey' => trim((string)($entry['slotkey'] ?? '')),
                 ],
             ];
-        } else if ((string)$sequenz['bausteine'][$bausteinid]['titel'] === ''
-            && trim((string)($entry['title'] ?? '')) !== '') {
+        } else if (
+            (string)$sequenz['bausteine'][$bausteinid]['titel'] === ''
+            && trim((string)($entry['title'] ?? '')) !== ''
+        ) {
             $sequenz['bausteine'][$bausteinid]['titel'] = (string)$entry['title'];
         }
 

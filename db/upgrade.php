@@ -62,14 +62,30 @@ function xmldb_seminarplaner_upgrade($oldversion) {
     if ($oldversion < 2026022339) {
         $table = new xmldb_table('kgen_activity_setlink');
 
-        $pendingversionid = new xmldb_field('pendingversionid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0',
-            'methodsetversionid');
+        $pendingversionid = new xmldb_field(
+            'pendingversionid',
+            XMLDB_TYPE_INTEGER,
+            '10',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'methodsetversionid'
+        );
         if (!$dbman->field_exists($table, $pendingversionid)) {
             $dbman->add_field($table, $pendingversionid);
         }
 
-        $autosyncenabled = new xmldb_field('autosyncenabled', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0',
-            'pendingversionid');
+        $autosyncenabled = new xmldb_field(
+            'autosyncenabled',
+            XMLDB_TYPE_INTEGER,
+            '1',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'pendingversionid'
+        );
         if (!$dbman->field_exists($table, $autosyncenabled)) {
             $dbman->add_field($table, $autosyncenabled);
         }
@@ -166,8 +182,10 @@ function xmldb_seminarplaner_upgrade($oldversion) {
         $rs = $DB->get_recordset_sql($sql);
         foreach ($rs as $record) {
             $state = json_decode((string)$record->statejson, true);
-            if (!is_array($state)
-                || !\mod_seminarplaner\local\sequence\sequence_state::has_sequence($state)) {
+            if (
+                !is_array($state)
+                || !\mod_seminarplaner\local\sequence\sequence_state::has_sequence($state)
+            ) {
                 continue;
             }
             $cmid = (int)$record->cmid;
@@ -240,9 +258,11 @@ function xmldb_seminarplaner_upgrade($oldversion) {
             }
             return 'beliebig';
         };
-        $rows = $DB->get_records_select('config_plugins',
+        $rows = $DB->get_records_select(
+            'config_plugins',
             'plugin = :plugin AND ' . $DB->sql_like('name', ':namelike'),
-            ['plugin' => 'mod_seminarplaner', 'namelike' => 'methods_cmid_%']);
+            ['plugin' => 'mod_seminarplaner', 'namelike' => 'methods_cmid_%']
+        );
         foreach ($rows as $row) {
             $cards = json_decode((string)$row->value, true);
             if (!is_array($cards)) {

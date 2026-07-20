@@ -119,8 +119,13 @@ class import_export_service {
      * @param bool $strictlegacy Strict legacy mode.
      * @return array{errors: string[], warnings: string[], legacyrows: array}
      */
-    public function validate_export_rows(?int $cmid, int $contextid, int $actorid, array $internalrows,
-        bool $strictlegacy = false): array {
+    public function validate_export_rows(
+        ?int $cmid,
+        int $contextid,
+        int $actorid,
+        array $internalrows,
+        bool $strictlegacy = false
+    ): array {
         if ($contextid <= 0 || $actorid <= 0) {
             throw new coding_exception('Invalid context or actor for validate_export_rows');
         }

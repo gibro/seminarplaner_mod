@@ -33,7 +33,7 @@ use mod_seminarplaner\privacy\provider;
 /**
  * Privacy provider tests for mod_seminarplaner.
  */
-final class mod_seminarplaner_privacy_provider_test extends advanced_testcase {
+final class privacy_provider_test extends advanced_testcase {
     /** @var \stdClass */
     private $user;
     /** @var \context_module */

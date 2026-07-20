@@ -42,8 +42,15 @@ class import_export_log_repository {
      * @param int $actorid Actor user id.
      * @return int New record id.
      */
-    public function create(?int $cmid, int $contextid, string $direction, string $status, ?string $payloadmeta, ?string $message,
-        int $actorid): int {
+    public function create(
+        ?int $cmid,
+        int $contextid,
+        string $direction,
+        string $status,
+        ?string $payloadmeta,
+        ?string $message,
+        int $actorid
+    ): int {
         global $DB;
 
         $record = (object)[

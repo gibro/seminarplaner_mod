@@ -36,7 +36,7 @@ class backup_seminarplaner_activity_structure_step extends backup_activity_struc
     protected function define_structure(): backup_nested_element {
         global $DB;
         $dbman = $DB->get_manager();
-        $tableexists = static function(string $tablename) use ($dbman): bool {
+        $tableexists = static function (string $tablename) use ($dbman): bool {
             return $dbman->table_exists(new xmldb_table($tablename));
         };
 
@@ -196,7 +196,7 @@ class backup_seminarplaner_activity_structure_step extends backup_activity_struc
 
         if ($tableexists('kgen_activity_setlink')) {
             $activitysetlink->set_source_sql(
-                    "SELECT asl.id, asl.methodsetid, asl.methodsetversionid, asl.pendingversionid,
+                "SELECT asl.id, asl.methodsetid, asl.methodsetversionid, asl.pendingversionid,
                         asl.autosyncenabled, asl.isdefault, asl.timecreated, asl.createdby
                    FROM {kgen_activity_setlink} asl
                    JOIN {course_modules} cm ON cm.id = asl.cmid
@@ -205,13 +205,13 @@ class backup_seminarplaner_activity_structure_step extends backup_activity_struc
                     AND mo.name = 'seminarplaner'",
                 [
                     'instanceid' => backup::VAR_PARENTID,
-                ]
+                    ]
             );
             $activitysetlink->annotate_ids('user', 'createdby');
         }
         if ($tableexists('kgen_activity_methodovr')) {
             $activitymethodovr->set_source_sql(
-                    "SELECT am.id, am.source_methodid, am.source_setversionid, am.title, am.seminarphase, am.zeitbedarf,
+                "SELECT am.id, am.source_methodid, am.source_setversionid, am.title, am.seminarphase, am.zeitbedarf,
                         am.gruppengroesse, am.kurzbeschreibung, am.ablauf, am.lernziele, am.komplexitaetsgrad,
                         am.vorbereitung, am.raumanforderungen, am.sozialform, am.risiken_tipps, am.debrief,
                         am.material_technik, am.tags, am.kognitive_dimension, am.autor_kontakt, am.custommetajson,
@@ -223,14 +223,14 @@ class backup_seminarplaner_activity_structure_step extends backup_activity_struc
                     AND mo.name = 'seminarplaner'",
                 [
                     'instanceid' => backup::VAR_PARENTID,
-                ]
+                    ]
             );
             $activitymethodovr->annotate_ids('user', 'createdby');
             $activitymethodovr->annotate_ids('user', 'modifiedby');
         }
         if ($tableexists('kgen_planning_state')) {
             $planningstate->set_source_sql(
-                    "SELECT ps.id, ps.statejson, ps.versionhash, ps.timecreated, ps.timemodified, ps.createdby, ps.modifiedby
+                "SELECT ps.id, ps.statejson, ps.versionhash, ps.timecreated, ps.timemodified, ps.createdby, ps.modifiedby
                    FROM {kgen_planning_state} ps
                    JOIN {course_modules} cm ON cm.id = ps.cmid
                    JOIN {modules} mo ON mo.id = cm.module
@@ -238,14 +238,14 @@ class backup_seminarplaner_activity_structure_step extends backup_activity_struc
                     AND mo.name = 'seminarplaner'",
                 [
                     'instanceid' => backup::VAR_PARENTID,
-                ]
+                    ]
             );
             $planningstate->annotate_ids('user', 'createdby');
             $planningstate->annotate_ids('user', 'modifiedby');
         }
         if ($tableexists('kgen_grid')) {
             $grid->set_source_sql(
-                    "SELECT g.id, g.name, g.description, g.isarchived, g.timecreated, g.timemodified, g.createdby, g.modifiedby
+                "SELECT g.id, g.name, g.description, g.isarchived, g.timecreated, g.timemodified, g.createdby, g.modifiedby
                    FROM {kgen_grid} g
                    JOIN {course_modules} cm ON cm.id = g.cmid
                    JOIN {modules} mo ON mo.id = cm.module
@@ -253,7 +253,7 @@ class backup_seminarplaner_activity_structure_step extends backup_activity_struc
                     AND mo.name = 'seminarplaner'",
                 [
                     'instanceid' => backup::VAR_PARENTID,
-                ]
+                    ]
             );
             $grid->annotate_ids('user', 'createdby');
             $grid->annotate_ids('user', 'modifiedby');
@@ -263,7 +263,7 @@ class backup_seminarplaner_activity_structure_step extends backup_activity_struc
         }
         if ($tableexists('kgen_roterfaden_state')) {
             $roterfadenstate->set_source_sql(
-                    "SELECT rf.id, rf.gridid, rf.statejson, rf.ispublished, rf.publishedby, rf.timecreated, rf.timemodified
+                "SELECT rf.id, rf.gridid, rf.statejson, rf.ispublished, rf.publishedby, rf.timecreated, rf.timemodified
                    FROM {kgen_roterfaden_state} rf
                    JOIN {course_modules} cm ON cm.id = rf.cmid
                    JOIN {modules} mo ON mo.id = cm.module
@@ -271,13 +271,13 @@ class backup_seminarplaner_activity_structure_step extends backup_activity_struc
                     AND mo.name = 'seminarplaner'",
                 [
                     'instanceid' => backup::VAR_PARENTID,
-                ]
+                    ]
             );
             $roterfadenstate->annotate_ids('user', 'publishedby');
         }
         if ($tableexists('kgen_method_filemap')) {
             $methodfilemap->set_source_sql(
-                    "SELECT mf.id, mf.userid, mf.methoduid, mf.itemid, mf.timecreated, mf.timemodified
+                "SELECT mf.id, mf.userid, mf.methoduid, mf.itemid, mf.timecreated, mf.timemodified
                    FROM {kgen_method_filemap} mf
                    JOIN {course_modules} cm ON cm.id = mf.cmid
                    JOIN {modules} mo ON mo.id = cm.module
@@ -285,7 +285,7 @@ class backup_seminarplaner_activity_structure_step extends backup_activity_struc
                     AND mo.name = 'seminarplaner'",
                 [
                     'instanceid' => backup::VAR_PARENTID,
-                ]
+                    ]
             );
             $methodfilemap->annotate_files('mod_seminarplaner', 'method_materialien', 'itemid');
             $methodfilemap->annotate_files('mod_seminarplaner', 'method_h5p', 'itemid');

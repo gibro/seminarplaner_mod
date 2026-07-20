@@ -565,14 +565,16 @@ $editoroptions = [
     'subdirs' => 0,
     'content_style' => $contentstyle,
 ];
-foreach ([
+foreach (
+    [
     'ml-e-kurzbeschreibung',
     'ml-e-ablauf',
     'ml-e-lernziele',
     'ml-e-risiken',
     'ml-e-debrief',
     'ml-e-materialtechnik',
-] as $editorid) {
+    ] as $editorid
+) {
     $editor->use_editor($editorid, $editoroptions, null);
 }
 

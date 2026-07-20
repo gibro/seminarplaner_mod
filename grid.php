@@ -37,7 +37,7 @@ $grids = $gridservice->list_grids((int)$cm->id);
 seminarplaner_prepare_page('/mod/seminarplaner/grid.php', $cm, $course, $seminarplaner, 'grid');
 
 $lucidebaseurl = $CFG->wwwroot . '/mod/seminarplaner/pix/lucide';
-$renderlucide = static function(string $name, string $sizeclass = 'kg-lucide--sm') use ($lucidebaseurl): string {
+$renderlucide = static function (string $name, string $sizeclass = 'kg-lucide--sm') use ($lucidebaseurl): string {
     return html_writer::empty_tag('img', [
         'src' => $lucidebaseurl . '/' . $name . '.svg',
         'class' => trim('kg-lucide ' . $sizeclass),
@@ -47,18 +47,19 @@ $renderlucide = static function(string $name, string $sizeclass = 'kg-lucide--sm
         'decoding' => 'async',
     ]);
 };
-$rendericontext = static function(string $icon, string $text, string $wrapperclass = 'kg-label-content') use ($renderlucide): string {
-    return html_writer::tag('span',
+$rendericontext = static function (string $icon, string $text, string $wrapperclass = 'kg-label-content') use ($renderlucide): string {
+    return html_writer::tag(
+        'span',
         $renderlucide($icon) . html_writer::tag('span', s($text)),
         ['class' => $wrapperclass]
     );
 };
-$renderbuttonlabel = static function(string $text, string $icon) use ($rendericontext): string {
+$renderbuttonlabel = static function (string $text, string $icon) use ($rendericontext): string {
     return $rendericontext($icon, $text, 'kg-btn-content');
 };
 
 // Inline-SVG-Icons (Meta-Line, dekorativ) für die Überblick-Export-Leiste.
-$icon = static function(string $paths, float $size = 16, float $stroke = 2.0): string {
+$icon = static function (string $paths, float $size = 16, float $stroke = 2.0): string {
     return '<svg width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24" fill="none" '
         . 'stroke="currentColor" stroke-width="' . $stroke . '" aria-hidden="true" focusable="false">'
         . $paths . '</svg>';
@@ -68,10 +69,12 @@ $icDownload = $icon('<path d="M12 3v12M8 11l4 4 4-4M5 21h14"/>', 14, 2.2);
 
 // PDF-Export-Buttons für den Überblick: lösen per Deep-Link denselben Export-Flow
 // im Import/Export-Tab aus (kein zweiter Mechanismus).
-$pdfbtn = static function(string $id, string $label) use ($icDownload): string {
-    return html_writer::tag('button',
+$pdfbtn = static function (string $id, string $label) use ($icDownload): string {
+    return html_writer::tag(
+        'button',
         '<span class="kg-btn-content">' . $icDownload . html_writer::tag('span', s($label)) . '</span>',
-        ['type' => 'button', 'id' => $id, 'class' => 'kg-btn kg-btn--outline-red kg-ov-pdfbtn']);
+        ['type' => 'button', 'id' => $id, 'class' => 'kg-btn kg-btn--outline-red kg-ov-pdfbtn']
+    );
 };
 
 echo $OUTPUT->header();
@@ -115,10 +118,12 @@ echo html_writer::end_tag('select');
 echo html_writer::tag('button', 'Laden', ['type' => 'button', 'id' => 'kg-load-grid', 'class' => 'kg-btn kg-btn-primary']);
 echo html_writer::tag('button', 'Löschen', ['type' => 'button', 'id' => 'kg-grid-delete', 'class' => 'kg-btn kg-btn--outline-red']);
 echo html_writer::end_div();
-echo html_writer::tag('span',
+echo html_writer::tag(
+    'span',
     $icon('<rect x="5" y="11" width="14" height="9"/><path d="M8 11V8a4 4 0 018 0v3"/>', 14, 2)
     . html_writer::tag('span', 'Nur Ansicht'),
-    ['class' => 'kg-ov-badge']);
+    ['class' => 'kg-ov-badge']
+);
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ov-toolbar__row kg-ov-toolbar__row--second kg-hidden', ['id' => 'kg-grid-step-2']);
@@ -139,9 +144,11 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_div();
 
-echo html_writer::tag('p',
+echo html_writer::tag(
+    'p',
     'Neue Seminarpläne legst du im Tab „Sequenz" an – dort sitzt auch die Einrichtung (Tage und Seminarzeiten).',
-    ['class' => 'kg-ov-toolbar__hint']);
+    ['class' => 'kg-ov-toolbar__hint']
+);
 
 ?>
 <div class="sp-wrapper">
@@ -170,7 +177,7 @@ echo html_writer::tag('p',
         <div class="kg-tag-dropdown-panel kg-hidden" id="sp-filter-phase-panel">
           <label class="kg-tag-option"><input type="checkbox" id="sp-filter-phase-all" checked><span>Alle</span></label>
           <div id="sp-filter-phase-options">
-            <?php foreach (array_keys(seminarplaner_phase_options()) as $phase): ?>
+            <?php foreach (array_keys(seminarplaner_phase_options()) as $phase) : ?>
             <label class="kg-tag-option"><input type="checkbox" value="<?= s($phase) ?>"><span><?= s($phase) ?></span></label>
             <?php endforeach; ?>
           </div>
@@ -320,8 +327,10 @@ echo html_writer::tag('p',
         echo html_writer::start_div('sq-legend kg-ov-legend kg-hidden', ['id' => 'sp-phase-legend']);
         echo html_writer::tag('span', 'Seminarphasen', ['class' => 'kg-ov-legend__label']);
         foreach ($phases as $key => $label) {
-            echo html_writer::tag('span',
-                html_writer::tag('i', '', ['class' => 'sq-legend__dot sq-phase-bg--' . $key]) . s($label));
+            echo html_writer::tag(
+                'span',
+                html_writer::tag('i', '', ['class' => 'sq-legend__dot sq-phase-bg--' . $key]) . s($label)
+            );
         }
         echo html_writer::tag('span', '⇄ Alternative hinterlegt', ['class' => 'kg-ov-legend__alt']);
         echo html_writer::end_div();

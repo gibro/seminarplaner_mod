@@ -36,7 +36,7 @@ use mod_seminarplaner\local\service\method_card_service;
  * D32 that later got the Seminarkonzept label - the units then come in like a
  * collection, see Workflow 12 in TEST_WORKFLOWS.md).
  */
-final class mod_seminarplaner_import_global_methodset_test extends advanced_testcase {
+final class import_global_methodset_test extends advanced_testcase {
     /** @var int Course module id of the activity units are imported into. */
     private int $cmid = 0;
 
@@ -74,8 +74,11 @@ final class mod_seminarplaner_import_global_methodset_test extends advanced_test
      * @param string $displayname
      * @return array{0:int,1:int} Set id and version id.
      */
-    private function create_published_set(string $concepttype, array $snapshot,
-        string $displayname = 'Globales Konzept'): array {
+    private function create_published_set(
+        string $concepttype,
+        array $snapshot,
+        string $displayname = 'Globales Konzept'
+    ): array {
         global $DB;
 
         $now = time();
@@ -272,8 +275,7 @@ final class mod_seminarplaner_import_global_methodset_test extends advanced_test
         $this->assertSame('Einstiegsseminar', $konzepte[0]['planname']);
 
         $state = (new grid_service())->get_user_state((int)$grid->id, (int)$USER->id);
-        $auswahl = $state['state'][\mod_seminarplaner\local\sequence\sequence_state::STATE_KEY]
-            ['einheitenauswahlen']['ea-1'];
+        $auswahl = $state['state'][\mod_seminarplaner\local\sequence\sequence_state::STATE_KEY]['einheitenauswahlen']['ea-1'];
 
         $this->assertSame([
             $newids['Blitzlicht'],

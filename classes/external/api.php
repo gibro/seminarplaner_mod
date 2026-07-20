@@ -150,8 +150,12 @@ class api extends external_api {
      * @param array $materialien Attachment descriptors of this method.
      * @return array
      */
-    private static function map_global_method_record(\stdClass $row, int $setid = 0, int $versionid = 0,
-        array $materialien = []): array {
+    private static function map_global_method_record(
+        \stdClass $row,
+        int $setid = 0,
+        int $versionid = 0,
+        array $materialien = []
+    ): array {
         $mapped = [
             'id' => 'global-' . (int)$row->id . '-' . time(),
             'titel' => (string)($row->title ?? ''),
@@ -235,10 +239,12 @@ class api extends external_api {
             return [];
         }
 
-        list($insql, $params) = $DB->get_in_or_equal($methodids, SQL_PARAMS_NAMED);
-        $links = $DB->get_records_select('local_kgen_method_file',
+        [$insql, $params] = $DB->get_in_or_equal($methodids, SQL_PARAMS_NAMED);
+        $links = $DB->get_records_select(
+            'local_kgen_method_file',
             "methodid {$insql} AND kind = :kind",
-            $params + ['kind' => 'material']);
+            $params + ['kind' => 'material']
+        );
         if (!$links) {
             return [];
         }
@@ -252,8 +258,9 @@ class api extends external_api {
             return [];
         }
 
-        list($iteminsql, $itemparams) = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
-        $records = $DB->get_records_select('files',
+        [$iteminsql, $itemparams] = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
+        $records = $DB->get_records_select(
+            'files',
             "itemid {$iteminsql}
                  AND component = :component
                  AND filearea = :filearea
@@ -263,7 +270,8 @@ class api extends external_api {
                 'component' => 'local_seminarplaner',
                 'filearea' => 'method_material',
                 'dot' => '.',
-            ]);
+            ]
+        );
         if (!$records) {
             return [];
         }
@@ -315,8 +323,13 @@ class api extends external_api {
      * @param bool $fromactivity True when the payload originates from the activity (not carried over).
      * @return void
      */
-    private static function copy_method_material_files_to_global(array $method, int $globalmethodid,
-        int $modulecontextid, int $actorid, bool $fromactivity): void {
+    private static function copy_method_material_files_to_global(
+        array $method,
+        int $globalmethodid,
+        int $modulecontextid,
+        int $actorid,
+        bool $fromactivity
+    ): void {
         global $CFG, $DB;
 
         require_once($CFG->dirroot . '/local/seminarplaner/locallib.php');
@@ -326,8 +339,10 @@ class api extends external_api {
 
         $sourceitemid = 0;
         foreach ((array)($method['materialien'] ?? []) as $entry) {
-            if (is_array($entry) && !empty($entry['stored'])
-                    && (string)($entry['filearea'] ?? '') === 'method_materialien') {
+            if (
+                is_array($entry) && !empty($entry['stored'])
+                    && (string)($entry['filearea'] ?? '') === 'method_materialien'
+            ) {
                 $sourceitemid = (int)($entry['itemid'] ?? 0);
                 break;
             }
@@ -335,18 +350,33 @@ class api extends external_api {
 
         $sourcefiles = [];
         if ($sourceitemid > 0) {
-            $sourcefiles = array_values($fs->get_area_files($modulecontextid, 'mod_seminarplaner',
-                'method_materialien', $sourceitemid, 'id ASC', false));
+            $sourcefiles = array_values($fs->get_area_files(
+                $modulecontextid,
+                'mod_seminarplaner',
+                'method_materialien',
+                $sourceitemid,
+                'id ASC',
+                false
+            ));
         }
 
         if (!$sourcefiles && !$fromactivity) {
             $sourcemethodid = (int)($method['_kgsync']['sourcemethodid'] ?? 0);
             if ($sourcemethodid > 0) {
-                $links = $DB->get_records('local_kgen_method_file',
-                    ['methodid' => $sourcemethodid, 'kind' => 'material'], 'id ASC');
+                $links = $DB->get_records(
+                    'local_kgen_method_file',
+                    ['methodid' => $sourcemethodid, 'kind' => 'material'],
+                    'id ASC'
+                );
                 foreach ($links as $link) {
-                    $areafiles = $fs->get_area_files($systemcontextid, 'local_seminarplaner',
-                        'method_material', (int)$link->fileitemid, 'id ASC', false);
+                    $areafiles = $fs->get_area_files(
+                        $systemcontextid,
+                        'local_seminarplaner',
+                        'method_material',
+                        (int)$link->fileitemid,
+                        'id ASC',
+                        false
+                    );
                     foreach ($areafiles as $areafile) {
                         $sourcefiles[] = $areafile;
                     }
@@ -366,8 +396,16 @@ class api extends external_api {
             if ($filename === '' || $filename === '.') {
                 continue;
             }
-            if ($fs->get_file($systemcontextid, 'local_seminarplaner', 'method_material',
-                    $newitemid, $filepath, $filename)) {
+            if (
+                $fs->get_file(
+                    $systemcontextid,
+                    'local_seminarplaner',
+                    'method_material',
+                    $newitemid,
+                    $filepath,
+                    $filename
+                )
+            ) {
                 continue;
             }
             $fs->create_file_from_storedfile((object)[
@@ -398,7 +436,7 @@ class api extends external_api {
      * @return array<string, mixed>
      */
     private static function map_activity_method_to_global_record(array $method): array {
-        $splitmulti = static function($value): string {
+        $splitmulti = static function ($value): string {
             if (is_array($value)) {
                 $parts = [];
                 foreach ($value as $entry) {
@@ -464,10 +502,12 @@ class api extends external_api {
             return [];
         }
 
-        list($insql, $params) = $DB->get_in_or_equal($methodids, SQL_PARAMS_NAMED);
-        $links = $DB->get_records_select('local_kgen_method_file',
+        [$insql, $params] = $DB->get_in_or_equal($methodids, SQL_PARAMS_NAMED);
+        $links = $DB->get_records_select(
+            'local_kgen_method_file',
             "methodid {$insql} AND kind = :kind",
-            $params + ['kind' => 'material']);
+            $params + ['kind' => 'material']
+        );
         if (!$links) {
             return [];
         }
@@ -481,8 +521,9 @@ class api extends external_api {
             return [];
         }
 
-        list($iteminsql, $itemparams) = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
-        $records = $DB->get_records_select('files',
+        [$iteminsql, $itemparams] = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
+        $records = $DB->get_records_select(
+            'files',
             "itemid {$iteminsql}
                  AND component = :component
                  AND filearea = :filearea
@@ -492,7 +533,8 @@ class api extends external_api {
                 'component' => 'local_seminarplaner',
                 'filearea' => 'method_material',
                 'dot' => '.',
-            ]);
+            ]
+        );
 
         $out = [];
         foreach ($records as $record) {
@@ -573,7 +615,7 @@ class api extends external_api {
 
         // Without the real attachments every comparison against an activity unit would
         // report the files as a difference.
-        $attachments = self::load_global_method_material_names(array_map(static function($row) {
+        $attachments = self::load_global_method_material_names(array_map(static function ($row) {
             return (int)$row->id;
         }, array_values($rows)));
 
@@ -583,9 +625,12 @@ class api extends external_api {
             if ($title === '') {
                 continue;
             }
-            $out[self::normalize_method_title($title)] = self::map_global_method_record($row,
-                (int)$set->id, (int)($row->methodsetversionid ?? $set->currentversion ?? 0),
-                $attachments[(int)$row->id] ?? []);
+            $out[self::normalize_method_title($title)] = self::map_global_method_record(
+                $row,
+                (int)$set->id,
+                (int)($row->methodsetversionid ?? $set->currentversion ?? 0),
+                $attachments[(int)$row->id] ?? []
+            );
         }
         return $out;
     }
@@ -617,14 +662,14 @@ class api extends external_api {
             'tags' => 'Tags',
             'kognitive' => 'Kognitive Dimension',
         ];
-        $normalize = static function($value): string {
+        $normalize = static function ($value): string {
             if (is_array($value)) {
                 $parts = [];
                 foreach ($value as $entry) {
                     $parts[] = trim(strip_tags((string)$entry));
                 }
                 sort($parts);
-                return implode('||', array_filter($parts, static function($entry) {
+                return implode('||', array_filter($parts, static function ($entry) {
                     return $entry !== '';
                 }));
             }
@@ -708,7 +753,7 @@ class api extends external_api {
             $entries = [];
         }
 
-        $entries = array_values(array_filter($entries, static function($ts) use ($windowstart) {
+        $entries = array_values(array_filter($entries, static function ($ts) use ($windowstart) {
             return is_int($ts) && $ts >= $windowstart;
         }));
 
@@ -910,15 +955,18 @@ class api extends external_api {
             $rows = $DB->get_records('local_kgen_method', ['methodsetid' => (int)$set->id]);
         }
 
-        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function($row) {
+        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function ($row) {
             return (int)$row->id;
         }, array_values($rows)));
 
         $imported = [];
         foreach ($rows as $row) {
-            $mapped = self::map_global_method_record($row, (int)$set->id,
+            $mapped = self::map_global_method_record(
+                $row,
+                (int)$set->id,
                 (int)($row->methodsetversionid ?? $contentversionid),
-                $attachmentsbymethod[(int)$row->id] ?? []);
+                $attachmentsbymethod[(int)$row->id] ?? []
+            );
             if (trim((string)$mapped['titel']) !== '') {
                 $imported[] = $mapped;
             }
@@ -933,8 +981,13 @@ class api extends external_api {
         $service->save_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id, (int)$resolved['context']->id, $merged);
         if ($contentversionid > 0) {
             $syncservice = new \mod_seminarplaner\local\service\methodset_sync_service();
-            $syncservice->upsert_activity_set_link((int)$resolved['cm']->id, (int)$set->id, $contentversionid,
-                (int)$GLOBALS['USER']->id, false);
+            $syncservice->upsert_activity_set_link(
+                (int)$resolved['cm']->id,
+                (int)$set->id,
+                $contentversionid,
+                (int)$GLOBALS['USER']->id,
+                false
+            );
         }
 
         return [
@@ -977,8 +1030,11 @@ class api extends external_api {
      * @param \local_seminarplaner\local\repository\methodset_repository $repo Repository.
      * @return array|null Import result, or null if the set carries no plan.
      */
-    private static function import_global_seminarkonzept(array $resolved, \stdClass $set,
-        \local_seminarplaner\local\repository\methodset_repository $repo): ?array {
+    private static function import_global_seminarkonzept(
+        array $resolved,
+        \stdClass $set,
+        \local_seminarplaner\local\repository\methodset_repository $repo
+    ): ?array {
         global $DB;
 
         $contentversionid = self::resolve_set_content_versionid($set);
@@ -987,8 +1043,10 @@ class api extends external_api {
         }
         $version = $repo->get_version($contentversionid);
         $payload = $version ? json_decode((string)$version->snapshotjson, true) : null;
-        if (!is_array($payload) || (string)($payload['typ'] ?? '') !== 'seminarkonzept'
-                || !is_array($payload['plan'] ?? null)) {
+        if (
+            !is_array($payload) || (string)($payload['typ'] ?? '') !== 'seminarkonzept'
+                || !is_array($payload['plan'] ?? null)
+        ) {
             // Kein Plan im Snapshot. Das trifft jedes Set, das vor D32
             // veroeffentlicht wurde (damals blieb der Snapshot leer, die
             // Einheiten lagen nur in local_kgen_method) und spaeter das Label
@@ -1008,7 +1066,7 @@ class api extends external_api {
             'methodsetid' => (int)$set->id,
             'methodsetversionid' => $contentversionid,
         ]);
-        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function($row) {
+        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function ($row) {
             return (int)$row->id;
         }, array_values($rows)));
         $attachmentsbytitle = [];
@@ -1047,8 +1105,10 @@ class api extends external_api {
 
         // Rewrite the sequence's card references onto the fresh ids.
         $statekey = \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY;
-        if (isset($state[$statekey]) && is_array($state[$statekey])
-                && isset($state[$statekey]['einheitenauswahlen']) && is_array($state[$statekey]['einheitenauswahlen'])) {
+        if (
+            isset($state[$statekey]) && is_array($state[$statekey])
+                && isset($state[$statekey]['einheitenauswahlen']) && is_array($state[$statekey]['einheitenauswahlen'])
+        ) {
             foreach ($state[$statekey]['einheitenauswahlen'] as $eaid => $auswahl) {
                 if (!is_array($auswahl)) {
                     continue;
@@ -1089,8 +1149,12 @@ class api extends external_api {
             $uniquename = $planname . ' (' . $suffix . ')';
             $suffix++;
         }
-        $newgridid = $gridservice->create_grid((int)$resolved['cm']->id, $uniquename, $actorid,
-            trim((string)($plan['description'] ?? '')) !== '' ? (string)$plan['description'] : null);
+        $newgridid = $gridservice->create_grid(
+            (int)$resolved['cm']->id,
+            $uniquename,
+            $actorid,
+            trim((string)($plan['description'] ?? '')) !== '' ? (string)$plan['description'] : null
+        );
         $gridservice->save_user_state($newgridid, $actorid, $state);
 
         // D55: importierte Seminarkonzepte im Bibliothek-Tab "Globale
@@ -1175,16 +1239,19 @@ class api extends external_api {
             $rows = $DB->get_records('local_kgen_method', ['methodsetid' => (int)$set->id]);
         }
 
-        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function($row) {
+        $attachmentsbymethod = self::load_global_method_material_attachments(array_map(static function ($row) {
             return (int)$row->id;
         }, array_values($rows)));
 
         $imported = [];
         $counter = 0;
         foreach ($rows as $row) {
-            $mapped = self::map_global_method_record($row, (int)$set->id,
+            $mapped = self::map_global_method_record(
+                $row,
+                (int)$set->id,
                 (int)($row->methodsetversionid ?? $contentversionid),
-                $attachmentsbymethod[(int)$row->id] ?? []);
+                $attachmentsbymethod[(int)$row->id] ?? []
+            );
             if (trim((string)$mapped['titel']) === '') {
                 continue;
             }
@@ -1455,7 +1522,7 @@ class api extends external_api {
             ];
         }
         // Newest import first.
-        usort($out, static function($a, $b) {
+        usort($out, static function ($a, $b) {
             return $b['timeimported'] <=> $a['timeimported'];
         });
 
@@ -1745,8 +1812,11 @@ class api extends external_api {
         self::enforce_write_rate_limit('apply_methodset_updates', 30, 60);
 
         $syncservice = new \mod_seminarplaner\local\service\methodset_sync_service();
-        $updated = $syncservice->apply_pending_update_for_activity((int)$resolved['cm']->id, (int)$params['methodsetid'],
-            (int)$GLOBALS['USER']->id);
+        $updated = $syncservice->apply_pending_update_for_activity(
+            (int)$resolved['cm']->id,
+            (int)$params['methodsetid'],
+            (int)$GLOBALS['USER']->id
+        );
         return ['updated' => (bool)$updated];
     }
 
@@ -1845,8 +1915,12 @@ class api extends external_api {
 
         $users = [];
         foreach ($scopecontexts as $scopectx) {
-            $candidates = get_users_by_capability($scopectx, 'local/seminarplaner:reviewset',
-                'u.id,u.firstname,u.lastname,u.email,u.deleted,u.suspended', 'u.lastname ASC, u.firstname ASC');
+            $candidates = get_users_by_capability(
+                $scopectx,
+                'local/seminarplaner:reviewset',
+                'u.id,u.firstname,u.lastname,u.email,u.deleted,u.suspended',
+                'u.lastname ASC, u.firstname ASC'
+            );
             foreach ($candidates as $candidate) {
                 if (!empty($candidate->deleted) || !empty($candidate->suspended)) {
                     continue;
@@ -1915,8 +1989,12 @@ class api extends external_api {
         $users = [];
         $caniopt = false;
         foreach ($scopecontexts as $scopectx) {
-            $candidates = get_users_by_capability($scopectx, 'local/seminarplaner:reviewset',
-                'u.id,u.firstname,u.lastname,u.deleted,u.suspended', 'u.lastname ASC, u.firstname ASC');
+            $candidates = get_users_by_capability(
+                $scopectx,
+                'local/seminarplaner:reviewset',
+                'u.id,u.firstname,u.lastname,u.deleted,u.suspended',
+                'u.lastname ASC, u.firstname ASC'
+            );
             foreach ($candidates as $candidate) {
                 if (!empty($candidate->deleted) || !empty($candidate->suspended)) {
                     continue;
@@ -1936,7 +2014,7 @@ class api extends external_api {
         }
 
         $reviewers = array_values($users);
-        usort($reviewers, function($a, $b) {
+        usort($reviewers, function ($a, $b) {
             return strcasecmp($a['fullname'], $b['fullname']);
         });
 
@@ -1988,15 +2066,18 @@ class api extends external_api {
         }
 
         $scopecontexts = self::resolve_submit_scope_contexts($resolved['course']);
-        $allowedscopeids = array_map(static function($ctx) {
+        $allowedscopeids = array_map(static function ($ctx) {
             return (int)$ctx->id;
         }, $scopecontexts);
         if (!in_array((int)$set->scopecontextid, $allowedscopeids, true)) {
             throw new invalid_parameter_exception('Keine Berechtigung für das gewählte Konzept');
         }
 
-        $activitymethods = (new method_card_service())->get_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id,
-            (int)$resolved['context']->id);
+        $activitymethods = (new method_card_service())->get_methods(
+            (int)$resolved['cm']->id,
+            (int)$GLOBALS['USER']->id,
+            (int)$resolved['context']->id
+        );
         $setmethods = self::load_set_methods_by_title((int)$set->id);
 
         $candidates = [];
@@ -2048,13 +2129,21 @@ class api extends external_api {
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
             'methodsetid' => new external_value(PARAM_INT, 'Existing method set id'),
             'changelog' => new external_value(PARAM_TEXT, 'Update note', VALUE_DEFAULT, ''),
-            'methodids' => new external_multiple_structure(new external_value(PARAM_RAW, 'Method ids from activity'),
-                'Methods to submit', VALUE_DEFAULT, []),
+            'methodids' => new external_multiple_structure(
+                new external_value(PARAM_RAW, 'Method ids from activity'),
+                'Methods to submit',
+                VALUE_DEFAULT,
+                []
+            ),
         ]);
     }
 
-    public static function submit_methodset_for_review(int $cmid, int $methodsetid, string $changelog = '',
-        array $methodids = []): array {
+    public static function submit_methodset_for_review(
+        int $cmid,
+        int $methodsetid,
+        string $changelog = '',
+        array $methodids = []
+    ): array {
         global $DB;
 
         $params = self::validate_parameters(self::submit_methodset_for_review_parameters(), [
@@ -2081,7 +2170,7 @@ class api extends external_api {
         if (!$scopecontexts) {
             throw new invalid_parameter_exception('Keine Berechtigung zum Einreichen für Review');
         }
-        $allowedscopeids = array_map(static function($ctx) {
+        $allowedscopeids = array_map(static function ($ctx) {
             return (int)$ctx->id;
         }, $scopecontexts);
 
@@ -2169,8 +2258,12 @@ class api extends external_api {
         if (!$assignedreviewers) {
             // Fallback for legacy sets without explicit reviewer assignment:
             // auto-assign active users that currently hold review capability in scope.
-            $autocandidates = get_users_by_capability($scopecontext, 'local/seminarplaner:reviewset',
-                'u.id,u.deleted,u.suspended', 'u.id ASC');
+            $autocandidates = get_users_by_capability(
+                $scopecontext,
+                'local/seminarplaner:reviewset',
+                'u.id,u.deleted,u.suspended',
+                'u.id ASC'
+            );
             $autorreviewerids = [];
             foreach ($autocandidates as $candidate) {
                 if (!empty($candidate->deleted) || !empty($candidate->suspended)) {
@@ -2185,8 +2278,12 @@ class api extends external_api {
             $reviewerrepo->replace_reviewers((int)$set->id, $autorreviewerids, $actorid);
             $assignedreviewers = $autorreviewerids;
         }
-        $reviewerswithcap = get_users_by_capability($scopecontext, 'local/seminarplaner:reviewset',
-            'u.id,u.deleted,u.suspended', 'u.id ASC');
+        $reviewerswithcap = get_users_by_capability(
+            $scopecontext,
+            'local/seminarplaner:reviewset',
+            'u.id,u.deleted,u.suspended',
+            'u.id ASC'
+        );
         $allowedreviewers = [];
         foreach ($reviewerswithcap as $capuser) {
             if (!empty($capuser->deleted) || !empty($capuser->suspended)) {
@@ -2222,8 +2319,13 @@ class api extends external_api {
             $newmethodid = (int)$DB->insert_record('local_kgen_method', $record);
             $savedcount++;
             $fromactivity = !empty($selectedtitles[self::normalize_method_title((string)$mapped['title'])]);
-            self::copy_method_material_files_to_global($method, $newmethodid,
-                (int)$resolved['context']->id, $actorid, $fromactivity);
+            self::copy_method_material_files_to_global(
+                $method,
+                $newmethodid,
+                (int)$resolved['context']->id,
+                $actorid,
+                $fromactivity
+            );
         }
 
         $comment = trim((string)$params['changelog']) !== '' ? trim((string)$params['changelog']) : 'Submitted from mod_seminarplaner';
@@ -2255,13 +2357,23 @@ class api extends external_api {
             'displayname' => new external_value(PARAM_TEXT, 'New method set displayname'),
             'description' => new external_value(PARAM_RAW, 'New method set description', VALUE_DEFAULT, ''),
             'changelog' => new external_value(PARAM_TEXT, 'Update note', VALUE_DEFAULT, ''),
-            'methodids' => new external_multiple_structure(new external_value(PARAM_RAW, 'Method ids from activity'),
-                'Methods for new set', VALUE_DEFAULT, []),
+            'methodids' => new external_multiple_structure(
+                new external_value(PARAM_RAW, 'Method ids from activity'),
+                'Methods for new set',
+                VALUE_DEFAULT,
+                []
+            ),
         ]);
     }
 
-    public static function create_methodset_for_review(int $cmid, string $shortname, string $displayname, string $description = '',
-        string $changelog = '', array $methodids = []): array {
+    public static function create_methodset_for_review(
+        int $cmid,
+        string $shortname,
+        string $displayname,
+        string $description = '',
+        string $changelog = '',
+        array $methodids = []
+    ): array {
         global $DB;
 
         $params = self::validate_parameters(self::create_methodset_for_review_parameters(), [
@@ -2332,8 +2444,13 @@ class api extends external_api {
         $reviewerrepo = new \local_seminarplaner\local\repository\reviewer_repository();
         $workflow = new \local_seminarplaner\local\service\workflow_service();
 
-        $newsetid = $repo->create_methodset_draft((string)$params['shortname'], (string)$params['displayname'],
-            (string)$params['description'], (int)$targetscope->id, $actorid);
+        $newsetid = $repo->create_methodset_draft(
+            (string)$params['shortname'],
+            (string)$params['displayname'],
+            (string)$params['description'],
+            (int)$targetscope->id,
+            $actorid
+        );
 
         $snapshotjson = json_encode($selectedmethods, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($snapshotjson === false) {
@@ -2372,8 +2489,13 @@ class api extends external_api {
             ]);
             $newmethodid = (int)$DB->insert_record('local_kgen_method', $record);
             $savedcount++;
-            self::copy_method_material_files_to_global($method, $newmethodid,
-                (int)$resolved['context']->id, $actorid, true);
+            self::copy_method_material_files_to_global(
+                $method,
+                $newmethodid,
+                (int)$resolved['context']->id,
+                $actorid,
+                true
+            );
         }
 
         $comment = trim((string)$params['changelog']) !== '' ? trim((string)$params['changelog']) : 'Submitted from mod_seminarplaner';
@@ -2432,12 +2554,24 @@ class api extends external_api {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
             'gridid' => new external_value(PARAM_INT, 'Seminarplan id'),
-            'methodsetid' => new external_value(PARAM_INT, 'Existing Seminarkonzept set id (0 = create new)',
-                VALUE_DEFAULT, 0),
-            'shortname' => new external_value(PARAM_ALPHANUMEXT, 'New set shortname (only for new sets)',
-                VALUE_DEFAULT, ''),
-            'displayname' => new external_value(PARAM_TEXT, 'New set displayname (only for new sets)',
-                VALUE_DEFAULT, ''),
+            'methodsetid' => new external_value(
+                PARAM_INT,
+                'Existing Seminarkonzept set id (0 = create new)',
+                VALUE_DEFAULT,
+                0
+            ),
+            'shortname' => new external_value(
+                PARAM_ALPHANUMEXT,
+                'New set shortname (only for new sets)',
+                VALUE_DEFAULT,
+                ''
+            ),
+            'displayname' => new external_value(
+                PARAM_TEXT,
+                'New set displayname (only for new sets)',
+                VALUE_DEFAULT,
+                ''
+            ),
             'description' => new external_value(PARAM_RAW, 'New set description', VALUE_DEFAULT, ''),
             'changelog' => new external_value(PARAM_TEXT, 'Update note', VALUE_DEFAULT, ''),
         ]);
@@ -2453,8 +2587,15 @@ class api extends external_api {
      * rebuild the plan 1:1). The referenced units are also written as
      * local_kgen_method rows, so they stay browsable in the global library.
      */
-    public static function submit_seminarkonzept_for_review(int $cmid, int $gridid, int $methodsetid = 0,
-        string $shortname = '', string $displayname = '', string $description = '', string $changelog = ''): array {
+    public static function submit_seminarkonzept_for_review(
+        int $cmid,
+        int $gridid,
+        int $methodsetid = 0,
+        string $shortname = '',
+        string $displayname = '',
+        string $description = '',
+        string $changelog = ''
+    ): array {
         global $DB;
 
         $params = self::validate_parameters(self::submit_seminarkonzept_for_review_parameters(), [
@@ -2485,7 +2626,7 @@ class api extends external_api {
         if (!$scopecontexts) {
             throw new invalid_parameter_exception('Keine Berechtigung zum Einreichen für Review');
         }
-        $allowedscopeids = array_map(static function($ctx) {
+        $allowedscopeids = array_map(static function ($ctx) {
             return (int)$ctx->id;
         }, $scopecontexts);
         $actorid = (int)$GLOBALS['USER']->id;
@@ -2502,7 +2643,8 @@ class api extends external_api {
         $sequenz = $state[\mod_seminarplaner\local\sequence\sequence_state::STATE_KEY] ?? null;
         if (!$sequenz) {
             throw new invalid_parameter_exception(
-                'Dieser Seminarplan hat noch keine Sequenz – bitte einmal in der Sequenzansicht öffnen.');
+                'Dieser Seminarplan hat noch keine Sequenz – bitte einmal in der Sequenzansicht öffnen.'
+            );
         }
 
         // The plan's units travel inside the snapshot with their original ids,
@@ -2560,8 +2702,14 @@ class api extends external_api {
                 throw new invalid_parameter_exception('Bitte Name und Kurzbezeichnung angeben');
             }
             $targetscope = $scopecontexts[0];
-            $setid = $repo->create_methodset_draft($newshortname, $newdisplayname,
-                (string)$params['description'], (int)$targetscope->id, $actorid, 'seminarkonzept');
+            $setid = $repo->create_methodset_draft(
+                $newshortname,
+                $newdisplayname,
+                (string)$params['description'],
+                (int)$targetscope->id,
+                $actorid,
+                'seminarkonzept'
+            );
             $versionnum = 1;
         }
 
@@ -2588,8 +2736,12 @@ class api extends external_api {
         $scopecontext = \context::instance_by_id((int)$set->scopecontextid, MUST_EXIST);
         $assignedreviewers = $reviewerrepo->get_reviewer_userids($setid);
         if (!$assignedreviewers) {
-            $autocandidates = get_users_by_capability($scopecontext, 'local/seminarplaner:reviewset',
-                'u.id,u.deleted,u.suspended', 'u.id ASC');
+            $autocandidates = get_users_by_capability(
+                $scopecontext,
+                'local/seminarplaner:reviewset',
+                'u.id,u.deleted,u.suspended',
+                'u.id ASC'
+            );
             $autorreviewerids = [];
             foreach ($autocandidates as $candidate) {
                 if (!empty($candidate->deleted) || !empty($candidate->suspended)) {
@@ -2625,8 +2777,13 @@ class api extends external_api {
             ]);
             $newmethodid = (int)$DB->insert_record('local_kgen_method', $record);
             $savedcount++;
-            self::copy_method_material_files_to_global($method, $newmethodid,
-                (int)$resolved['context']->id, $actorid, true);
+            self::copy_method_material_files_to_global(
+                $method,
+                $newmethodid,
+                (int)$resolved['context']->id,
+                $actorid,
+                true
+            );
         }
 
         $comment = trim((string)$params['changelog']) !== ''
@@ -2675,8 +2832,12 @@ class api extends external_api {
         self::enforce_write_rate_limit('create_grid', 40, 60);
 
         $service = new grid_service();
-        $gridid = $service->create_grid((int)$resolved['cm']->id, (string)$params['name'], (int)$GLOBALS['USER']->id,
-            (string)$params['description']);
+        $gridid = $service->create_grid(
+            (int)$resolved['cm']->id,
+            (string)$params['name'],
+            (int)$GLOBALS['USER']->id,
+            (string)$params['description']
+        );
 
         return ['gridid' => $gridid, 'name' => (string)$params['name']];
     }
@@ -2947,8 +3108,12 @@ class api extends external_api {
         }
 
         $service = new grid_service();
-        $newhash = $service->save_user_state((int)$params['gridid'], (int)$GLOBALS['USER']->id, $decoded,
-            (string)$params['expectedhash']);
+        $newhash = $service->save_user_state(
+            (int)$params['gridid'],
+            (int)$GLOBALS['USER']->id,
+            $decoded,
+            (string)$params['expectedhash']
+        );
 
         return ['versionhash' => $newhash];
     }
@@ -3049,8 +3214,13 @@ class api extends external_api {
         }
 
         $service = new import_export_service();
-        $result = $service->validate_import_rows((int)$resolved['cm']->id, (int)$resolved['context']->id,
-            (int)$GLOBALS['USER']->id, $payload, (bool)$params['strict']);
+        $result = $service->validate_import_rows(
+            (int)$resolved['cm']->id,
+            (int)$resolved['context']->id,
+            (int)$GLOBALS['USER']->id,
+            $payload,
+            (bool)$params['strict']
+        );
 
         return [
             'errors' => $result['errors'],
@@ -3097,8 +3267,13 @@ class api extends external_api {
         }
 
         $service = new import_export_service();
-        $result = $service->validate_export_rows((int)$resolved['cm']->id, (int)$resolved['context']->id,
-            (int)$GLOBALS['USER']->id, $payload, (bool)$params['strictlegacy']);
+        $result = $service->validate_export_rows(
+            (int)$resolved['cm']->id,
+            (int)$resolved['context']->id,
+            (int)$GLOBALS['USER']->id,
+            $payload,
+            (bool)$params['strictlegacy']
+        );
 
         return [
             'errors' => $result['errors'],
@@ -3179,8 +3354,12 @@ class api extends external_api {
         self::enforce_write_rate_limit('refresh_lock', 240, 60);
 
         $service = new soft_lock_service();
-        $ok = $service->refresh((int)$params['gridid'], (int)$GLOBALS['USER']->id, (string)$params['token'],
-            (int)$params['ttlseconds']);
+        $ok = $service->refresh(
+            (int)$params['gridid'],
+            (int)$GLOBALS['USER']->id,
+            (string)$params['token'],
+            (int)$params['ttlseconds']
+        );
         return ['success' => $ok];
     }
 

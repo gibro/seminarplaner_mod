@@ -310,8 +310,10 @@ class method_card_service {
         unset($method);
 
         $normalizedalts = $this->normalize_method_alternatives($decoded);
-        if (json_encode($normalizedalts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-            !== json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) {
+        if (
+            json_encode($normalizedalts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            !== json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        ) {
             $decoded = $normalizedalts;
             $jsonchanged = true;
         }
@@ -709,7 +711,8 @@ class method_card_service {
             'component' => 'mod_seminarplaner',
             'filearea' => $filearea,
         ], $inparams);
-        $records = $DB->get_records_select('files',
+        $records = $DB->get_records_select(
+            'files',
             'contextid = :contextid
              AND component = :component
              AND filearea = :filearea
@@ -717,7 +720,8 @@ class method_card_service {
              AND filename ' . $insql,
             $params,
             '',
-            'itemid, filename');
+            'itemid, filename'
+        );
         if (!$records) {
             return null;
         }

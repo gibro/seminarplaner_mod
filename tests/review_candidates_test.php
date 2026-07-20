@@ -34,7 +34,7 @@ use mod_seminarplaner\local\service\method_card_service;
  * compared to an existing global method set. Attachments are part of a unit:
  * adding a handout to a unit whose text stayed the same must offer it for review.
  */
-final class mod_seminarplaner_review_candidates_test extends advanced_testcase {
+final class review_candidates_test extends advanced_testcase {
     /** @var int Course module id of the activity the units live in. */
     private int $cmid = 0;
 

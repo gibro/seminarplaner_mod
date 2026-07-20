@@ -47,8 +47,11 @@ echo html_writer::tag('div', '', ['id' => 'sq-status', 'class' => 'kg-status', '
 // die frühere gelbe Hinweisbox.
 echo html_writer::start_div('sq-pagehead');
 echo html_writer::tag('h3', 'Sequenzansicht');
-echo html_writer::div(get_string('sequenz_previewnote', 'mod_seminarplaner'),
-    'sq-pagehead__sub', ['id' => 'sq-preview-note']);
+echo html_writer::div(
+    get_string('sequenz_previewnote', 'mod_seminarplaner'),
+    'sq-pagehead__sub',
+    ['id' => 'sq-preview-note']
+);
 echo html_writer::end_div();
 
 // Handoff-SEQUENZ: Planwahl und Tagesnavigation sind Rüstzeug, kein Teil des
@@ -56,20 +59,25 @@ echo html_writer::end_div();
 // Zeitleiste darunter die Ansicht dominiert. Default offen; den Zustand merkt
 // sich sequenz.js pro Aktivität.
 echo html_writer::start_div('sq-head', ['id' => 'sq-head']);
-echo html_writer::tag('button',
+echo html_writer::tag(
+    'button',
     html_writer::tag('span', '▸', ['class' => 'sq-tri', 'aria-hidden' => 'true'])
     . html_writer::tag('span', 'Seminarplan &amp; Tag', ['class' => 'sq-head__title'])
     . html_writer::tag('span', '', ['class' => 'sq-head__info', 'id' => 'sq-head-info']),
     [
         'type' => 'button', 'class' => 'sq-head__toggle', 'id' => 'sq-head-toggle',
         'aria-expanded' => 'true', 'aria-controls' => 'sq-head-body',
-    ]);
+    ]
+);
 echo html_writer::start_div('sq-head__body', ['id' => 'sq-head-body']);
 
 // Plan selection, creation and setup (D45: templates live here now).
 echo html_writer::start_div('sq-planbar');
-echo html_writer::tag('label', get_string('sequenz_planlabel', 'mod_seminarplaner'),
-    ['for' => 'sq-grid-select', 'class' => 'kg-label sq-planbar__label']);
+echo html_writer::tag(
+    'label',
+    get_string('sequenz_planlabel', 'mod_seminarplaner'),
+    ['for' => 'sq-grid-select', 'class' => 'kg-label sq-planbar__label']
+);
 echo html_writer::tag('select', '', ['id' => 'sq-grid-select', 'class' => 'kg-input sq-planbar__select']);
 echo html_writer::tag('button', '＋ Neuer Seminarplan', [
     'type' => 'button', 'id' => 'sq-new-plan', 'class' => 'kg-btn',
@@ -124,9 +132,9 @@ $days = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', '
         <span class="sp-modal__label">Erster Seminartag</span>
         <select name="firstDay" id="sp-config-first-day" class="kg-input kg-grid-select">
           <?php
-          foreach ($days as $day) {
-              echo '<option value="' . s($day) . '">' . s($day) . '</option>';
-          }
+            foreach ($days as $day) {
+                echo '<option value="' . s($day) . '">' . s($day) . '</option>';
+            }
           ?>
         </select>
       </label>
@@ -181,14 +189,16 @@ echo html_writer::tag('button', '›', [
 ]);
 echo html_writer::end_div();
 // Kleiner ⓘ-Button mit Erklär-Popover (Öffnen/Schließen macht sequenz.js).
-$renderinfo = static function(string $text): string {
-    return html_writer::tag('span',
+$renderinfo = static function (string $text): string {
+    return html_writer::tag(
+        'span',
         html_writer::tag('button', 'i', [
             'type' => 'button', 'class' => 'sq-info__btn',
             'aria-label' => 'Erklärung anzeigen', 'aria-expanded' => 'false',
         ])
         . html_writer::tag('span', s($text), ['class' => 'sq-info__pop', 'role' => 'tooltip']),
-        ['class' => 'sq-info']);
+        ['class' => 'sq-info']
+    );
 };
 
 echo html_writer::start_div('sq-toolbar__actions');
@@ -210,16 +220,20 @@ echo html_writer::start_tag('label', ['class' => 'sq-toggle', 'for' => 'sq-publi
 echo html_writer::empty_tag('input', ['type' => 'checkbox', 'id' => 'sq-publish-roterfaden']);
 echo html_writer::tag('span', get_string('sequenz_publishlabel', 'mod_seminarplaner'));
 echo html_writer::end_tag('label');
-echo html_writer::tag('span',
+echo html_writer::tag(
+    'span',
     html_writer::tag('button', 'i', [
         'type' => 'button', 'class' => 'sq-info__btn',
         'aria-label' => 'Erklärung anzeigen', 'aria-expanded' => 'false',
     ])
-    . html_writer::tag('span',
+    . html_writer::tag(
+        'span',
         s(get_string('sequenz_publishlabel_info', 'mod_seminarplaner'))
         . html_writer::tag('span', '', ['id' => 'sq-publish-roterfaden-status', 'class' => 'sq-info__status']),
-        ['class' => 'sq-info__pop', 'role' => 'tooltip']),
-    ['class' => 'sq-info']);
+        ['class' => 'sq-info__pop', 'role' => 'tooltip']
+    ),
+    ['class' => 'sq-info']
+);
 echo html_writer::end_tag('span');
 // CD-Handoff: Neue Einheiten lassen sich jederzeit aus der Werkzeugleiste
 // heraus gestalten (Quick-Create). Dieser Button plant in den ERSTEN aktiven
@@ -263,8 +277,10 @@ $phases = [
 ];
 echo html_writer::start_div('sq-legend');
 foreach ($phases as $key => $label) {
-    echo html_writer::tag('span',
-        html_writer::tag('i', '', ['class' => 'sq-legend__dot sq-phase-bg--' . $key]) . s($label));
+    echo html_writer::tag(
+        'span',
+        html_writer::tag('i', '', ['class' => 'sq-legend__dot sq-phase-bg--' . $key]) . s($label)
+    );
 }
 echo html_writer::end_div();
 
@@ -279,7 +295,7 @@ echo html_writer::tag('div', '', ['id' => 'sq-toast', 'class' => 'sq-toast', 'ro
 // Bearbeiten (openEditor) und Anlegen (openCreateEditor, D50) teilen es sich;
 // sequenz.js füllt die Felder und schaltet Überschrift/Speichern-Button um.
 // ---------------------------------------------------------------------------
-$sqtext = static function(string $label, string $key, string $hint = ''): string {
+$sqtext = static function (string $label, string $key, string $hint = ''): string {
     $out = html_writer::start_div('sq-field');
     $out .= html_writer::tag('label', s($label), ['class' => 'kg-label', 'for' => 'sq-e-' . $key]);
     $out .= html_writer::empty_tag('input', ['type' => 'text', 'class' => 'kg-input', 'id' => 'sq-e-' . $key]);
@@ -289,7 +305,7 @@ $sqtext = static function(string $label, string $key, string $hint = ''): string
     $out .= html_writer::end_div();
     return $out;
 };
-$sqrich = static function(string $label, string $key, int $rows = 6): string {
+$sqrich = static function (string $label, string $key, int $rows = 6): string {
     $out = html_writer::start_div('sq-field');
     $out .= html_writer::tag('label', s($label), ['class' => 'kg-label', 'for' => 'sq-e-' . $key]);
     $out .= html_writer::tag('textarea', '', ['class' => 'kg-input', 'id' => 'sq-e-' . $key, 'rows' => (string)$rows]);
@@ -298,14 +314,14 @@ $sqrich = static function(string $label, string $key, int $rows = 6): string {
 };
 // Gleiche Bedienelemente wie der Bibliotheks-Editor (D17: ein Editor, drei
 // Einstiege): Mehrfach-Auswahlen als Dropdown mit Häkchen statt Komma-Text.
-$sqmulti = static function(string $label, string $key, array $options, string $placeholder, string $labelprefix): string {
+$sqmulti = static function (string $label, string $key, array $options, string $placeholder, string $labelprefix): string {
     $out = html_writer::start_div('sq-field');
     $out .= html_writer::tag('label', s($label), ['class' => 'kg-label', 'for' => 'sq-e-' . $key]);
     $out .= seminarplaner_render_multi_dropdown('sq-e-' . $key, $options, $placeholder, $labelprefix);
     $out .= html_writer::end_div();
     return $out;
 };
-$sqselect = static function(string $label, string $key, array $options): string {
+$sqselect = static function (string $label, string $key, array $options): string {
     $out = html_writer::start_div('sq-field');
     $out .= html_writer::tag('label', s($label), ['class' => 'kg-label', 'for' => 'sq-e-' . $key]);
     $out .= html_writer::start_tag('select', ['class' => 'kg-input', 'id' => 'sq-e-' . $key]);
@@ -319,7 +335,7 @@ $sqselect = static function(string $label, string $key, array $options): string 
 // Alternative Seminareinheiten (D8/D21): wie im Bibliotheks-Editor ein
 // Dropdown mit Suche; die Optionen (alle anderen Einheiten) füllt sequenz.js
 // beim Öffnen dynamisch, da sie vom Bestand abhängen.
-$sqalternativen = static function(): string {
+$sqalternativen = static function (): string {
     $out = html_writer::start_div('sq-field');
     $out .= html_writer::tag('label', 'Alternative Seminareinheiten', ['class' => 'kg-label', 'for' => 'sq-e-alternativen']);
     $out .= html_writer::start_div('kg-tag-dropdown', [
@@ -384,8 +400,10 @@ echo $sqmulti('Sozialform', 'sozialform', [
 ], 'Sozialformen wählen', 'Sozialformen');
 // Klapp-Indikator wie in der ganzen Ansicht (.sq-tri), nicht der native Marker.
 $sqsummary = static function (string $label): string {
-    return html_writer::tag('summary',
-        html_writer::tag('span', '▸', ['class' => 'sq-tri', 'aria-hidden' => 'true']) . ' ' . s($label));
+    return html_writer::tag(
+        'summary',
+        html_writer::tag('span', '▸', ['class' => 'sq-tri', 'aria-hidden' => 'true']) . ' ' . s($label)
+    );
 };
 echo html_writer::start_tag('details', ['class' => 'sq-section']);
 echo $sqsummary('Ablauf und Rahmen');
@@ -443,14 +461,16 @@ $editoroptions = [
     'subdirs' => 0,
     'content_style' => $contentstyle,
 ];
-foreach ([
+foreach (
+    [
     'sq-e-lernziele',
     'sq-e-kurzbeschreibung',
     'sq-e-ablauf',
     'sq-e-risiken',
     'sq-e-debrief',
     'sq-e-materialtechnik',
-] as $editorid) {
+    ] as $editorid
+) {
     $editor->use_editor($editorid, $editoroptions, null);
 }
 

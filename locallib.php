@@ -158,7 +158,7 @@ function seminarplaner_install_unserialize_notice_guard(int $userid = 0): void {
     }
     $installed = true;
 
-    set_error_handler(static function($errno, $errstr) use ($userid) {
+    set_error_handler(static function ($errno, $errstr) use ($userid) {
         global $DB, $USER;
 
         $message = (string)$errstr;
@@ -201,8 +201,13 @@ function seminarplaner_install_unserialize_notice_guard(int $userid = 0): void {
  * @param string|null $amdmodule Optional AMD module suffix.
  * @return void
  */
-function seminarplaner_prepare_page(string $script, stdClass $cm, stdClass $course, stdClass $seminarplaner,
-    ?string $amdmodule = null): void {
+function seminarplaner_prepare_page(
+    string $script,
+    stdClass $cm,
+    stdClass $course,
+    stdClass $seminarplaner,
+    ?string $amdmodule = null
+): void {
     global $PAGE;
 
     $PAGE->set_url($script, ['id' => (int)$cm->id]);
@@ -258,7 +263,7 @@ function seminarplaner_cleanup_invalid_fileprefs(int $userid): void {
             continue;
         }
         $notice = false;
-        set_error_handler(static function($errno, $errstr) use (&$notice) {
+        set_error_handler(static function ($errno, $errstr) use (&$notice) {
             $notice = true;
             return true;
         });
@@ -390,7 +395,7 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
         || has_capability('mod/seminarplaner:importfrommoddata', $context)
         || has_capability('mod/seminarplaner:exporttomoddata', $context);
 
-    $rendericon = static function(string $name): string {
+    $rendericon = static function (string $name): string {
         if ($name === '') {
             return '';
         }
@@ -413,8 +418,8 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
     if ($canmanageseminarplaner) {
         // Reihenfolge/Benennung D16/D50. Immer sichtbar: Überblick · Sequenz ·
         // Bibliothek · Import/Export. Nach Nutzungszweck zusätzlich:
-        //  - "durchfuehren": Roter Faden (nach Bibliothek),
-        //  - "verwalten": Einreichen (am Ende).
+        // - "durchfuehren": Roter Faden (nach Bibliothek),
+        // - "verwalten": Einreichen (am Ende).
         $tabs = [
             'grid' => ['label' => get_string('ueberblickmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/grid.php', 'icon' => 'calendar-range'],
             'sequenz' => ['label' => get_string('sequenzmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/sequenz.php', 'icon' => 'list-checks'],
@@ -440,7 +445,8 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
     $out = html_writer::start_div('kg-tabs');
     foreach ($tabs as $key => $tab) {
         $classes = 'kg-tab' . ($key === $active ? ' kg-tab-active' : '');
-        $content = html_writer::tag('span',
+        $content = html_writer::tag(
+            'span',
             $rendericon((string)($tab['icon'] ?? ''))
             . html_writer::tag('span', s((string)$tab['label']), ['class' => 'kg-tab-label']),
             ['class' => 'kg-tab-content']

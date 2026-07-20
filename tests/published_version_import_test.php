@@ -35,7 +35,7 @@ use mod_seminarplaner\local\service\method_card_service;
  * re-submission creates one), so importing from it could pull unreviewed content into
  * activities. These tests pin the "published version wins" behaviour.
  */
-final class mod_seminarplaner_published_version_import_test extends advanced_testcase {
+final class published_version_import_test extends advanced_testcase {
     /** @var int Course module id. */
     private int $cmid = 0;
 
@@ -131,7 +131,7 @@ final class mod_seminarplaner_published_version_import_test extends advanced_tes
         global $USER;
 
         $methods = (new method_card_service())->get_methods($this->cmid, (int)$USER->id, $this->contextid);
-        $titles = array_map(static function($method) {
+        $titles = array_map(static function ($method) {
             return (string)($method['titel'] ?? '');
         }, is_array($methods) ? $methods : []);
         sort($titles);

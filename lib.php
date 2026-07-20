@@ -140,7 +140,7 @@ function seminarplaner_delete_instance($id) {
     if (!empty($cmid)) {
         $gridids = $DB->get_fieldset_select('kgen_grid', 'id', 'cmid = ?', [$cmid]);
         if (!empty($gridids)) {
-            list($insql, $inparams) = $DB->get_in_or_equal($gridids, SQL_PARAMS_QM);
+            [$insql, $inparams] = $DB->get_in_or_equal($gridids, SQL_PARAMS_QM);
             $DB->delete_records_select('kgen_grid_user_state', "gridid $insql", $inparams);
             $DB->delete_records_select('kgen_grid_lock', "gridid $insql", $inparams);
         }

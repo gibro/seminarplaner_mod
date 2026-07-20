@@ -56,8 +56,15 @@ class import_export_audit_service {
      * @param int $actorid User id.
      * @return int Audit record id.
      */
-    public function log(?int $cmid, int $contextid, string $direction, string $status, array $meta, string $message,
-        int $actorid): int {
+    public function log(
+        ?int $cmid,
+        int $contextid,
+        string $direction,
+        string $status,
+        array $meta,
+        string $message,
+        int $actorid
+    ): int {
         $payloadmeta = json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($payloadmeta === false) {
             $payloadmeta = '{}';

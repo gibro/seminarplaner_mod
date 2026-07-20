@@ -60,10 +60,16 @@ class backup_seminarplaner_activity_task extends backup_activity_task {
         global $CFG;
 
         $base = preg_quote($CFG->wwwroot, '/');
-        $content = preg_replace("/{$base}\/mod\/seminarplaner\/index.php\?id\=([0-9]+)/",
-            '$@SEMINARPLANERINDEX*$1@$', $content);
-        $content = preg_replace("/{$base}\/mod\/seminarplaner\/view.php\?id\=([0-9]+)/",
-            '$@SEMINARPLANERVIEWBYID*$1@$', $content);
+        $content = preg_replace(
+            "/{$base}\/mod\/seminarplaner\/index.php\?id\=([0-9]+)/",
+            '$@SEMINARPLANERINDEX*$1@$',
+            $content
+        );
+        $content = preg_replace(
+            "/{$base}\/mod\/seminarplaner\/view.php\?id\=([0-9]+)/",
+            '$@SEMINARPLANERVIEWBYID*$1@$',
+            $content
+        );
         return $content;
     }
 }

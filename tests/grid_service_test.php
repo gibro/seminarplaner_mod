@@ -29,7 +29,7 @@ use mod_seminarplaner\local\service\grid_service;
 /**
  * DB-backed tests for grid service.
  */
-final class mod_seminarplaner_grid_service_test extends advanced_testcase {
+final class grid_service_test extends advanced_testcase {
     public function test_create_and_list_grid(): void {
         $this->resetAfterTest(true);
 

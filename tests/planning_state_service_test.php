@@ -29,7 +29,7 @@ use mod_seminarplaner\local\service\planning_state_service;
 /**
  * DB-backed tests for planning state service.
  */
-final class mod_seminarplaner_planning_state_service_test extends advanced_testcase {
+final class planning_state_service_test extends advanced_testcase {
     public function test_save_state_removes_non_reciprocal_slotkeys(): void {
         $this->resetAfterTest(true);
 

@@ -50,8 +50,13 @@ class methodset_sync_service {
      * @param bool $isdefault
      * @return void
      */
-    public function upsert_activity_set_link(int $cmid, int $methodsetid, int $methodsetversionid, int $userid,
-        bool $isdefault = false): void {
+    public function upsert_activity_set_link(
+        int $cmid,
+        int $methodsetid,
+        int $methodsetversionid,
+        int $userid,
+        bool $isdefault = false
+    ): void {
         global $DB;
 
         if ($cmid <= 0 || $methodsetid <= 0 || $methodsetversionid <= 0 || $userid <= 0) {
@@ -103,8 +108,12 @@ class methodset_sync_service {
         $links = $DB->get_records('kgen_activity_setlink', ['cmid' => $cmid], 'id ASC');
         $out = [];
         foreach ($links as $link) {
-            $set = $DB->get_record('local_kgen_methodset', ['id' => (int)$link->methodsetid],
-                'id,shortname,displayname,status,currentversion', IGNORE_MISSING);
+            $set = $DB->get_record(
+                'local_kgen_methodset',
+                ['id' => (int)$link->methodsetid],
+                'id,shortname,displayname,status,currentversion',
+                IGNORE_MISSING
+            );
             if (!$set) {
                 continue;
             }
@@ -253,8 +262,12 @@ class methodset_sync_service {
      * @param array $existinglinks
      * @return void
      */
-    private function backfill_links_from_activity_defaults(int $methodsetid, int $newversionid, int $actorid,
-        array $existinglinks): void {
+    private function backfill_links_from_activity_defaults(
+        int $methodsetid,
+        int $newversionid,
+        int $actorid,
+        array $existinglinks
+    ): void {
         global $DB;
 
         $linkedcmids = [];
@@ -296,8 +309,13 @@ class methodset_sync_service {
             if ($cmid <= 0 || !empty($linkedcmids[$cmid])) {
                 continue;
             }
-            $this->upsert_activity_set_link($cmid, $methodsetid,
-                $fallbackoldversion > 0 ? $fallbackoldversion : $newversionid, $actorid, true);
+            $this->upsert_activity_set_link(
+                $cmid,
+                $methodsetid,
+                $fallbackoldversion > 0 ? $fallbackoldversion : $newversionid,
+                $actorid,
+                true
+            );
         }
     }
 
@@ -336,8 +354,13 @@ class methodset_sync_service {
      * @param int $newversionid
      * @return array
      */
-    private function merge_methods_for_sync(array $existing, int $methodsetid, array $oldsetmethods, array $newsetmethods,
-        int $newversionid): array {
+    private function merge_methods_for_sync(
+        array $existing,
+        int $methodsetid,
+        array $oldsetmethods,
+        array $newsetmethods,
+        int $newversionid
+    ): array {
         $updated = [];
         $usednew = [];
 
@@ -503,7 +526,7 @@ class methodset_sync_service {
             return [];
         }
 
-        $attachmentsbymethod = $this->load_global_method_material_attachments(array_map(static function($row) {
+        $attachmentsbymethod = $this->load_global_method_material_attachments(array_map(static function ($row) {
             return (int)$row->id;
         }, array_values($rows)));
 
@@ -672,10 +695,12 @@ class methodset_sync_service {
             return [];
         }
 
-        list($insql, $params) = $DB->get_in_or_equal($methodids, SQL_PARAMS_NAMED);
-        $links = $DB->get_records_select('local_kgen_method_file',
+        [$insql, $params] = $DB->get_in_or_equal($methodids, SQL_PARAMS_NAMED);
+        $links = $DB->get_records_select(
+            'local_kgen_method_file',
             "methodid {$insql} AND kind = :kind",
-            $params + ['kind' => 'material']);
+            $params + ['kind' => 'material']
+        );
         if (!$links) {
             return [];
         }
@@ -689,8 +714,9 @@ class methodset_sync_service {
             return [];
         }
 
-        list($iteminsql, $itemparams) = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
-        $records = $DB->get_records_select('files',
+        [$iteminsql, $itemparams] = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
+        $records = $DB->get_records_select(
+            'files',
             "itemid {$iteminsql}
                  AND component = :component
                  AND filearea = :filearea
@@ -700,7 +726,8 @@ class methodset_sync_service {
                 'component' => 'local_seminarplaner',
                 'filearea' => 'method_material',
                 'dot' => '.',
-            ]);
+            ]
+        );
         if (!$records) {
             return [];
         }

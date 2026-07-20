@@ -76,4 +76,3 @@ class planning_state_repository {
         return (int)$DB->insert_record('kgen_planning_state', $record);
     }
 }
-

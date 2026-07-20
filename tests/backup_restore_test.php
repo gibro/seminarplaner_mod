@@ -37,7 +37,7 @@ use mod_seminarplaner\local\service\grid_service;
  * survive a course backup/restore (also triggered by activity duplication and
  * course import). See Workflow 21/22 in TEST_WORKFLOWS.md.
  */
-final class mod_seminarplaner_backup_restore_test extends advanced_testcase {
+final class backup_restore_test extends advanced_testcase {
     public function test_backup_restore_preserves_grid_and_roterfaden(): void {
         global $USER;
 
@@ -192,8 +192,10 @@ final class mod_seminarplaner_backup_restore_test extends advanced_testcase {
         $restoredcmid = $this->roundtrip_activity($sourcecmid, (int)$generator->create_course()->id, (int)$USER->id);
         $this->assertNotSame($sourcecmid, $restoredcmid);
 
-        $restored = $DB->get_record('seminarplaner',
-            ['id' => get_coursemodule_from_id('seminarplaner', $restoredcmid)->instance]);
+        $restored = $DB->get_record(
+            'seminarplaner',
+            ['id' => get_coursemodule_from_id('seminarplaner', $restoredcmid)->instance]
+        );
         $this->assertSame('left', $restored->logoposition, 'Die Logo-Position hat den Restore nicht ueberlebt.');
         $this->assertSame('verwalten', $restored->usecase, 'Der Nutzungszweck hat den Restore nicht ueberlebt.');
 

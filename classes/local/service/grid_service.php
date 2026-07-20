@@ -278,7 +278,7 @@ class grid_service {
                     'end' => $end,
                 ];
             }
-            usort($normalized, static function(array $a, array $b): int {
+            usort($normalized, static function (array $a, array $b): int {
                 if ($a['start'] !== $b['start']) {
                     return $a['start'] <=> $b['start'];
                 }
@@ -353,7 +353,7 @@ class grid_service {
             $merged[] = $entry;
         }
 
-        usort($merged, static function(array $a, array $b): int {
+        usort($merged, static function (array $a, array $b): int {
             $astart = (int)($a['startMin'] ?? 0);
             $bstart = (int)($b['startMin'] ?? 0);
             if ($astart !== $bstart) {
@@ -508,9 +508,11 @@ class grid_service {
      */
     private static function derive_ankerzeiten(array $config): array {
         $az = $config['ankerzeiten'] ?? null;
-        if (is_array($az) && isset($az['vormittag']['start'], $az['nachmittag']['start'])
+        if (
+            is_array($az) && isset($az['vormittag']['start'], $az['nachmittag']['start'])
                 && self::parse_clock($az['vormittag']['start']) !== null
-                && self::parse_clock($az['nachmittag']['start']) !== null) {
+                && self::parse_clock($az['nachmittag']['start']) !== null
+        ) {
             return $az;
         }
         $range = $config['timeRange'] ?? [];
@@ -527,8 +529,11 @@ class grid_service {
             }
         }
         $vmend = $best ? $best['start'] : '12:30';
-        $nmstart = $best ? sprintf('%02d:%02d', intdiv(self::parse_clock($best['start']) + $best['duration'], 60),
-            (self::parse_clock($best['start']) + $best['duration']) % 60) : '12:30';
+        $nmstart = $best ? sprintf(
+            '%02d:%02d',
+            intdiv(self::parse_clock($best['start']) + $best['duration'], 60),
+            (self::parse_clock($best['start']) + $best['duration']) % 60
+        ) : '12:30';
         return [
             'vormittag' => ['start' => $start, 'end' => $vmend],
             'nachmittag' => ['start' => $nmstart, 'end' => $end],

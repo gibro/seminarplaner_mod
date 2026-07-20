@@ -30,7 +30,7 @@ use mod_seminarplaner\local\sequence\sequence_state;
 /**
  * Tests for the deterministic grid to sequence conversion (D20/D43).
  */
-final class mod_seminarplaner_grid_to_sequence_converter_test extends basic_testcase {
+final class grid_to_sequence_converter_test extends basic_testcase {
     /**
      * Build a realistic legacy grid state fixture.
      *

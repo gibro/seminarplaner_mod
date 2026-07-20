@@ -35,7 +35,7 @@ use mod_seminarplaner\local\service\methodset_sync_service;
  * the sync tracked the text fields only, so a handout added to the published set
  * never reached the activities using it.
  */
-final class mod_seminarplaner_sync_attachments_test extends advanced_testcase {
+final class sync_attachments_test extends advanced_testcase {
     /** @var int Course module id of the activity linked to the set. */
     private int $cmid = 0;
 
@@ -133,8 +133,12 @@ final class mod_seminarplaner_sync_attachments_test extends advanced_testcase {
 
         // One link per method carrying all its files, the way the importer stores them -
         // a second link on the same itemid would list every file twice.
-        $itemid = (int)$DB->get_field('local_kgen_method_file', 'fileitemid',
-            ['methodid' => $globalmethodid, 'kind' => 'material'], IGNORE_MULTIPLE);
+        $itemid = (int)$DB->get_field(
+            'local_kgen_method_file',
+            'fileitemid',
+            ['methodid' => $globalmethodid, 'kind' => 'material'],
+            IGNORE_MULTIPLE
+        );
         $isnewlink = ($itemid <= 0);
         if ($isnewlink) {
             $itemid = $globalmethodid + 700000;
@@ -187,7 +191,7 @@ final class mod_seminarplaner_sync_attachments_test extends advanced_testcase {
             if ((string)($method['titel'] ?? '') !== $title) {
                 continue;
             }
-            $names = array_map(static function($entry) {
+            $names = array_map(static function ($entry) {
                 return (string)($entry['name'] ?? '');
             }, (array)($method['materialien'] ?? []));
             sort($names);

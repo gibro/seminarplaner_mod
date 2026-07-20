@@ -40,8 +40,10 @@ echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('modulenameplural', 'mod_seminarplaner'));
 
 if (!$instances) {
-    notice(get_string('thereareno', 'moodle', get_string('modulenameplural', 'mod_seminarplaner')),
-        new moodle_url('/course/view.php', ['id' => $course->id]));
+    notice(
+        get_string('thereareno', 'moodle', get_string('modulenameplural', 'mod_seminarplaner')),
+        new moodle_url('/course/view.php', ['id' => $course->id])
+    );
 }
 
 $table = new html_table();
@@ -49,8 +51,10 @@ $table->head = [get_string('name')];
 
 foreach ($instances as $instance) {
     $cmcontext = context_module::instance($instance->coursemodule);
-    if (!has_capability('mod/seminarplaner:view', $cmcontext)
-        && !has_capability('mod/seminarplaner:viewroterfaden', $cmcontext)) {
+    if (
+        !has_capability('mod/seminarplaner:view', $cmcontext)
+        && !has_capability('mod/seminarplaner:viewroterfaden', $cmcontext)
+    ) {
         continue;
     }
 

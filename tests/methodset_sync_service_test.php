@@ -33,7 +33,7 @@ use mod_seminarplaner\local\service\methodset_sync_service;
  * indicator. The content-merge/apply path needs a real module context and is
  * exercised manually (see Workflow 11 in TEST_WORKFLOWS.md).
  */
-final class mod_seminarplaner_methodset_sync_service_test extends advanced_testcase {
+final class methodset_sync_service_test extends advanced_testcase {
     /**
      * Insert a minimal global method set record and return its id.
      *

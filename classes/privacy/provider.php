@@ -40,11 +40,7 @@ use core_privacy\local\request\writer;
 /**
  * Privacy provider implementation for mod_seminarplaner.
  */
-final class provider implements
-    \core_privacy\local\metadata\provider,
-    request_provider,
-    core_userlist_provider {
-
+final class provider implements \core_privacy\local\metadata\provider, core_userlist_provider, request_provider {
     /**
      * @inheritDoc
      */
@@ -218,20 +214,26 @@ final class provider implements
                     // dieser Methode uebergaben frueher direkt das Ergebnis von
                     // array_values() und liefen damit in einen TypeError - der
                     // Export war also nie funktionsfaehig.
-                    writer::with_context($context)->export_data(['grid_user_state'],
-                        (object)['states' => array_values($state)]);
+                    writer::with_context($context)->export_data(
+                        ['grid_user_state'],
+                        (object)['states' => array_values($state)]
+                    );
                 }
                 $locks = $DB->get_records_select('kgen_grid_lock', "gridid {$insql} AND userid = ?", array_merge($params, [$userid]));
                 if (!empty($locks)) {
-                    writer::with_context($context)->export_data(['grid_locks'],
-                        (object)['locks' => array_values($locks)]);
+                    writer::with_context($context)->export_data(
+                        ['grid_locks'],
+                        (object)['locks' => array_values($locks)]
+                    );
                 }
             }
 
             $filemaps = $DB->get_records('kgen_method_filemap', ['cmid' => $cmid, 'userid' => $userid]);
             if (!empty($filemaps)) {
-                writer::with_context($context)->export_data(['method_filemap'],
-                    (object)['maps' => array_values($filemaps)]);
+                writer::with_context($context)->export_data(
+                    ['method_filemap'],
+                    (object)['maps' => array_values($filemaps)]
+                );
 
                 // Zu den oben exportierten Zuordnungen auch die Dateien selbst.
                 // Frueher stand hier helper::export_context_files($context,
@@ -256,8 +258,10 @@ final class provider implements
 
             $logs = $DB->get_records('kgen_import_export_log', ['cmid' => $cmid, 'actorid' => $userid]);
             if (!empty($logs)) {
-                writer::with_context($context)->export_data(['import_export_log'],
-                    (object)['entries' => array_values($logs)]);
+                writer::with_context($context)->export_data(
+                    ['import_export_log'],
+                    (object)['entries' => array_values($logs)]
+                );
             }
 
             // Urheberschaft: was der Nutzer angelegt oder zuletzt geaendert hat.
@@ -277,8 +281,10 @@ final class provider implements
                 [$where, $params] = self::authorship_where($table, $fields, $cmid, (int)$userid);
                 $records = $DB->get_records_select($table, $where, $params);
                 if (!empty($records)) {
-                    writer::with_context($context)->export_data([$table],
-                        (object)['records' => array_values($records)]);
+                    writer::with_context($context)->export_data(
+                        [$table],
+                        (object)['records' => array_values($records)]
+                    );
                 }
             }
         }
@@ -452,7 +458,11 @@ final class provider implements
         }
         $cmids = array_values(array_unique(array_map('intval', $cmids)));
         [$insql, $params] = $DB->get_in_or_equal($cmids, SQL_PARAMS_QM);
-        return $DB->get_fieldset_select('context', 'id', "contextlevel = ? AND instanceid {$insql}",
-            array_merge([CONTEXT_MODULE], $params));
+        return $DB->get_fieldset_select(
+            'context',
+            'id',
+            "contextlevel = ? AND instanceid {$insql}",
+            array_merge([CONTEXT_MODULE], $params)
+        );
     }
 }
