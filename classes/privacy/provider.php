@@ -40,7 +40,10 @@ use core_privacy\local\request\writer;
  */
 final class provider implements \core_privacy\local\metadata\provider, core_userlist_provider, request_provider {
     /**
-     * @inheritDoc
+     * Meldet, welche Daten dieses Plugin zu einer Person speichert.
+     *
+     * @param collection $items Sammlung, in die die Metadaten eingetragen werden.
+     * @return collection Die um die Tabellen und Subsystem-Verweise ergaenzte Sammlung.
      */
     public static function get_metadata(collection $items): collection {
         $items->add_database_table('kgen_grid_user_state', [
@@ -109,7 +112,10 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
     }
 
     /**
-     * @inheritDoc
+     * Sammelt alle Modul-Kontexte, in denen zu dieser Person Daten liegen.
+     *
+     * @param int $userid Id der Person, deren Kontexte gesucht werden.
+     * @return contextlist Liste der Kontexte mit Zustaenden, Dateizuordnungen, Protokollen oder Urheberschaft.
      */
     public static function get_contexts_for_userid(int $userid): contextlist {
         global $DB;
@@ -131,7 +137,9 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
         $cmids = $DB->get_fieldset_select('kgen_import_export_log', 'DISTINCT cmid', 'actorid = ?', [$userid]);
         $contextids = array_merge($contextids, self::contextids_from_cmids($cmids));
 
-        foreach (['kgen_grid', 'kgen_planning_state', 'kgen_roterfaden_state', 'kgen_activity_setlink', 'kgen_activity_methodovr'] as $table) {
+        $authortables = ['kgen_grid', 'kgen_planning_state', 'kgen_roterfaden_state',
+            'kgen_activity_setlink', 'kgen_activity_methodovr'];
+        foreach ($authortables as $table) {
             $field = 'createdby';
             if ($table === 'kgen_roterfaden_state') {
                 $field = 'publishedby';
@@ -157,7 +165,10 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
     }
 
     /**
-     * @inheritDoc
+     * Sammelt alle Personen, zu denen in diesem Modul-Kontext Daten liegen.
+     *
+     * @param userlist $userlist Nutzerliste des Kontexts, die ergaenzt wird.
+     * @return void
      */
     public static function get_users_in_context(userlist $userlist): void {
         global $DB;
@@ -189,7 +200,10 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
     }
 
     /**
-     * @inheritDoc
+     * Exportiert alle Daten einer Person aus den freigegebenen Kontexten.
+     *
+     * @param approved_contextlist $contextlist Freigegebene Kontexte samt betroffener Person.
+     * @return void
      */
     public static function export_user_data(approved_contextlist $contextlist): void {
         global $DB;
@@ -205,7 +219,11 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
 
             if (!empty($gridids)) {
                 [$insql, $params] = $DB->get_in_or_equal($gridids, SQL_PARAMS_QM);
-                $state = $DB->get_records_select('kgen_grid_user_state', "gridid {$insql} AND userid = ?", array_merge($params, [$userid]));
+                $state = $DB->get_records_select(
+                    'kgen_grid_user_state',
+                    "gridid {$insql} AND userid = ?",
+                    array_merge($params, [$userid])
+                );
                 if (!empty($state)) {
                     // Export_data() verlangt ein \stdClass, kein Array (siehe
                     // moodle_content_writer::export_data). Alle vier Aufrufe in
@@ -217,7 +235,11 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
                         (object)['states' => array_values($state)]
                     );
                 }
-                $locks = $DB->get_records_select('kgen_grid_lock', "gridid {$insql} AND userid = ?", array_merge($params, [$userid]));
+                $locks = $DB->get_records_select(
+                    'kgen_grid_lock',
+                    "gridid {$insql} AND userid = ?",
+                    array_merge($params, [$userid])
+                );
                 if (!empty($locks)) {
                     writer::with_context($context)->export_data(
                         ['grid_locks'],
@@ -326,7 +348,10 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
     }
 
     /**
-     * @inheritDoc
+     * Loescht saemtliche Plugin-Daten eines Modul-Kontexts fuer alle Personen.
+     *
+     * @param context $context Kontext, dessen Daten vollstaendig geloescht werden.
+     * @return void
      */
     public static function delete_data_for_all_users_in_context(context $context): void {
         global $DB;
@@ -356,7 +381,10 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
     }
 
     /**
-     * @inheritDoc
+     * Loescht oder anonymisiert die Daten einer Person in den freigegebenen Kontexten.
+     *
+     * @param approved_contextlist $contextlist Freigegebene Kontexte samt betroffener Person.
+     * @return void
      */
     public static function delete_data_for_user(approved_contextlist $contextlist): void {
         $userid = (int)$contextlist->get_user()->id;
@@ -366,7 +394,10 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
     }
 
     /**
-     * @inheritDoc
+     * Loescht oder anonymisiert die Daten mehrerer freigegebener Personen in einem Kontext.
+     *
+     * @param approved_userlist $userlist Freigegebene Personen samt Kontext.
+     * @return void
      */
     public static function delete_data_for_users(approved_userlist $userlist): void {
         $context = $userlist->get_context();

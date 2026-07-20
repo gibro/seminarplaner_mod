@@ -59,7 +59,9 @@ echo '<script>window.__kg_prev_define = window.define; try { window.define = und
 echo '<script src="' . s($vendorbase . '/jszip/jszip.min.js') . '"></script>';
 echo '<script src="' . s($vendorbase . '/jspdf/jspdf.umd.min.js') . '"></script>';
 echo '<script src="' . s($vendorbase . '/jspdf-autotable/jspdf.plugin.autotable.min.js') . '"></script>';
-echo '<script>try { if (window.__kg_prev_define !== undefined) { window.define = window.__kg_prev_define; } else { delete window.define; } } catch (e) {} delete window.__kg_prev_define;</script>';
+echo '<script>try { if (window.__kg_prev_define !== undefined) { '
+    . 'window.define = window.__kg_prev_define; } else { delete window.define; } } '
+    . 'catch (e) {} delete window.__kg_prev_define;</script>';
 
 // ---------------------------------------------------------------------------
 // Inline-SVG-Icons (Handoff: Meta-Line, stroke-width 2 / 2.2). Rein dekorativ,
@@ -75,7 +77,8 @@ $icExportUp   = $icon('<path d="M12 21V9M7 14l5-5 5 5M4 3h16"/>', 18, 2.2);
 $icFile       = $icon('<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/>');
 $icLayers     = $icon('<path d="M4 7l8-4 8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4"/>');
 $icExchange   = $icon('<path d="M4 8h13l-3-3M20 16H7l3 3"/>');
-$icPdf        = $icon('<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>');
+$icPdf        = $icon('<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/>'
+    . '<path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>');
 $icInfo       = $icon('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>', 16, 2);
 $icExternal   = $icon('<path d="M7 17L17 7M9 7h8v8"/>', 12, 2.4);
 $icDownload   = $icon('<path d="M12 3v12M8 11l4 4 4-4M5 21h14"/>', 14, 2.2);
@@ -104,9 +107,8 @@ echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-layout');
 
-// =====================================================================
-// ZONE: IMPORTIEREN
-// =====================================================================
+// ---------------------------------------------------------------------
+// Zone: Importieren.
 echo '<div class="kg-ie-zone">';
 echo '<div class="kg-ie-zonehead">'
     . '<span class="kg-ie-zonehead__badge">' . $icImportTray . '</span>'
@@ -114,7 +116,7 @@ echo '<div class="kg-ie-zonehead">'
     . '<div class="kg-ie-zonehead__sub">Inhalte in deinen Bestand holen</div></div>'
     . '</div>';
 
-// --- Karte 1: Datei importieren (Rot) -------------------------------
+// Karte 1: Datei importieren (Rot).
 echo '<div class="kg-ie-card kg-ie-card--red">';
 echo '<div class="kg-ie-card__head">'
     . '<span class="kg-ie-card__badge">' . $icFile . '</span>'
@@ -167,7 +169,7 @@ echo html_writer::tag('button', 'Datei analysieren', [
     'type' => 'button', 'id' => 'kg-ie-parse', 'class' => 'kg-btn kg-btn-primary kg-ie-fullbtn',
 ]);
 echo '<div class="kg-ie-footnote">Unterstützte Formate: mod_data CSV-Export, ZIP mit CSV, JSON-Export.</div>';
-echo '</div>'; // #kg-ie-panel-1
+echo '</div>'; // Ende #kg-ie-panel-1.
 
 // Panel 2 – Vorschau & Import.
 echo '<div class="kg-hidden" id="kg-ie-panel-2">';
@@ -184,11 +186,11 @@ echo html_writer::tag('button', 'Importieren', [
 echo html_writer::tag('div', '', [
     'id' => 'kg-ie-import-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite',
 ]);
-echo '</div>'; // #kg-ie-panel-2
+echo '</div>'; // Ende #kg-ie-panel-2.
 
-echo '</div>'; // kg-ie-card (Datei importieren)
+echo '</div>'; // Ende kg-ie-card (Datei importieren).
 
-// --- Karte 2: Globale Seminarkonzepte (Blau) ------------------------
+// Karte 2: Globale Seminarkonzepte (Blau).
 echo '<div class="kg-ie-card kg-ie-card--blue">';
 echo '<div class="kg-ie-card__head">'
     . '<span class="kg-ie-card__badge">' . $icLayers . '</span>'
@@ -216,13 +218,12 @@ echo html_writer::tag('div', '', [
 echo html_writer::tag('div', '', [
     'id' => 'kg-global-set-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite',
 ]);
-echo '</div>'; // kg-ie-card (Globale Seminarkonzepte)
+echo '</div>'; // Ende kg-ie-card (Globale Seminarkonzepte).
 
-echo '</div>'; // kg-ie-zone (Import)
+echo '</div>'; // Ende kg-ie-zone (Import).
 
-// =====================================================================
-// ZONE: EXPORTIEREN & AUSGEBEN
-// =====================================================================
+// ---------------------------------------------------------------------
+// Zone: Exportieren und ausgeben.
 echo '<div class="kg-ie-zone">';
 echo '<div class="kg-ie-zonehead">'
     . '<span class="kg-ie-zonehead__badge">' . $icExportUp . '</span>'
@@ -230,7 +231,7 @@ echo '<div class="kg-ie-zonehead">'
     . '<div class="kg-ie-zonehead__sub">Inhalte weitergeben oder als Dokument erzeugen</div></div>'
     . '</div>';
 
-// --- Karte 3: Austausch mit anderem Planer (Grün) -------------------
+// Karte 3: Austausch mit anderem Planer (Grün).
 echo '<div class="kg-ie-card kg-ie-card--green">';
 echo '<div class="kg-ie-card__head">'
     . '<span class="kg-ie-card__badge">' . $icExchange . '</span>'
@@ -246,9 +247,9 @@ echo $scopechip('kg-ie-export-grids', 'Seminarpläne', false);
 echo '</div>';
 echo '<button type="button" id="kg-ie-export-json-full" class="kg-btn kg-btn-primary kg-ie-fullbtn kg-ie-btn--green">'
     . '<span class="kg-btn-content">' . $icDownload . 'Seminarplaner-JSON exportieren</span></button>';
-echo '</div>'; // kg-ie-card (Austausch)
+echo '</div>'; // Ende kg-ie-card (Austausch).
 
-// --- Karte 4: PDF erstellen (Tiefrot) -------------------------------
+// Karte 4: PDF erstellen (Tiefrot).
 echo '<div class="kg-ie-card kg-ie-card--darkred">';
 echo '<div class="kg-ie-card__head">'
     . '<span class="kg-ie-card__badge">' . $icPdf . '</span>'
@@ -304,13 +305,15 @@ foreach (
     echo '<div class="kg-tag-option kg-pdf-col-row" data-col="' . s($key) . '">'
         . '<label class="kg-pdf-col-check"><input type="checkbox" value="' . s($key) . '"><span>' . s($label) . '</span></label>'
         . '<span class="kg-pdf-col-move">'
-        . '<button type="button" class="kg-pdf-col-btn" data-move="left" title="Spalte nach links" aria-label="Spalte nach links">◄</button>'
-        . '<button type="button" class="kg-pdf-col-btn" data-move="right" title="Spalte nach rechts" aria-label="Spalte nach rechts">►</button>'
+        . '<button type="button" class="kg-pdf-col-btn" data-move="left" title="Spalte nach links" '
+        . 'aria-label="Spalte nach links">◄</button>'
+        . '<button type="button" class="kg-pdf-col-btn" data-move="right" title="Spalte nach rechts" '
+        . 'aria-label="Spalte nach rechts">►</button>'
         . '</span>'
         . '</div>';
 }
 echo '</div></div></div>';
-echo '</div>'; // .field-card
+echo '</div>'; // Ende .field-card.
 
 echo '<div class="kg-ie-pdfactions">';
 echo html_writer::tag('button', 'ZIM-PDF erstellen', [
@@ -328,16 +331,16 @@ echo html_writer::tag('button', 'Handout-PDF für Teilnehmende', [
     'type' => 'button', 'id' => 'kg-pdf-handout', 'class' => 'kg-btn kg-btn-primary',
 ]);
 echo '</div>';
-echo '</div>'; // kg-ie-card (PDF)
+echo '</div>'; // Ende kg-ie-card (PDF).
 
-echo '</div>'; // kg-ie-zone (Export)
+echo '</div>'; // Ende kg-ie-zone (Export).
 
-echo html_writer::end_div(); // kg-ie-layout
+echo html_writer::end_div(); // Ende kg-ie-layout.
 
 echo html_writer::tag('div', '', [
     'id' => 'kg-ie-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite',
 ]);
 
-echo html_writer::end_div(); // kg-shell
+echo html_writer::end_div(); // Ende kg-shell.
 
 echo $OUTPUT->footer();

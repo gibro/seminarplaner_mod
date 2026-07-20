@@ -79,7 +79,8 @@ echo seminarplaner_render_tabs((int)$cm->id, 'methodlibrary');
 echo html_writer::start_div('kg-shell');
 echo html_writer::start_div('sq-pagehead');
 echo html_writer::tag('h3', 'Bibliothek');
-echo html_writer::div('Alle Seminareinheiten durchsuchen, bearbeiten und für deine Pläne übernehmen – oder eine neue anlegen.', 'sq-pagehead__sub');
+echo html_writer::div('Alle Seminareinheiten durchsuchen, bearbeiten und für deine Pläne '
+    . 'übernehmen – oder eine neue anlegen.', 'sq-pagehead__sub');
 echo html_writer::end_div();
 
 // D55: Bibliothek in drei Unterbereiche als Tabs - lokale Seminareinheiten
@@ -110,7 +111,7 @@ if ($hasimportedkonzepte) {
 }
 echo html_writer::end_div();
 
-// ---- Tab 1: Lokale Seminareinheiten (Standard-Ansicht) ------------------
+// Tab 1: Lokale Seminareinheiten (Standard-Ansicht).
 echo html_writer::start_div('ml-tabpanel', ['id' => 'ml-tab-local', 'role' => 'tabpanel']);
 
 // Filterleiste, Liste, Mehrfachbearbeitung und Editor sind für lokale
@@ -149,7 +150,9 @@ echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'ml-filter-b
 echo html_writer::tag('h4', 'Seminareinheit suchen');
 echo html_writer::start_div('sp-filterbar');
 
-echo '<label class="sp-filter"><span class="sp-filter__label">Suche</span><input id="ml-filter-search" class="kg-input" type="search" placeholder="Titel, Beschreibung, Tags"></label>';
+echo '<label class="sp-filter"><span class="sp-filter__label">Suche</span>'
+    . '<input id="ml-filter-search" class="kg-input" type="search" '
+    . 'placeholder="Titel, Beschreibung, Tags"></label>';
 
 echo '<label class="sp-filter"><span class="sp-filter__label">Tags</span>';
 echo '<div class="kg-tag-dropdown" id="ml-filter-tags-dropdown">';
@@ -220,7 +223,11 @@ echo html_writer::start_div('ml-bulk-toolbar kg-hidden', ['id' => 'ml-bulk-toolb
 echo html_writer::tag('span', '', ['id' => 'ml-bulk-toolbar-count', 'class' => 'ml-bulk-toolbar-count']);
 echo html_writer::tag('button', 'Alle auswählen', ['type' => 'button', 'id' => 'ml-bulk-selectall', 'class' => 'kg-btn']);
 echo html_writer::tag('button', 'Auswahl aufheben', ['type' => 'button', 'id' => 'ml-bulk-selectnone', 'class' => 'kg-btn']);
-echo html_writer::tag('button', 'Bearbeiten', ['type' => 'button', 'id' => 'ml-bulk-edit-open', 'class' => 'kg-btn kg-btn-primary']);
+echo html_writer::tag('button', 'Bearbeiten', [
+    'type' => 'button',
+    'id' => 'ml-bulk-edit-open',
+    'class' => 'kg-btn kg-btn-primary',
+]);
 echo html_writer::end_div();
 
 echo html_writer::start_div('kg-ie-block kg-library-step kg-hidden', ['id' => 'ml-bulk-section']);
@@ -274,14 +281,24 @@ foreach ($bulkmultifields as $fieldname => $fielddef) {
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Tags / Schlüsselworte', ['class' => 'kg-label']);
 echo html_writer::start_div('kg-two');
-echo html_writer::start_tag('select', ['id' => 'ml-bulk-mode-tags', 'class' => 'kg-input kg-bulk-mode-select', 'data-bulk-value-target' => '#ml-bulk-tags-value']);
+echo html_writer::start_tag('select', [
+    'id' => 'ml-bulk-mode-tags',
+    'class' => 'kg-input kg-bulk-mode-select',
+    'data-bulk-value-target' => '#ml-bulk-tags-value',
+]);
 echo html_writer::tag('option', 'Nicht ändern', ['value' => 'none']);
 echo html_writer::tag('option', 'Hinzufügen', ['value' => 'add']);
 echo html_writer::tag('option', 'Entfernen', ['value' => 'remove']);
 echo html_writer::tag('option', 'Ersetzen', ['value' => 'replace']);
 echo html_writer::end_tag('select');
 echo html_writer::start_div('kg-bulk-value kg-bulk-value--disabled', ['id' => 'ml-bulk-tags-value']);
-echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'ml-bulk-tags', 'class' => 'kg-input', 'placeholder' => 'Tags, durch Komma getrennt', 'disabled' => 'disabled']);
+echo html_writer::empty_tag('input', [
+    'type' => 'text',
+    'id' => 'ml-bulk-tags',
+    'class' => 'kg-input',
+    'placeholder' => 'Tags, durch Komma getrennt',
+    'disabled' => 'disabled',
+]);
 echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_div();
@@ -317,7 +334,11 @@ foreach ($bulkselectfields as $fieldname => $fielddef) {
 
 echo html_writer::end_div();
 echo html_writer::start_div('kg-row');
-echo html_writer::tag('button', 'Änderungen anwenden', ['type' => 'button', 'id' => 'ml-bulk-save', 'class' => 'kg-btn kg-btn-primary']);
+echo html_writer::tag('button', 'Änderungen anwenden', [
+    'type' => 'button',
+    'id' => 'ml-bulk-save',
+    'class' => 'kg-btn kg-btn-primary',
+]);
 echo html_writer::tag('button', 'Abbrechen', ['type' => 'button', 'id' => 'ml-bulk-cancel', 'class' => 'kg-btn']);
 echo html_writer::end_div();
 echo html_writer::end_div();
@@ -353,7 +374,12 @@ echo html_writer::start_div('field-card');
 echo html_writer::start_div('kg-two');
 echo html_writer::start_div();
 echo html_writer::tag('label', 'Seminarphase', ['for' => 'ml-e-seminarphase', 'class' => 'kg-label']);
-echo seminarplaner_render_multi_dropdown('ml-e-seminarphase', seminarplaner_phase_options(), 'Seminarphasen wählen', 'Seminarphasen');
+echo seminarplaner_render_multi_dropdown(
+    'ml-e-seminarphase',
+    seminarplaner_phase_options(),
+    'Seminarphasen wählen',
+    'Seminarphasen'
+);
 echo html_writer::end_div();
 echo html_writer::start_div();
 echo html_writer::tag('label', 'Tags / Schlüsselworte', ['for' => 'ml-e-tags', 'class' => 'kg-label']);
@@ -383,7 +409,12 @@ echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Kurzbeschreibung', ['for' => 'ml-e-kurzbeschreibung', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'ml-e-kurzbeschreibung', 'class' => 'kg-input', 'rows' => '10', 'autocomplete' => 'off']);
+echo html_writer::tag('textarea', '', [
+    'id' => 'ml-e-kurzbeschreibung',
+    'class' => 'kg-input',
+    'rows' => '10',
+    'autocomplete' => 'off',
+]);
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Alternative Seminareinheiten', ['for' => 'ml-e-alternativen', 'class' => 'kg-label']);
@@ -491,13 +522,22 @@ echo html_writer::tag('div', '', ['id' => 'ml-e-materialien-current', 'class' =>
 echo html_writer::end_div();
 echo html_writer::start_div('field-card');
 echo html_writer::tag('label', 'Material/Technik', ['for' => 'ml-e-materialtechnik', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'ml-e-materialtechnik', 'class' => 'kg-input', 'rows' => '10', 'autocomplete' => 'off']);
+echo html_writer::tag('textarea', '', [
+    'id' => 'ml-e-materialtechnik',
+    'class' => 'kg-input',
+    'rows' => '10',
+    'autocomplete' => 'off',
+]);
 echo html_writer::end_div();
 echo html_writer::end_div();
 echo html_writer::end_tag('details');
 
 echo html_writer::start_div('kg-row');
-echo html_writer::tag('button', 'Änderungen speichern', ['type' => 'button', 'id' => 'ml-save', 'class' => 'kg-btn kg-btn-primary']);
+echo html_writer::tag('button', 'Änderungen speichern', [
+    'type' => 'button',
+    'id' => 'ml-save',
+    'class' => 'kg-btn kg-btn-primary',
+]);
 echo html_writer::tag('button', 'Abbrechen', ['type' => 'button', 'id' => 'ml-cancel', 'class' => 'kg-btn']);
 echo html_writer::end_div();
 
@@ -510,7 +550,7 @@ echo html_writer::end_div(); // Ende #ml-browse (wandert zwischen den Tabs).
 
 echo html_writer::end_div(); // Ende Tab 1 (#ml-tab-local).
 
-// ---- Tab 2: Methodensammlungen (globale Bibliothek, immer durchsuchbar) --
+// Tab 2: Methodensammlungen (globale Bibliothek, immer durchsuchbar).
 // D29/D33: globale Bibliothek - immer durchsuchbar, kein Vor-Import einer
 // ganzen Methoden-Sammlung noetig; Uebernehmen legt sofort eine lokale Kopie an.
 echo html_writer::start_div('ml-tabpanel kg-hidden', ['id' => 'ml-tab-collections', 'role' => 'tabpanel']);
@@ -527,7 +567,7 @@ echo html_writer::tag('div', '', ['id' => 'gl-list', 'class' => 'kg-library-list
 echo html_writer::end_div();
 echo html_writer::end_div(); // Ende Tab 2 (#ml-tab-collections).
 
-// ---- Tab 3: Globale Seminarkonzepte (bereits importierte, D55) -----------
+// Tab 3: Globale Seminarkonzepte (bereits importierte, D55).
 // D55: zeigt nur die Seminarkonzepte, die bereits über den Import (D32,
 // Import/Export-Tab) in den lokalen Bestand geholt wurden - kein Import hier.
 // Panel nur ausgeben, wenn der zugehörige Tab existiert (mindestens ein

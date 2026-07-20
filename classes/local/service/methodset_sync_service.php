@@ -278,7 +278,12 @@ class methodset_sync_service {
             return;
         }
 
-        $newversion = $DB->get_record('local_kgen_methodset_ver', ['id' => $newversionid], 'id,methodsetid,versionnum', IGNORE_MISSING);
+        $newversion = $DB->get_record(
+            'local_kgen_methodset_ver',
+            ['id' => $newversionid],
+            'id,methodsetid,versionnum',
+            IGNORE_MISSING
+        );
         $fallbackoldversion = 0;
         if ($newversion && (int)$newversion->methodsetid === $methodsetid) {
             $previous = $DB->get_record_sql(
@@ -377,7 +382,8 @@ class methodset_sync_service {
             }
 
             $isfrozen = !empty($syncmeta['frozen']);
-            $sourcehashes = isset($syncmeta['sourcehashes']) && is_array($syncmeta['sourcehashes']) ? $syncmeta['sourcehashes'] : [];
+            $sourcehashes = isset($syncmeta['sourcehashes']) && is_array($syncmeta['sourcehashes'])
+                ? $syncmeta['sourcehashes'] : [];
             // Cards linked before attachments were tracked carry no baseline for them. A
             // missing baseline counts as "not changed locally" and would let the incoming
             // list delete locally added files. The baseline is what the set looked like at
@@ -645,6 +651,13 @@ class methodset_sync_service {
         return $aliases[$key] ?? $phase;
     }
 
+    /**
+     * Zerlegt ein Mehrfachfeld in eine Liste eindeutiger, bereinigter Einzelwerte.
+     *
+     * @param string|null $value Rohwert, getrennt durch ##, Zeilenumbrueche, Kommas oder Semikola.
+     * @param bool $normalizephase True, wenn die Einzelwerte als Seminarphase normalisiert werden sollen.
+     * @return array Liste der bereinigten Werte ohne Leereintraege und ohne Dubletten.
+     */
     private function split_multi_text(?string $value, bool $normalizephase = false): array {
         if ($value === null) {
             return [];

@@ -134,7 +134,7 @@ final class backup_restore_test extends advanced_testcase {
         $element = $xml->seminarplaner;
         $this->assertNotNull($element, 'Das Backup enthaelt kein <seminarplaner>-Element.');
 
-        // 'id' ist der Schluessel des Elements und steht als Attribut, nicht als
+        // Das Feld 'id' ist der Schluessel des Elements und steht als Attribut, nicht als
         // Kindelement - alle uebrigen Spalten muessen als Kindelement auftauchen.
         $exempt = ['id'];
         $missing = [];

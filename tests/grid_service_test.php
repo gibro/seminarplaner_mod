@@ -144,7 +144,7 @@ final class grid_service_test extends advanced_testcase {
                     // Zwei Einheiten desselben Bausteins (45 + 60 Minuten) ….
                     'p1' => ['typ' => 'einheit', 'bausteinid' => 'b1', 'titel' => 'Teil 1', 'dauer' => 45],
                     'p2' => ['typ' => 'einheit', 'bausteinid' => 'b1', 'titel' => 'Teil 2', 'dauer' => 60],
-                    // … gefolgt von einer freien Einheit.
+                    // ... gefolgt von einer freien Einheit.
                     'p3' => ['typ' => 'einheit', 'titel' => 'Fallbeispiel', 'dauer' => 30],
                 ],
                 'bausteine' => ['b1' => ['titel' => 'Grundlagen', 'unterthemen' => '']],

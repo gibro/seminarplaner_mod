@@ -24,12 +24,15 @@
 
 require_once(__DIR__ . '/bootstrap.php');
 
-const MOD_SEMINARPLANER_UPLOAD_MAX_BYTES = 10485760; // 10 MB.
+/** @var int Maximale Groesse eines hochgeladenen Anhangs in Bytes (10 MB). */
+const MOD_SEMINARPLANER_UPLOAD_MAX_BYTES = 10485760;
+/** @var string[] Dateiendungen, die als Anhang nicht hochgeladen werden duerfen. */
 const MOD_SEMINARPLANER_UPLOAD_BLOCKED_EXTENSIONS = [
     'php', 'php3', 'php4', 'php5', 'phtml', 'phar', 'cgi', 'pl', 'py', 'rb',
     'sh', 'bash', 'bat', 'cmd', 'com', 'exe', 'msi', 'jsp', 'asp', 'aspx',
     'htaccess', 'shtml',
 ];
+/** @var string[] Dateiendungen, die fuer H5P-Anhaenge erlaubt sind. */
 const MOD_SEMINARPLANER_UPLOAD_ALLOWED_H5P_EXTENSIONS = ['h5p'];
 
 try {

@@ -65,13 +65,19 @@ class import_export_validator {
             $value = is_scalar($legacyrow[$legacyfield]) ? trim((string)$legacyrow[$legacyfield]) : '';
             $mapped[$internalfield] = $value;
 
-            if ($strict && isset(self::STRICT_ENUMS[$legacyfield]) && $value !== '' && !in_array($value, self::STRICT_ENUMS[$legacyfield], true)) {
+            if (
+                $strict && isset(self::STRICT_ENUMS[$legacyfield]) && $value !== ''
+                && !in_array($value, self::STRICT_ENUMS[$legacyfield], true)
+            ) {
                 $warnings[] = "Unexpected value for {$legacyfield}: {$value}";
             }
         }
 
         foreach (array_keys($legacyrow) as $legacyfield) {
-            if (!array_key_exists($legacyfield, legacy_field_map::legacy_to_internal()) && !in_array($legacyfield, ['Materialien', 'H5P-Inhalt'], true)) {
+            if (
+                !array_key_exists($legacyfield, legacy_field_map::legacy_to_internal())
+                && !in_array($legacyfield, ['Materialien', 'H5P-Inhalt'], true)
+            ) {
                 $warnings[] = "Unmapped legacy field retained as custom metadata: {$legacyfield}";
             }
         }

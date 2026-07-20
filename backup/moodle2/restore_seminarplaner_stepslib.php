@@ -44,7 +44,10 @@ class restore_seminarplaner_activity_structure_step extends restore_activity_str
         $paths[] = new restore_path_element('activity_methodovr', '/activity/seminarplaner/activity_methodovrs/activity_methodovr');
         $paths[] = new restore_path_element('planning_state', '/activity/seminarplaner/planning_states/planning_state');
         $paths[] = new restore_path_element('grid', '/activity/seminarplaner/grids/grid');
-        $paths[] = new restore_path_element('grid_user_state', '/activity/seminarplaner/grids/grid/grid_user_states/grid_user_state');
+        $paths[] = new restore_path_element(
+            'grid_user_state',
+            '/activity/seminarplaner/grids/grid/grid_user_states/grid_user_state'
+        );
         $paths[] = new restore_path_element('roterfaden_state', '/activity/seminarplaner/roterfaden_states/roterfaden_state');
         $paths[] = new restore_path_element('method_filemap', '/activity/seminarplaner/method_filemaps/method_filemap');
         return $this->prepare_activity_structure($paths);
@@ -144,7 +147,7 @@ class restore_seminarplaner_activity_structure_step extends restore_activity_str
         $data->modifiedby = $this->map_userid_or_zero((int)($data->modifiedby ?? 0));
 
         $newid = (int)$DB->insert_record('kgen_grid', $data);
-        // "grid" mapping is used by child path resolution via get_new_parentid('grid').
+        // Das Mapping "grid" wird von der Kindpfad-Aufloesung ueber get_new_parentid('grid') genutzt.
         $this->set_mapping('grid', $oldid, $newid);
         // Keep explicit alias for direct lookup in map_gridid_or_zero().
         $this->set_mapping('kgen_grid', $oldid, $newid);

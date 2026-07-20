@@ -190,7 +190,7 @@ final class import_global_methodset_test extends advanced_testcase {
         $this->assertCount(1, $konzepte);
         $this->assertSame($setid, $konzepte[0]['setid']);
         $this->assertSame(2, $konzepte[0]['unitcount']);
-        // "Hatte nie einen Plan" ist nicht "Plan wurde geloescht".
+        // Wichtig: "Hatte nie einen Plan" ist nicht "Plan wurde geloescht".
         $this->assertFalse($konzepte[0]['hadplan']);
         $this->assertFalse($konzepte[0]['planexists']);
     }
@@ -216,7 +216,7 @@ final class import_global_methodset_test extends advanced_testcase {
                 'description' => 'Aus dem Konzept',
                 'state' => [
                     \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY => [
-                        // 'version' ist Pflicht: ohne sie gilt der Abschnitt als
+                        // Das Feld 'version' ist Pflicht: ohne sie gilt der Abschnitt als
                         // nicht vorhanden (sequence_state::has_sequence) und
                         // save_user_state ersetzt ihn beim Anlegen des Plans
                         // durch einen frisch konvertierten, leeren.

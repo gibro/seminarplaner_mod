@@ -170,7 +170,8 @@ class grid_service {
                 'days' => array_values($days),
                 'count' => count($overlaps),
             ];
-            throw new \invalid_parameter_exception(self::CONFLICT_MARKER . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            throw new \invalid_parameter_exception(self::CONFLICT_MARKER
+                . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         }
 
         // Empty sequence maps must stay JSON objects across the
@@ -216,11 +217,17 @@ class grid_service {
         }
 
         $currentdays = [];
-        if (isset($current['plan']) && is_array($current['plan']) && isset($current['plan']['days']) && is_array($current['plan']['days'])) {
+        if (
+            isset($current['plan']) && is_array($current['plan'])
+            && isset($current['plan']['days']) && is_array($current['plan']['days'])
+        ) {
             $currentdays = $current['plan']['days'];
         }
         $incomingdays = [];
-        if (isset($incoming['plan']) && is_array($incoming['plan']) && isset($incoming['plan']['days']) && is_array($incoming['plan']['days'])) {
+        if (
+            isset($incoming['plan']) && is_array($incoming['plan'])
+            && isset($incoming['plan']['days']) && is_array($incoming['plan']['days'])
+        ) {
             $incomingdays = $incoming['plan']['days'];
         }
 
@@ -249,7 +256,10 @@ class grid_service {
      */
     private function find_time_overlaps(array $state): array {
         $days = [];
-        if (isset($state['plan']) && is_array($state['plan']) && isset($state['plan']['days']) && is_array($state['plan']['days'])) {
+        if (
+            isset($state['plan']) && is_array($state['plan'])
+            && isset($state['plan']['days']) && is_array($state['plan']['days'])
+        ) {
             $days = $state['plan']['days'];
         }
         if (!$days) {
@@ -633,6 +643,15 @@ class grid_service {
         return $days;
     }
 
+    /**
+     * Veroeffentlicht den Roten Faden eines Seminarplans fuer die Teilnehmenden.
+     *
+     * @param int $cmid Kurs-Modul-Id der Aktivitaet.
+     * @param int $gridid Id des Seminarplans, dessen Roter Faden veroeffentlicht wird.
+     * @param array $state Zu veroeffentlichender Zustand; plan.days wird aus der Sequenz neu projiziert.
+     * @param int $userid Id der handelnden Nutzerin.
+     * @return bool True, wenn der Rote Faden gespeichert wurde.
+     */
     public function publish_roterfaden(int $cmid, int $gridid, array $state, int $userid): bool {
         if ($cmid <= 0 || $gridid <= 0 || $userid <= 0) {
             throw new coding_exception('Invalid input for publish_roterfaden');

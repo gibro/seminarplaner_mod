@@ -51,7 +51,9 @@ echo seminarplaner_render_tabs((int)$cm->id, 'roterfaden', $context);
 $vendorbase = $CFG->wwwroot . '/mod/seminarplaner/thirdparty';
 echo '<script>window.__kg_prev_define = window.define; try { window.define = undefined; } catch (e) {}</script>';
 echo '<script src="' . s($vendorbase . '/jspdf/jspdf.umd.min.js') . '"></script>';
-echo '<script>try { if (window.__kg_prev_define !== undefined) { window.define = window.__kg_prev_define; } else { delete window.define; } } catch (e) {} delete window.__kg_prev_define;</script>';
+echo '<script>try { if (window.__kg_prev_define !== undefined) { '
+    . 'window.define = window.__kg_prev_define; } else { delete window.define; } } '
+    . 'catch (e) {} delete window.__kg_prev_define;</script>';
 
 echo html_writer::start_div('kg-shell kg-rf-shell');
 
@@ -96,7 +98,12 @@ echo html_writer::tag(
 );
 echo html_writer::end_div();
 
-echo html_writer::tag('div', '', ['id' => 'kg-roterfaden-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
+echo html_writer::tag('div', '', [
+    'id' => 'kg-roterfaden-status',
+    'class' => 'kg-status',
+    'role' => 'status',
+    'aria-live' => 'polite',
+]);
 echo html_writer::tag('div', '', [
     'id' => 'kg-roterfaden-empty',
     'class' => 'sp-filter-status kg-hidden',

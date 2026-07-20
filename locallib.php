@@ -421,9 +421,21 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
         // - "durchfuehren": Roter Faden (nach Bibliothek),
         // - "verwalten": Einreichen (am Ende).
         $tabs = [
-            'grid' => ['label' => get_string('ueberblickmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/grid.php', 'icon' => 'calendar-range'],
-            'sequenz' => ['label' => get_string('sequenzmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/sequenz.php', 'icon' => 'list-checks'],
-            'methods' => ['label' => get_string('bibliothekmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/methodlibrary.php', 'icon' => 'layout-grid'],
+            'grid' => [
+                'label' => get_string('ueberblickmenu', 'mod_seminarplaner'),
+                'path' => '/mod/seminarplaner/grid.php',
+                'icon' => 'calendar-range',
+            ],
+            'sequenz' => [
+                'label' => get_string('sequenzmenu', 'mod_seminarplaner'),
+                'path' => '/mod/seminarplaner/sequenz.php',
+                'icon' => 'list-checks',
+            ],
+            'methods' => [
+                'label' => get_string('bibliothekmenu', 'mod_seminarplaner'),
+                'path' => '/mod/seminarplaner/methodlibrary.php',
+                'icon' => 'layout-grid',
+            ],
         ];
         if ($usecase === 'durchfuehren' && has_capability('mod/seminarplaner:viewroterfaden', $context)) {
             $tabs['roterfaden'] = [
@@ -432,13 +444,25 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
                 'icon' => 'route',
             ];
         }
-        $tabs['importexport'] = ['label' => get_string('importexport', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/importexport.php', 'icon' => 'arrow-left-right'];
+        $tabs['importexport'] = [
+            'label' => get_string('importexport', 'mod_seminarplaner'),
+            'path' => '/mod/seminarplaner/importexport.php',
+            'icon' => 'arrow-left-right',
+        ];
         if ($usecase === 'verwalten') {
-            $tabs['review'] = ['label' => get_string('einreichenmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/review.php', 'icon' => 'clipboard-check'];
+            $tabs['review'] = [
+                'label' => get_string('einreichenmenu', 'mod_seminarplaner'),
+                'path' => '/mod/seminarplaner/review.php',
+                'icon' => 'clipboard-check',
+            ];
         }
     } else if (has_capability('mod/seminarplaner:viewroterfaden', $context)) {
         $tabs = [
-            'roterfaden' => ['label' => get_string('roterfadenmenu', 'mod_seminarplaner'), 'path' => '/mod/seminarplaner/roterfaden.php', 'icon' => 'route'],
+            'roterfaden' => [
+                'label' => get_string('roterfadenmenu', 'mod_seminarplaner'),
+                'path' => '/mod/seminarplaner/roterfaden.php',
+                'icon' => 'route',
+            ],
         ];
     }
 

@@ -124,7 +124,9 @@ $days = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', '
         <?php
         foreach ($days as $day) {
             $idattr = 'sp-day-' . strtolower(substr($day, 0, 2));
-            echo '<label class="sp-day-checkbox"><input type="checkbox" name="days" value="' . s($day) . '" id="' . s($idattr) . '"><span>' . s($day) . '</span></label>';
+            echo '<label class="sp-day-checkbox">'
+                . '<input type="checkbox" name="days" value="' . s($day) . '" id="' . s($idattr) . '">'
+                . '<span>' . s($day) . '</span></label>';
         }
         ?>
       </div>
@@ -144,13 +146,17 @@ $days = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', '
       <h3>Seminarzeiten</h3>
       <div class="sp-time-range sp-anchor-times">
         <span class="sp-anchor-label">Vormittag</span>
-        <label class="sp-modal__field"><span class="sp-modal__label">von</span><input type="time" name="vormittagStart" id="sp-config-vm-start" class="kg-input" value="08:30"></label>
-        <label class="sp-modal__field"><span class="sp-modal__label">bis</span><input type="time" name="vormittagEnd" id="sp-config-vm-end" class="kg-input" value="12:30"></label>
+        <label class="sp-modal__field"><span class="sp-modal__label">von</span><input type="time" name="vormittagStart"
+            id="sp-config-vm-start" class="kg-input" value="08:30"></label>
+        <label class="sp-modal__field"><span class="sp-modal__label">bis</span><input type="time" name="vormittagEnd"
+            id="sp-config-vm-end" class="kg-input" value="12:30"></label>
       </div>
       <div class="sp-time-range sp-anchor-times">
         <span class="sp-anchor-label">Nachmittag</span>
-        <label class="sp-modal__field"><span class="sp-modal__label">von</span><input type="time" name="nachmittagStart" id="sp-config-nm-start" class="kg-input" value="13:15"></label>
-        <label class="sp-modal__field"><span class="sp-modal__label">bis</span><input type="time" name="nachmittagEnd" id="sp-config-nm-end" class="kg-input" value="17:30"></label>
+        <label class="sp-modal__field"><span class="sp-modal__label">von</span><input type="time" name="nachmittagStart"
+            id="sp-config-nm-start" class="kg-input" value="13:15"></label>
+        <label class="sp-modal__field"><span class="sp-modal__label">bis</span><input type="time" name="nachmittagEnd"
+            id="sp-config-nm-end" class="kg-input" value="17:30"></label>
       </div>
       <label class="kg-label kg-inline-checkbox">
         <input type="checkbox" name="firstDayAfternoonOnly" id="sp-config-first-arrival">
@@ -257,8 +263,8 @@ echo html_writer::end_div();
 echo html_writer::tag('div', '', ['id' => 'sq-plan-info', 'class' => 'sq-toolbar__info']);
 echo html_writer::end_div();
 
-echo html_writer::end_div(); // .sq-head__body
-echo html_writer::end_div(); // .sq-head
+echo html_writer::end_div(); // Ende .sq-head__body.
+echo html_writer::end_div(); // Ende .sq-head.
 
 // D61: Seminarziele des Gesamtplans (aufklappbar, von sequenz.js gefüllt).
 echo html_writer::tag('div', '', ['id' => 'sq-goals', 'class' => 'sq-goals']);
