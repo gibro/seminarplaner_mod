@@ -453,7 +453,8 @@ function(Ajax, Notification, LernzielEditor) {
             }
             const row = document.createElement('label');
             row.className = 'kg-tag-option';
-            row.innerHTML = `<input type="checkbox" value="${escapeHtml(methodid)}" data-kg-form-multi-option="1"><span>${escapeHtml(title)}</span>`;
+            row.innerHTML = `<input type="checkbox" value="${escapeHtml(methodid)}"
+                data-kg-form-multi-option="1"><span>${escapeHtml(title)}</span>`;
             host.appendChild(row);
         });
         host.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
@@ -1033,17 +1034,23 @@ function(Ajax, Notification, LernzielEditor) {
             }
             const card = document.createElement('div');
             const cognitiveLevel = cognitiveLevelOf(m);
-            card.className = 'kg-library-card sp-card' + (cognitiveLevel ? ` sp-level-${cognitiveLevel}` : '') + phaseClassOf(m.seminarphase);
+            card.className = 'kg-library-card sp-card'
+                + (cognitiveLevel ? ` sp-level-${cognitiveLevel}` : '')
+                + phaseClassOf(m.seminarphase);
             card.setAttribute('data-id', String(m.id));
             card.draggable = true;
             const pendingUpdate = hasPendingUpdate(m);
             const showlock = shouldShowFreezeLock(m);
             const frozen = showlock ? isFrozenState(m._kgsync, true) : false;
             const freezeaction = showlock
-                ? `<button type="button" class="sq-menu__item" data-act="freeze" title="Schützt diese Karte beim Übernehmen von Updates vor dem Überschreiben.">${ML_MENU_ICONS.lock}<span>${frozen ? 'Fixierung lösen' : 'Lokal fixieren'}</span></button>`
+                ? `<button type="button" class="sq-menu__item" data-act="freeze"
+                    title="Schützt diese Karte beim Übernehmen von Updates vor dem Überschreiben.">\
+${ML_MENU_ICONS.lock}<span>${frozen ? 'Fixierung lösen' : 'Lokal fixieren'}</span></button>`
                 : '';
             const updatehint = pendingUpdate
-                ? `<div class="ml-card-updatehint" title="Übernehmen über &bdquo;Ausstehende Updates übernehmen&ldquo; im Tab Import/Export. Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügbar</div>`
+                ? `<div class="ml-card-updatehint"
+                    title="Übernehmen über &bdquo;Ausstehende Updates übernehmen&ldquo; im Tab Import/Export. \
+Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügbar</div>`
                 : '';
             const tagChips = splitMulti(m.tags)
                 .map((tag) => `<span class="ml-card-tag">${escapeHtml(tag)}</span>`)
@@ -1053,7 +1060,8 @@ function(Ajax, Notification, LernzielEditor) {
             }
             card.innerHTML = `
               <label class="ml-card-select">
-                <input type="checkbox" class="ml-card-select-input" ${selectedIds.has(String(m.id)) ? 'checked' : ''} aria-label="Seminareinheit auswählen">
+                <input type="checkbox" class="ml-card-select-input"
+                  ${selectedIds.has(String(m.id)) ? 'checked' : ''} aria-label="Seminareinheit auswählen">
               </label>
               <div class="ml-card-head">
                 <span class="ml-card-drag-handle" title="Reihenfolge per Drag-and-drop ändern" aria-hidden="true">
@@ -1067,10 +1075,13 @@ function(Ajax, Notification, LernzielEditor) {
                   <details class="ml-card-menu sq-menu">
                     <summary class="sq-menu__btn" aria-label="Aktionen" title="Weitere Aktionen">⋮</summary>
                     <div class="sq-menu__panel" role="menu">
-                      <button type="button" class="sq-menu__item" data-act="edit">${ML_MENU_ICONS.edit}<span>Bearbeiten</span></button>
-                      <button type="button" class="sq-menu__item" data-act="overwrite-import">${ML_MENU_ICONS.replace}<span>Aus Datei ersetzen…</span></button>
+                      <button type="button" class="sq-menu__item"
+                        data-act="edit">${ML_MENU_ICONS.edit}<span>Bearbeiten</span></button>
+                      <button type="button" class="sq-menu__item"
+                        data-act="overwrite-import">${ML_MENU_ICONS.replace}<span>Aus Datei ersetzen…</span></button>
                       ${freezeaction}
-                      <button type="button" class="sq-menu__item sq-menu__item--danger" data-act="delete">${ML_MENU_ICONS.remove}<span>Löschen</span></button>
+                      <button type="button" class="sq-menu__item sq-menu__item--danger"
+                        data-act="delete">${ML_MENU_ICONS.remove}<span>Löschen</span></button>
                     </div>
                   </details>
                 </div>
@@ -1085,7 +1096,8 @@ function(Ajax, Notification, LernzielEditor) {
               </div>
               <div class="ml-card-footer">
                 <span class="ml-card-modified">Letzte Änderung: ${escapeHtml(formatRelativeModified(m.timemodified))}</span>
-                <button type="button" class="ml-card-details" data-act="details">Details <span class="ml-card-details__chevron" aria-hidden="true">›</span></button>
+                <button type="button" class="ml-card-details" data-act="details">Details <span
+                  class="ml-card-details__chevron" aria-hidden="true">›</span></button>
               </div>
             `;
 
@@ -1411,7 +1423,8 @@ function(Ajax, Notification, LernzielEditor) {
             const prepareddraft = Number(materialdraft.value || 0);
             materialdraft.value = String(prepareddraft || 0);
             if (!prepareddraft) {
-                setStatus('Dateien konnten nicht zum Bearbeiten vorbereitet werden. Bitte Seminareinheit erneut über "Bearbeiten" öffnen.', true);
+                setStatus('Dateien konnten nicht zum Bearbeiten vorbereitet werden. '
+                    + 'Bitte Seminareinheit erneut über "Bearbeiten" öffnen.', true);
             }
         }
         if (materialcurrent) {
@@ -2424,7 +2437,7 @@ function(Ajax, Notification, LernzielEditor) {
         return hits;
     };
 
-    const renderAllSearch = (cmid) => {
+    const renderAllSearch = () => {
         const input = bySel('#ml-allsearch');
         const block = bySel('#ml-allsearch-block');
         const host = bySel('#ml-allsearch-list');
@@ -2474,7 +2487,7 @@ function(Ajax, Notification, LernzielEditor) {
         const input = bySel('#ml-allsearch');
         const host = bySel('#ml-allsearch-list');
         if (input) {
-            input.addEventListener('input', () => renderAllSearch(cmid));
+            input.addEventListener('input', () => renderAllSearch());
         }
         if (host) {
             host.addEventListener('click', (event) => {
