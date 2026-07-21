@@ -5284,6 +5284,12 @@ details[open] > summary .sq-tri,
    welchem Bereich ein Treffer stammt - ohne es waeren die Zeilen nicht
    auseinanderzuhalten. */
 .ml-allsearch { flex: 1 1 320px; }
+/* Anlegen-Button und Suchfeld stehen nebeneinander, aber nur das Suchfeld hat
+   ein Label darueber. Bei align-items:center rutscht das Eingabefeld dadurch
+   tiefer als der Button. Unten ausrichten und gleiche Hoehe geben, damit beide
+   Felder buendig auf einer Linie liegen. */
+#ml-create-row { align-items: flex-end; }
+#ml-create-row .kg-btn { min-height: 40px; }
 .ml-allsearch-row {
     display: flex;
     align-items: center;
