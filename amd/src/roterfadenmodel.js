@@ -330,6 +330,13 @@ define([], function() {
         clockLabel: clockLabel,
         durationLabel: durationLabel,
 
+        // Fuer livemodel.js mit herausgegeben: die Live-Ansicht rechnet die
+        // Uhrzeiten aus denselben Ankerzeiten wie der Rote Faden. Eine eigene
+        // Ableitung waere die fuenfte Kopie derselben Regel gewesen.
+        parseClock: parseClock,
+        phaseKey: phaseKey,
+        deriveAnkerzeiten: deriveAnkerzeiten,
+
         /**
          * Tage/Anker/Bloecke aus einem veroeffentlichten Roter-Faden-Snapshot ableiten.
          *

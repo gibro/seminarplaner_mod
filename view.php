@@ -49,5 +49,14 @@ if (
     redirect(new moodle_url('/mod/seminarplaner/methodlibrary.php', ['id' => $cm->id]));
 }
 
+// D69: Wer den Plan nur durchfuehrt, landet im Souffleur — der Rote Faden ist
+// die Teilnehmenden-Sicht und bleibt Einstieg fuer alle uebrigen.
+if (
+    !has_capability('mod/seminarplaner:viewroterfaden', $context)
+    && has_capability('mod/seminarplaner:viewlive', $context)
+) {
+    redirect(new moodle_url('/mod/seminarplaner/live.php', ['id' => $cm->id]));
+}
+
 require_capability('mod/seminarplaner:viewroterfaden', $context);
 redirect(new moodle_url('/mod/seminarplaner/roterfaden.php', ['id' => $cm->id]));

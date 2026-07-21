@@ -86,6 +86,12 @@ echo html_writer::tag('button', 'Einrichtung', [
     'type' => 'button', 'id' => 'sq-edit-setup', 'class' => 'kg-btn',
     'title' => 'Tage und Seminarzeiten dieses Seminarplans anpassen',
 ]);
+// D67: Kopieren steht bei den übrigen plan-bezogenen Aktionen, nicht in
+// einer eigenen Ansicht – hier erwarten Referentinnen alles zum Seminarplan.
+echo html_writer::tag('button', 'Kopieren', [
+    'type' => 'button', 'id' => 'sq-copy-plan', 'class' => 'kg-btn',
+    'title' => 'Eine eigenständige Zweitfassung dieses Seminarplans anlegen',
+]);
 echo html_writer::tag('button', 'Seminarplan löschen', [
     'type' => 'button', 'id' => 'sq-delete-plan', 'class' => 'kg-btn kg-btn--outline-red',
     'title' => 'Den aktuell gewählten Seminarplan löschen',

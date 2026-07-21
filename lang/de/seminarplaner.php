@@ -29,6 +29,7 @@ $string['pluginadministration'] = 'Seminarplaner-Administration';
 $string['seminarplaner:addinstance'] = 'Neue Seminarplaner-Aktivität hinzufügen';
 $string['seminarplaner:view'] = 'Seminarplaner anzeigen';
 $string['seminarplaner:viewroterfaden'] = 'Roter-Faden-Ansicht anzeigen';
+$string['seminarplaner:viewlive'] = 'Live-Ansicht für die Durchführung anzeigen';
 $string['seminarplaner:managemethods'] = 'Seminareinheiten verwalten';
 $string['seminarplaner:managegrids'] = 'Seminarpläne verwalten';
 $string['seminarplaner:overrideglobalset'] = 'Globale Konzepte lokal überschreiben';
@@ -83,13 +84,26 @@ $string['usecase'] = 'Wozu brauchst du den Seminarplaner?';
 $string['usecase_help'] = 'Die Auswahl steuert, welche Tabs in dieser Aktivität angezeigt werden:
 
 * **Ein Seminar konzipieren:** Überblick, Sequenz, Bibliothek, Import/Export
-* **Ein konzipiertes Seminar durchführen:** Überblick, Sequenz, Bibliothek, Roter Faden, Import/Export
+* **Ein konzipiertes Seminar durchführen:** Überblick, Sequenz, Bibliothek, Live, Roter Faden, Import/Export
 * **Ein globales Seminarkonzept verwalten:** Überblick, Sequenz, Bibliothek, Import/Export, Einreichen
 
-Der Rote Faden erscheint nur mit der entsprechenden Berechtigung.';
+Live und Roter Faden erscheinen nur mit der jeweiligen Berechtigung.';
 $string['usecase_konzipieren'] = 'Ein Seminar konzipieren';
 $string['usecase_durchfuehren'] = 'Ein konzipiertes Seminar durchführen';
 $string['usecase_verwalten'] = 'Ein globales Seminarkonzept verwalten';
+$string['livemenu'] = 'Live';
+$string['live_intro'] = 'Der Souffleur für die Durchführung: Du startest selbst und blätterst manuell weiter — wie im Moderationsmodus einer Präsentation. Die Ansicht ist rein lesend, sie verändert den Seminarplan nicht.';
+$string['live_planlabel'] = 'Seminarplan';
+$string['live_startatlabel'] = 'Beginnen bei';
+$string['live_startbutton'] = 'Durchführung starten';
+$string['live_empty'] = 'In diesem Seminarplan ist noch nichts platziert.';
+$string['live_now'] = 'Läuft gerade';
+$string['live_next'] = 'Weiter';
+$string['live_prev'] = 'Zurück';
+$string['live_showclock'] = 'Uhrzeit anzeigen';
+$string['live_fullscreen'] = 'Vollbild';
+$string['live_quit'] = 'Beenden';
+$string['live_keyhint'] = 'Tastatur: ← und → oder Leertaste blättern.';
 $string['roterfaden_empty'] = 'Bisher wurde kein Roter Faden veröffentlicht';
 $string['roterfaden_publishlabel'] = 'Seminarplan als roten Faden veröffentlichen';
 $string['roterfaden_theme_label'] = 'Timeline-Stil';

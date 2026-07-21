@@ -24,6 +24,7 @@ Lucide icons used in this plugin view:
 - blocks.svg
 - arrow-left-right.svg
 - clipboard-check.svg
+- presentation.svg
 
 Source: https://github.com/lucide-icons/lucide
 License: ISC (see LICENSE in this directory)

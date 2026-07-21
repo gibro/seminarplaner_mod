@@ -180,4 +180,174 @@ final class grid_service_test extends advanced_testcase {
         $this->assertTrue($service->set_roterfaden_visibility(1005, false, 9));
         $this->assertFalse($service->get_roterfaden_state(1005)['ispublished']);
     }
+
+    /**
+     * D67: Die Kopie traegt den Zustand des Originals, ist aber ein eigener Plan.
+     */
+    public function test_copy_grid_duplicates_state_into_an_independent_plan(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $sourceid = $service->create_grid(1006, 'Grundkurs', 4, 'Beschreibung');
+        $service->save_user_state($sourceid, 4, [
+            'config' => ['days' => ['Montag'], 'ankerzeiten' => ['vormittag' => ['start' => '09:00']]],
+            'seminarziele' => [['id' => 'z1', 'text' => 'Ziel eins']],
+        ]);
+
+        $copy = $service->copy_grid(1006, $sourceid, 4);
+
+        $this->assertGreaterThan(0, $copy['gridid']);
+        $this->assertNotSame($sourceid, $copy['gridid']);
+        $this->assertSame('Grundkurs (Kopie)', $copy['name']);
+
+        // Anker-Zeiten (D45) und Seminarziele (D61) sind mitgekommen.
+        $copied = $service->get_user_state($copy['gridid'], 4);
+        $this->assertSame('09:00', $copied['state']['config']['ankerzeiten']['vormittag']['start']);
+        $this->assertSame('Ziel eins', $copied['state']['seminarziele'][0]['text']);
+        $this->assertSame('Beschreibung', $service->list_grids(1006)[$copy['gridid']]->description);
+
+        // Eigenstaendig: eine Aenderung an der Kopie laesst das Original kalt.
+        $service->save_user_state($copy['gridid'], 4, ['seminarziele' => [['id' => 'z1', 'text' => 'Anders']]]);
+        $original = $service->get_user_state($sourceid, 4);
+        $this->assertSame('Ziel eins', $original['state']['seminarziele'][0]['text']);
+    }
+
+    /**
+     * D67: Mehrfaches Kopieren zaehlt hoch, statt gleichnamige Plaene zu erzeugen.
+     */
+    public function test_copy_grid_names_stay_distinguishable(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $sourceid = $service->create_grid(1007, 'Grundkurs', 4);
+        $service->save_user_state($sourceid, 4, ['config' => ['days' => ['Montag']]]);
+
+        $first = $service->copy_grid(1007, $sourceid, 4);
+        $second = $service->copy_grid(1007, $sourceid, 4);
+        // Die Kopie einer Kopie stapelt den Zusatz nicht.
+        $third = $service->copy_grid(1007, $first['gridid'], 4);
+
+        $this->assertSame('Grundkurs (Kopie)', $first['name']);
+        $this->assertSame('Grundkurs (Kopie 2)', $second['name']);
+        $this->assertSame('Grundkurs (Kopie 3)', $third['name']);
+    }
+
+    /**
+     * D35: Die Uebersetzungs-Anzeige gehoert zum Umstieg, nicht zu einer frischen Kopie.
+     */
+    public function test_copy_grid_marks_intro_as_seen(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $sourceid = $service->create_grid(1008, 'Grundkurs', 4);
+        $service->save_user_state($sourceid, 4, ['config' => ['days' => ['Montag']]]);
+
+        $copy = $service->copy_grid(1008, $sourceid, 4);
+
+        $this->assertTrue($service->get_intro_seen($copy['gridid'], 4));
+    }
+
+    /**
+     * D9/D19: Baustein-Stammdaten kommen auch ohne den einmaligen Upgrade-Schritt an.
+     *
+     * Der Fehler dahinter: die Anreicherung lief nur im Schritt 2026070908,
+     * jede spaeter abgeleitete Sequenz blieb ohne Unterthemen und ohne die
+     * ehemaligen Lernziele des Bausteins.
+     */
+    public function test_baustein_master_data_arrives_without_the_upgrade_step(): void {
+        global $DB;
+        $this->resetAfterTest(true);
+
+        $cmid = 1011;
+        $DB->insert_record('kgen_planning_state', (object)[
+            'cmid' => $cmid,
+            'statejson' => json_encode(['units' => [[
+                'id' => 'u1',
+                'title' => 'Einstieg',
+                'topics' => 'Erwartungen; Ablauf',
+                'objectives' => 'Die Teilnehmenden können den Anlass benennen.',
+            ]]]),
+            'versionhash' => 'h',
+            'timecreated' => time(),
+            'timemodified' => time(),
+            'createdby' => 4,
+            'modifiedby' => 4,
+        ]);
+
+        $service = new grid_service();
+        $gridid = $service->create_grid($cmid, 'Nach dem Upgrade importiert', 4);
+        // Sequenz mit einem Baustein, der auf die Planungs-Unit zeigt, aber
+        // (wie nach einem Import) noch keine Stammdaten traegt.
+        $service->save_user_state($gridid, 4, ['sequenz' => [
+            'version' => 1,
+            'tage' => [],
+            'platzierungen' => [],
+            'einheitenauswahlen' => [],
+            'bausteine' => ['b1' => [
+                'titel' => '',
+                'unterthemen' => '',
+                'themenplanreferenz' => '',
+                'quelle' => ['unitid' => 'u1'],
+            ]],
+        ]]);
+
+        $baustein = $service->get_user_state($gridid, 4)['state']['sequenz']['bausteine']['b1'];
+        $this->assertSame('Erwartungen; Ablauf', $baustein['unterthemen']);
+        $this->assertSame('Die Teilnehmenden können den Anlass benennen.', $baustein['themenplanreferenz']);
+    }
+
+    /**
+     * D9/D19: Bewusst geleerte Felder bleiben leer - die Anreicherung laeuft nur einmal.
+     */
+    public function test_baustein_enrichment_does_not_refill_cleared_fields(): void {
+        global $DB;
+        $this->resetAfterTest(true);
+
+        $cmid = 1012;
+        $DB->insert_record('kgen_planning_state', (object)[
+            'cmid' => $cmid,
+            'statejson' => json_encode(['units' => [[
+                'id' => 'u1', 'title' => 'Einstieg', 'topics' => 'Erwartungen', 'objectives' => 'Altes Lernziel',
+            ]]]),
+            'versionhash' => 'h',
+            'timecreated' => time(),
+            'timemodified' => time(),
+            'createdby' => 4,
+            'modifiedby' => 4,
+        ]);
+
+        $service = new grid_service();
+        $gridid = $service->create_grid($cmid, 'Plan', 4);
+        $base = ['sequenz' => [
+            'version' => 1, 'tage' => [], 'platzierungen' => [], 'einheitenauswahlen' => [],
+            'bausteine' => ['b1' => [
+                'titel' => '', 'unterthemen' => '', 'themenplanreferenz' => '', 'quelle' => ['unitid' => 'u1'],
+            ]],
+        ]];
+        $service->save_user_state($gridid, 4, $base);
+
+        // Erste Uebernahme hat stattgefunden ...
+        $state = $service->get_user_state($gridid, 4)['state'];
+        $this->assertSame('Erwartungen', $state['sequenz']['bausteine']['b1']['unterthemen']);
+
+        // ... jetzt leert die Referentin das Feld bewusst.
+        $state['sequenz']['bausteine']['b1']['unterthemen'] = '';
+        $service->save_user_state($gridid, 4, $state);
+
+        $after = $service->get_user_state($gridid, 4)['state']['sequenz']['bausteine']['b1'];
+        $this->assertSame('', $after['unterthemen'], 'Geleertes Feld darf nicht wieder aufgefuellt werden.');
+    }
+
+    /**
+     * Ein Plan aus einer anderen Aktivitaet laesst sich nicht herueberkopieren.
+     */
+    public function test_copy_grid_rejects_foreign_plan(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $foreignid = $service->create_grid(1009, 'Fremd', 4);
+
+        $this->expectException(\invalid_parameter_exception::class);
+        $service->copy_grid(1010, $foreignid, 4);
+    }
 }

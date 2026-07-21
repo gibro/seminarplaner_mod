@@ -165,6 +165,13 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
     ],
+    'mod_seminarplaner_get_live_state' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'get_live_state',
+        'description' => 'Read plan list, sequence and live unit fields for the presenter view.',
+        'type' => 'read',
+        'ajax' => true,
+    ],
     'mod_seminarplaner_publish_roterfaden' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'publish_roterfaden',
@@ -176,6 +183,13 @@ $functions = [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'unpublish_roterfaden',
         'description' => 'Set Common Thread snapshot to not visible.',
+        'type' => 'write',
+        'ajax' => true,
+    ],
+    'mod_seminarplaner_copy_grid' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'copy_grid',
+        'description' => 'Copy a seminar plan inside the same Seminarplaner activity.',
         'type' => 'write',
         'ajax' => true,
     ],

@@ -437,6 +437,13 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
                 'icon' => 'layout-grid',
             ],
         ];
+        if ($usecase === 'durchfuehren' && has_capability('mod/seminarplaner:viewlive', $context)) {
+            $tabs['live'] = [
+                'label' => get_string('livemenu', 'mod_seminarplaner'),
+                'path' => '/mod/seminarplaner/live.php',
+                'icon' => 'presentation',
+            ];
+        }
         if ($usecase === 'durchfuehren' && has_capability('mod/seminarplaner:viewroterfaden', $context)) {
             $tabs['roterfaden'] = [
                 'label' => get_string('roterfadenmenu', 'mod_seminarplaner'),
@@ -456,14 +463,23 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
                 'icon' => 'clipboard-check',
             ];
         }
-    } else if (has_capability('mod/seminarplaner:viewroterfaden', $context)) {
-        $tabs = [
-            'roterfaden' => [
+    } else {
+        // Reine Durchfuehrende (D69): kein Bearbeiten, aber Souffleur und
+        // Roter Faden — je nachdem, was ihre Rolle mitbringt.
+        if ($usecase === 'durchfuehren' && has_capability('mod/seminarplaner:viewlive', $context)) {
+            $tabs['live'] = [
+                'label' => get_string('livemenu', 'mod_seminarplaner'),
+                'path' => '/mod/seminarplaner/live.php',
+                'icon' => 'presentation',
+            ];
+        }
+        if (has_capability('mod/seminarplaner:viewroterfaden', $context)) {
+            $tabs['roterfaden'] = [
                 'label' => get_string('roterfadenmenu', 'mod_seminarplaner'),
                 'path' => '/mod/seminarplaner/roterfaden.php',
                 'icon' => 'route',
-            ],
-        ];
+            ];
+        }
     }
 
     $out = html_writer::start_div('kg-tabs');

@@ -37,6 +37,8 @@ class grid_service {
     private const SHARED_STATE_USERID = 0;
     /** @var string Marker prefix used by client conflict handling. */
     private const CONFLICT_MARKER = 'GRID_TIME_CONFLICT:';
+    /** @var string Key marking that Baustein master data was carried over once (D9/D19). */
+    public const ENRICHED_MARKER = 'stammdatenuebernommen';
 
     /** @var grid_repository */
     private $repository;
@@ -80,6 +82,147 @@ class grid_service {
         }
 
         return $this->repository->get_active_grids($cmid);
+    }
+
+    /**
+     * Carry Baustein master data from the planning state into the sequence (D9/D19).
+     *
+     * Until v2026072101 this only ever happened in the one-shot upgrade step
+     * 2026070908. Every sequence derived after that upgrade - an import, an
+     * old-format state healed on read, a plan created later - kept its
+     * Bausteine empty even though the planning state still held their
+     * Unterthemen and their former Lernziele. The same gap was already closed
+     * for {@see grid_to_sequence_converter::convert()} by deriving at the
+     * service choke points; this does the same for the enrichment.
+     *
+     * Runs at most once per plan, guarded by a marker inside the sequence
+     * section: the enrichment fills every empty field, so a repeated run
+     * would refill fields the user deliberately emptied.
+     *
+     * @param int $gridid Grid id the state belongs to.
+     * @param array $state Full grid state.
+     * @return array State, enriched and marked when it was still due.
+     */
+    private function enrich_bausteine_once(int $gridid, array $state): array {
+        if (!sequence_state::has_sequence($state)) {
+            return $state;
+        }
+        $sequenz = $state[sequence_state::STATE_KEY];
+        if (!is_array($sequenz) || !empty($sequenz[self::ENRICHED_MARKER])) {
+            return $state;
+        }
+
+        $grid = $this->repository->get_grid($gridid);
+        $cmid = $grid ? (int)$grid->cmid : 0;
+        if ($cmid > 0) {
+            $planning = (new planning_state_service())->get_state($cmid);
+            $units = $planning['state']['units'] ?? null;
+            if (is_array($units) && $units) {
+                $sequenz = (new grid_to_sequence_converter())->enrich_bausteine($sequenz, $units);
+            }
+        }
+
+        // Marked even when nothing was carried over: the question "is this
+        // plan still due?" is answered either way, and asking again would
+        // cost a planning state lookup on every read.
+        $sequenz[self::ENRICHED_MARKER] = true;
+        $state[sequence_state::STATE_KEY] = $sequenz;
+
+        return $state;
+    }
+
+    /**
+     * Copy one seminar plan inside the same activity (D67).
+     *
+     * The copy is a second, independent plan: it gets its own grid row and
+     * its own state, so sequence, anchors (D45) and seminar goals (D61) can
+     * be changed without touching the original. The library of units stays
+     * shared - it belongs to the activity, not to a single plan, so a copy
+     * refers to the same cards instead of duplicating the whole library.
+     *
+     * The state is copied verbatim rather than through save_user_state: this
+     * is a copy, not an edit, so it must not be rewritten by the save path's
+     * validation (a legacy plan that never passed through that path would
+     * otherwise leave an empty plan behind).
+     *
+     * @param int $cmid Course module id.
+     * @param int $gridid Grid id of the plan to copy.
+     * @param int $userid User id of the actor.
+     * @return array Array with keys gridid and name of the new plan.
+     */
+    public function copy_grid(int $cmid, int $gridid, int $userid): array {
+        if ($cmid <= 0 || $gridid <= 0 || $userid <= 0) {
+            throw new coding_exception('Invalid input for copy_grid');
+        }
+        $source = $this->repository->get_grid($gridid);
+        if (!$source || (int)$source->cmid !== $cmid || (int)$source->isarchived === 1) {
+            throw new \invalid_parameter_exception('Grid not found');
+        }
+
+        $name = $this->build_copy_name($cmid, (string)$source->name);
+        $newgridid = $this->repository->create_grid($cmid, $name, $userid, (string)($source->description ?? ''));
+
+        // Read through the service so a legacy plan without a sequence
+        // section (D20/D43) is derived once before it is copied - otherwise
+        // the copy would open empty.
+        $state = $this->get_user_state($gridid, $userid);
+        $payload = is_array($state['state'] ?? null) ? $state['state'] : [];
+        if ($payload) {
+            $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($json === false) {
+                throw new coding_exception('Failed to encode copied plan state');
+            }
+            $this->repository->upsert_user_state(
+                $newgridid,
+                self::SHARED_STATE_USERID,
+                $json,
+                sha1($json . '|' . microtime(true))
+            );
+        }
+
+        // D35: the translation screen explains the switch from grid to
+        // sequence logic. A plan the user just created a moment ago needs no
+        // such explanation, so the marker is set right away.
+        $this->mark_intro_seen($newgridid, $userid);
+
+        return ['gridid' => $newgridid, 'name' => $name];
+    }
+
+    /**
+     * Build the name of a copy, keeping it unique inside the activity (D67).
+     *
+     * First copy is "<name> (Kopie)", further ones count up. Without the
+     * counter a second copy would be indistinguishable from the first in the
+     * plan dropdown (D46).
+     *
+     * @param int $cmid Course module id.
+     * @param string $sourcename Name of the plan being copied.
+     * @return string
+     */
+    private function build_copy_name(int $cmid, string $sourcename): string {
+        $taken = [];
+        foreach ($this->repository->get_active_grids($cmid) as $grid) {
+            $taken[\core_text::strtolower(trim((string)$grid->name))] = true;
+        }
+        // A copy of a copy keeps one suffix instead of stacking them.
+        $base = preg_replace('/\s*\(Kopie(\s+\d+)?\)$/u', '', trim($sourcename));
+        $base = ($base === '' || $base === null) ? trim($sourcename) : $base;
+
+        $candidate = $base . ' (Kopie)';
+        $counter = 1;
+        while (isset($taken[\core_text::strtolower($candidate)])) {
+            $counter++;
+            $candidate = $base . ' (Kopie ' . $counter . ')';
+        }
+
+        // kgen_grid.name holds 255 characters; trim the base, not the suffix,
+        // so the copy stays recognisable as one.
+        if (\core_text::strlen($candidate) > 255) {
+            $suffix = \core_text::substr($candidate, \core_text::strlen($base));
+            $candidate = \core_text::substr($base, 0, 255 - \core_text::strlen($suffix)) . $suffix;
+        }
+
+        return $candidate;
     }
 
     /**
@@ -156,6 +299,9 @@ class grid_service {
         if (!sequence_state::has_sequence($state)) {
             $state[sequence_state::STATE_KEY] = (new grid_to_sequence_converter())->convert($state);
         }
+
+        // Same choke point idea for the Baustein master data (D9/D19).
+        $state = $this->enrich_bausteine_once($gridid, $state);
 
         $overlaps = $this->find_time_overlaps($state);
         if ($overlaps) {
@@ -419,6 +565,13 @@ class grid_service {
         // next save) so existing broken imports recover on their next open.
         if ($decoded && !sequence_state::has_sequence($decoded)) {
             $decoded[sequence_state::STATE_KEY] = (new grid_to_sequence_converter())->convert($decoded);
+        }
+
+        // Baustein master data (D9/D19), same self-heal reasoning as above:
+        // derived on read so an unenriched plan shows its Unterthemen and
+        // former Lernziele right away, persisted by the next save.
+        if ($decoded) {
+            $decoded = $this->enrich_bausteine_once($gridid, $decoded);
         }
 
         // The read path re-encodes the decoded state for the client; keep

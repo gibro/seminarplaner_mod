@@ -55,6 +55,21 @@ $capabilities = [
             'manager' => CAP_ALLOW,
         ],
     ],
+    // D69: Die Live-Ansicht (Souffleur) zeigt den Arbeitsauftrag aus dem
+    // Ablauf-Feld, die Material/Technik-Checkliste und die Materialien - also
+    // die Vorbereitungsseite des Plans, nicht die Teilnehmenden-Sicht. Deshalb
+    // eine eigene Berechtigung statt viewroterfaden: Wer nur durchfuehrt,
+    // bekommt eine Rolle mit dieser Berechtigung, ohne den Plan bearbeiten zu
+    // duerfen (managegrids); Teilnehmende bleiben aussen vor.
+    'mod/seminarplaner:viewlive' => [
+        'captype' => 'read',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes' => [
+            'teacher' => CAP_ALLOW,
+            'editingteacher' => CAP_ALLOW,
+            'manager' => CAP_ALLOW,
+        ],
+    ],
     'mod/seminarplaner:managemethods' => [
         'captype' => 'write',
         'contextlevel' => CONTEXT_MODULE,
