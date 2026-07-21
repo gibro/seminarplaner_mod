@@ -248,6 +248,97 @@ final class grid_service_test extends advanced_testcase {
     }
 
     /**
+     * D9/D19: Baustein-Stammdaten kommen auch ohne den einmaligen Upgrade-Schritt an.
+     *
+     * Der Fehler dahinter: die Anreicherung lief nur im Schritt 2026070908,
+     * jede spaeter abgeleitete Sequenz blieb ohne Unterthemen und ohne die
+     * ehemaligen Lernziele des Bausteins.
+     */
+    public function test_baustein_master_data_arrives_without_the_upgrade_step(): void {
+        global $DB;
+        $this->resetAfterTest(true);
+
+        $cmid = 1011;
+        $DB->insert_record('kgen_planning_state', (object)[
+            'cmid' => $cmid,
+            'statejson' => json_encode(['units' => [[
+                'id' => 'u1',
+                'title' => 'Einstieg',
+                'topics' => 'Erwartungen; Ablauf',
+                'objectives' => 'Die Teilnehmenden können den Anlass benennen.',
+            ]]]),
+            'versionhash' => 'h',
+            'timecreated' => time(),
+            'timemodified' => time(),
+            'createdby' => 4,
+            'modifiedby' => 4,
+        ]);
+
+        $service = new grid_service();
+        $gridid = $service->create_grid($cmid, 'Nach dem Upgrade importiert', 4);
+        // Sequenz mit einem Baustein, der auf die Planungs-Unit zeigt, aber
+        // (wie nach einem Import) noch keine Stammdaten traegt.
+        $service->save_user_state($gridid, 4, ['sequenz' => [
+            'version' => 1,
+            'tage' => [],
+            'platzierungen' => [],
+            'einheitenauswahlen' => [],
+            'bausteine' => ['b1' => [
+                'titel' => '',
+                'unterthemen' => '',
+                'themenplanreferenz' => '',
+                'quelle' => ['unitid' => 'u1'],
+            ]],
+        ]]);
+
+        $baustein = $service->get_user_state($gridid, 4)['state']['sequenz']['bausteine']['b1'];
+        $this->assertSame('Erwartungen; Ablauf', $baustein['unterthemen']);
+        $this->assertSame('Die Teilnehmenden können den Anlass benennen.', $baustein['themenplanreferenz']);
+    }
+
+    /**
+     * D9/D19: Bewusst geleerte Felder bleiben leer - die Anreicherung laeuft nur einmal.
+     */
+    public function test_baustein_enrichment_does_not_refill_cleared_fields(): void {
+        global $DB;
+        $this->resetAfterTest(true);
+
+        $cmid = 1012;
+        $DB->insert_record('kgen_planning_state', (object)[
+            'cmid' => $cmid,
+            'statejson' => json_encode(['units' => [[
+                'id' => 'u1', 'title' => 'Einstieg', 'topics' => 'Erwartungen', 'objectives' => 'Altes Lernziel',
+            ]]]),
+            'versionhash' => 'h',
+            'timecreated' => time(),
+            'timemodified' => time(),
+            'createdby' => 4,
+            'modifiedby' => 4,
+        ]);
+
+        $service = new grid_service();
+        $gridid = $service->create_grid($cmid, 'Plan', 4);
+        $base = ['sequenz' => [
+            'version' => 1, 'tage' => [], 'platzierungen' => [], 'einheitenauswahlen' => [],
+            'bausteine' => ['b1' => [
+                'titel' => '', 'unterthemen' => '', 'themenplanreferenz' => '', 'quelle' => ['unitid' => 'u1'],
+            ]],
+        ]];
+        $service->save_user_state($gridid, 4, $base);
+
+        // Erste Uebernahme hat stattgefunden ...
+        $state = $service->get_user_state($gridid, 4)['state'];
+        $this->assertSame('Erwartungen', $state['sequenz']['bausteine']['b1']['unterthemen']);
+
+        // ... jetzt leert die Referentin das Feld bewusst.
+        $state['sequenz']['bausteine']['b1']['unterthemen'] = '';
+        $service->save_user_state($gridid, 4, $state);
+
+        $after = $service->get_user_state($gridid, 4)['state']['sequenz']['bausteine']['b1'];
+        $this->assertSame('', $after['unterthemen'], 'Geleertes Feld darf nicht wieder aufgefuellt werden.');
+    }
+
+    /**
      * Ein Plan aus einer anderen Aktivitaet laesst sich nicht herueberkopieren.
      */
     public function test_copy_grid_rejects_foreign_plan(): void {

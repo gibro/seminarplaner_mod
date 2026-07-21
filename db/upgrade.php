@@ -323,5 +323,62 @@ function xmldb_seminarplaner_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026071552, 'seminarplaner');
     }
 
+    if ($oldversion < 2026072101) {
+        // D9/D19: Die Baustein-Stammdaten (Unterthemen, ehemalige Lernziele)
+        // wanderten bisher NUR im einmaligen Schritt 2026070908 aus dem
+        // Planungszustand in die Sequenz. Jeder Plan, dessen Sequenz danach
+        // entstand (Import, auf dem Lesepfad geheilter Altzustand, spaeter
+        // angelegt), blieb ohne sie - im Bestand nachweislich mehrere
+        // Bausteine mit gepflegten Lernzielen und Unterthemen, die in der
+        // Sequenz leer ankamen. Kuenftig erledigt das der Service an seinen
+        // Choke-Points; dieser Schritt holt den Rueckstand einmal nach und
+        // setzt an ALLEN Plaenen den Marker, damit der Service spaeter nichts
+        // wieder auffuellt, was jemand bewusst geleert hat.
+        $converter = new \mod_seminarplaner\local\sequence\grid_to_sequence_converter();
+        $statekey = \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY;
+        $marker = \mod_seminarplaner\local\service\grid_service::ENRICHED_MARKER;
+        $sql = "SELECT s.*, g.cmid
+                  FROM {kgen_grid_user_state} s
+                  JOIN {kgen_grid} g ON g.id = s.gridid
+                 WHERE s.userid = 0";
+        $planningcache = [];
+        $rs = $DB->get_recordset_sql($sql);
+        foreach ($rs as $record) {
+            $state = json_decode((string)$record->statejson, true);
+            if (
+                !is_array($state)
+                || !\mod_seminarplaner\local\sequence\sequence_state::has_sequence($state)
+                || !is_array($state[$statekey])
+            ) {
+                continue;
+            }
+            $sequenz = $state[$statekey];
+            $cmid = (int)$record->cmid;
+            if (!array_key_exists($cmid, $planningcache)) {
+                $planningrow = $DB->get_record('kgen_planning_state', ['cmid' => $cmid]);
+                $planning = $planningrow ? json_decode((string)$planningrow->statejson, true) : null;
+                $planningcache[$cmid] = is_array($planning) && is_array($planning['units'] ?? null)
+                    ? $planning['units'] : [];
+            }
+            if ($planningcache[$cmid]) {
+                $sequenz = $converter->enrich_bausteine($sequenz, $planningcache[$cmid]);
+            }
+            $sequenz[$marker] = true;
+            $state[$statekey] = $sequenz;
+            $json = json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($json === false) {
+                continue;
+            }
+            $record->statejson = $json;
+            $record->versionhash = sha1($json . '|baustein-enrich-2');
+            $record->timemodified = time();
+            unset($record->cmid);
+            $DB->update_record('kgen_grid_user_state', $record);
+        }
+        $rs->close();
+
+        upgrade_mod_savepoint(true, 2026072101, 'seminarplaner');
+    }
+
     return true;
 }

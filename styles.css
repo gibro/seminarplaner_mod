@@ -5442,6 +5442,15 @@ details[open] > summary .sq-tri,
     color: #5b6b79;
     white-space: pre-line;
 }
+/* D9: Zuordnen-Zeile unter dem Archivblock (Einheiten-Auswahl + Button). */
+.sq-archiv-assign {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+.sq-archiv-assign select { flex: 1 1 220px; min-width: 0; }
 .sq-modal__footer--split { justify-content: flex-start; }
 .sq-modal__footer-gap { flex: 1; }
 .sq-danger { color: #a02f2f; border-color: #d9b3b3; }

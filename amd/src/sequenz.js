@@ -3057,6 +3057,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                         this.saveBausteinEditor();
                     } else if (type === 'baustein-dissolve') {
                         this.dissolveBaustein(action.getAttribute('data-bid') || '');
+                    } else if (type === 'baustein-archiv-assign') {
+                        this.assignBausteinArchiv(action.getAttribute('data-bid') || '');
                     } else if (type === 'picker-create') {
                         // D50: aus dem Picker in den vollen Editor wechseln -
                         // dabei das Picker-Ziel (Anker oder Baustein) übernehmen.
@@ -3654,6 +3656,113 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 </div>`;
         }
 
+        // D9: Die Lernziele, die ein Baustein vor dem Umbau selbst trug, liegen
+        // seit der Migration im Feld `themenplanreferenz` - der Schluesselname
+        // ist historisch, gefuellt wird er ausschliesslich von der Migration
+        // (kein Themenplan-Import schreibt je hinein). Sie bleiben sichtbar,
+        // aber inaktiv, und werden nicht automatisch einer Einheit zugeordnet:
+        // welche Einheit das Ziel ist, weiss nur die Referentin.
+        renderBausteinArchiv(bid, baustein, referenz) {
+            if (!referenz) {
+                return '';
+            }
+            const label = 'Ehemalige Lernziele dieses Bausteins (aus der Umstellung, nicht änderbar)';
+            const block = `<div class="sq-readonly">${escapeHtml(referenz)}</div>`;
+            if (baustein.archivzugeordnet) {
+                return `
+                    <div class="sq-field">
+                      <label class="kg-label">${label}</label>
+                      ${block}
+                      <div class="sq-field__hint">Bereits einer Einheit zugeordnet.</div>
+                    </div>`;
+            }
+            const units = this.bausteinUnitChoices(bid);
+            if (!units.length) {
+                return `
+                    <div class="sq-field">
+                      <label class="kg-label">${label}</label>
+                      ${block}
+                      <div class="sq-field__hint">Sobald dieser Baustein eine Einheit enthält,
+                        kannst du die Lernziele hier einer davon zuordnen.</div>
+                    </div>`;
+            }
+            const options = units.map((unit) =>
+                `<option value="${escapeHtml(unit.ref)}">${escapeHtml(unit.titel)}</option>`).join('');
+            return `
+                <div class="sq-field">
+                  <label class="kg-label">${label}</label>
+                  ${block}
+                  <div class="sq-field__hint">Ehemalige Lernziele dieses Bausteins – einer Einheit zuordnen?
+                    Der Text wird unten an die Lernziele der gewählten Einheit angehängt.</div>
+                  <div class="sq-archiv-assign">
+                    <select class="kg-input" id="sq-b-archivziel">${options}</select>
+                    <button type="button" class="kg-btn" data-sq-action="baustein-archiv-assign"
+                      data-bid="${escapeHtml(bid)}">Zuordnen</button>
+                  </div>
+                </div>`;
+        }
+
+        // Einheiten, die aktuell in diesem Baustein liegen - als Ziel fuer die
+        // D9-Zuordnung. Fortsetzungen tauchen nur einmal auf.
+        bausteinUnitChoices(bid) {
+            const seen = {};
+            const out = [];
+            this.bausteinRuns(bid).forEach((run) => {
+                run.pids.forEach((pid) => {
+                    const placement = this.placement(pid);
+                    const auswahl = this.auswahl(placement);
+                    const ref = auswahl && auswahl.aktiv ? String(auswahl.aktiv) : '';
+                    if (!ref || seen[ref]) {
+                        return;
+                    }
+                    const card = this.methodCardForRef(ref);
+                    if (!card) {
+                        return;
+                    }
+                    seen[ref] = true;
+                    out.push({ref, titel: cardTitle(card) || 'Ohne Titel'});
+                });
+            });
+            return out;
+        }
+
+        // D9: den archivierten Text an die Lernziele der gewaehlten Einheit
+        // anhaengen. Achtung: Lernziele stehen auf der Einheiten-Karte, und die
+        // ist aktivitaetsweit geteilt - die Ergaenzung wirkt in jedem Plan, der
+        // diese Einheit verwendet.
+        assignBausteinArchiv(bid) {
+            const baustein = this.baustein(bid);
+            const select = bySel('#sq-b-archivziel');
+            if (!baustein || !select) {
+                return;
+            }
+            const card = this.methodCardForRef(select.value);
+            const text = String(baustein.themenplanreferenz || '').trim();
+            if (!card || !text) {
+                this.setStatus('Zuordnen nicht möglich – Einheit oder Text fehlt.', true);
+                return;
+            }
+            const existing = String(card.lernziele || '').trim();
+            card.lernziele = existing ? `${existing}\n${text}` : text;
+            card.timemodified = Date.now();
+            asCall('mod_seminarplaner_save_method_cards', {
+                cmid: this.cmid,
+                methodsjson: JSON.stringify(this.methodCardList),
+            }).then(() => {
+                // Der Text bleibt am Baustein stehen (D9: sichtbar, aber
+                // inaktiv) - nur die Frage ist beantwortet.
+                baustein.archivzugeordnet = true;
+                this.setDirty(true);
+                this.setStatus(`Ehemalige Lernziele zu „${cardTitle(card)}" übernommen.`);
+                this.openBausteinEditor(bid);
+            }).catch(() => {
+                // Die Karte im Speicher wieder zuruecksetzen, sonst zeigt die
+                // Oberflaeche eine Ergaenzung, die nie gespeichert wurde.
+                card.lernziele = existing;
+                this.setStatus('Die Lernziele konnten nicht übernommen werden.', true);
+            });
+        }
+
         openBausteinEditor(bid) {
             const baustein = this.baustein(bid);
             if (!baustein) {
@@ -3681,11 +3790,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                       <div class="sq-field__hint">Eine Zeile je Unterthema.</div>
                     </div>
                     ${this.renderBausteinAltField(bid, baustein)}
-                    ${referenz ? `
-                    <div class="sq-field">
-                      <label class="kg-label">Themenplan-Referenz (aus dem Import, nicht änderbar)</label>
-                      <div class="sq-readonly">${escapeHtml(referenz)}</div>
-                    </div>` : ''}
+                    ${this.renderBausteinArchiv(bid, baustein, referenz)}
                   </div>
                   <div class="sq-modal__footer sq-modal__footer--split">
                     <button type="button" class="kg-btn sq-danger" data-sq-action="baustein-dissolve"

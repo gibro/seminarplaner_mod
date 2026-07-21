@@ -37,6 +37,8 @@ class grid_service {
     private const SHARED_STATE_USERID = 0;
     /** @var string Marker prefix used by client conflict handling. */
     private const CONFLICT_MARKER = 'GRID_TIME_CONFLICT:';
+    /** @var string Key marking that Baustein master data was carried over once (D9/D19). */
+    public const ENRICHED_MARKER = 'stammdatenuebernommen';
 
     /** @var grid_repository */
     private $repository;
@@ -80,6 +82,53 @@ class grid_service {
         }
 
         return $this->repository->get_active_grids($cmid);
+    }
+
+    /**
+     * Carry Baustein master data from the planning state into the sequence (D9/D19).
+     *
+     * Until v2026072101 this only ever happened in the one-shot upgrade step
+     * 2026070908. Every sequence derived after that upgrade - an import, an
+     * old-format state healed on read, a plan created later - kept its
+     * Bausteine empty even though the planning state still held their
+     * Unterthemen and their former Lernziele. The same gap was already closed
+     * for {@see grid_to_sequence_converter::convert()} by deriving at the
+     * service choke points; this does the same for the enrichment.
+     *
+     * Runs at most once per plan, guarded by a marker inside the sequence
+     * section: the enrichment fills every empty field, so a repeated run
+     * would refill fields the user deliberately emptied.
+     *
+     * @param int $gridid Grid id the state belongs to.
+     * @param array $state Full grid state.
+     * @return array State, enriched and marked when it was still due.
+     */
+    private function enrich_bausteine_once(int $gridid, array $state): array {
+        if (!sequence_state::has_sequence($state)) {
+            return $state;
+        }
+        $sequenz = $state[sequence_state::STATE_KEY];
+        if (!is_array($sequenz) || !empty($sequenz[self::ENRICHED_MARKER])) {
+            return $state;
+        }
+
+        $grid = $this->repository->get_grid($gridid);
+        $cmid = $grid ? (int)$grid->cmid : 0;
+        if ($cmid > 0) {
+            $planning = (new planning_state_service())->get_state($cmid);
+            $units = $planning['state']['units'] ?? null;
+            if (is_array($units) && $units) {
+                $sequenz = (new grid_to_sequence_converter())->enrich_bausteine($sequenz, $units);
+            }
+        }
+
+        // Marked even when nothing was carried over: the question "is this
+        // plan still due?" is answered either way, and asking again would
+        // cost a planning state lookup on every read.
+        $sequenz[self::ENRICHED_MARKER] = true;
+        $state[sequence_state::STATE_KEY] = $sequenz;
+
+        return $state;
     }
 
     /**
@@ -250,6 +299,9 @@ class grid_service {
         if (!sequence_state::has_sequence($state)) {
             $state[sequence_state::STATE_KEY] = (new grid_to_sequence_converter())->convert($state);
         }
+
+        // Same choke point idea for the Baustein master data (D9/D19).
+        $state = $this->enrich_bausteine_once($gridid, $state);
 
         $overlaps = $this->find_time_overlaps($state);
         if ($overlaps) {
@@ -513,6 +565,13 @@ class grid_service {
         // next save) so existing broken imports recover on their next open.
         if ($decoded && !sequence_state::has_sequence($decoded)) {
             $decoded[sequence_state::STATE_KEY] = (new grid_to_sequence_converter())->convert($decoded);
+        }
+
+        // Baustein master data (D9/D19), same self-heal reasoning as above:
+        // derived on read so an unenriched plan shows its Unterthemen and
+        // former Lernziele right away, persisted by the next save.
+        if ($decoded) {
+            $decoded = $this->enrich_bausteine_once($gridid, $decoded);
         }
 
         // The read path re-encodes the decoded state for the client; keep
