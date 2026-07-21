@@ -29,6 +29,7 @@ $string['pluginadministration'] = 'Concept generator administration';
 $string['seminarplaner:addinstance'] = 'Add a new concept generator activity';
 $string['seminarplaner:view'] = 'View concept generator';
 $string['seminarplaner:viewroterfaden'] = 'View Common Thread';
+$string['seminarplaner:viewlive'] = 'View the live presenter view';
 $string['seminarplaner:managemethods'] = 'Manage methods';
 $string['seminarplaner:managegrids'] = 'Manage seminar plans';
 $string['seminarplaner:overrideglobalset'] = 'Override global method sets locally';
@@ -82,14 +83,27 @@ $string['usecase'] = 'What do you need the seminar planner for?';
 $string['usecase_help'] = 'This choice controls which tabs are shown in this activity:
 
 * **Design a seminar:** Overview, Sequence, Library, Import/Export
-* **Run a designed seminar:** Overview, Sequence, Library, Common Thread, Import/Export
+* **Run a designed seminar:** Overview, Sequence, Library, Live, Common Thread, Import/Export
 * **Manage a global seminar concept:** Overview, Sequence, Library, Import/Export, Submit
 
-The Common Thread tab only appears with the matching capability.';
+The Live and Common Thread tabs only appear with the matching capability.';
 $string['usecase_konzipieren'] = 'Design a seminar';
 $string['usecase_durchfuehren'] = 'Run a designed seminar';
 $string['usecase_verwalten'] = 'Manage a global seminar concept';
 $string['roterfadenmenu'] = 'Common Thread';
+$string['livemenu'] = 'Live';
+$string['live_intro'] = 'The prompter for running the seminar: you start it yourself and move on manually, like the presenter mode of a slide deck. The view is read-only and never changes the seminar plan.';
+$string['live_planlabel'] = 'Seminar plan';
+$string['live_startatlabel'] = 'Start at';
+$string['live_startbutton'] = 'Start the session';
+$string['live_empty'] = 'Nothing has been placed in this seminar plan yet.';
+$string['live_now'] = 'Running now';
+$string['live_next'] = 'Next';
+$string['live_prev'] = 'Back';
+$string['live_showclock'] = 'Show clock';
+$string['live_fullscreen'] = 'Full screen';
+$string['live_quit'] = 'Quit';
+$string['live_keyhint'] = 'Keyboard: ← and → or the space bar move through the steps.';
 $string['roterfaden_empty'] = 'No Common Thread has been published yet';
 $string['roterfaden_publishlabel'] = 'Publish seminar plan as Common Thread';
 $string['roterfaden_theme_label'] = 'Timeline style';

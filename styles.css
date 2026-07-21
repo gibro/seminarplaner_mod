@@ -8024,3 +8024,468 @@ details.sq-menu[open] > summary.sq-menu__btn {
         padding: 4px 10px;
     }
 }
+
+/* ==========================================================================
+   LIVE-ANSICHT (Durchfuehrungsmodus / Souffleur, D69/D70/D72)
+   --------------------------------------------------------------------------
+   Eigener Block am Dateiende, keine Zweitdefinition bestehender Selektoren.
+   Die Phasenfarben kommen aus den bereits vorhandenen .rf-phase--*-Klassen
+   (--rf-color / --rf-tint / --rf-text) — dieselbe Palette wie im Roten Faden.
+
+   Gebaut fuer Tablet und Laptop im Seminarraum: grosse Schrift, ruhige
+   Flaechen, alles Wichtige ohne Scrollen. Der Zweispalter „jetzt | als
+   Naechstes" klappt unter 900px untereinander.
+   ========================================================================== */
+
+.live-shell {
+    max-width: 1240px;
+    padding: 16px;
+    background: var(--ig-surface-muted);
+}
+
+/* Vollbild: die Huelle traegt im Vollbildmodus die Seite allein. */
+.live-shell:fullscreen {
+    max-width: none;
+    overflow-y: auto;
+    background: var(--ig-surface-muted);
+}
+
+/* D72: Die Uhrzeit-Anzeige ist ein reiner Informationsdienst und laesst sich
+   abschalten — geplante Zeiten und Wanduhr zusammen, die Dauern bleiben. */
+.live-shell--noclock .live-time {
+    display: none;
+}
+
+/* ---- Startbildschirm ---- */
+.live-start__form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    align-items: flex-end;
+    padding: 14px 16px;
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+}
+
+.live-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 220px;
+}
+
+.live-field .kg-input {
+    min-height: 38px;
+}
+
+.live-start__preview {
+    margin: 16px 0;
+}
+
+.live-preview {
+    padding: 14px 16px;
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+    border-left: 4px solid var(--ig-red);
+}
+
+.live-preview__head {
+    font-family: var(--font-head);
+    font-size: 15px;
+    margin-bottom: 8px;
+}
+
+.live-preview__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.live-preview__list li {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 14px;
+}
+
+.live-preview__dot {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 auto;
+    background: var(--rf-color, var(--ig-midgray));
+}
+
+.live-preview__dur {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--ig-gray);
+}
+
+.live-preview__more {
+    font-size: 12px;
+    color: var(--ig-gray);
+}
+
+.live-start__go {
+    min-height: 46px;
+    padding: 10px 26px;
+    font-family: var(--font-head);
+    font-size: 15px;
+    letter-spacing: .03em;
+}
+
+/* ---- Kopfleiste der Buehne ---- */
+.live-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 9px 16px;
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+}
+
+.live-bar__where {
+    font-family: var(--font-head);
+    font-size: 14px;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    color: var(--ig-gray);
+}
+
+.live-bar__tools {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.live-bar__clock {
+    font-family: var(--font-head);
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+}
+
+.live-bar__switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 13px;
+    color: var(--ig-gray);
+    cursor: pointer;
+}
+
+.live-bar__tools .kg-btn {
+    margin: 0;
+    min-height: 32px;
+    padding: 5px 12px;
+    font-size: 13px;
+}
+
+/* ---- Zweispalter: was laeuft, was kommt ---- */
+.live-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr);
+    gap: 16px;
+    margin: 16px 0;
+    align-items: start;
+}
+
+.live-card {
+    padding: 18px 20px;
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+    border-top: 4px solid var(--rf-color, var(--ig-midgray));
+}
+
+.live-card__head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.live-badge {
+    padding: 3px 10px;
+    background: var(--rf-tint, var(--ig-surface-soft));
+    color: var(--rf-text, var(--ig-anthracite));
+    border: 1px solid var(--rf-color, var(--ig-midgray));
+    font-family: var(--font-head);
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.live-card__time {
+    font-family: var(--font-head);
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+}
+
+.live-card__dur {
+    font-size: 13px;
+    color: var(--ig-gray);
+}
+
+.live-card__title {
+    margin: 0;
+    font-family: var(--font-head);
+    font-size: 28px;
+    line-height: 1.2;
+}
+
+.live-card__crumb {
+    margin-top: 5px;
+    font-size: 13px;
+    color: var(--ig-gray);
+}
+
+.live-card--pause {
+    text-align: center;
+    color: var(--ig-gray);
+}
+
+.live-card--pause .live-card__head {
+    justify-content: center;
+}
+
+/* ---- Ablauf-Abschnitte (D70/D72: rein sequenziell, keine Timer) ---- */
+.live-flow {
+    font-size: 17px;
+    line-height: 1.55;
+}
+
+.live-flow p {
+    margin: 0 0 10px;
+}
+
+.live-flow ul,
+.live-flow ol {
+    margin: 0 0 10px;
+    padding-left: 22px;
+}
+
+.live-steps {
+    margin: 16px 0 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: none;
+}
+
+.live-step {
+    border-left: 3px solid var(--ig-lightgray);
+    padding-left: 12px;
+    margin-bottom: 6px;
+}
+
+.live-step.is-active {
+    border-left-color: var(--rf-color, var(--ig-red));
+}
+
+.live-step.is-done .live-step__title {
+    color: var(--ig-gray);
+    text-decoration: line-through;
+}
+
+.live-step__head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 5px 0;
+    background: none;
+    border: 0;
+    text-align: left;
+    cursor: pointer;
+}
+
+.live-step__num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    background: var(--ig-surface-muted);
+    font-family: var(--font-head);
+    font-size: 12px;
+}
+
+.live-step.is-active .live-step__num {
+    background: var(--rf-color, var(--ig-red));
+    color: #fff;
+}
+
+.live-step__title {
+    font-family: var(--font-head);
+    font-size: 16px;
+}
+
+.live-step__body {
+    padding: 4px 0 12px;
+}
+
+.live-empty-hint {
+    padding: 12px 0;
+    font-size: 14px;
+    color: var(--ig-gray);
+}
+
+/* ---- Material/Technik und Materialien (D21/D69) ---- */
+.live-panels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 18px;
+}
+
+.live-panel {
+    flex: 1 1 240px;
+    padding: 12px 14px;
+    background: var(--ig-surface-soft);
+    border: 1px solid var(--ig-lightgray);
+}
+
+.live-panel__head {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 8px;
+    font-family: var(--font-head);
+    font-size: 12px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--ig-gray);
+}
+
+.live-panel__text {
+    font-size: 14px;
+}
+
+.live-icon {
+    flex: 0 0 auto;
+}
+
+.live-check {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.live-check__item label {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0;
+    padding: 3px 0;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+.live-check__item.is-done > label > span {
+    color: var(--ig-gray);
+    text-decoration: line-through;
+}
+
+.live-files {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.live-files li {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 3px 0;
+    font-size: 15px;
+}
+
+.live-files__size {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--ig-gray);
+}
+
+/* ---- Vorschau auf die naechste Einheit (D72) ---- */
+.live-next__label {
+    margin-bottom: 7px;
+    font-family: var(--font-head);
+    font-size: 12px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--ig-gray);
+}
+
+.live-card--next .live-card__title {
+    font-size: 20px;
+}
+
+.live-card--next .live-panels {
+    margin-top: 12px;
+}
+
+.live-card--next .live-panel {
+    flex-basis: 100%;
+}
+
+.live-next__day {
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--ig-lightgray);
+    font-family: var(--font-head);
+    font-size: 13px;
+    color: var(--ig-red);
+}
+
+/* ---- Blaetterleiste ---- */
+.live-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 10px 16px;
+    background: #fff;
+    border: 1px solid var(--ig-lightgray);
+}
+
+.live-nav__btn {
+    margin: 0;
+    min-height: 44px;
+    padding: 8px 22px;
+    font-family: var(--font-head);
+    font-size: 15px;
+}
+
+.live-nav__btn:disabled {
+    opacity: .45;
+    cursor: default;
+}
+
+.live-nav__count {
+    font-size: 13px;
+    color: var(--ig-gray);
+    font-variant-numeric: tabular-nums;
+}
+
+.live-keyhint {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--ig-gray);
+    text-align: center;
+}
+
+@media (max-width: 900px) {
+    .live-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .live-card__title {
+        font-size: 23px;
+    }
+}

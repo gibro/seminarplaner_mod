@@ -3364,6 +3364,130 @@ class api extends external_api {
     }
 
     /**
+     * Definiert die Eingabeparameter für die Abfrage des Live-Zustands (Durchführungsmodus).
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
+    public static function get_live_state_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'gridid' => new external_value(PARAM_INT, 'Seminarplan id, 0 for the most recently used one', VALUE_DEFAULT, 0),
+        ]);
+    }
+
+    /**
+     * Liefert alles, was die Live-Ansicht (D69) für einen Seminarplan braucht: Planliste, Sequenz und Kartenfelder.
+     *
+     * Eigener Endpunkt statt get_user_state + get_method_cards, weil beide
+     * managegrids bzw. managemethods verlangen — die Live-Ansicht steht aber
+     * auch reinen Durchführenden offen (D69). Er ist rein lesend und gibt von
+     * den Seminareinheiten nur die Felder heraus, die der Souffleur anzeigt.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $gridid ID des Seminarplans; 0 wählt den zuletzt bearbeiteten.
+     *
+     * @return array Array mit den Schlüsseln gridid, grids, statejson und cardsjson.
+     */
+    public static function get_live_state(int $cmid, int $gridid = 0): array {
+        $params = self::validate_parameters(self::get_live_state_parameters(), ['cmid' => $cmid, 'gridid' => $gridid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:viewlive', $resolved['context']);
+
+        $gridservice = new grid_service();
+        $grids = $gridservice->list_grids((int)$resolved['cm']->id);
+        $out = [];
+        foreach ($grids as $grid) {
+            $out[] = ['id' => (int)$grid->id, 'name' => (string)$grid->name];
+        }
+
+        // Nur Pläne dieser Aktivität: eine fremde gridid darf keinen Zustand
+        // ausliefern, auch nicht, wenn sie zufällig existiert.
+        $selected = (int)$params['gridid'];
+        $allowed = array_column($out, 'id');
+        if ($selected <= 0 || !in_array($selected, $allowed, true)) {
+            $selected = $allowed ? (int)$allowed[0] : 0;
+        }
+
+        $state = [];
+        if ($selected > 0) {
+            $result = $gridservice->get_user_state($selected, (int)$GLOBALS['USER']->id);
+            $state = is_array($result['state'] ?? null) ? $result['state'] : [];
+        }
+
+        $cardservice = new method_card_service();
+        $methods = $cardservice->get_methods(
+            (int)$resolved['cm']->id,
+            (int)$GLOBALS['USER']->id,
+            (int)$resolved['context']->id
+        );
+
+        return [
+            'gridid' => $selected,
+            'grids' => $out,
+            'statejson' => json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'cardsjson' => json_encode(
+                self::project_live_cards($methods),
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            ),
+        ];
+    }
+
+    /**
+     * Reduziert die Seminareinheiten auf die Felder, die der Souffleur anzeigt (D69/D72).
+     *
+     * @param array $methods Vollständige Seminareinheiten aus dem method_card_service.
+     *
+     * @return array Auf Titel, Phase, Dauer, Ablauf, Material/Technik und Materialien reduzierte Karten.
+     */
+    private static function project_live_cards(array $methods): array {
+        $out = [];
+        foreach ($methods as $method) {
+            if (!is_array($method)) {
+                continue;
+            }
+            $materialien = [];
+            foreach ((array)($method['materialien'] ?? []) as $file) {
+                if (!is_array($file)) {
+                    continue;
+                }
+                $materialien[] = [
+                    'name' => (string)($file['name'] ?? ''),
+                    'fileurl' => (string)($file['fileurl'] ?? ''),
+                    'mimetype' => (string)($file['mimetype'] ?? ''),
+                    'filesize' => (int)($file['filesize'] ?? 0),
+                ];
+            }
+            $out[] = [
+                'id' => (string)($method['id'] ?? ''),
+                'titel' => (string)($method['titel'] ?? ''),
+                'seminarphase' => $method['seminarphase'] ?? '',
+                'zeitbedarf' => (string)($method['zeitbedarf'] ?? ''),
+                'ablauf' => (string)($method['ablauf'] ?? ''),
+                'materialtechnik' => (string)($method['materialtechnik'] ?? ''),
+                'materialien' => $materialien,
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Beschreibt die Rückgabestruktur der Live-Abfrage (Planliste, Sequenz und Kartenfelder).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
+    public static function get_live_state_returns(): external_single_structure {
+        return new external_single_structure([
+            'gridid' => new external_value(PARAM_INT, 'Seminarplan id the state belongs to'),
+            'grids' => new external_multiple_structure(new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Seminarplan id'),
+                'name' => new external_value(PARAM_RAW, 'Seminarplan name'),
+            ])),
+            'statejson' => new external_value(PARAM_RAW, 'Grid state as JSON'),
+            'cardsjson' => new external_value(PARAM_RAW, 'Seminar units reduced to the live fields as JSON'),
+        ]);
+    }
+
+    /**
      * Definiert die Eingabeparameter für das Veröffentlichen des Roten Fadens.
      *
      * @return external_function_parameters Parameterdefinition der Webservice-Funktion.

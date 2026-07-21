@@ -165,6 +165,13 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
     ],
+    'mod_seminarplaner_get_live_state' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'get_live_state',
+        'description' => 'Read plan list, sequence and live unit fields for the presenter view.',
+        'type' => 'read',
+        'ajax' => true,
+    ],
     'mod_seminarplaner_publish_roterfaden' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'publish_roterfaden',
