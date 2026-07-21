@@ -8043,11 +8043,57 @@ details.sq-menu[open] > summary.sq-menu__btn {
     background: var(--ig-surface-muted);
 }
 
-/* Vollbild: die Huelle traegt im Vollbildmodus die Seite allein. */
+/* Vollbild: die Huelle traegt die Seite allein. Die Klasse setzt live.js beim
+   fullscreenchange — die Pseudoklasse :fullscreen braeuchte fuer Safari eine
+   zweite, wortgleiche Regel, weil ein unbekannter Selektor die ganze Gruppe
+   ungueltig macht. :fullscreen bleibt trotzdem stehen, damit der Hintergrund
+   auch dann stimmt, wenn das Ereignis einmal ausbleibt. */
 .live-shell:fullscreen {
     max-width: none;
-    overflow-y: auto;
     background: var(--ig-surface-muted);
+}
+
+/* Im Vollbild darf die Blaetterleiste NIE unter der Kante liegen: die Huelle
+   bekommt die volle Hoehe, Kopf- und Blaetterleiste sind fest, und nur der
+   Inhalt dazwischen scrollt. */
+.live-shell--fullscreen {
+    display: flex;
+    flex-direction: column;
+    max-width: none;
+    height: 100%;
+    overflow: hidden;
+}
+
+.live-shell--fullscreen .live-stage {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.live-shell--fullscreen .live-grid {
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+    margin: 12px 0;
+}
+
+/* Beide Spalten scrollen fuer sich — sonst schoebe ein langer Ablauf die
+   Vorschau auf die naechste Einheit aus dem Bild. */
+.live-shell--fullscreen .live-now,
+.live-shell--fullscreen .live-next {
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.live-shell--fullscreen .live-bar,
+.live-shell--fullscreen .live-nav {
+    flex: 0 0 auto;
+}
+
+/* Der Tastatur-Hinweis ist im Vollbild verzichtbarer Platz. */
+.live-shell--fullscreen .live-keyhint {
+    display: none;
 }
 
 /* D72: Die Uhrzeit-Anzeige ist ein reiner Informationsdienst und laesst sich
@@ -8443,8 +8489,13 @@ details.sq-menu[open] > summary.sq-menu__btn {
     color: var(--ig-red);
 }
 
-/* ---- Blaetterleiste ---- */
+/* ---- Blaetterleiste ----
+   Klebt auch ausserhalb des Vollbilds am unteren Rand: bei einer langen Einheit
+   auf einem kleinen Laptop-Bildschirm waere „Weiter" sonst weggescrollt. */
 .live-nav {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
     display: flex;
     align-items: center;
     justify-content: space-between;

@@ -409,6 +409,27 @@ define([
             if (forward) {
                 forward.disabled = this.step >= this.steps.length - 1;
             }
+            this.showStepFromTop();
+        }
+
+        /**
+         * Nach dem Blaettern oben am neuen Schritt anfangen.
+         *
+         * Ohne das liest man bei einer langen Einheit weiter, wohin man vorher
+         * gescrollt hatte - und landet mitten im naechsten Text.
+         */
+        showStepFromTop() {
+            this.nowBox.scrollTop = 0;
+            this.nextBox.scrollTop = 0;
+            if (this.isFullscreen() || typeof this.nowBox.scrollIntoView !== 'function') {
+                return;
+            }
+            // Ausserhalb des Vollbilds scrollt die Seite. Nur zurueckholen, wenn
+            // der Kartenkopf tatsaechlich ueber den Rand gerutscht ist.
+            const box = this.nowBox.getBoundingClientRect();
+            if (box && box.top < 0) {
+                this.nowBox.scrollIntoView({block: 'start'});
+            }
         }
 
         // ---- Uhrzeit (D72: rein informativ, ausblendbar) ---------------------
@@ -479,6 +500,13 @@ define([
             if (fullscreen) {
                 fullscreen.addEventListener('click', () => this.toggleFullscreen());
             }
+            // Das Vollbild-Layout haengt an einer eigenen Klasse statt an
+            // :fullscreen: die Pseudoklasse braeuchte fuer Safari eine zweite,
+            // wortgleiche Regel (ein unbekannter Selektor kippt die ganze
+            // Gruppe) - eine Doppelpflege, die sich hier vermeiden laesst.
+            ['fullscreenchange', 'webkitfullscreenchange'].forEach((name) => {
+                document.addEventListener(name, () => this.syncFullscreenClass());
+            });
 
             // Abhaken und Abschnitt-Direktwahl laufen ueber Delegation, weil die
             // Karte bei jedem Schritt neu gezeichnet wird.
@@ -528,17 +556,32 @@ define([
             }
         }
 
+        isFullscreen() {
+            return (document.fullscreenElement || document.webkitFullscreenElement) === this.shell;
+        }
+
+        syncFullscreenClass() {
+            this.shell.classList.toggle('live-shell--fullscreen', this.isFullscreen());
+        }
+
         toggleFullscreen() {
             // Vollbild auf der Huelle statt auf dem Dokument: so verschwinden
             // Kursnavigation und Tab-Leiste, die waehrend des Seminars stoeren.
-            if (document.fullscreenElement) {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
+            if (this.isFullscreen()) {
+                const exit = document.exitFullscreen || document.webkitExitFullscreen;
+                if (exit) {
+                    exit.call(document);
                 }
                 return;
             }
-            if (this.shell.requestFullscreen) {
-                this.shell.requestFullscreen().catch(() => {
+            const request = this.shell.requestFullscreen || this.shell.webkitRequestFullscreen;
+            if (!request) {
+                this.setStatus('Dieser Browser kennt keinen Vollbildmodus.', true);
+                return;
+            }
+            const started = request.call(this.shell);
+            if (started && started.catch) {
+                started.catch(() => {
                     this.setStatus('Der Vollbildmodus wurde vom Browser abgelehnt.', true);
                 });
             }
