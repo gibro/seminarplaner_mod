@@ -5288,7 +5288,9 @@ details[open] > summary .sq-tri,
    ein Label darueber. Bei align-items:center rutscht das Eingabefeld dadurch
    tiefer als der Button. Unten ausrichten und gleiche Hoehe geben, damit beide
    Felder buendig auf einer Linie liegen. */
-#ml-create-row { align-items: flex-end; }
+/* Kleiner Abstand nach unten, damit die Zeile nicht auf dem Filterkasten
+   "Seminareinheit suchen" aufsitzt. */
+#ml-create-row { align-items: flex-end; margin-bottom: 5px; }
 #ml-create-row .kg-btn { min-height: 40px; }
 .ml-allsearch-row {
     display: flex;
