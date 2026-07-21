@@ -3168,6 +3168,54 @@ class api extends external_api {
     }
 
     /**
+     * Definiert die Eingabeparameter für das Kopieren eines Seminarplans (D67).
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
+    public static function copy_grid_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'gridid' => new external_value(PARAM_INT, 'Id of the Seminarplan to copy'),
+        ]);
+    }
+
+    /**
+     * Kopiert einen Seminarplan innerhalb derselben Aktivität (D67).
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $gridid ID des zu kopierenden Seminarplans.
+     *
+     * @return array Array mit den Schlüsseln gridid und name der Kopie.
+     */
+    public static function copy_grid(int $cmid, int $gridid): array {
+        $params = self::validate_parameters(self::copy_grid_parameters(), [
+            'cmid' => $cmid,
+            'gridid' => $gridid,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        // Kopieren schreibt einen vollstaendigen Planzustand - dieselbe
+        // Schranke wie beim Anlegen und Loeschen.
+        self::enforce_write_rate_limit('copy_grid', 40, 60);
+
+        $service = new grid_service();
+
+        return $service->copy_grid((int)$resolved['cm']->id, (int)$params['gridid'], (int)$GLOBALS['USER']->id);
+    }
+
+    /**
+     * Beschreibt die Rückgabestruktur des Kopiervorgangs (ID und Name der Kopie).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
+    public static function copy_grid_returns(): external_single_structure {
+        return new external_single_structure([
+            'gridid' => new external_value(PARAM_INT, 'Id of the new copy'),
+            'name' => new external_value(PARAM_TEXT, 'Name of the new copy'),
+        ]);
+    }
+
+    /**
      * Definiert die Eingabeparameter für das Löschen eines Seminarplans.
      *
      * @return external_function_parameters Parameterdefinition der Webservice-Funktion.

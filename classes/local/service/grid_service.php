@@ -83,6 +83,100 @@ class grid_service {
     }
 
     /**
+     * Copy one seminar plan inside the same activity (D67).
+     *
+     * The copy is a second, independent plan: it gets its own grid row and
+     * its own state, so sequence, anchors (D45) and seminar goals (D61) can
+     * be changed without touching the original. The library of units stays
+     * shared - it belongs to the activity, not to a single plan, so a copy
+     * refers to the same cards instead of duplicating the whole library.
+     *
+     * The state is copied verbatim rather than through save_user_state: this
+     * is a copy, not an edit, so it must not be rewritten by the save path's
+     * validation (a legacy plan that never passed through that path would
+     * otherwise leave an empty plan behind).
+     *
+     * @param int $cmid Course module id.
+     * @param int $gridid Grid id of the plan to copy.
+     * @param int $userid User id of the actor.
+     * @return array Array with keys gridid and name of the new plan.
+     */
+    public function copy_grid(int $cmid, int $gridid, int $userid): array {
+        if ($cmid <= 0 || $gridid <= 0 || $userid <= 0) {
+            throw new coding_exception('Invalid input for copy_grid');
+        }
+        $source = $this->repository->get_grid($gridid);
+        if (!$source || (int)$source->cmid !== $cmid || (int)$source->isarchived === 1) {
+            throw new \invalid_parameter_exception('Grid not found');
+        }
+
+        $name = $this->build_copy_name($cmid, (string)$source->name);
+        $newgridid = $this->repository->create_grid($cmid, $name, $userid, (string)($source->description ?? ''));
+
+        // Read through the service so a legacy plan without a sequence
+        // section (D20/D43) is derived once before it is copied - otherwise
+        // the copy would open empty.
+        $state = $this->get_user_state($gridid, $userid);
+        $payload = is_array($state['state'] ?? null) ? $state['state'] : [];
+        if ($payload) {
+            $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($json === false) {
+                throw new coding_exception('Failed to encode copied plan state');
+            }
+            $this->repository->upsert_user_state(
+                $newgridid,
+                self::SHARED_STATE_USERID,
+                $json,
+                sha1($json . '|' . microtime(true))
+            );
+        }
+
+        // D35: the translation screen explains the switch from grid to
+        // sequence logic. A plan the user just created a moment ago needs no
+        // such explanation, so the marker is set right away.
+        $this->mark_intro_seen($newgridid, $userid);
+
+        return ['gridid' => $newgridid, 'name' => $name];
+    }
+
+    /**
+     * Build the name of a copy, keeping it unique inside the activity (D67).
+     *
+     * First copy is "<name> (Kopie)", further ones count up. Without the
+     * counter a second copy would be indistinguishable from the first in the
+     * plan dropdown (D46).
+     *
+     * @param int $cmid Course module id.
+     * @param string $sourcename Name of the plan being copied.
+     * @return string
+     */
+    private function build_copy_name(int $cmid, string $sourcename): string {
+        $taken = [];
+        foreach ($this->repository->get_active_grids($cmid) as $grid) {
+            $taken[\core_text::strtolower(trim((string)$grid->name))] = true;
+        }
+        // A copy of a copy keeps one suffix instead of stacking them.
+        $base = preg_replace('/\s*\(Kopie(\s+\d+)?\)$/u', '', trim($sourcename));
+        $base = ($base === '' || $base === null) ? trim($sourcename) : $base;
+
+        $candidate = $base . ' (Kopie)';
+        $counter = 1;
+        while (isset($taken[\core_text::strtolower($candidate)])) {
+            $counter++;
+            $candidate = $base . ' (Kopie ' . $counter . ')';
+        }
+
+        // kgen_grid.name holds 255 characters; trim the base, not the suffix,
+        // so the copy stays recognisable as one.
+        if (\core_text::strlen($candidate) > 255) {
+            $suffix = \core_text::substr($candidate, \core_text::strlen($base));
+            $candidate = \core_text::substr($base, 0, 255 - \core_text::strlen($suffix)) . $suffix;
+        }
+
+        return $candidate;
+    }
+
+    /**
      * Archive a grid in current activity context.
      *
      * @param int $cmid Course module id.

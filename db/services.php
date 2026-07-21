@@ -179,6 +179,13 @@ $functions = [
         'type' => 'write',
         'ajax' => true,
     ],
+    'mod_seminarplaner_copy_grid' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'copy_grid',
+        'description' => 'Copy a seminar plan inside the same Seminarplaner activity.',
+        'type' => 'write',
+        'ajax' => true,
+    ],
     'mod_seminarplaner_delete_grid' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'delete_grid',

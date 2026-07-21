@@ -789,6 +789,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (deletebtn) {
                 deletebtn.addEventListener('click', () => this.deletePlan());
             }
+            const copybtn = bySel('#sq-copy-plan');
+            if (copybtn) {
+                copybtn.addEventListener('click', () => this.copyPlan());
+            }
             if (cancel) {
                 cancel.addEventListener('click', () => this.closeSetup());
             }
@@ -1321,6 +1325,45 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 this.loadState(target);
             }).catch(() => {
                 this.setStatus('Seminarpläne konnten nicht geladen werden.', true);
+            });
+        }
+
+        // D67: Zweitfassung des aktuellen Seminarplans anlegen. Anders als
+        // Löschen ist das nichts Endgültiges - deshalb ohne Rückfrage, aber
+        // mit vorherigem Sichern, damit die Kopie den Stand auf dem Schirm
+        // trägt und nicht den zuletzt automatisch gespeicherten.
+        copyPlan() {
+            const select = bySel('#sq-grid-select');
+            const button = bySel('#sq-copy-plan');
+            const gridid = this.gridid || (select ? Number(select.value) : 0);
+            if (!gridid) {
+                this.setStatus('Kein Seminarplan ausgewählt.', true);
+                return;
+            }
+            if (button) {
+                button.disabled = true;
+            }
+            this.setStatus('Seminarplan wird kopiert …');
+            const pending = this.dirty ? this.save() : Promise.resolve(true);
+            pending.catch(() => {
+                // Der Sicherungsversuch hat einen eigenen Wiederholungslauf;
+                // hier wird nur die Kopie abgebrochen, damit sie nicht einen
+                // Stand festschreibt, den die Referentin nicht mehr sieht.
+                throw new Error('save-before-copy-failed');
+            }).then(() => {
+                return asCall('mod_seminarplaner_copy_grid', {cmid: this.cmid, gridid});
+            }).then((res) => {
+                const name = String((res && res.name) || 'Kopie');
+                this.setStatus(`Kopie „${name}" angelegt – du arbeitest jetzt darin.`);
+                return this.loadGrids(Number(res && res.gridid));
+            }).catch((error) => {
+                this.setStatus(String(error && error.message) === 'save-before-copy-failed'
+                    ? 'Kopieren abgebrochen – die letzten Änderungen sind noch nicht gesichert.'
+                    : 'Seminarplan kopieren fehlgeschlagen.', true);
+            }).then(() => {
+                if (button) {
+                    button.disabled = false;
+                }
             });
         }
 
