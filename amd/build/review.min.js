@@ -174,6 +174,9 @@ define(['core/ajax', 'core/notification', 'core_user/repository'], function(Ajax
         if (!select) {
             return Promise.resolve();
         }
+        // Die getroffene Auswahl überdauert das Neuaufbauen der Liste - sonst stünde
+        // nach dem Einreichen wieder "Bitte wählen" da, obwohl man weiterarbeiten will.
+        const previousTarget = String(select.value || '');
         return asCall('mod_seminarplaner_list_review_targets', {cmid}).then((res) => {
             reviewTargets = Array.isArray(res.methodsets) ? res.methodsets : [];
             select.innerHTML = '<option value="0">Bitte wählen</option>';
@@ -187,6 +190,9 @@ define(['core/ajax', 'core/notification', 'core_user/repository'], function(Ajax
                 opt.textContent = `${set.displayname} [${statuslabel}] · Konzeptverantwortliche: ${set.reviewercount || 0}`;
                 select.appendChild(opt);
             });
+            if (previousTarget && select.querySelector(`option[value="${previousTarget}"]`)) {
+                select.value = previousTarget;
+            }
             renderKonzeptTargets();
             renderStatusList();
         });
@@ -400,7 +406,9 @@ define(['core/ajax', 'core/notification', 'core_user/repository'], function(Ajax
                     + `${res.savedcount} Seminareinheiten in der Sammlung).`,
                 false
             );
-            return loadExistingCandidates(cmid);
+            // Auch "Wo stehen deine Einreichungen?" nachziehen: die Sammlung steht jetzt
+            // auf "in Prüfung", und ohne das sah man den neuen Stand erst nach F5.
+            return loadReviewTargets(cmid).then(() => loadExistingCandidates(cmid));
         }).catch((e) => {
             Notification.exception(e);
             setStatus('#kg-review-existing-status', 'Einreichen fehlgeschlagen.', true);
