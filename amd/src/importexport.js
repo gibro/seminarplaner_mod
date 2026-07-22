@@ -535,34 +535,41 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
     // Stored attachment descriptors (from get_method_cards) only carry a fileurl, not the file
     // content. For a portable export we fetch the file and embed it as contentbase64 so the
     // attachments survive a re-import into another activity.
-    const embedFileContent = async (entry) => {
+    // A file that cannot be fetched is exported without its content. That used to pass
+    // unnoticed, so the tally is collected here and reported after the export.
+    const embedFileContent = async (entry, tally) => {
         if (!entry || typeof entry !== 'object') {
             return entry;
         }
         if (entry.contentbase64) {
+            tally.embedded++;
             return entry;
         }
         const url = entry.fileurl || '';
         if (!url) {
+            tally.failed.push(String(entry.name || '?'));
             return entry;
         }
         try {
             const resp = await fetch(url, {credentials: 'same-origin'});
             if (!resp.ok) {
+                tally.failed.push(String(entry.name || '?'));
                 return entry;
             }
             const blob = await resp.blob();
+            tally.embedded++;
             return {
                 name: String(entry.name || ''),
                 mimetype: String(entry.mimetype || blob.type || 'application/octet-stream'),
                 contentbase64: await blobToBase64(blob)
             };
         } catch (e) {
+            tally.failed.push(String(entry.name || '?'));
             return entry;
         }
     };
 
-    const embedMethodFileContents = async (methodList) => {
+    const embedMethodFileContents = async (methodList, tally) => {
         const list = Array.isArray(methodList) ? methodList : [];
         return Promise.all(list.map(async (method) => {
             if (!method || typeof method !== 'object') {
@@ -570,10 +577,10 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
             }
             const copy = Object.assign({}, method);
             if (Array.isArray(method.materialien)) {
-                copy.materialien = await Promise.all(method.materialien.map(embedFileContent));
+                copy.materialien = await Promise.all(method.materialien.map((e) => embedFileContent(e, tally)));
             }
             if (Array.isArray(method.h5p)) {
-                copy.h5p = await Promise.all(method.h5p.map(embedFileContent));
+                copy.h5p = await Promise.all(method.h5p.map((e) => embedFileContent(e, tally)));
             }
             return copy;
         }));
@@ -601,8 +608,9 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
                 seminarplaene: !!selection.grids
             }
         };
+        const fileTally = {embedded: 0, failed: []};
         if (selection.methods) {
-            payload.methods = await embedMethodFileContents(Array.isArray(methods) ? methods : []);
+            payload.methods = await embedMethodFileContents(Array.isArray(methods) ? methods : [], fileTally);
         }
         if (selection.units) {
             payload.bausteine = bausteine;
@@ -621,8 +629,15 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
         const exportedMethods = Array.isArray(payload.methods) ? payload.methods.length : 0;
         const exportedUnits = Array.isArray(payload.bausteine) ? payload.bausteine.length : 0;
         const exportedGrids = Array.isArray(payload.seminarplaene) ? payload.seminarplaene.length : 0;
-        setStatus(`Seminarplaner-JSON exportiert (${exportedMethods} Seminareinheiten, `
-            + `${exportedUnits} Bausteine, ${exportedGrids} Seminarpläne).`, false);
+        let summary = `Seminarplaner-JSON exportiert (${exportedMethods} Seminareinheiten, `
+            + `${exportedUnits} Bausteine, ${exportedGrids} Seminarpläne`;
+        summary += fileTally.embedded ? `, ${fileTally.embedded} Anhänge eingebettet).` : ').';
+        if (fileTally.failed.length) {
+            setStatus(`${summary} ACHTUNG: ${fileTally.failed.length} Anhänge konnten nicht gelesen werden und `
+                + `fehlen in der Datei: ${fileTally.failed.join(', ')}.`, true);
+            return;
+        }
+        setStatus(summary, false);
     };
 
     const loadMethods = (cmid) => {
