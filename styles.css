@@ -5178,6 +5178,81 @@ details[open] > summary .sq-tri,
     color: var(--sq-text-muted);
 }
 
+/* D84: Referent*innen-Chip in der Sequenzzeile. Aufbau bewusst wie
+   .sq-phase (Knopf + absolut positioniertes Panel), damit sich beide
+   Dropdowns in der Zeile gleich anfuehlen. Der Avatar ist die einzige
+   runde Form in der Sequenz — er zitiert die Moodle-Profilbilder. */
+.sq-ref { position: relative; display: inline-block; }
+.sq-ref__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    border: 1px solid var(--sq-border);
+    border-radius: 0;
+    background: #fff;
+    color: var(--sq-text-muted);
+    padding: 4px 7px;
+    cursor: pointer;
+    white-space: nowrap;
+    min-height: 30px;
+}
+.sq-ref__btn:hover { border-color: var(--sq-border-strong); }
+.sq-ref__btn.has-people { padding: 3px 5px; }
+.sq-ref__avatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: 0 0 22px;
+    background: var(--ig-lightgray, #DADADA);
+}
+/* Mehrere Personen ueberlappen leicht, damit die Zeile bei Co-Moderation
+   nicht auseinanderlaeuft. */
+.sq-ref__btn .sq-ref__avatar + .sq-ref__avatar { margin-left: -8px; box-shadow: 0 0 0 2px #fff; }
+.sq-ref__panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--sq-border-strong);
+    border-radius: 0;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+    padding: 4px;
+    min-width: 240px;
+    max-height: 320px;
+    overflow-y: auto;
+    z-index: 40;
+}
+.sq-ref__panel.open { display: block; }
+.sq-ref__head {
+    font-family: var(--font-head, inherit);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: 10px;
+    color: var(--sq-text-muted);
+    padding: 5px 10px 6px;
+}
+.sq-ref__option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    cursor: pointer;
+}
+.sq-ref__option:hover { background: var(--sq-accent-bg); }
+.sq-ref__option.active { font-weight: 700; color: var(--sq-accent-dark); }
+.sq-ref__note {
+    border-top: 1px solid var(--sq-border);
+    margin-top: 4px;
+    padding: 6px 10px 4px;
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--sq-text-muted);
+}
+
 .sq-heading-affordance { display: flex; align-items: center; gap: 8px; margin: -2px 0 2px 2px; }
 .sq-heading-link {
     background: none;
@@ -6815,6 +6890,26 @@ a.kg-btn-primary:focus {
     pointer-events: none;
 }
 
+/* D84: Profilbilder der Referent*innen unten rechts in der Kachel. Unten,
+   damit sie dem ⇄-Marker oben rechts nicht ins Gehege kommen. */
+.sp-item__referenten {
+    position: absolute;
+    right: 4px;
+    bottom: 3px;
+    display: flex;
+    line-height: 0;
+    pointer-events: none;
+}
+.sp-item__avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 0 0 2px #fff;
+    background: var(--ig-lightgray, #DADADA);
+}
+.sp-item__avatar + .sp-item__avatar { margin-left: -7px; }
+
 /* ---- Überblick: Legende ---- */
 .kg-ov-legend {
     background: #fff;
@@ -8298,6 +8393,23 @@ details.sq-menu[open] > summary.sq-menu__btn {
     font-size: 13px;
     color: var(--ig-gray);
 }
+
+/* D84: Referent*innen im Kopf des aktuellen Schritts. */
+.live-card__referenten {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 10px;
+}
+.live-referent { display: inline-flex; align-items: center; gap: 7px; }
+.live-referent__avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--ig-lightgray, #DADADA);
+}
+.live-referent__name { font-size: 14px; font-weight: 700; }
 
 .live-card--pause {
     text-align: center;

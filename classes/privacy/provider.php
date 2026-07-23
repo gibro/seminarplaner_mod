@@ -152,6 +152,13 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
             }
         }
 
+        // D84: Als Referent*in einer Seminareinheit steht die Nutzer-Id im
+        // Plan-JSON, nicht in einer eigenen Spalte - dieser Kontext taucht
+        // sonst in keiner der Abfragen oben auf.
+        foreach (self::referent_states($userid) as $row) {
+            $contextids = array_merge($contextids, self::contextids_from_cmids([(int)$row->cmid]));
+        }
+
         $contextids = array_values(array_unique(array_map('intval', $contextids)));
         if (!empty($contextids)) {
             // Contextlist::add_contextids() gibt es in Moodle nicht - der
@@ -197,6 +204,90 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
         $userlist->add_from_sql('createdby', "SELECT createdby FROM {kgen_activity_setlink} WHERE cmid = ?", [$cmid]);
         $userlist->add_from_sql('createdby', "SELECT createdby FROM {kgen_activity_methodovr} WHERE cmid = ?", [$cmid]);
         $userlist->add_from_sql('modifiedby', "SELECT modifiedby FROM {kgen_activity_methodovr} WHERE cmid = ?", [$cmid]);
+
+        // D84: Referent*innen stehen im Plan-JSON; add_from_sql kann sie nicht
+        // erreichen, also einmal auslesen und die gefundenen Ids anhaengen.
+        $referentids = [];
+        foreach (self::referent_states(0, $cmid) as $row) {
+            foreach (self::referent_assignments($row->statejson) as $ids) {
+                foreach ($ids as $id) {
+                    $referentids[$id] = $id;
+                }
+            }
+        }
+        if ($referentids) {
+            [$insql, $params] = $DB->get_in_or_equal(array_values($referentids), SQL_PARAMS_QM);
+            $userlist->add_from_sql('id', "SELECT id FROM {user} WHERE id {$insql}", $params);
+        }
+    }
+
+    /**
+     * Saved plan states that carry a Referent*innen assignment (D84).
+     *
+     * The assignment lives inside the plan JSON, so there is no column to
+     * query. The LIKE narrows the scan to states that mention the key at all;
+     * the caller decodes only those.
+     *
+     * @param int $userid Restrict to states naming this person, 0 for all.
+     * @param int $cmid Restrict to one activity, 0 for site wide.
+     * @return \stdClass[] Rows with id, gridid, cmid, statejson.
+     */
+    private static function referent_states(int $userid, int $cmid = 0): array {
+        global $DB;
+
+        $like = $DB->sql_like('gus.statejson', ':marker', false, false);
+        $params = ['marker' => '%"' . \mod_seminarplaner\local\sequence\sequence_state::KEY_REFERENTEN . '"%'];
+        $where = '';
+        if ($cmid > 0) {
+            $where = ' AND g.cmid = :cmid';
+            $params['cmid'] = $cmid;
+        }
+        $rows = $DB->get_records_sql(
+            "SELECT gus.id, gus.gridid, g.cmid, gus.statejson
+               FROM {kgen_grid_user_state} gus
+               JOIN {kgen_grid} g ON g.id = gus.gridid
+              WHERE {$like}{$where}",
+            $params
+        );
+
+        if ($userid <= 0) {
+            return array_values($rows);
+        }
+        return array_values(array_filter($rows, static function ($row) use ($userid): bool {
+            foreach (self::referent_assignments($row->statejson) as $ids) {
+                if (in_array($userid, $ids, true)) {
+                    return true;
+                }
+            }
+            return false;
+        }));
+    }
+
+    /**
+     * Referent*innen assignments of a saved plan state (D84).
+     *
+     * @param string $statejson Saved plan state.
+     * @return array<string, int[]> Placement id => user ids.
+     */
+    private static function referent_assignments(string $statejson): array {
+        $state = json_decode($statejson, true);
+        $statekey = \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY;
+        if (!is_array($state) || !is_array($state[$statekey] ?? null)) {
+            return [];
+        }
+        $found = [];
+        foreach ((array)($state[$statekey]['platzierungen'] ?? []) as $pid => $platzierung) {
+            if (!is_array($platzierung)) {
+                continue;
+            }
+            $ids = \mod_seminarplaner\local\sequence\sequence_state::normalize_referenten(
+                $platzierung[\mod_seminarplaner\local\sequence\sequence_state::KEY_REFERENTEN] ?? null
+            );
+            if ($ids) {
+                $found[(string)$pid] = $ids;
+            }
+        }
+        return $found;
     }
 
     /**
@@ -281,6 +372,32 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
                 writer::with_context($context)->export_data(
                     ['import_export_log'],
                     (object)['entries' => array_values($logs)]
+                );
+            }
+
+            // D84: Wo die Person als Referent*in einer Seminareinheit
+            // eingetragen ist. Ausgegeben wird der Seminarplan samt Titel der
+            // Einheit - die blosse Platzierungs-Id sagt niemandem etwas.
+            $assignments = [];
+            foreach (self::referent_states((int)$userid, $cmid) as $row) {
+                $state = json_decode((string)$row->statejson, true);
+                $placements = is_array($state) ? (array)($state[\mod_seminarplaner\local\sequence\sequence_state::STATE_KEY]
+                    ['platzierungen'] ?? []) : [];
+                foreach (self::referent_assignments((string)$row->statejson) as $pid => $ids) {
+                    if (!in_array((int)$userid, $ids, true)) {
+                        continue;
+                    }
+                    $assignments[] = (object)[
+                        'gridid' => (int)$row->gridid,
+                        'platzierung' => $pid,
+                        'titel' => (string)(($placements[$pid]['titel'] ?? '') ?: ''),
+                    ];
+                }
+            }
+            if (!empty($assignments)) {
+                writer::with_context($context)->export_data(
+                    ['referent_assignments'],
+                    (object)['assignments' => $assignments]
                 );
             }
 
@@ -471,6 +588,51 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
             "UPDATE {kgen_activity_methodovr} SET modifiedby = 0 WHERE cmid = ? AND modifiedby {$usersql}",
             array_merge([$cmid], $userparams)
         );
+
+        // D84: Die Zuordnung als Referent*in aus den Plaenen dieser Aktivitaet
+        // entfernen. Der Plan selbst bleibt - geloescht wird die Person darin,
+        // nicht die Arbeit anderer.
+        self::remove_referent_assignments($cmid, $userids);
+    }
+
+    /**
+     * Strip a person's Referent*innen assignments from an activity's plans (D84).
+     *
+     * @param int $cmid Course module id.
+     * @param int[] $userids User ids to remove.
+     * @return void
+     */
+    private static function remove_referent_assignments(int $cmid, array $userids): void {
+        global $DB;
+
+        $remove = array_fill_keys(array_map('intval', $userids), true);
+        foreach (self::referent_states(0, $cmid) as $row) {
+            $state = json_decode((string)$row->statejson, true);
+            $statekey = \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY;
+            if (!is_array($state) || !is_array($state[$statekey] ?? null)) {
+                continue;
+            }
+            $before = $state[$statekey];
+            $state[$statekey] = \mod_seminarplaner\local\sequence\sequence_state::map_referenten(
+                $before,
+                static function (array $ids) use ($remove): array {
+                    return array_values(array_filter($ids, static fn(int $id): bool => !isset($remove[$id])));
+                }
+            );
+            if ($state[$statekey] === $before) {
+                continue;
+            }
+            $json = json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($json === false) {
+                continue;
+            }
+            $DB->update_record('kgen_grid_user_state', (object)[
+                'id' => (int)$row->id,
+                'statejson' => $json,
+                'versionhash' => sha1($json . '|privacy'),
+                'timemodified' => time(),
+            ]);
+        }
     }
 
     /**

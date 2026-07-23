@@ -292,6 +292,7 @@ foreach (
     [
     'uhrzeit' => 'Uhrzeit',
     'titel' => 'Titel',
+    'referent' => 'Referent*in',
     'seminarphase' => 'Seminarphase',
     'kurzbeschreibung' => 'Kurzbeschreibung',
     'debrief' => 'Debrief-/Reflexionsfragen',

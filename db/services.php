@@ -291,4 +291,11 @@ $functions = [
         'type' => 'write',
         'ajax' => true,
     ],
+    'mod_seminarplaner_get_referenten' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'get_referenten',
+        'description' => 'List the people assignable as Referent*in of a seminar unit (D84).',
+        'type' => 'read',
+        'ajax' => true,
+    ],
 ];
