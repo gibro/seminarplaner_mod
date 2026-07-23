@@ -268,6 +268,9 @@ define(['mod_seminarplaner/roterfadenmodel'], function(Model) {
                         sections: ispause ? [] : splitAblauf(card ? card.ablauf : ''),
                         checklist: ispause ? {items: [], html: ''} : checklist(card ? card.materialtechnik : ''),
                         materialien: (card && Array.isArray(card.materialien)) ? card.materialien : [],
+                        // D84: Zugeordnete Referent*innen als reine Nutzer-Ids;
+                        // Name und Profilbild loest die Ansicht selbst auf.
+                        referenten: (!ispause && Array.isArray(placement.referenten)) ? placement.referenten : [],
                     });
                     clock += minutes;
                 });

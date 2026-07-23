@@ -24,13 +24,16 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
     // D63: pro Aktivität gespeicherte Spaltenauswahl/-reihenfolge des ZIM-Exports.
     let pdfColumnsSetting = null;
     let pdfColumnsSaveTimer = null;
+    // D84: Referent*innen der Aktivität als Nutzer-Id -> {id, fullname, avatarurl}.
+    const referentenById = new Map();
     const PDF_COLUMN_ORDER = [
-        'uhrzeit', 'titel', 'seminarphase', 'kurzbeschreibung', 'debrief',
+        'uhrzeit', 'titel', 'referent', 'seminarphase', 'kurzbeschreibung', 'debrief',
         'ablauf', 'lernziele', 'risiken', 'materialtechnik', 'sonstiges'
     ];
     const PDF_COLUMN_LABELS = {
         uhrzeit: 'Uhrzeit',
         titel: 'Titel',
+        referent: 'Referent*in',
         seminarphase: 'Seminarphase',
         kurzbeschreibung: 'Kurzbeschreibung',
         debrief: 'Debrief-/Reflexionsfragen',
@@ -794,6 +797,20 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
         });
     };
 
+    // D84: Namen für die ZIM-Spalte „Referent*in". Schlägt der Aufruf fehl,
+    // bleibt die Spalte leer — der Export selbst darf daran nicht scheitern.
+    const loadReferenten = (cmid) => {
+        referentenById.clear();
+        return asCall('mod_seminarplaner_get_referenten', {cmid}).then((res) => {
+            (Array.isArray(res && res.referenten) ? res.referenten : []).forEach((person) => {
+                referentenById.set(String(person.id), person);
+            });
+            return true;
+        }).catch(() => {
+            return false;
+        });
+    };
+
     const loadPlanningState = (cmid) => {
         planningUnitsById = {};
         planningState = {};
@@ -938,19 +955,26 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
                         const aktiv = auswahl && auswahl.aktiv !== null && auswahl.aktiv !== undefined ? String(auswahl.aktiv) : '';
                         card = aktiv ? methodById.get(aktiv) : null;
                     }
+                    // D84: Referent*innen hängen an der Platzierung, nicht an
+                    // der Bibliothekskarte — sie reisen deshalb hier mit.
+                    const referenten = Array.isArray(p.referenten) ? p.referenten : [];
                     if (card) {
                         const normalized = normalizeMethodForPdf(card);
                         items.push(Object.assign({}, normalized, {
                             kind: 'method',
                             title: String(p.titel || '').trim() || normalized.title,
                             startMin: clock,
-                            endMin: clock + duration
+                            endMin: clock + duration,
+                            referenten
                         }));
                     } else {
                         const baustein = p.bausteinid ? bausteine[p.bausteinid] : null;
                         const title = String(p.titel || '').trim()
                             || (baustein && baustein.titel ? String(baustein.titel) : 'Seminareinheit');
-                        items.push({kind: 'method', title, phase: '', startMin: clock, endMin: clock + duration, details: {}});
+                        items.push({
+                            kind: 'method', title, phase: '', startMin: clock, endMin: clock + duration,
+                            details: {}, referenten
+                        });
                     }
                     clock += duration;
                 });
@@ -1223,6 +1247,15 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
         };
     };
 
+    // D84: Nutzer-Id -> Anzeigename. Der Plan speichert nur Ids; für die
+    // ZIM-Spalte braucht das PDF die Namen.
+    const referentNames = (ids) => {
+        return (Array.isArray(ids) ? ids : [])
+            .map((id) => referentenById.get(String(id)))
+            .filter((person) => !!person)
+            .map((person) => person.fullname);
+    };
+
     const joinUniquePdfValues = (values) => {
         const seen = {};
         return values
@@ -1421,6 +1454,10 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
                     return `${formatTimeForPdf(item.startMin)} – ${formatTimeForPdf(item.endMin)}`;
                 case 'titel':
                     return escapeTextForPdf(unit.title || item.title || '');
+                case 'referent':
+                    return joinUniquePdfValues(
+                        unit.methods.reduce((names, method) => names.concat(referentNames(method.referenten)), [])
+                    );
                 case 'seminarphase':
                     return joinUniquePdfValues(unit.methods.map((method) => normalizePhaseText(method.phase || '')));
                 case 'kurzbeschreibung': {
@@ -1467,6 +1504,8 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
                 return `${formatTimeForPdf(item.startMin)} – ${formatTimeForPdf(item.endMin)}`;
             case 'titel':
                 return escapeTextForPdf(item.title || '');
+            case 'referent':
+                return escapeTextForPdf(referentNames(item.referenten).join(', '));
             case 'seminarphase':
                 return escapeTextForPdf(normalizePhaseText(item.phase || details.phase || ''));
             case 'kurzbeschreibung':
@@ -1817,6 +1856,7 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
         const widthMap = {
             uhrzeit: 25,
             titel: 35,
+            referent: 28,
             seminarphase: 28,
             kurzbeschreibung: 40,
             debrief: 35,
@@ -2624,6 +2664,7 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
                     loadPlanningState(cmid),
                     loadGlobalMethodsets(cmid),
                     loadGlobalSyncStatus(cmid),
+                    loadReferenten(cmid),
                     preparePdfLogo(logo)
                 ]);
             }).then(() => {

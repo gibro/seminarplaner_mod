@@ -170,6 +170,7 @@ class restore_seminarplaner_activity_structure_step extends restore_activity_str
         }
 
         $data->userid = $this->map_userid_or_zero((int)($data->userid ?? 0));
+        $data->statejson = $this->remap_referenten((string)($data->statejson ?? ''));
 
         $existing = $DB->get_record('kgen_grid_user_state', ['gridid' => $data->gridid, 'userid' => $data->userid], 'id');
         if ($existing) {
@@ -194,6 +195,7 @@ class restore_seminarplaner_activity_structure_step extends restore_activity_str
         $data->cmid = $this->resolve_restored_cmid();
         $data->gridid = $this->map_gridid_or_zero((int)($data->gridid ?? 0));
         $data->publishedby = $this->map_userid_or_zero((int)($data->publishedby ?? 0));
+        $data->statejson = $this->remap_referenten((string)($data->statejson ?? ''));
         $DB->insert_record('kgen_roterfaden_state', $data);
     }
 
@@ -244,6 +246,50 @@ class restore_seminarplaner_activity_structure_step extends restore_activity_str
         $cm = get_coursemodule_from_instance('seminarplaner', $instanceid, $this->get_courseid(), false, MUST_EXIST);
         $this->restoredcmid = (int)$cm->id;
         return $this->restoredcmid;
+    }
+
+    /**
+     * Rewrite the Referent*innen ids inside a saved plan state (D84).
+     *
+     * Two things have to happen when a plan lands in another course (or on
+     * another site): the ids have to follow the restore's user mapping, and
+     * whoever may not plan seminars here loses the assignment. Without the
+     * first step a raw id would silently point at a stranger; without the
+     * second, people who are not part of this course would stay in the plan.
+     *
+     * @param string $statejson Saved plan state.
+     * @return string Rewritten state.
+     */
+    private function remap_referenten(string $statejson): string {
+        global $CFG;
+
+        if ($statejson === '' || strpos($statejson, '"referenten"') === false) {
+            return $statejson;
+        }
+        $state = json_decode($statejson, true);
+        $statekey = \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY;
+        if (!is_array($state) || !is_array($state[$statekey] ?? null)) {
+            return $statejson;
+        }
+
+        require_once($CFG->dirroot . '/mod/seminarplaner/locallib.php');
+        $allowed = seminarplaner_allowed_referent_ids($this->resolve_restored_cmid());
+        $state[$statekey] = \mod_seminarplaner\local\sequence\sequence_state::map_referenten(
+            $state[$statekey],
+            function (array $ids) use ($allowed): array {
+                $mapped = [];
+                foreach ($ids as $id) {
+                    $new = $this->map_userid_or_zero($id);
+                    if ($new > 0 && ($allowed === null || in_array($new, $allowed, true))) {
+                        $mapped[] = $new;
+                    }
+                }
+                return $mapped;
+            }
+        );
+
+        $json = json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return $json === false ? $statejson : $json;
     }
 
     /**

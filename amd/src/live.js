@@ -66,6 +66,8 @@ define([
             this.units = [];
             this.steps = [];
             this.step = 0;
+            // D84: Nutzer-Id -> {id, fullname, avatarurl}.
+            this.referenten = new Map();
             // Abgehakte Checklisten-Punkte, nur fuer diese Sitzung im Speicher —
             // die Ansicht schreibt nichts in den Plan zurueck (D69).
             this.ticks = {};
@@ -92,7 +94,30 @@ define([
 
             this.bindControls();
             this.applyClockVisibility(this.readStoredClock());
+            this.loadReferenten();
             this.load(0);
+        }
+
+        // D84: Name und Profilbild der Referent*innen. Die Zuordnung selbst
+        // steht als Nutzer-Id im Plan; ohne diese Liste bleibt der Kopf des
+        // Schritts einfach ohne Personenangabe.
+        loadReferenten() {
+            return asCall('mod_seminarplaner_get_referenten', {cmid: this.cmid})
+                .then((res) => {
+                    this.referenten = new Map(
+                        (Array.isArray(res && res.referenten) ? res.referenten : [])
+                            .map((person) => [String(person.id), person])
+                    );
+                    // Nur nachzeichnen, wenn die Durchfuehrung schon laeuft —
+                    // auf dem Startbildschirm gibt es nichts zu aktualisieren.
+                    if (this.units.length && this.startPanel && this.startPanel.classList.contains('kg-hidden')) {
+                        this.render();
+                    }
+                    return null;
+                })
+                .catch(() => {
+                    this.referenten = new Map();
+                });
         }
 
         setStatus(text, isError = false) {
@@ -318,6 +343,27 @@ define([
                 </ol>`;
         }
 
+        // D84: Wer hält diese Einheit? Steht im Kopf des aktuellen Schritts —
+        // im Souffleur ist das eine Ansage an den Raum, deshalb Avatar UND Name
+        // (anders als im Überblick, wo nur das Bild Platz hat).
+        renderReferenten(unit) {
+            const people = (Array.isArray(unit.referenten) ? unit.referenten : [])
+                .map((userid) => this.referenten.get(String(userid)))
+                .filter((person) => !!person);
+            if (!people.length) {
+                return '';
+            }
+            return `
+                <div class="live-card__referenten">
+                    ${people.map((person) => `
+                        <span class="live-referent">
+                            <img class="live-referent__avatar" src="${esc(person.avatarurl)}" alt=""
+                                loading="lazy" decoding="async">
+                            <span class="live-referent__name">${esc(person.fullname)}</span>
+                        </span>`).join('')}
+                </div>`;
+        }
+
         renderNow(unit, step) {
             if (unit.kind === 'pause') {
                 this.nowBox.innerHTML = `
@@ -349,6 +395,7 @@ define([
                     </div>
                     <h2 class="live-card__title">${esc(unit.title)}</h2>
                     ${crumbs.length ? `<div class="live-card__crumb">${crumbs.join(' · ')}</div>` : ''}
+                    ${this.renderReferenten(unit)}
                     ${this.renderSections(unit, step.sectionIndex)}
                     <div class="live-panels">
                         ${this.renderChecklist(unit)}

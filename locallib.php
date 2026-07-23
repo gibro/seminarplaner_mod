@@ -91,9 +91,67 @@ function seminarplaner_get_pdf_logo(context_module $context, stdClass $seminarpl
  */
 function seminarplaner_pdf_column_keys(): array {
     return [
-        'uhrzeit', 'titel', 'seminarphase', 'kurzbeschreibung',
+        'uhrzeit', 'titel', 'referent', 'seminarphase', 'kurzbeschreibung',
         'debrief', 'ablauf', 'lernziele', 'risiken', 'materialtechnik', 'sonstiges',
     ];
+}
+
+/**
+ * People who can be assigned to a placed seminar unit (D84).
+ *
+ * The assignment happens in the sequence, not in the library, and only names
+ * course staff: everyone enrolled in this course who may plan seminars here
+ * (`managegrids` — Trainer/in, Manager). Participants are never offered.
+ *
+ * @param context_module $context Module context.
+ * @return array List of ['id' => int, 'fullname' => string, 'avatarurl' => string].
+ */
+function seminarplaner_get_referent_options(context_module $context): array {
+    global $PAGE;
+
+    $fields = 'u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic, u.middlename, '
+        . 'u.alternatename, u.picture, u.imagealt, u.email';
+    $users = get_enrolled_users($context, 'mod/seminarplaner:managegrids', 0, $fields, 'u.lastname, u.firstname');
+
+    $options = [];
+    foreach ($users as $user) {
+        $picture = new user_picture($user);
+        $picture->size = 100;
+        $options[] = [
+            'id' => (int)$user->id,
+            'fullname' => fullname($user),
+            'avatarurl' => $picture->get_url($PAGE)->out(false),
+        ];
+    }
+    return $options;
+}
+
+/**
+ * Ids that may be stored as Referent*innen of an activity (D84).
+ *
+ * Returns null when the activity context cannot be resolved. Callers must
+ * treat that as "unknown" and skip filtering — an empty list means the
+ * opposite ("nobody may be assigned here") and would silently delete
+ * assignments.
+ *
+ * @param int $cmid Course module id.
+ * @return int[]|null
+ */
+function seminarplaner_allowed_referent_ids(int $cmid): ?array {
+    static $cache = [];
+
+    if (array_key_exists($cmid, $cache)) {
+        return $cache[$cmid];
+    }
+    try {
+        $context = context_module::instance($cmid);
+        $users = get_enrolled_users($context, 'mod/seminarplaner:managegrids', 0, 'u.id');
+        $ids = array_map('intval', array_keys($users));
+    } catch (Throwable $e) {
+        $ids = null;
+    }
+    $cache[$cmid] = $ids;
+    return $ids;
 }
 
 /**

@@ -339,6 +339,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.versionhash = '';
             this.methods = [];
             this.methodsetNames = new Map();
+            // D84: Nutzer-Id -> {id, fullname, avatarurl} der Referent*innen.
+            this.referenten = new Map();
             this.planningState = {units: [], slotorder: []};
             this.methodAlternativeSelection = {};
             this.filterIndex = [];
@@ -2428,6 +2430,14 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             sqTag: idx + 1,
                             sqReserved: reserved,
                         };
+                        // D84: Referent*innen der Platzierung mitnehmen; die
+                        // Kachel zeigt daraus den runden Profil-Avatar.
+                        const referenten = (Array.isArray(p.referenten) ? p.referenten : [])
+                            .map((userid) => this.referenten.get(String(userid)))
+                            .filter((person) => !!person);
+                        if (referenten.length) {
+                            item.sqReferenten = referenten;
+                        }
                         // Phasenfarbe (Handoff-Palette): aktive Einheiten-Karte
                         // -> deren Seminarphase; sonst Phase des Alt-Eintrags.
                         if (p.typ === 'einheit') {
@@ -2752,6 +2762,18 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     // CD-Handoff: ⇄-Marker oben rechts, wenn Alternativen
                     // hinterlegt sind (nur Sequenz-Projektion).
                     const altmarker = (it.sqTag && it.sqAlt) ? '<span class="sp-item__alt" aria-hidden="true">⇄</span>' : '';
+                    // D84: kleiner runder Moodle-Avatar je zugeordneter Person.
+                    // Bewusst ohne Namen in der Kachel - dort ist kaum Platz -
+                    // der Name steht im Tooltip und im aria-label.
+                    const referenten = Array.isArray(it.sqReferenten) ? it.sqReferenten : [];
+                    const avatars = referenten.length
+                        ? `<span class="sp-item__referenten"
+                             title="${escapeHtml(referenten.map((p) => p.fullname).join(', '))}">
+                             ${referenten.map((person) => `<img class="sp-item__avatar"
+                               src="${escapeHtml(person.avatarurl)}"
+                               alt="${escapeHtml(person.fullname)}" loading="lazy" decoding="async">`).join('')}
+                           </span>`
+                        : '';
                     div.innerHTML = `
                         <div class="sp-item-content">
                             ${unitLabelHtml}
@@ -2759,6 +2781,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             ${isDayView ? '' : `<div class="sp-meta">${escapeHtml(timeLabel)}</div>`}
                             ${unitmethodshtml}
                         </div>
+                        ${avatars}
                         ${altmarker}
                         ${contextmenu}
                     `;
@@ -4465,8 +4488,27 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             });
         }
 
+        // D84: Namen und Profilbilder der Referent*innen. Die Zuordnung selbst
+        // steckt als Nutzer-Id in der Sequenz; hier kommt dazu, was der
+        // Überblick zum Zeichnen des Avatars braucht.
+        loadReferenten() {
+            return asCall('mod_seminarplaner_get_referenten', {cmid: this.cmid}).then((res) => {
+                this.referenten = new Map(
+                    (Array.isArray(res && res.referenten) ? res.referenten : [])
+                        .map((person) => [String(person.id), person])
+                );
+            }).catch(() => {
+                this.referenten = new Map();
+            });
+        }
+
         loadSources() {
-            return Promise.all([this.loadMethodCards(), this.loadPlanningState(), this.loadMethodsetNames()]).then(() => {
+            return Promise.all([
+                this.loadMethodCards(),
+                this.loadPlanningState(),
+                this.loadMethodsetNames(),
+                this.loadReferenten(),
+            ]).then(() => {
                 this.renderMethods();
             });
         }

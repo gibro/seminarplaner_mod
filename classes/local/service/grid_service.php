@@ -320,6 +320,19 @@ class grid_service {
                 . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         }
 
+        // D84: Referent*innen sind Personen DIESES Kurses. Der Filter sitzt
+        // hier, weil jeder Schreibweg durch diese Methode laeuft - der Client,
+        // der Konzept-Import aus einem fremden Kurs und die Plan-Kopie.
+        if (
+            isset($state[sequence_state::STATE_KEY]) && is_array($state[sequence_state::STATE_KEY])
+                && sequence_state::has_referenten($state[sequence_state::STATE_KEY])
+        ) {
+            $state[sequence_state::STATE_KEY] = $this->filter_referenten_for_grid(
+                $gridid,
+                $state[sequence_state::STATE_KEY]
+            );
+        }
+
         // Empty sequence maps must stay JSON objects across the
         // decode/encode round trip, otherwise clients receive arrays and
         // silently lose entries (see sequence_state::normalize_maps).
@@ -335,6 +348,29 @@ class grid_service {
         $newhash = sha1($json . '|' . microtime(true));
         $this->repository->upsert_user_state($gridid, self::SHARED_STATE_USERID, $json, $newhash);
         return $newhash;
+    }
+
+    /**
+     * Keep only Referent*innen who may be assigned in this plan's activity (D84).
+     *
+     * @param int $gridid Grid id.
+     * @param array $sequenz Sequence section.
+     * @return array
+     */
+    private function filter_referenten_for_grid(int $gridid, array $sequenz): array {
+        global $CFG;
+
+        $grid = $this->repository->get_grid($gridid);
+        $cmid = $grid ? (int)$grid->cmid : 0;
+        if ($cmid <= 0) {
+            return $sequenz;
+        }
+        require_once($CFG->dirroot . '/mod/seminarplaner/locallib.php');
+        $allowed = seminarplaner_allowed_referent_ids($cmid);
+        if ($allowed === null) {
+            return $sequenz;
+        }
+        return sequence_state::filter_referenten($sequenz, $allowed);
     }
 
     /**
@@ -829,6 +865,13 @@ class grid_service {
                     $state['plan']['days'] = $days;
                 }
             }
+        }
+
+        // D84: Der veroeffentlichte Rote Faden ist die Teilnehmenden-Sicht; die
+        // Referent*innen-Zuordnung gehoert dort nicht hinein (und damit auch
+        // nicht ins Handout, das aus diesem Schnappschuss entsteht).
+        if (isset($state[sequence_state::STATE_KEY]) && is_array($state[sequence_state::STATE_KEY])) {
+            $state[sequence_state::STATE_KEY] = sequence_state::strip_referenten($state[sequence_state::STATE_KEY]);
         }
 
         $json = json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

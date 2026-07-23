@@ -119,6 +119,101 @@ class sequence_state {
         return $sequenz;
     }
 
+    /** @var string Placement key holding the assigned Referent*innen (D84). */
+    public const KEY_REFERENTEN = 'referenten';
+
+    /**
+     * Normalize the Referent*innen of a single placement (D84).
+     *
+     * Stored are plain Moodle user ids; name and avatar are resolved at
+     * display time. Duplicates and non-numeric values are dropped, and an
+     * empty assignment loses the key entirely so plans without any
+     * assignment stay byte-identical to before.
+     *
+     * @param mixed $value Raw value from the client.
+     * @return int[]
+     */
+    public static function normalize_referenten($value): array {
+        $ids = [];
+        foreach ((array)$value as $id) {
+            $id = (int)$id;
+            if ($id > 0 && !in_array($id, $ids, true)) {
+                $ids[] = $id;
+            }
+        }
+        return $ids;
+    }
+
+    /**
+     * Apply a callback to the Referent*innen of every placement (D84).
+     *
+     * @param array $sequenz Sequence section.
+     * @param callable $mapper Receives int[] and returns int[].
+     * @return array Sequence section with rewritten assignments.
+     */
+    public static function map_referenten(array $sequenz, callable $mapper): array {
+        if (!is_array($sequenz['platzierungen'] ?? null)) {
+            return $sequenz;
+        }
+        foreach ($sequenz['platzierungen'] as $pid => $platzierung) {
+            if (!is_array($platzierung) || !array_key_exists(self::KEY_REFERENTEN, $platzierung)) {
+                continue;
+            }
+            $ids = $mapper(self::normalize_referenten($platzierung[self::KEY_REFERENTEN]));
+            if ($ids) {
+                $sequenz['platzierungen'][$pid][self::KEY_REFERENTEN] = array_values($ids);
+            } else {
+                unset($sequenz['platzierungen'][$pid][self::KEY_REFERENTEN]);
+            }
+        }
+        return $sequenz;
+    }
+
+    /**
+     * Drop every Referent*innen assignment from a sequence (D84).
+     *
+     * Used wherever a plan leaves its course — the assignment names people of
+     * this course and is meaningless (and none of their business) elsewhere.
+     *
+     * @param array $sequenz Sequence section.
+     * @return array
+     */
+    public static function strip_referenten(array $sequenz): array {
+        return self::map_referenten($sequenz, static fn(array $ids): array => []);
+    }
+
+    /**
+     * Keep only assignments to people who may be Referent*in here (D84).
+     *
+     * @param array $sequenz Sequence section.
+     * @param int[] $allowedids Assignable user ids.
+     * @return array
+     */
+    public static function filter_referenten(array $sequenz, array $allowedids): array {
+        $allowed = array_fill_keys(array_map('intval', $allowedids), true);
+        return self::map_referenten($sequenz, static function (array $ids) use ($allowed): array {
+            return array_values(array_filter($ids, static fn(int $id): bool => isset($allowed[$id])));
+        });
+    }
+
+    /**
+     * Whether any placement carries a Referent*innen assignment (D84).
+     *
+     * Lets callers skip the (enrolment querying) filter for the overwhelming
+     * majority of saves that touch no assignment at all.
+     *
+     * @param array $sequenz Sequence section.
+     * @return bool
+     */
+    public static function has_referenten(array $sequenz): bool {
+        foreach ((array)($sequenz['platzierungen'] ?? []) as $platzierung) {
+            if (is_array($platzierung) && !empty($platzierung[self::KEY_REFERENTEN])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Whether the given grid state already carries a sequence section.
      *

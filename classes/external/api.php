@@ -2940,6 +2940,10 @@ class api extends external_api {
                 'Dieser Seminarplan hat noch keine Sequenz – bitte einmal in der Sequenzansicht öffnen.'
             );
         }
+        // D84: Das Konzept verlaesst den Kurs. Die Referent*innen-Zuordnung
+        // benennt Personen dieses Kurses und bleibt deshalb hier.
+        $sequenz = \mod_seminarplaner\local\sequence\sequence_state::strip_referenten($sequenz);
+        $state[\mod_seminarplaner\local\sequence\sequence_state::STATE_KEY] = $sequenz;
 
         // The plan's units travel inside the snapshot with their original ids,
         // so the sequence references survive the roundtrip (table rows below
@@ -4302,6 +4306,57 @@ class api extends external_api {
     public static function set_pdf_columns_returns(): external_single_structure {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Save result'),
+        ]);
+    }
+
+    /**
+     * Definiert die Eingabeparameter für die Liste möglicher Referent*innen.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
+    public static function get_referenten_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+        ]);
+    }
+
+    /**
+     * Personen, die in dieser Aktivität einer Seminareinheit zugeordnet
+     * werden können (D84), samt Name und Profilbild.
+     *
+     * Lesend und auch für die Live-Ansicht gedacht, deshalb genügt
+     * `viewlive` bzw. `managegrids` — beides hat, wer den Plan überhaupt
+     * sieht; Teilnehmende bekommen die Liste nicht.
+     *
+     * @param int $cmid Kurs-Modul-Id der Aktivität.
+     * @return array Array mit dem Schlüssel referenten.
+     */
+    public static function get_referenten(int $cmid): array {
+        global $CFG;
+        require_once($CFG->dirroot . '/mod/seminarplaner/locallib.php');
+
+        $params = self::validate_parameters(self::get_referenten_parameters(), ['cmid' => $cmid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        $context = $resolved['context'];
+        if (!has_capability('mod/seminarplaner:viewlive', $context)) {
+            require_capability('mod/seminarplaner:managegrids', $context);
+        }
+
+        return ['referenten' => seminarplaner_get_referent_options($context)];
+    }
+
+    /**
+     * Beschreibt die Rückgabestruktur der Referent*innen-Liste.
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
+    public static function get_referenten_returns(): external_single_structure {
+        return new external_single_structure([
+            'referenten' => new external_multiple_structure(new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'User id'),
+                'fullname' => new external_value(PARAM_RAW, 'Full name'),
+                'avatarurl' => new external_value(PARAM_URL, 'Profile picture url'),
+            ])),
         ]);
     }
 }

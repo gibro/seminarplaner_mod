@@ -517,6 +517,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             // immer nur eines gleichzeitig, geschlossen ueber denselben
             // Klick-daneben-Handler.
             this.openPhasePid = '';
+            // D84: Referent*innen dieses Kurses ({id, fullname, avatarurl}) und
+            // das gerade offene Zuordnungs-Dropdown (pid).
+            this.referenten = [];
+            this.openRefPid = '';
             this.openBausteinSwapBid = '';
             this.openMenuPid = '';
             this.headingPid = '';
@@ -740,7 +744,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 const outsideBausteinSwap = !insideSwap && this.openBausteinSwapBid;
                 const outsideMenu = !event.target.closest('.sq-menu') && this.openMenuPid;
                 const outsidePhase = !event.target.closest('.sq-phase') && this.openPhasePid;
-                if (outsideSwap || outsideBausteinSwap || outsideMenu || outsidePhase) {
+                const outsideRef = !event.target.closest('.sq-ref') && this.openRefPid;
+                if (outsideSwap || outsideBausteinSwap || outsideMenu || outsidePhase || outsideRef) {
                     if (outsideSwap) {
                         this.openSwapPid = '';
                     }
@@ -752,6 +757,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     }
                     if (outsidePhase) {
                         this.openPhasePid = '';
+                    }
+                    if (outsideRef) {
+                        this.openRefPid = '';
                     }
                     this.render();
                 }
@@ -768,6 +776,56 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             this.initPublishControl();
             this.loadGrids(this.requestedGrid || undefined);
             this.loadEnrichment();
+            this.loadReferenten();
+        }
+
+        // ---- Referent*innen (D84) -------------------------------------------
+        // Zugeordnet wird in der Sequenz, nicht in der Bibliothek: dieselbe
+        // Einheit kann in zwei Plänen von zwei Personen gehalten werden. Die
+        // Zuordnung hängt deshalb an der Platzierung, nicht an der Karte.
+
+        loadReferenten() {
+            asCall('mod_seminarplaner_get_referenten', {cmid: this.cmid}).then((res) => {
+                this.referenten = Array.isArray(res.referenten) ? res.referenten : [];
+                // Kommt nach dem ersten Render an — die Chips zeichnen sich
+                // dann mit dem nächsten Durchlauf.
+                if (this.sequenz) {
+                    this.render();
+                }
+                return true;
+            }).catch(() => {
+                this.referenten = [];
+            });
+        }
+
+        referentById(id) {
+            const key = String(id);
+            return this.referenten.find((person) => String(person.id) === key) || null;
+        }
+
+        placementReferenten(placement) {
+            return (Array.isArray(placement.referenten) ? placement.referenten : [])
+                .map((id) => this.referentById(id))
+                .filter((person) => !!person);
+        }
+
+        toggleReferent(pid, userid) {
+            const placement = this.placement(pid);
+            const id = Number.parseInt(String(userid), 10);
+            if (!placement || !Number.isFinite(id) || id <= 0) {
+                return;
+            }
+            const current = Array.isArray(placement.referenten) ? placement.referenten.map(Number) : [];
+            const next = current.includes(id) ? current.filter((entry) => entry !== id) : current.concat([id]);
+            if (next.length) {
+                placement.referenten = next;
+            } else {
+                // Ohne Zuordnung verschwindet der Schlüssel wieder, damit Pläne
+                // ohne Referent*innen unverändert bleiben.
+                delete placement.referenten;
+            }
+            this.setDirty(true);
+            this.render();
         }
 
         // ---- Plan creation and setup (D45, moved here from the overview) ----
@@ -5032,6 +5090,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 this.render();
             } else if (type === 'phase-choose') {
                 this.choosePhase(pid, action.getAttribute('data-phase') || '');
+            } else if (type === 'ref-toggle') {
+                this.openRefPid = this.openRefPid === pid ? '' : pid;
+                this.render();
+            } else if (type === 'ref-choose') {
+                this.toggleReferent(pid, action.getAttribute('data-userid') || '');
             } else if (type === 'variant') {
                 this.chooseVariant(action.getAttribute('data-bid') || '', action.getAttribute('data-vid') || '');
             } else if (type === 'bswap-toggle') {
@@ -5639,6 +5702,60 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 </span>`;
         }
 
+        // D84: Referent*innen-Chip direkt in der Zeile. Zugeordnet ist, wessen
+        // Avatar zu sehen ist; der Klick öffnet die Liste der Personen, die in
+        // diesem Kurs Seminare planen dürfen (Mehrfachauswahl für Co-Moderation).
+        renderReferentChip(p) {
+            if (p.data.typ !== 'einheit') {
+                return '';
+            }
+            const assigned = this.placementReferenten(p.data);
+            const open = this.openRefPid === p.pid;
+            const avatars = assigned.map((person) => `
+                <img class="sq-ref__avatar" src="${escapeHtml(person.avatarurl)}" alt=""
+                  loading="lazy" decoding="async">`).join('');
+            const names = assigned.map((person) => person.fullname).join(', ');
+            const label = assigned.length
+                ? `Referent*in: ${names} – ändern`
+                : 'Referent*in zuordnen';
+            const empty = `
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                  <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                  <path d="M19 8v6M22 11h-6"/></svg>`;
+            // Ohne Liste (noch nicht geladen oder keine Berechtigten im Kurs)
+            // bleibt der Knopf weg statt ein leeres Menü anzubieten.
+            if (!this.referenten.length && !assigned.length) {
+                return '';
+            }
+            const options = this.referenten.map((person) => {
+                const active = assigned.some((entry) => String(entry.id) === String(person.id));
+                return `
+                    <div class="sq-ref__option${active ? ' active' : ''}" role="menuitemcheckbox"
+                      aria-checked="${active ? 'true' : 'false'}"
+                      data-sq-action="ref-choose" data-pid="${escapeHtml(p.pid)}"
+                      data-userid="${escapeHtml(String(person.id))}">
+                      <img class="sq-ref__avatar" src="${escapeHtml(person.avatarurl)}" alt=""
+                        loading="lazy" decoding="async">
+                      <span class="sq-ref__name">${escapeHtml(person.fullname)}</span>
+                    </div>`;
+            }).join('');
+            return `
+                <span class="sq-ref">
+                  <button type="button" class="sq-ref__btn${assigned.length ? ' has-people' : ''}"
+                    data-sq-action="ref-toggle" data-pid="${escapeHtml(p.pid)}"
+                    aria-haspopup="true" aria-expanded="${open ? 'true' : 'false'}"
+                    title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">
+                    ${assigned.length ? avatars : empty}
+                  </button>
+                  <div class="sq-ref__panel${open ? ' open' : ''}" role="menu">
+                    <div class="sq-ref__head">Wer hält diese Einheit?</div>
+                    ${options || '<div class="sq-ref__note">Keine Referent*innen im Kurs.</div>'}
+                    <div class="sq-ref__note">Gilt nur für diese Platzierung in diesem Seminarplan.</div>
+                  </div>
+                </span>`;
+        }
+
         // Nur noch das Eingabefeld: „Überschrift geben" ruft man jetzt im ⋮-Menü
         // der Zeile auf, damit unter jeder Einheit kein Dauer-Link mehr steht.
         renderHeadingAffordance(p) {
@@ -5726,6 +5843,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                   ${inBaustein ? '' : this.renderGrip()}
                   <div class="sq-alt__options">${options}</div>
                   <div class="sq-unit__actions">
+                    ${this.renderReferentChip(p)}
                     <button type="button" class="kg-btn" data-sq-action="edit"
                       data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
                     ${this.renderRowMenu(p, inBaustein)}
@@ -5813,6 +5931,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                       ${meta ? `<div class="sq-unit__meta">${meta}</div>` : ''}
                     </div>
                     <div class="sq-unit__actions">
+                      ${this.renderReferentChip(p)}
                       ${this.renderSwap(p)}
                       ${this.renderPhaseSelect(p)}
                       <button type="button" class="kg-btn" data-sq-action="edit" data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
