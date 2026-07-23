@@ -52,6 +52,11 @@ final class referenten_test extends advanced_testcase {
 
         $this->resetAfterTest(true);
         $this->setAdminUser();
+        // Ohne das verschickt das Einschreiben eine Willkommensmail, deren
+        // Renderer das Theme festnagelt - jeder spaetere Kontextwechsel im
+        // Webservice laeuft danach in eine coding_exception.
+        $this->preventResetByRollback();
+        $this->redirectMessages();
 
         $generator = $this->getDataGenerator();
         $course = $generator->create_course();
