@@ -1,0 +1,248 @@
+/* This file is part of Moodle - http://moodle.org/
+ *
+ * Moodle is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Moodle is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Roter Faden in der Moodle App.
+ *
+ * Diese Datei wird von der App geladen und gilt dort global — jede Regel steht
+ * deshalb unter .sp-app. Farben und Abstaende folgen dem Handoff
+ * (docs/design_handoff_seminarplaner/ROTER-FADEN.md); Hintergruende und Schrift
+ * kommen aus den Ionic-Variablen, damit der helle und der dunkle Modus der App
+ * beide tragen.
+ */
+
+.sp-app {
+  --sp-red: #E3051B;
+  --sp-darkred: #882A30;
+  --sp-yellow: #EAB500;
+  --sp-blue: #2F80AB;
+  --sp-green: #5B9945;
+  --sp-gray: #646464;
+  --sp-line: rgba(128, 128, 128, 0.28);
+  --sp-muted: var(--ion-color-medium, #646464);
+
+  padding: 8px 0 24px;
+}
+
+/* ---- Kopfzeile ---- */
+
+.sp-app__note ion-card-content {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.sp-app__summary {
+  padding: 4px 16px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--sp-muted);
+}
+
+.sp-app__list {
+  background: transparent;
+}
+
+/* ---- Tag ---- */
+
+.sp-app ion-item-divider.sp-day {
+  --background: var(--ion-background-color, #fff);
+  --padding-start: 16px;
+  --inner-padding-end: 16px;
+  border-bottom: 2px solid var(--sp-line);
+  margin-top: 8px;
+}
+
+.sp-app ion-item-divider.sp-day--today {
+  border-bottom-color: var(--sp-red);
+}
+
+.sp-day__name {
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  margin: 6px 0 2px !important;
+}
+
+.sp-day__count {
+  font-size: 12px !important;
+  color: var(--sp-muted) !important;
+  margin: 0 0 6px !important;
+}
+
+.sp-app ion-badge.sp-day__today {
+  --background: var(--sp-red);
+  --color: #fff;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ---- Anker (Vormittag / Nachmittag) ---- */
+
+.sp-anchor {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 14px 16px 6px;
+}
+
+.sp-anchor__name {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sp-muted);
+}
+
+.sp-anchor__time {
+  font-size: 12px;
+  color: var(--sp-muted);
+}
+
+/* ---- Block ---- */
+
+.sp-block {
+  position: relative;
+  margin: 6px 16px 10px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--sp-line);
+  border-radius: 10px;
+  border-left: 4px solid var(--sp-color, var(--sp-gray));
+  background: var(--ion-card-background, var(--ion-background-color, #fff));
+}
+
+.sp-block__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.sp-block__num {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sp-color, var(--sp-gray));
+}
+
+.sp-block__title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.sp-block__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--sp-muted);
+}
+
+.sp-block__time {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ion-text-color, #1a1a1a);
+}
+
+.sp-block__dur {
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--sp-tint, rgba(128, 128, 128, 0.16));
+  color: var(--sp-text, var(--sp-gray));
+}
+
+.sp-cont {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-style: italic;
+  border: 1px dashed var(--sp-line);
+}
+
+/* ---- Themen eines Blocks ---- */
+
+.sp-themen {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--sp-line);
+}
+
+.sp-theme {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.sp-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sp-color, var(--sp-gray));
+}
+
+.sp-theme__title {
+  flex: 1 1 auto;
+}
+
+.sp-theme__dur {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--sp-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Seminarphasen: dieselbe Zuordnung wie im Browser ---- */
+
+.sp-phase--orientierung {
+  --sp-color: var(--sp-blue);
+  --sp-tint: #e7f0f5;
+  --sp-text: #215d7e;
+}
+
+.sp-phase--erfahrung {
+  --sp-color: var(--sp-green);
+  --sp-tint: #e7f1e3;
+  --sp-text: #3f6e2f;
+}
+
+.sp-phase--analyse {
+  --sp-color: var(--sp-yellow);
+  --sp-tint: #fbf1d0;
+  --sp-text: #8a6d00;
+}
+
+.sp-phase--handlung {
+  --sp-color: var(--sp-darkred);
+  --sp-tint: #f3e6e7;
+  --sp-text: var(--sp-darkred);
+}
+
+.sp-phase--transfer {
+  --sp-color: var(--sp-gray);
+  --sp-tint: #eeeeee;
+  --sp-text: #4a4a4a;
+}

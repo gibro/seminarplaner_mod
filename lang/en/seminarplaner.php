@@ -109,6 +109,20 @@ $string['roterfaden_publishlabel'] = 'Publish seminar plan as Common Thread';
 $string['roterfaden_theme_label'] = 'Timeline style';
 $string['roterfaden_theme_modern'] = 'Modern';
 $string['roterfaden_theme_kompakt'] = 'Compact';
+
+// Moodle App: the Common Thread on a phone.
+$string['mobile_noaccess'] = 'The Common Thread is not available to you here. Seminar planning happens in the browser — open the activity there.';
+$string['mobile_today'] = 'Today';
+$string['mobile_day'] = '1 day';
+$string['mobile_days'] = '{$a} days';
+$string['mobile_item'] = '1 item';
+$string['mobile_items'] = '{$a} items';
+$string['mobile_continuation'] = 'Continued';
+$string['phase_orientierung'] = 'Orientation';
+$string['phase_erfahrung'] = 'Gathering experience';
+$string['phase_analyse'] = 'Analysis';
+$string['phase_handlung'] = 'Action';
+$string['phase_transfer'] = 'Transfer';
 $string['timespan'] = 'Time range';
 $string['stepsize'] = 'Step (minutes)';
 $string['applygrid'] = 'Apply seminar plan';

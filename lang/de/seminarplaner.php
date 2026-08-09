@@ -109,6 +109,20 @@ $string['roterfaden_publishlabel'] = 'Seminarplan als roten Faden veröffentlich
 $string['roterfaden_theme_label'] = 'Timeline-Stil';
 $string['roterfaden_theme_modern'] = 'Modern';
 $string['roterfaden_theme_kompakt'] = 'Kompakt';
+
+// Moodle App: der Rote Faden auf dem Telefon.
+$string['mobile_noaccess'] = 'Der Rote Faden steht dir hier nicht offen. Die Planung des Seminars läuft im Browser — öffne die Aktivität dort.';
+$string['mobile_today'] = 'Heute';
+$string['mobile_day'] = '1 Tag';
+$string['mobile_days'] = '{$a} Tage';
+$string['mobile_item'] = '1 Programmpunkt';
+$string['mobile_items'] = '{$a} Programmpunkte';
+$string['mobile_continuation'] = 'Fortsetzung';
+$string['phase_orientierung'] = 'Orientierung';
+$string['phase_erfahrung'] = 'Erfahrungserhebung';
+$string['phase_analyse'] = 'Analyse';
+$string['phase_handlung'] = 'Handlungsteil';
+$string['phase_transfer'] = 'Transfer';
 $string['timespan'] = 'Zeitfenster';
 $string['stepsize'] = 'Schritt (Minuten)';
 $string['applygrid'] = 'Seminarplan anwenden';
