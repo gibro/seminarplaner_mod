@@ -58,7 +58,13 @@ class mobile {
 
         $cm = get_coursemodule_from_id('seminarplaner', $cmid, 0, false, MUST_EXIST);
         $course = $DB->get_record('course', ['id' => $cm->course], '*', MUST_EXIST);
-        require_login($course, true, $cm);
+        // $preventredirect: Im Webservice gibt es keine Seite, auf die man
+        // weiterleiten koennte. Ohne das Flag endet ein Fall, in dem
+        // require_login sonst zur Einschreibeseite schicken wuerde (nicht
+        // eingeschriebene Person, verborgener Kurs), in „Nichtunterstuetzte
+        // Weiterleitung" statt in einer Fehlermeldung, mit der die App umgehen
+        // kann. Auf gibro.de an einer echten Aktivitaet aufgeschlagen.
+        require_login($course, true, $cm, true, true);
         $context = context_module::instance($cm->id);
 
         // Die Beschreibung der Aktivitaet blendet die App selbst ein

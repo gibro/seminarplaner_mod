@@ -266,6 +266,19 @@ final class mobile_test extends advanced_testcase {
         $this->assertStringNotContainsString('Einstieg ins Thema', $html);
     }
 
+    public function test_missing_enrolment_raises_an_error_instead_of_redirecting(): void {
+        $this->publish($this->build_state());
+
+        // Wer nicht eingeschrieben ist, wuerde im Browser auf die
+        // Einschreibeseite geschickt. Im Webservice gibt es die nicht — dort
+        // muss eine Fehlermeldung herauskommen, mit der die App umgehen kann,
+        // und nicht „Nichtunterstuetzte Weiterleitung".
+        $this->setUser($this->getDataGenerator()->create_user());
+
+        $this->expectException(require_login_exception::class);
+        mobile::mobile_course_view(['cmid' => $this->cmid, 'courseid' => $this->courseid]);
+    }
+
     public function test_curly_braces_in_titles_cannot_reach_angular(): void {
         // Ein "{{" im Seminartitel waere in der App eine Interpolation und
         // liesse die ganze Ansicht leer — es muss als Entitaet ankommen.
