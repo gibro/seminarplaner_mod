@@ -5539,6 +5539,30 @@ details[open] > summary .sq-tri,
 .sq-danger { color: #a02f2f; border-color: #d9b3b3; }
 .sq-danger:hover { background: #fdf2f2; border-color: #a02f2f; }
 
+/* Rueckfrage vor dem Verwerfen: liegt ueber dem statischen Einheiten-Modal.
+   Beide Overlays teilen sich z-index 2000; das dynamische Modal haengt zwar
+   ohnehin am Ende des <body> und gewinnt damit die Reihenfolge, aber die
+   Stapelung soll nicht von der DOM-Position abhaengen. */
+#sq-modal { z-index: 2010; }
+
+/* Datei-Auswahl und Loesch-Nachfrage des Dateimanagers (YUI-Dialoge) muessen
+   UEBER dem Einheiten-Modal liegen. Sie tragen ihren z-index inline (1042),
+   unsere Overlays liegen bei 2000/2010 — ohne diese Anhebung erschien die
+   Auswahl HINTER dem Modal, und jeder Klick darauf landete auf dem
+   Overlay-Hintergrund, war also ein „Modal schliessen" (und verwarf frueher
+   still alle Eingaben). Inline-Stil laesst sich nur per !important
+   ueberstimmen; auf unsere Seiten begrenzt, weil styles.css site-weit
+   geladen wird. Maske und Dialog behalten denselben Wert, damit wie bisher
+   die DOM-Reihenfolge entscheidet (Dialog steht nach der Maske). */
+body.path-mod-seminarplaner .moodle-dialogue-base .yui3-widget-mask,
+body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
+    z-index: 2100 !important;
+}
+.sq-modal--confirm { max-width: 460px; }
+.sq-modal--confirm .sq-modal__body p { margin: 0; }
+/* Fehlermeldung im Modal-Fuss (leer = unsichtbar, kein Platzhalter-Rahmen). */
+.sq-formerror { color: #a02f2f; font-size: 12px; }
+
 /* === D16-Abschluss: Ueberblick read-only (D34) === */
 .kg-grid-readonly .sp-sidebar { display: none; }
 .kg-grid-readonly #sp-filterbar { display: none; }

@@ -1,0 +1,149 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_seminarplaner/mobile_view
+
+    Der Rote Faden in der Moodle App.
+
+    Alles steht hier fertig gerechnet: die App bekommt reines Markup, keine
+    Angular-Ausdruecke — mod_seminarplaner\output\mobile hat Uhrzeiten, Dauern
+    und Beschriftungen schon zu Text gemacht.
+
+    Classes required for JS:
+    * none
+
+    Data attributes required for JS:
+    * none
+
+    Context variables required for this template:
+    * allowed boolean Ob die Nutzerin den Roten Faden sehen darf
+    * noaccessmessage string Hinweis fuer alle uebrigen
+    * hasdays boolean Ob ein Ablauf veroeffentlicht ist
+    * emptymessage string Hinweis, wenn nichts veroeffentlicht ist
+    * summary string "3 Tage · 12 Programmpunkte"
+    * days array Tage mit Ankern, Bloecken und Themen
+
+    Example context (json):
+    {
+        "allowed": true,
+        "noaccessmessage": "",
+        "hasdays": true,
+        "emptymessage": "",
+        "summary": "1 Tag · 1 Programmpunkt",
+        "days": [
+            {
+                "name": "Montag",
+                "istoday": true,
+                "todaylabel": "Heute",
+                "countlabel": "1 Programmpunkt",
+                "anchors": [
+                    {
+                        "key": "vormittag",
+                        "name": "Vormittag",
+                        "timespan": "09:00–12:30",
+                        "hastimespan": true,
+                        "blocks": [
+                            {
+                                "num": 1,
+                                "title": "Ankommen",
+                                "continuation": false,
+                                "continuationlabel": "Fortsetzung",
+                                "phase": "orientierung",
+                                "hasphase": true,
+                                "phaselabel": "Orientierung",
+                                "starttime": "09:00",
+                                "duration": "45 Min",
+                                "showthemen": true,
+                                "themen": [
+                                    {
+                                        "title": "Vorstellungsrunde",
+                                        "phase": "orientierung",
+                                        "hasphase": true,
+                                        "phaselabel": "Orientierung",
+                                        "hasduration": true,
+                                        "duration": "45 Min"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}}
+<div class="sp-app">
+    {{^allowed}}
+        <ion-card class="sp-app__note">
+            <ion-card-content>{{noaccessmessage}}</ion-card-content>
+        </ion-card>
+    {{/allowed}}
+    {{#allowed}}
+        {{^hasdays}}
+            <ion-card class="sp-app__note">
+                <ion-card-content>{{emptymessage}}</ion-card-content>
+            </ion-card>
+        {{/hasdays}}
+        {{#hasdays}}
+            <div class="sp-app__summary">{{summary}}</div>
+            <ion-list class="sp-app__list" lines="none">
+                {{#days}}
+                    <ion-item-divider sticky="true" class="sp-day{{#istoday}} sp-day--today{{/istoday}}">
+                        <ion-label>
+                            <h2 class="sp-day__name">{{name}}</h2>
+                            <p class="sp-day__count">{{countlabel}}</p>
+                        </ion-label>
+                        {{#istoday}}
+                            <ion-badge slot="end" class="sp-day__today">{{todaylabel}}</ion-badge>
+                        {{/istoday}}
+                    </ion-item-divider>
+                    {{#anchors}}
+                        <div class="sp-anchor sp-anchor--{{key}}">
+                            <span class="sp-anchor__name">{{name}}</span>
+                            {{#hastimespan}}<span class="sp-anchor__time">{{timespan}}</span>{{/hastimespan}}
+                        </div>
+                        {{#blocks}}
+                            <div class="sp-block{{#hasphase}} sp-phase--{{phase}}{{/hasphase}}">
+                                <div class="sp-block__head">
+                                    <span class="sp-block__num">{{num}}.</span>
+                                    <span class="sp-block__title">{{title}}</span>
+                                </div>
+                                <div class="sp-block__meta">
+                                    <span class="sp-block__time">{{starttime}}</span>
+                                    <span class="sp-block__dur">{{duration}}</span>
+                                    {{#hasphase}}<span class="sp-badge">{{phaselabel}}</span>{{/hasphase}}
+                                    {{#continuation}}<span class="sp-cont">{{continuationlabel}}</span>{{/continuation}}
+                                </div>
+                                {{#showthemen}}
+                                    <ul class="sp-themen">
+                                        {{#themen}}
+                                            <li class="sp-theme">
+                                                <span class="sp-dot{{#hasphase}} sp-phase--{{phase}}{{/hasphase}}"></span>
+                                                <span class="sp-theme__title">{{title}}</span>
+                                                {{#hasduration}}<span class="sp-theme__dur">{{duration}}</span>{{/hasduration}}
+                                            </li>
+                                        {{/themen}}
+                                    </ul>
+                                {{/showthemen}}
+                            </div>
+                        {{/blocks}}
+                    {{/anchors}}
+                {{/days}}
+            </ion-list>
+        {{/hasdays}}
+    {{/allowed}}
+</div>

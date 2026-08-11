@@ -27,6 +27,7 @@ namespace mod_seminarplaner\local\service;
 use coding_exception;
 use mod_seminarplaner\local\repository\grid_repository;
 use mod_seminarplaner\local\sequence\grid_to_sequence_converter;
+use mod_seminarplaner\local\sequence\roterfaden_model;
 use mod_seminarplaner\local\sequence\sequence_state;
 
 /**
@@ -683,60 +684,25 @@ class grid_service {
      */
     /**
      * Parse a "HH:MM" clock string to minutes, or null when invalid.
+     *
+     * @param mixed $value Clock string.
+     * @return int|null
      */
     private static function parse_clock($value): ?int {
-        if (!is_string($value) || strpos($value, ':') === false) {
-            return null;
-        }
-        [$hh, $mm] = array_pad(explode(':', $value), 2, null);
-        if (!is_numeric($hh) || !is_numeric($mm)) {
-            return null;
-        }
-        return (int)$hh * 60 + (int)$mm;
+        return roterfaden_model::parse_clock($value);
     }
 
     /**
-     * Derive morning/afternoon anchor times from a config (mirror of the JS
-     * deriveAnkerzeiten): legacy configs without ankerzeiten fall back to
-     * timeRange + longest break as the midday cut.
+     * Derive morning/afternoon anchor times from a config.
+     *
+     * Die Regel selbst steht in roterfaden_model (dieselbe, aus der die
+     * Moodle-App rechnet) — hier bleibt nur der kurze Weg dorthin.
      *
      * @param array $config
      * @return array
      */
     private static function derive_ankerzeiten(array $config): array {
-        $az = $config['ankerzeiten'] ?? null;
-        if (
-            is_array($az) && isset($az['vormittag']['start'], $az['nachmittag']['start'])
-                && self::parse_clock($az['vormittag']['start']) !== null
-                && self::parse_clock($az['nachmittag']['start']) !== null
-        ) {
-            return $az;
-        }
-        $range = $config['timeRange'] ?? [];
-        $start = self::parse_clock($range['start'] ?? null) === null ? '08:30' : $range['start'];
-        $end = self::parse_clock($range['end'] ?? null) === null ? '17:30' : $range['end'];
-        $best = null;
-        foreach ((array)($config['breaks'] ?? []) as $brk) {
-            if (!is_array($brk) || self::parse_clock($brk['start'] ?? null) === null) {
-                continue;
-            }
-            $duration = max(0, (int)($brk['duration'] ?? 0));
-            if ($duration && (!$best || $duration > $best['duration'])) {
-                $best = ['start' => $brk['start'], 'duration' => $duration];
-            }
-        }
-        $vmend = $best ? $best['start'] : '12:30';
-        $nmstart = $best ? sprintf(
-            '%02d:%02d',
-            intdiv(self::parse_clock($best['start']) + $best['duration'], 60),
-            (self::parse_clock($best['start']) + $best['duration']) % 60
-        ) : '12:30';
-        return [
-            'vormittag' => ['start' => $start, 'end' => $vmend],
-            'nachmittag' => ['start' => $nmstart, 'end' => $end],
-            'ersterTagNurNachmittag' => false,
-            'letzterTagNurVormittag' => false,
-        ];
+        return roterfaden_model::derive_ankerzeiten($config);
     }
 
     /**

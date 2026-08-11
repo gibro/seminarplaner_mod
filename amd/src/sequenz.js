@@ -312,6 +312,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         document.querySelectorAll('[data-kg-form-multi-dropdown="1"]').forEach(bindMultiDropdown);
     };
 
+    // Liegt gerade ein Moodle-Dialog ueber der Seite? Die YUI-Dialoge des
+    // Dateimanagers bleiben nach dem Schliessen im DOM, deshalb entscheidet
+    // die gemessene Hoehe, nicht die blosse Anwesenheit.
+    const moodleDialogOpen = () => Array
+        .from(document.querySelectorAll('.moodle-dialogue-base .moodle-dialogue, .modal.show'))
+        .some((el) => el.getBoundingClientRect().height > 0);
+
     const tinyEditorFor = (el) => {
         if (typeof window === 'undefined' || !window.tinyMCE || !el || !el.id) {
             return null;
@@ -627,18 +634,29 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (unitsave) {
                 unitsave.addEventListener('click', () => this.saveUnitModal());
             }
+            // Alle drei Auswege fragen bei ungespeicherten Eingaben nach
+            // (requestCloseUnitModal), damit ein Klick daneben nicht still
+            // alles verwirft.
             ['#sq-unit-cancel', '#sq-unit-close'].forEach((sel) => {
                 const btn = bySel(sel);
                 if (btn) {
-                    btn.addEventListener('click', () => this.closeUnitModal());
+                    btn.addEventListener('click', () => this.requestCloseUnitModal());
                 }
             });
             const unitoverlay = bySel('#sq-unit-modal');
             if (unitoverlay) {
                 unitoverlay.addEventListener('click', (event) => {
-                    if (event.target === unitoverlay) {
-                        this.closeUnitModal();
+                    if (event.target !== unitoverlay) {
+                        return;
                     }
+                    // Solange ein Moodle-Dialog offen ist (Datei-Auswahl,
+                    // Loesch-Nachfrage des Dateimanagers), gehoert der Klick
+                    // nicht uns - auch wenn er geometrisch auf dem Overlay
+                    // landet.
+                    if (moodleDialogOpen()) {
+                        return;
+                    }
+                    this.requestCloseUnitModal();
                 });
             }
             const select = bySel('#sq-grid-select');
@@ -3121,6 +3139,19 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                         // D50: aus dem Picker in den vollen Editor wechseln -
                         // dabei das Picker-Ziel (Anker oder Baustein) übernehmen.
                         this.openCreateEditor(this.pickerTarget || {anker: this.pickerAnker || 'vormittag'});
+                    } else if (type === 'unitclose-save') {
+                        // Rückfrage beim Schließen des Einheiten-Modals: erst die
+                        // Rückfrage schließen, dann regulär speichern (das
+                        // Einheiten-Modal schließt sich bei Erfolg selbst).
+                        this.closeModal();
+                        this.saveUnitModal();
+                    } else if (type === 'unitclose-discard') {
+                        this.closeModal();
+                        this.closeUnitModal();
+                    } else if (type === 'unitclose-back') {
+                        // Nur die Rückfrage schließen - das Einheiten-Modal
+                        // bleibt mit allen Eingaben stehen.
+                        this.closeModal();
                     }
                 });
             }
@@ -3230,9 +3261,21 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 return;
             }
             host.innerHTML = '<div class="sq-field__hint">Datei-Anhänge werden geladen …</div>';
+            const token = this.unitModalToken;
             Fragment.loadFragment('mod_seminarplaner', 'unitmaterials', M.cfg.contextid, {methodid: methodid || ''})
                 .done((html, js) => {
                     Templates.replaceNodeContents(host, html, js);
+                    // Ausgangsstand der Anhänge erst festhalten, wenn der
+                    // Filemanager sein JavaScript ausgeführt und die Dateien
+                    // gezeichnet hat - sonst zählt der Vergleich beim Schließen
+                    // jede vorhandene Datei als frische Änderung. Der Token
+                    // verhindert, dass eine späte Antwort ein inzwischen neu
+                    // geöffnetes Modal überschreibt.
+                    window.setTimeout(() => {
+                        if (this.unitModalToken === token) {
+                            this.unitMaterialBaseline = this.unitMaterialFingerprint();
+                        }
+                    }, 800);
                 })
                 .fail(() => {
                     host.innerHTML = '<div class="sq-field__hint">Datei-Anhänge konnten nicht geladen werden – '
@@ -3251,6 +3294,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         // mode: 'edit' (bestehende Karte) oder 'create' (D50, leer).
         openUnitModal(mode, card) {
             this.unitModalMode = mode;
+            // Jedes Öffnen bekommt eine eigene Kennung; späte Rückläufer aus
+            // einem vorherigen Öffnen erkennen daran, dass sie zu spät sind.
+            this.unitModalToken = (this.unitModalToken || 0) + 1;
+            this.unitMaterialBaseline = null;
+            this.setUnitFormError('');
             // Ein evtl. offenes dynamisches Modal (z. B. der Picker) schließt.
             this.closeModal();
             UNIT_FIELD_KEYS.forEach((key) => {
@@ -3279,12 +3327,108 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (titlefield) {
                 titlefield.focus();
             }
+            // Ausgangsstand der Textfelder festhalten (Rückfrage beim
+            // Schließen). Die Rich-Text-Felder werden mit demselben Leser
+            // abgegriffen, mit dem später verglichen wird - so zählt Tinys
+            // eigene Normalisierung („text" -> „<p>text</p>") nicht als
+            // Änderung.
+            this.unitFieldBaseline = this.unitFieldFingerprint();
         }
 
         closeUnitModal() {
             const overlay = bySel('#sq-unit-modal');
             if (overlay) {
                 overlay.classList.remove('open');
+            }
+            this.unitModalToken = (this.unitModalToken || 0) + 1;
+            this.unitFieldBaseline = null;
+            this.unitMaterialBaseline = null;
+            this.setUnitFormError('');
+        }
+
+        // ---- Rückfrage vor dem Verwerfen (Klick neben das Modal, ✕, Abbrechen)
+
+        // Zustand aller Eingabefelder als vergleichbare Zeichenkette.
+        unitFieldFingerprint() {
+            const state = {};
+            UNIT_FIELD_KEYS.forEach((key) => {
+                const value = this.getUnitField(key);
+                state[key] = Array.isArray(value) ? value.join('##') : String(value);
+            });
+            state.alternativen = readMultiDropdownValues('#sq-e-alternativen').join('##');
+            return JSON.stringify(state);
+        }
+
+        // Anhänge: Der Filemanager hat keinen auslesbaren Wert, deshalb dient
+        // die Liste der gezeichneten Dateinamen als Fingerabdruck. Erkennt
+        // Hochladen, Löschen und Umbenennen; feinere Änderungen (z. B. nur ein
+        // getauschter Dateiinhalt) bleiben unsichtbar.
+        unitMaterialFingerprint() {
+            const host = bySel('#sq-e-materialien-host');
+            if (!host) {
+                return '';
+            }
+            return Array.from(host.querySelectorAll('.fp-filename'))
+                .map((el) => String(el.textContent || '').trim())
+                .join('|');
+        }
+
+        unitModalDirty() {
+            if (this.unitFieldBaseline === null || this.unitFieldBaseline === undefined) {
+                return false;
+            }
+            if (this.unitFieldFingerprint() !== this.unitFieldBaseline) {
+                return true;
+            }
+            if (this.unitMaterialBaseline === null || this.unitMaterialBaseline === undefined) {
+                // Anhänge noch nicht geladen oder Laden fehlgeschlagen: kein
+                // Vergleichsmaßstab, also auch keine falsche Rückfrage.
+                return false;
+            }
+            return this.unitMaterialFingerprint() !== this.unitMaterialBaseline;
+        }
+
+        // Einstieg für alle drei Auswege aus dem Einheiten-Modal.
+        requestCloseUnitModal() {
+            if (!this.unitModalDirty()) {
+                this.closeUnitModal();
+                return;
+            }
+            const create = this.unitModalMode === 'create';
+            const root = this.modalRoot();
+            root.innerHTML = `
+                <div class="sq-modal sq-modal--confirm">
+                  <div class="sq-modal__head">
+                    <h3>Änderungen speichern?</h3>
+                    <button type="button" class="sq-modal__close" data-sq-action="unitclose-back">✕</button>
+                  </div>
+                  <div class="sq-modal__body">
+                    <p>${create
+                        ? 'Die neue Seminareinheit ist noch nicht angelegt.'
+                        : 'An dieser Seminareinheit sind Änderungen offen.'}
+                      Beim Schließen gehen die Eingaben verloren.</p>
+                  </div>
+                  <div class="sq-modal__footer">
+                    <button type="button" class="kg-btn" data-sq-action="unitclose-back">Weiter bearbeiten</button>
+                    <button type="button" class="kg-btn sq-danger" data-sq-action="unitclose-discard">Verwerfen</button>
+                    <button type="button" class="kg-btn kg-btn-primary" data-sq-action="unitclose-save">${
+                        create ? 'Anlegen und einplanen' : 'Speichern'}</button>
+                  </div>
+                </div>`;
+            root.classList.add('open');
+            // Fokus auf „Weiter bearbeiten" - nicht auf das ✕ im Kopf, das
+            // dieselbe Aktion traegt und im Selektor sonst zuerst kommt.
+            const back = root.querySelector('.sq-modal__footer [data-sq-action="unitclose-back"]');
+            if (back) {
+                back.focus();
+            }
+        }
+
+        // Hinweiszeile im Fuß des Einheiten-Modals (z. B. fehlender Titel).
+        setUnitFormError(text) {
+            const el = bySel('#sq-unit-formerror');
+            if (el) {
+                el.textContent = text || '';
             }
         }
 
@@ -3333,6 +3477,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 cmid: this.cmid,
                 methodsjson: JSON.stringify(this.methodCardList),
             }).then(() => {
+                // Der Entwurfsbereich ist übernommen. Bliebe seine Nummer an der
+                // Karte kleben, ginge sie bei JEDEM weiteren Speichern erneut mit
+                // (die Kartenliste wird komplett geschickt) - und sobald Moodle
+                // den Bereich aufräumt, hiesse „leerer Entwurf" für den Server
+                // „alle Anhänge weg". Die Bibliothek wirft das Feld aus demselben
+                // Grund weg, sobald sie neu lädt.
+                delete card.materialiendraftitemid;
                 // Live values flow back into every placement using this unit (D20).
                 Object.keys(this.sequenz.platzierungen).forEach((pid) => {
                     const other = this.sequenz.platzierungen[pid];
@@ -3349,6 +3500,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 this.render();
                 this.toast('Gespeichert – Dauer geändert? Dann sind die Zeiten schon angepasst.');
             }).catch(() => {
+                // Auch im Modal melden - die Statuszeile liegt hinter dem Overlay.
+                this.setUnitFormError('Die Einheit konnte nicht gespeichert werden.');
                 this.setStatus('Die Einheit konnte nicht gespeichert werden.', true);
             });
         }
@@ -3619,12 +3772,16 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             });
             const titel = String(values.titel || '').trim();
             if (!titel) {
+                // Ohne sichtbaren Hinweis wirkte der Klick auf „Anlegen" wie ein
+                // Aussetzer - besonders, wenn er aus der Schließen-Rückfrage kam.
+                this.setUnitFormError('Bitte zuerst einen Titel eintragen.');
                 const title = bySel('#sq-e-titel');
                 if (title) {
                     title.focus();
                 }
                 return;
             }
+            this.setUnitFormError('');
             const duration = Number.parseInt(String(values.zeitbedarf || '').replace(/\D+/g, ''), 10);
             // Feldform wie beim Anlegen in der Bibliothek (methods-Karten):
             // seminarphase/sozialform/raum sind Arrays (kommen so aus den
@@ -3656,9 +3813,14 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 cmid: this.cmid,
                 methodsjson: JSON.stringify(this.methodCardList),
             }).then(() => {
+                // Entwurfsbereich ist übernommen - Nummer nicht an der Karte
+                // lassen (siehe saveUnitModal).
+                delete card.materialiendraftitemid;
                 this.closeUnitModal();
                 this.applySuggestTarget(String(card.id), this.createTarget || {});
             }).catch(() => {
+                // Auch im Modal melden - die Statuszeile liegt hinter dem Overlay.
+                this.setUnitFormError('Die neue Einheit konnte nicht angelegt werden.');
                 this.setStatus('Die neue Einheit konnte nicht angelegt werden.', true);
             });
         }
