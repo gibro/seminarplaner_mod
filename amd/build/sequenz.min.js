@@ -312,6 +312,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         document.querySelectorAll('[data-kg-form-multi-dropdown="1"]').forEach(bindMultiDropdown);
     };
 
+    // Liegt gerade ein Moodle-Dialog ueber der Seite? Die YUI-Dialoge des
+    // Dateimanagers bleiben nach dem Schliessen im DOM, deshalb entscheidet
+    // die gemessene Hoehe, nicht die blosse Anwesenheit.
+    const moodleDialogOpen = () => Array
+        .from(document.querySelectorAll('.moodle-dialogue-base .moodle-dialogue, .modal.show'))
+        .some((el) => el.getBoundingClientRect().height > 0);
+
     const tinyEditorFor = (el) => {
         if (typeof window === 'undefined' || !window.tinyMCE || !el || !el.id) {
             return null;
@@ -639,9 +646,17 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             const unitoverlay = bySel('#sq-unit-modal');
             if (unitoverlay) {
                 unitoverlay.addEventListener('click', (event) => {
-                    if (event.target === unitoverlay) {
-                        this.requestCloseUnitModal();
+                    if (event.target !== unitoverlay) {
+                        return;
                     }
+                    // Solange ein Moodle-Dialog offen ist (Datei-Auswahl,
+                    // Loesch-Nachfrage des Dateimanagers), gehoert der Klick
+                    // nicht uns - auch wenn er geometrisch auf dem Overlay
+                    // landet.
+                    if (moodleDialogOpen()) {
+                        return;
+                    }
+                    this.requestCloseUnitModal();
                 });
             }
             const select = bySel('#sq-grid-select');
