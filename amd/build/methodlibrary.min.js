@@ -577,6 +577,28 @@ function(Ajax, Notification, LernzielEditor) {
         }
     };
 
+    // Der Datei-Entwurfsbereich dieser Seite (ml_materialiendraftitemid) gehört
+    // immer GENAU EINER Seminareinheit: Er wird beim Seitenaufbau serverseitig
+    // vorbereitet - leer, oder mit den Dateien der über „Bearbeiten" geöffneten
+    // Einheit - und beim Speichern übernommen. Die Dateien bleiben danach im
+    // Bereich liegen. Wer ohne Neuaufbau der Seite die nächste Einheit anlegt,
+    // hängt sie deshalb unbemerkt an die neue Einheit (genau so bekam eine frisch
+    // angelegte Einheit die Datei ihrer Vorgängerin). Der Anlegen-Weg muss den
+    // Bereich also frisch holen, sobald er benutzt wurde.
+    let materialDraftUsed = false;
+
+    // Dateien, die der Dateimanager gerade anzeigt. Die leeren Namensfelder der
+    // JS-Vorlagen des Dateimanagers stehen ebenfalls im DOM - deshalb zählt nur,
+    // was auch Text trägt.
+    const materialFilesShown = () => Array
+        .from(document.querySelectorAll('#ml-edit-form .filemanager .fp-filename'))
+        .filter((el) => String(el.textContent || '').trim() !== '')
+        .length;
+
+    // Ist der Entwurfsbereich verbraucht (schon gespeichert) oder trägt er
+    // Dateien, gehören sie nicht in eine neue Einheit.
+    const materialDraftNeedsReset = () => materialDraftUsed || materialFilesShown() > 0;
+
     const readMaterialDraftItemId = () => {
         const candidates = [
             bySel('#id_ml_materialiendraftitemid'),
@@ -2082,6 +2104,8 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
         normalizeMethodAlternatives();
 
         await persist(cmid);
+        // Der Entwurfsbereich ist jetzt an diese Einheit vergeben.
+        materialDraftUsed = true;
         await loadMethods(cmid);
         creatingNew = false;
         setEditHeading('Seminareinheit bearbeiten');
@@ -2144,6 +2168,8 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
         normalizeMethodAlternatives();
 
         await persist(cmid);
+        // Der Entwurfsbereich ist jetzt an diese Einheit vergeben.
+        materialDraftUsed = true;
         await loadMethods(cmid);
         currentEditId = '';
         const form = bySel('#ml-edit-form');
@@ -2860,15 +2886,17 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                 });
             }
 
-            // D50: Anlegen-Button in der Bibliothek. Wenn die Seite mit einem
-            // editmethodid-Parameter geladen wurde, gehört der vorbereitete
-            // Datei-Entwurfsbereich zu dieser Einheit – dann sauber neu laden,
-            // damit ein leerer Entwurfsbereich entsteht.
+            // D50: Anlegen-Button in der Bibliothek. Der vorbereitete
+            // Datei-Entwurfsbereich gehört entweder einer über „Bearbeiten"
+            // geöffneten Einheit (editmethodid) oder ist schon verbraucht
+            // (materialDraftNeedsReset) – in beiden Fällen sauber neu laden,
+            // damit ein leerer Entwurfsbereich entsteht. Die URL allein reicht
+            // dafür nicht: saveEditor räumt editmethodid nach dem Speichern weg.
             const createbtn = bySel('#ml-create-open');
             if (createbtn) {
                 createbtn.addEventListener('click', () => {
                     const params = new URLSearchParams(window.location.search || '');
-                    if (params.get('editmethodid')) {
+                    if (params.get('editmethodid') || materialDraftNeedsReset()) {
                         suppressLeavePrompt();
                         const url = new URL(window.location.href);
                         url.searchParams.delete('editmethodid');

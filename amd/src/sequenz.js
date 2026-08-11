@@ -3477,6 +3477,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 cmid: this.cmid,
                 methodsjson: JSON.stringify(this.methodCardList),
             }).then(() => {
+                // Der Entwurfsbereich ist übernommen. Bliebe seine Nummer an der
+                // Karte kleben, ginge sie bei JEDEM weiteren Speichern erneut mit
+                // (die Kartenliste wird komplett geschickt) - und sobald Moodle
+                // den Bereich aufräumt, hiesse „leerer Entwurf" für den Server
+                // „alle Anhänge weg". Die Bibliothek wirft das Feld aus demselben
+                // Grund weg, sobald sie neu lädt.
+                delete card.materialiendraftitemid;
                 // Live values flow back into every placement using this unit (D20).
                 Object.keys(this.sequenz.platzierungen).forEach((pid) => {
                     const other = this.sequenz.platzierungen[pid];
@@ -3806,6 +3813,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 cmid: this.cmid,
                 methodsjson: JSON.stringify(this.methodCardList),
             }).then(() => {
+                // Entwurfsbereich ist übernommen - Nummer nicht an der Karte
+                // lassen (siehe saveUnitModal).
+                delete card.materialiendraftitemid;
                 this.closeUnitModal();
                 this.applySuggestTarget(String(card.id), this.createTarget || {});
             }).catch(() => {
