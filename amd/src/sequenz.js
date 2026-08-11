@@ -3401,7 +3401,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                   </div>
                 </div>`;
             root.classList.add('open');
-            const back = root.querySelector('[data-sq-action="unitclose-back"]');
+            // Fokus auf „Weiter bearbeiten" - nicht auf das ✕ im Kopf, das
+            // dieselbe Aktion traegt und im Selektor sonst zuerst kommt.
+            const back = root.querySelector('.sq-modal__footer [data-sq-action="unitclose-back"]');
             if (back) {
                 back.focus();
             }
