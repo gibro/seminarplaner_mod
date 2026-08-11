@@ -451,7 +451,12 @@ echo $sqrich('Material/Technik', 'materialtechnik');
 echo html_writer::end_div();
 echo html_writer::end_tag('details');
 echo html_writer::end_div();
-echo html_writer::start_div('sq-modal__footer');
+echo html_writer::start_div('sq-modal__footer sq-modal__footer--split');
+// Meldungen zum Formular (fehlender Titel, misslungenes Speichern) gehören in
+// das Modal: die Statuszeile der Seite liegt hinter dem Overlay und ist beim
+// geöffneten Editor nicht zu sehen.
+echo html_writer::div('', 'sq-formerror', ['id' => 'sq-unit-formerror', 'role' => 'alert', 'aria-live' => 'polite']);
+echo html_writer::tag('span', '', ['class' => 'sq-modal__footer-gap']);
 echo html_writer::tag('button', 'Abbrechen', ['type' => 'button', 'class' => 'kg-btn', 'id' => 'sq-unit-cancel']);
 echo html_writer::tag('button', 'Übernehmen', ['type' => 'button', 'class' => 'kg-btn kg-btn-primary', 'id' => 'sq-unit-save']);
 echo html_writer::end_div();
