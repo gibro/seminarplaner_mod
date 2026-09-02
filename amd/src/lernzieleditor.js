@@ -414,7 +414,9 @@ define([], function() {
             let template = 0;
 
             const overlay = document.createElement('div');
-            overlay.className = 'sq-modal-overlay sq-lz-overlay open';
+            // moodle-has-zindex: siehe sequenz.php – Moodles eigene Modale
+            // legen sich sonst hinter dieses Overlay.
+            overlay.className = 'sq-modal-overlay sq-lz-overlay open moodle-has-zindex';
             overlay.id = 'sq-lz-overlay';
             document.body.appendChild(overlay);
 

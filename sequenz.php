@@ -309,7 +309,12 @@ echo html_writer::tag('div', '', ['id' => 'sq-toast', 'class' => 'sq-toast', 'ro
 // ---------------------------------------------------------------------------.
 // Die Felder selbst kommen aus dem gemeinsamen Renderer in locallib.php, den
 // sich dieses Modal mit dem Bibliotheks-Editor teilt.
-echo html_writer::start_div('sq-modal-overlay', ['id' => 'sq-unit-modal']);
+// „moodle-has-zindex": Moodles eigene Modale (core/modal) rechnen sich in
+// calculateZIndex() über alles, was diese Klasse trägt. Ohne sie landet z. B.
+// die Löschnachfrage des Dateimanagers (Notification.saveCancelPromise) bei
+// z-index 1055 und damit HINTER unserem Overlay (2000) – sichtbar abgedunkelt,
+// aber nicht anklickbar. Mit der Klasse legt Moodle sie von selbst darüber.
+echo html_writer::start_div('sq-modal-overlay moodle-has-zindex', ['id' => 'sq-unit-modal']);
 echo html_writer::start_div('sq-modal');
 echo html_writer::start_div('sq-modal__head');
 echo html_writer::tag('h3', 'Seminareinheit bearbeiten', ['id' => 'sq-unit-modal-title']);

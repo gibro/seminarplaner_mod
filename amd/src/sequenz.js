@@ -3094,7 +3094,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (!root) {
                 root = document.createElement('div');
                 root.id = 'sq-modal';
-                root.className = 'sq-modal-overlay';
+                // moodle-has-zindex: laesst Moodles eigene Modale (core/modal)
+                // sich ueber dieses Overlay rechnen statt dahinter zu landen.
+                root.className = 'sq-modal-overlay moodle-has-zindex';
                 document.body.appendChild(root);
                 root.addEventListener('click', (event) => {
                     if (event.target === root) {
