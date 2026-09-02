@@ -352,185 +352,27 @@ echo html_writer::start_div($editsectionclasses, ['id' => 'ml-edit-section']);
 echo html_writer::tag('h4', 'Seminareinheit bearbeiten', ['id' => 'ml-edit-heading']);
 echo html_writer::start_div('kg-form ig-container kg-container-full', ['id' => 'ml-edit-form']);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'id' => 'ml-edit-id']);
-echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'ml-section-quick', 'open' => 'open']);
-echo html_writer::tag('summary', '1) Schnellfassung');
-echo html_writer::start_div('kg-stack field-stack ig-inner');
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Titel *', ['for' => 'ml-e-titel', 'class' => 'kg-label']);
-echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'ml-e-titel', 'class' => 'kg-input', 'required' => 'required']);
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Lernziele (Ich-kann ...)', ['for' => 'ml-e-lernziele', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'ml-e-lernziele', 'class' => 'kg-input', 'rows' => '10', 'autocomplete' => 'off']);
-// D62: geführter Lernziel-Editor („Der Differenzierer") – Satz per Helfer bauen
-// oder das Feld selbst ausfüllen.
-echo html_writer::tag('button', '✎ Lernziel formulieren', [
-    'type' => 'button',
-    'class' => 'kg-btn sq-lz-trigger',
-    'id' => 'ml-lz-open-lernziele',
-]);
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::start_div('kg-two');
-echo html_writer::start_div();
-echo html_writer::tag('label', 'Seminarphase', ['for' => 'ml-e-seminarphase', 'class' => 'kg-label']);
-echo seminarplaner_render_multi_dropdown(
-    'ml-e-seminarphase',
-    seminarplaner_phase_options(),
-    'Seminarphasen wählen',
-    'Seminarphasen'
-);
-echo html_writer::end_div();
-echo html_writer::start_div();
-echo html_writer::tag('label', 'Tags / Schlüsselworte', ['for' => 'ml-e-tags', 'class' => 'kg-label']);
-echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'ml-e-tags', 'class' => 'kg-input']);
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::start_div('kg-two');
-echo html_writer::start_div();
-echo html_writer::tag('label', 'Zeitbedarf', ['for' => 'ml-e-zeitbedarf', 'class' => 'kg-label']);
-echo html_writer::start_tag('select', ['id' => 'ml-e-zeitbedarf', 'class' => 'kg-input']);
-foreach (['5', '10', '20', '30', '45', '60', '90', '120', '150', '180', 'mehr als 180 Minuten'] as $v) {
-    echo html_writer::tag('option', s($v), ['value' => $v]);
-}
-echo html_writer::end_tag('select');
-echo html_writer::end_div();
-echo html_writer::start_div();
-echo html_writer::tag('label', 'Gruppengröße', ['for' => 'ml-e-gruppengroesse', 'class' => 'kg-label']);
-echo html_writer::start_tag('select', ['id' => 'ml-e-gruppengroesse', 'class' => 'kg-input']);
-foreach (array_keys(seminarplaner_groupsize_options()) as $v) {
-    echo html_writer::tag('option', s($v), ['value' => $v]);
-}
-echo html_writer::end_tag('select');
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Kurzbeschreibung', ['for' => 'ml-e-kurzbeschreibung', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', [
-    'id' => 'ml-e-kurzbeschreibung',
-    'class' => 'kg-input',
-    'rows' => '10',
-    'autocomplete' => 'off',
-]);
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Alternative Seminareinheiten', ['for' => 'ml-e-alternativen', 'class' => 'kg-label']);
-echo html_writer::start_div('kg-tag-dropdown', [
-    'id' => 'ml-e-alternativen-dropdown',
-    'data-kg-form-multi-dropdown' => '1',
-    'data-kg-field' => '#ml-e-alternativen',
-    'data-kg-label-prefix' => 'Alternativen',
-    'data-kg-placeholder' => 'Alternativen wählen',
-]);
-echo html_writer::tag('button', 'Alternativen wählen', [
-    'type' => 'button',
-    'class' => 'kg-input kg-tag-dropdown-toggle',
-    'id' => 'ml-e-alternativen-toggle',
-    'data-kg-form-multi-toggle' => '1',
-]);
-echo html_writer::start_div('kg-tag-dropdown-panel kg-hidden', [
-    'id' => 'ml-e-alternativen-panel',
-    'data-kg-form-multi-panel' => '1',
-]);
-echo html_writer::empty_tag('input', [
-    'type' => 'search',
-    'class' => 'kg-input kg-multi-search',
-    'placeholder' => 'Titel der Seminareinheit suchen',
-    'data-kg-form-multi-search' => '1',
-]);
-echo html_writer::start_div('', ['id' => 'ml-e-alternativen-options']);
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::empty_tag('input', [
-    'type' => 'hidden',
-    'id' => 'ml-e-alternativen',
-    'value' => '',
-]);
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::end_tag('details');
-
-echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'ml-section-quality']);
-echo html_writer::tag('summary', '2) Ablauf und Rahmen');
-echo html_writer::start_div('kg-stack field-stack ig-inner');
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Ablauf', ['for' => 'ml-e-ablauf', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'ml-e-ablauf', 'class' => 'kg-input', 'rows' => '10', 'autocomplete' => 'off']);
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Autor*in / Kontakt', ['for' => 'ml-e-autor', 'class' => 'kg-label']);
-echo html_writer::empty_tag('input', ['type' => 'text', 'id' => 'ml-e-autor', 'class' => 'kg-input']);
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::start_div('kg-two');
-echo html_writer::start_div();
-echo html_writer::tag('label', 'Raumanforderungen', ['for' => 'ml-e-raum', 'class' => 'kg-label']);
-echo seminarplaner_render_multi_dropdown('ml-e-raum', [
-    'Plenum' => 'Plenum',
-    'Stuhlkreis' => 'Stuhlkreis',
-    'Stehtische' => 'Stehtische',
-    'viel Freifläche' => 'viel Freifläche',
-    'Gruppentische' => 'Gruppentische',
-    'Gruppenräume' => 'Gruppenräume',
-    'akustisch ruhig' => 'akustisch ruhig',
-], 'Raumanforderungen wählen', 'Raumanforderungen');
-echo html_writer::end_div();
-echo html_writer::start_div();
-echo html_writer::tag('label', 'Sozialform', ['for' => 'ml-e-sozialform', 'class' => 'kg-label']);
-echo seminarplaner_render_multi_dropdown('ml-e-sozialform', [
-    'Vortrag' => 'Vortrag',
-    'Diskussion' => 'Diskussion',
-    'Einzelarbeit' => 'Einzelarbeit',
-    'Partnerarbeit' => 'Partnerarbeit',
-    'Kleingruppen' => 'Kleingruppen',
-    'Galeriegang' => 'Galeriegang',
-    'Fishbowl' => 'Fishbowl',
-], 'Sozialformen wählen', 'Sozialformen');
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Vorbereitung nötig', ['for' => 'ml-e-vorbereitung', 'class' => 'kg-label']);
-echo html_writer::start_tag('select', ['id' => 'ml-e-vorbereitung', 'class' => 'kg-input']);
-foreach (['keine', '<10 Min', '10–30 Min', '>30 Min'] as $v) {
-    echo html_writer::tag('option', s($v), ['value' => $v]);
-}
-echo html_writer::end_tag('select');
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Risiken/Tipps', ['for' => 'ml-e-risiken', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'ml-e-risiken', 'class' => 'kg-input', 'rows' => '10', 'autocomplete' => 'off']);
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Debrief/Reflexionsfragen', ['for' => 'ml-e-debrief', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', ['id' => 'ml-e-debrief', 'class' => 'kg-input', 'rows' => '10', 'autocomplete' => 'off']);
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::end_tag('details');
-
-echo html_writer::start_tag('details', ['class' => 'kg-section ig-section', 'id' => 'ml-section-materials']);
-echo html_writer::tag('summary', '3) Materialien und Technik');
-echo html_writer::start_div('kg-stack field-stack ig-inner');
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Materialien', ['for' => 'ml-e-materialien', 'class' => 'kg-label']);
+// D17 („ein Editor, drei Einstiege"): Felder, Reihenfolge und Bedienelemente
+// kommen aus demselben Renderer wie im Sequenz-Modal. Unterschied hier: die
+// Materialien hängen am Filemanager-Formular dieser Seite (die Sequenz lädt es
+// per Fragment-API nach) und „Vorbereitung nötig" gibt es nur in der
+// Bibliothek – ohne das Feld würde der gespeicherte Wert beim Speichern
+// verloren gehen (Karten-Badge, Stapelbearbeitung, Import/Export).
+// Die Feldhülle trägt zusätzlich 'field-card', weil daran die Layout-Regeln
+// für die Tiny-Editoren hängen.
+ob_start();
 $materialseditform->display();
 echo html_writer::tag('div', '', ['id' => 'ml-e-materialien-current', 'class' => 'sp-filter-status']);
-echo html_writer::end_div();
-echo html_writer::start_div('field-card');
-echo html_writer::tag('label', 'Material/Technik', ['for' => 'ml-e-materialtechnik', 'class' => 'kg-label']);
-echo html_writer::tag('textarea', '', [
-    'id' => 'ml-e-materialtechnik',
-    'class' => 'kg-input',
-    'rows' => '10',
-    'autocomplete' => 'off',
+$mlmaterialsblock = ob_get_clean();
+echo seminarplaner_render_unit_form_fields('ml-e-', [
+    'fieldclass' => 'sq-field field-card',
+    'lernzielbuttonid' => 'ml-lz-open-lernziele',
+    'materials' => $mlmaterialsblock,
+    'quickid' => 'ml-section-quick',
+    'processid' => 'ml-section-quality',
+    'materialsid' => 'ml-section-materials',
+    'vorbereitung' => true,
 ]);
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::end_tag('details');
 
 echo html_writer::start_div('kg-row');
 echo html_writer::tag('button', 'Änderungen speichern', [

@@ -1391,6 +1391,11 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
         setFieldValue('#ml-e-titel', '');
         setFieldValue('#ml-e-tags', '');
         setFieldValue('#ml-e-autor', '');
+        // Ohne <form> greift kein reset(); diese drei Felder behielten sonst
+        // die Werte der zuletzt bearbeiteten Einheit.
+        setFieldValue('#ml-e-zeitbedarf', '');
+        setFieldValue('#ml-e-gruppengroesse', '');
+        setFieldValue('#ml-e-vorbereitung', '');
         setSelectMulti('#ml-e-seminarphase', []);
         setSelectMulti('#ml-e-raum', []);
         setSelectMulti('#ml-e-sozialform', []);

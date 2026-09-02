@@ -603,3 +603,199 @@ function seminarplaner_render_multi_dropdown(string $fieldid, array $options, st
 
     return $out;
 }
+
+/**
+ * Render the shared seminar unit editor fields.
+ *
+ * D17 („ein Editor, drei Einstiege"): Sequenz-Modal und Bibliotheks-Editor
+ * teilen sich dieses Markup, damit Feldauswahl, Reihenfolge und Bedienelemente
+ * an beiden Stellen identisch sind. Unterschiedlich sind nur die Element-IDs
+ * (über $prefix) und der Materialien-Block – die Sequenz lädt ihn per
+ * Fragment-API nach, die Bibliothek rendert das Filemanager-Formular direkt.
+ *
+ * @param string $prefix Id-Präfix der Felder, z. B. 'sq-e-' oder 'ml-e-'.
+ * @param array $options 'fieldclass' => Klasse der Feldhülle (Bibliothek braucht
+ *                       zusätzlich 'field-card' für die Tiny-Editor-Regeln),
+ *                       'lernzielbuttonid' => Id des Lernziel-Helfers ('' = kein Button),
+ *                       'materials' => fertiges HTML des Materialien-Blocks,
+ *                       'quickid'/'processid'/'materialsid' => Ids der drei Abschnitte,
+ *                       'vorbereitung' => bool, Feld „Vorbereitung nötig" mitrendern.
+ * @return string
+ */
+function seminarplaner_render_unit_form_fields(string $prefix, array $options = []): string {
+    $fieldclass = (string)($options['fieldclass'] ?? 'sq-field');
+    $lernzielbuttonid = (string)($options['lernzielbuttonid'] ?? '');
+    $materials = (string)($options['materials'] ?? '');
+    $quickid = (string)($options['quickid'] ?? '');
+    $processid = (string)($options['processid'] ?? '');
+    $materialsid = (string)($options['materialsid'] ?? '');
+    $withvorbereitung = !empty($options['vorbereitung']);
+
+    $open = static function (string $label, string $key) use ($prefix, $fieldclass): string {
+        return html_writer::start_div($fieldclass)
+            . html_writer::tag('label', s($label), ['class' => 'kg-label', 'for' => $prefix . $key]);
+    };
+    $close = static function (string $hint = ''): string {
+        $out = '';
+        if ($hint !== '') {
+            $out .= html_writer::div(s($hint), 'sq-field__hint');
+        }
+        return $out . html_writer::end_div();
+    };
+    $text = static function (string $label, string $key, string $hint = '') use ($prefix, $open, $close): string {
+        return $open($label, $key)
+            . html_writer::empty_tag('input', ['type' => 'text', 'class' => 'kg-input', 'id' => $prefix . $key])
+            . $close($hint);
+    };
+    $rich = static function (string $label, string $key, int $rows = 6) use ($prefix, $open, $close): string {
+        return $open($label, $key)
+            . html_writer::tag('textarea', '', [
+                'class' => 'kg-input',
+                'id' => $prefix . $key,
+                'rows' => (string)$rows,
+                'autocomplete' => 'off',
+            ])
+            . $close();
+    };
+    $multi = static function (
+        string $label,
+        string $key,
+        array $choices,
+        string $placeholder,
+        string $labelprefix
+    ) use ($prefix, $open, $close): string {
+        return $open($label, $key)
+            . seminarplaner_render_multi_dropdown($prefix . $key, $choices, $placeholder, $labelprefix)
+            . $close();
+    };
+    $select = static function (string $label, string $key, array $choices) use ($prefix, $open, $close): string {
+        $out = $open($label, $key);
+        $out .= html_writer::start_tag('select', ['class' => 'kg-input', 'id' => $prefix . $key]);
+        foreach ($choices as $value => $optionlabel) {
+            $out .= html_writer::tag('option', s((string)$optionlabel), ['value' => (string)$value]);
+        }
+        $out .= html_writer::end_tag('select');
+        return $out . $close();
+    };
+    // Alternative Seminareinheiten (D8/D21): Dropdown mit Suche, dessen Optionen
+    // (alle anderen Einheiten des Bestands) erst das JavaScript beim Öffnen füllt.
+    $alternativen = static function () use ($prefix, $open, $close): string {
+        $out = $open('Alternative Seminareinheiten', 'alternativen');
+        $out .= html_writer::start_div('kg-tag-dropdown', [
+            'id' => $prefix . 'alternativen-dropdown',
+            'data-kg-form-multi-dropdown' => '1',
+            'data-kg-field' => '#' . $prefix . 'alternativen',
+            'data-kg-label-prefix' => 'Alternativen',
+            'data-kg-placeholder' => 'Alternativen wählen',
+        ]);
+        $out .= html_writer::tag('button', 'Alternativen wählen', [
+            'type' => 'button',
+            'class' => 'kg-input kg-tag-dropdown-toggle',
+            'id' => $prefix . 'alternativen-toggle',
+            'data-kg-form-multi-toggle' => '1',
+        ]);
+        $out .= html_writer::start_div('kg-tag-dropdown-panel kg-hidden', [
+            'id' => $prefix . 'alternativen-panel',
+            'data-kg-form-multi-panel' => '1',
+        ]);
+        $out .= html_writer::empty_tag('input', [
+            'type' => 'search',
+            'class' => 'kg-input kg-multi-search',
+            'placeholder' => 'Titel der Seminareinheit suchen',
+            'data-kg-form-multi-search' => '1',
+        ]);
+        $out .= html_writer::start_div('', ['id' => $prefix . 'alternativen-options']);
+        $out .= html_writer::end_div();
+        $out .= html_writer::end_div();
+        $out .= html_writer::end_div();
+        $out .= html_writer::empty_tag('input', [
+            'type' => 'hidden',
+            'id' => $prefix . 'alternativen',
+            'value' => '',
+        ]);
+        return $out . $close();
+    };
+    // Klapp-Indikator wie überall sonst (.sq-tri) statt des nativen Markers.
+    $summary = static function (string $label): string {
+        return html_writer::tag(
+            'summary',
+            html_writer::tag('span', '▸', ['class' => 'sq-tri', 'aria-hidden' => 'true']) . ' ' . s($label)
+        );
+    };
+
+    $out = html_writer::start_div('', $quickid !== '' ? ['id' => $quickid] : []);
+    $out .= $text('Titel', 'titel');
+    $out .= $rich('Lernziele (Ich kann …)', 'lernziele');
+    if ($lernzielbuttonid !== '') {
+        // D62: geführter Lernziel-Editor (Phase → Verb → Inhalt → Satz).
+        $out .= html_writer::tag('button', '✎ Lernziel formulieren', [
+            'type' => 'button',
+            'class' => 'kg-btn sq-lz-trigger',
+            'id' => $lernzielbuttonid,
+        ]);
+    }
+    $out .= $rich('Kurzbeschreibung', 'kurzbeschreibung');
+    $out .= $alternativen();
+    $out .= $text('Zeitbedarf (Minuten)', 'zeitbedarf');
+    $out .= $multi('Seminarphase', 'seminarphase', seminarplaner_phase_options(), 'Seminarphasen wählen', 'Seminarphasen');
+    $out .= $multi('Sozialform', 'sozialform', [
+        'Vortrag' => 'Vortrag',
+        'Diskussion' => 'Diskussion',
+        'Einzelarbeit' => 'Einzelarbeit',
+        'Partnerarbeit' => 'Partnerarbeit',
+        'Kleingruppen' => 'Kleingruppen',
+        'Galeriegang' => 'Galeriegang',
+        'Fishbowl' => 'Fishbowl',
+    ], 'Sozialformen wählen', 'Sozialformen');
+    $out .= html_writer::end_div();
+
+    $out .= html_writer::start_tag('details', $processid !== ''
+        ? ['class' => 'sq-section', 'id' => $processid]
+        : ['class' => 'sq-section']);
+    $out .= $summary('Ablauf und Rahmen');
+    $out .= html_writer::start_div('sq-section__inner');
+    $out .= $rich('Ablauf', 'ablauf', 8);
+    $out .= $multi('Raumanforderungen', 'raum', [
+        'Plenum' => 'Plenum',
+        'Stuhlkreis' => 'Stuhlkreis',
+        'Stehtische' => 'Stehtische',
+        'viel Freifläche' => 'viel Freifläche',
+        'Gruppentische' => 'Gruppentische',
+        'Gruppenräume' => 'Gruppenräume',
+        'akustisch ruhig' => 'akustisch ruhig',
+    ], 'Raumanforderungen wählen', 'Raumanforderungen');
+    $out .= $select('Gruppengröße', 'gruppengroesse', ['' => '(keine Angabe)'] + seminarplaner_groupsize_options());
+    if ($withvorbereitung) {
+        // Nur der Bibliotheks-Editor kennt dieses Feld; es speist die Karten-Badges,
+        // die Stapelbearbeitung und den Import/Export. Ohne Eingabefeld würde die
+        // Bibliothek den gespeicherten Wert beim nächsten Speichern leeren.
+        $out .= $select('Vorbereitung nötig', 'vorbereitung', [
+            '' => '(keine Angabe)',
+            'keine' => 'keine',
+            '<10 Min' => '<10 Min',
+            '10–30 Min' => '10–30 Min',
+            '>30 Min' => '>30 Min',
+        ]);
+    }
+    $out .= $rich('Risiken/Tipps', 'risiken');
+    $out .= $rich('Debrief/Reflexionsfragen', 'debrief');
+    $out .= $text('Tags/Schlüsselworte', 'tags', 'Hilft beim Wiederfinden und bei Vorschlägen');
+    $out .= $text('Autor*in / Kontakt', 'autor');
+    $out .= html_writer::end_div();
+    $out .= html_writer::end_tag('details');
+
+    $out .= html_writer::start_tag('details', $materialsid !== ''
+        ? ['class' => 'sq-section', 'id' => $materialsid]
+        : ['class' => 'sq-section']);
+    $out .= $summary('Materialien und Technik');
+    $out .= html_writer::start_div('sq-section__inner');
+    $out .= html_writer::start_div($fieldclass);
+    $out .= html_writer::tag('label', 'Materialien', ['class' => 'kg-label', 'for' => $prefix . 'materialien']);
+    $out .= $materials;
+    $out .= html_writer::end_div();
+    $out .= $rich('Material/Technik', 'materialtechnik');
+    $out .= html_writer::end_div();
+    $out .= html_writer::end_tag('details');
+
+    return $out;
+}
