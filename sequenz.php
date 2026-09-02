@@ -307,149 +307,27 @@ echo html_writer::tag('div', '', ['id' => 'sq-toast', 'class' => 'sq-toast', 'ro
 // Bearbeiten (openEditor) und Anlegen (openCreateEditor, D50) teilen es sich;
 // sequenz.js füllt die Felder und schaltet Überschrift/Speichern-Button um.
 // ---------------------------------------------------------------------------.
-$sqtext = static function (string $label, string $key, string $hint = ''): string {
-    $out = html_writer::start_div('sq-field');
-    $out .= html_writer::tag('label', s($label), ['class' => 'kg-label', 'for' => 'sq-e-' . $key]);
-    $out .= html_writer::empty_tag('input', ['type' => 'text', 'class' => 'kg-input', 'id' => 'sq-e-' . $key]);
-    if ($hint !== '') {
-        $out .= html_writer::div(s($hint), 'sq-field__hint');
-    }
-    $out .= html_writer::end_div();
-    return $out;
-};
-$sqrich = static function (string $label, string $key, int $rows = 6): string {
-    $out = html_writer::start_div('sq-field');
-    $out .= html_writer::tag('label', s($label), ['class' => 'kg-label', 'for' => 'sq-e-' . $key]);
-    $out .= html_writer::tag('textarea', '', ['class' => 'kg-input', 'id' => 'sq-e-' . $key, 'rows' => (string)$rows]);
-    $out .= html_writer::end_div();
-    return $out;
-};
-// Gleiche Bedienelemente wie der Bibliotheks-Editor (D17: ein Editor, drei
-// Einstiege): Mehrfach-Auswahlen als Dropdown mit Häkchen statt Komma-Text.
-$sqmulti = static function (string $label, string $key, array $options, string $placeholder, string $labelprefix): string {
-    $out = html_writer::start_div('sq-field');
-    $out .= html_writer::tag('label', s($label), ['class' => 'kg-label', 'for' => 'sq-e-' . $key]);
-    $out .= seminarplaner_render_multi_dropdown('sq-e-' . $key, $options, $placeholder, $labelprefix);
-    $out .= html_writer::end_div();
-    return $out;
-};
-$sqselect = static function (string $label, string $key, array $options): string {
-    $out = html_writer::start_div('sq-field');
-    $out .= html_writer::tag('label', s($label), ['class' => 'kg-label', 'for' => 'sq-e-' . $key]);
-    $out .= html_writer::start_tag('select', ['class' => 'kg-input', 'id' => 'sq-e-' . $key]);
-    foreach ($options as $value => $optionlabel) {
-        $out .= html_writer::tag('option', s((string)$optionlabel), ['value' => (string)$value]);
-    }
-    $out .= html_writer::end_tag('select');
-    $out .= html_writer::end_div();
-    return $out;
-};
-// Alternative Seminareinheiten (D8/D21): wie im Bibliotheks-Editor ein
-// Dropdown mit Suche; die Optionen (alle anderen Einheiten) füllt sequenz.js
-// beim Öffnen dynamisch, da sie vom Bestand abhängen.
-$sqalternativen = static function (): string {
-    $out = html_writer::start_div('sq-field');
-    $out .= html_writer::tag('label', 'Alternative Seminareinheiten', ['class' => 'kg-label', 'for' => 'sq-e-alternativen']);
-    $out .= html_writer::start_div('kg-tag-dropdown', [
-        'id' => 'sq-e-alternativen-dropdown',
-        'data-kg-form-multi-dropdown' => '1',
-        'data-kg-field' => '#sq-e-alternativen',
-        'data-kg-label-prefix' => 'Alternativen',
-        'data-kg-placeholder' => 'Alternativen wählen',
-    ]);
-    $out .= html_writer::tag('button', 'Alternativen wählen', [
-        'type' => 'button',
-        'class' => 'kg-input kg-tag-dropdown-toggle',
-        'id' => 'sq-e-alternativen-toggle',
-        'data-kg-form-multi-toggle' => '1',
-    ]);
-    $out .= html_writer::start_div('kg-tag-dropdown-panel kg-hidden', [
-        'id' => 'sq-e-alternativen-panel',
-        'data-kg-form-multi-panel' => '1',
-    ]);
-    $out .= html_writer::empty_tag('input', [
-        'type' => 'search',
-        'class' => 'kg-input kg-multi-search',
-        'placeholder' => 'Titel der Seminareinheit suchen',
-        'data-kg-form-multi-search' => '1',
-    ]);
-    $out .= html_writer::start_div('', ['id' => 'sq-e-alternativen-options']);
-    $out .= html_writer::end_div();
-    $out .= html_writer::end_div();
-    $out .= html_writer::end_div();
-    $out .= html_writer::empty_tag('input', ['type' => 'hidden', 'id' => 'sq-e-alternativen', 'value' => '']);
-    $out .= html_writer::end_div();
-    return $out;
-};
-
-echo html_writer::start_div('sq-modal-overlay', ['id' => 'sq-unit-modal']);
+// Die Felder selbst kommen aus dem gemeinsamen Renderer in locallib.php, den
+// sich dieses Modal mit dem Bibliotheks-Editor teilt.
+// „moodle-has-zindex": Moodles eigene Modale (core/modal) rechnen sich in
+// calculateZIndex() über alles, was diese Klasse trägt. Ohne sie landet z. B.
+// die Löschnachfrage des Dateimanagers (Notification.saveCancelPromise) bei
+// z-index 1055 und damit HINTER unserem Overlay (2000) – sichtbar abgedunkelt,
+// aber nicht anklickbar. Mit der Klasse legt Moodle sie von selbst darüber.
+echo html_writer::start_div('sq-modal-overlay moodle-has-zindex', ['id' => 'sq-unit-modal']);
 echo html_writer::start_div('sq-modal');
 echo html_writer::start_div('sq-modal__head');
 echo html_writer::tag('h3', 'Seminareinheit bearbeiten', ['id' => 'sq-unit-modal-title']);
 echo html_writer::tag('button', '✕', ['type' => 'button', 'class' => 'sq-modal__close', 'id' => 'sq-unit-close']);
 echo html_writer::end_div();
 echo html_writer::start_div('sq-modal__body');
-echo $sqtext('Titel', 'titel');
-echo $sqrich('Lernziele (Ich kann …)', 'lernziele');
-// D62: geführter Lernziel-Editor (Phase → Verb → Inhalt → Satz).
-echo html_writer::tag('button', '✎ Lernziel formulieren', [
-    'type' => 'button',
-    'class' => 'kg-btn sq-lz-trigger',
-    'id' => 'sq-lz-open-lernziele',
+// Datei-Anhänge wie im Bibliotheks-Editor: das Filemanager-Formular wird beim
+// Öffnen des Modals je Einheit über die Fragment-API nachgeladen (der
+// Entwurfsbereich muss serverseitig vorbereitet werden).
+echo seminarplaner_render_unit_form_fields('sq-e-', [
+    'lernzielbuttonid' => 'sq-lz-open-lernziele',
+    'materials' => html_writer::tag('div', '', ['id' => 'sq-e-materialien-host']),
 ]);
-echo $sqrich('Kurzbeschreibung', 'kurzbeschreibung');
-echo $sqalternativen();
-echo $sqtext('Zeitbedarf (Minuten)', 'zeitbedarf');
-echo $sqmulti('Seminarphase', 'seminarphase', seminarplaner_phase_options(), 'Seminarphasen wählen', 'Seminarphasen');
-echo $sqmulti('Sozialform', 'sozialform', [
-    'Vortrag' => 'Vortrag',
-    'Diskussion' => 'Diskussion',
-    'Einzelarbeit' => 'Einzelarbeit',
-    'Partnerarbeit' => 'Partnerarbeit',
-    'Kleingruppen' => 'Kleingruppen',
-    'Galeriegang' => 'Galeriegang',
-    'Fishbowl' => 'Fishbowl',
-], 'Sozialformen wählen', 'Sozialformen');
-// Klapp-Indikator wie in der ganzen Ansicht (.sq-tri), nicht der native Marker.
-$sqsummary = static function (string $label): string {
-    return html_writer::tag(
-        'summary',
-        html_writer::tag('span', '▸', ['class' => 'sq-tri', 'aria-hidden' => 'true']) . ' ' . s($label)
-    );
-};
-echo html_writer::start_tag('details', ['class' => 'sq-section']);
-echo $sqsummary('Ablauf und Rahmen');
-echo html_writer::start_div('sq-section__inner');
-echo $sqrich('Ablauf', 'ablauf', 8);
-echo $sqmulti('Raumanforderungen', 'raum', [
-    'Plenum' => 'Plenum',
-    'Stuhlkreis' => 'Stuhlkreis',
-    'Stehtische' => 'Stehtische',
-    'viel Freifläche' => 'viel Freifläche',
-    'Gruppentische' => 'Gruppentische',
-    'Gruppenräume' => 'Gruppenräume',
-    'akustisch ruhig' => 'akustisch ruhig',
-], 'Raumanforderungen wählen', 'Raumanforderungen');
-echo $sqselect('Gruppengröße', 'gruppengroesse', ['' => '(keine Angabe)'] + seminarplaner_groupsize_options());
-echo $sqrich('Risiken/Tipps', 'risiken');
-echo $sqrich('Debrief/Reflexionsfragen', 'debrief');
-echo $sqtext('Tags/Schlüsselworte', 'tags', 'Hilft beim Wiederfinden und bei Vorschlägen');
-echo $sqtext('Autor*in / Kontakt', 'autor');
-echo html_writer::end_div();
-echo html_writer::end_tag('details');
-echo html_writer::start_tag('details', ['class' => 'sq-section']);
-echo $sqsummary('Materialien und Technik');
-echo html_writer::start_div('sq-section__inner');
-// Datei-Anhänge wie im Bibliotheks-Editor: das Filemanager-Formular wird
-// beim Öffnen des Modals je Einheit über die Fragment-API nachgeladen
-// (Entwurfsbereich muss serverseitig vorbereitet werden).
-echo html_writer::start_div('sq-field');
-echo html_writer::tag('label', 'Materialien', ['class' => 'kg-label']);
-echo html_writer::tag('div', '', ['id' => 'sq-e-materialien-host']);
-echo html_writer::end_div();
-echo $sqrich('Material/Technik', 'materialtechnik');
-echo html_writer::end_div();
-echo html_writer::end_tag('details');
 echo html_writer::end_div();
 echo html_writer::start_div('sq-modal__footer sq-modal__footer--split');
 // Meldungen zum Formular (fehlender Titel, misslungenes Speichern) gehören in

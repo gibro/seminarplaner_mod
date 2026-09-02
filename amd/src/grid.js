@@ -3559,7 +3559,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
         createBreakModal() {
             const modal = document.createElement('div');
-            modal.className = 'sp-modal';
+            // moodle-has-zindex: siehe sequenz.php - sonst legen sich Moodles
+            // eigene Modale (core/modal) hinter dieses Overlay.
+            modal.className = 'sp-modal moodle-has-zindex';
             modal.setAttribute('aria-hidden', 'true');
             modal.innerHTML = `
                 <div class="sp-modal__backdrop" data-modal-close="break"></div>
@@ -3730,7 +3732,9 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
 
         createMethodDetailModal() {
             const modal = document.createElement('div');
-            modal.className = 'sp-modal';
+            // moodle-has-zindex: siehe sequenz.php - sonst legen sich Moodles
+            // eigene Modale (core/modal) hinter dieses Overlay.
+            modal.className = 'sp-modal moodle-has-zindex';
             modal.setAttribute('aria-hidden', 'true');
             modal.innerHTML = `
                 <div class="sp-modal__backdrop" data-modal-close="method-detail"></div>
