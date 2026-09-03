@@ -589,18 +589,61 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
         }));
     };
 
-    const exportJsonFull = async (cmid) => {
-        const selection = getComponentSelection('export');
-        if (selectedComponentCount(selection) === 0) {
-            throw new Error('Bitte mindestens eine Komponente auswählen (Seminareinheiten, Bausteine oder Seminarpläne).');
-        }
-        const bausteine = Object.entries(planningUnitsById || {}).map(([id, unit]) => ({
+    // Bausteine leben seit dem Sequenz-Umbau (D20) im Plan-JSON unter
+    // `sequenz.bausteine`; der aktivitätsweite Planungszustand ist nur noch
+    // Altbestand und bleibt in neu gebauten Seminaren leer. Der Export sammelt
+    // deshalb aus beiden Quellen - sonst meldet er „0 Bausteine", obwohl in der
+    // Sequenz welche stehen.
+    // Bausteine aus den `sequenz.bausteine`-Abschnitten einer Plan-Liste
+    // einsammeln (Export wie Import lesen dieselbe Struktur).
+    const bausteineFromPlans = (seminarplaene) => {
+        const out = [];
+        (Array.isArray(seminarplaene) ? seminarplaene : []).forEach((plan) => {
+            const state = plan && plan.state && typeof plan.state === 'object' ? plan.state : {};
+            const seq = state.sequenz && typeof state.sequenz === 'object' ? state.sequenz : {};
+            const bausteine = seq.bausteine && typeof seq.bausteine === 'object' ? seq.bausteine : {};
+            Object.entries(bausteine).forEach(([id, baustein]) => {
+                out.push({
+                    id: String(id || ''),
+                    title: String(baustein && baustein.titel ? baustein.titel : ''),
+                    topics: String(baustein && baustein.unterthemen ? baustein.unterthemen : ''),
+                    objectives: String(baustein && baustein.themenplanreferenz ? baustein.themenplanreferenz : '')
+                });
+            });
+        });
+        return out;
+    };
+
+    const collectBausteineForExport = (seminarplaene) => {
+        const fromplanning = Object.entries(planningUnitsById || {}).map(([id, unit]) => ({
             id: String(id),
             title: String(unit && unit.title ? unit.title : ''),
             topics: String(unit && unit.topics ? unit.topics : ''),
             objectives: String(unit && unit.objectives ? unit.objectives : '')
         }));
-        const seminarplaene = selection.grids ? await collectSeminarplaeneForExport(cmid) : [];
+        const out = [];
+        const seen = new Set();
+        fromplanning.concat(bausteineFromPlans(seminarplaene)).forEach((baustein) => {
+            if (!baustein.id || seen.has(baustein.id)) {
+                return;
+            }
+            seen.add(baustein.id);
+            out.push(baustein);
+        });
+        return out;
+    };
+
+    const exportJsonFull = async (cmid) => {
+        const selection = getComponentSelection('export');
+        if (selectedComponentCount(selection) === 0) {
+            throw new Error('Bitte mindestens eine Komponente auswählen (Seminareinheiten, Bausteine oder Seminarpläne).');
+        }
+        // Die Planzustände werden auch für die Bausteine gebraucht, nicht nur
+        // für den Seminarplan-Teil des Exports.
+        const seminarplaene = (selection.grids || selection.units)
+            ? await collectSeminarplaeneForExport(cmid)
+            : [];
+        const bausteine = collectBausteineForExport(seminarplaene);
         const payload = {
             format: 'seminarplaner-component-export',
             version: 3,
@@ -617,7 +660,17 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
         }
         if (selection.units) {
             payload.bausteine = bausteine;
-            payload.planningstate = planningState && typeof planningState === 'object' ? planningState : {units: bausteine};
+            // Der Planungszustand ist bei Aktivitäten ohne Altbestand ein
+            // leeres Array - dann trägt nur die Baustein-Liste die Daten.
+            const basestate = planningState && typeof planningState === 'object' && !Array.isArray(planningState)
+                ? Object.assign({}, planningState)
+                : {};
+            const stateunits = Array.isArray(basestate.units) ? basestate.units : [];
+            const knownids = new Set(stateunits
+                .map((unit) => String(unit && unit.id ? unit.id : '').trim())
+                .filter(Boolean));
+            basestate.units = stateunits.concat(bausteine.filter((unit) => !knownids.has(unit.id)));
+            payload.planningstate = basestate;
         }
         if (selection.grids) {
             payload.seminarplaene = seminarplaene;
@@ -2050,6 +2103,144 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
         });
     };
 
+    // Anhänge reisen als base64 im selben Speicheraufruf mit. Eine importierte
+    // Bibliothek mit vielen Materialien wird damit zweistellig megabytegroß und
+    // läuft in die POST-Grenze des Servers - die Antwort kommt dann ohne
+    // Fehlertext zurück (leerer Fehlerdialog). Deshalb wird der Import
+    // gestückelt: erst alle Einheiten ohne Dateiinhalte, danach die Inhalte in
+    // Paketen. `save_method_cards` behält vorhandene Dateien, wenn ein Anhang
+    // nur mit Namen (ohne contentbase64) übergeben wird - so ergänzt jedes
+    // Paket den Bestand, statt ihn zu ersetzen.
+    const SAVE_PAYLOAD_BUDGET_BYTES = 2 * 1024 * 1024;
+    const ATTACHMENT_AREAS = ['materialien', 'h5p'];
+
+    const withoutAttachmentContent = (method) => {
+        if (!method || typeof method !== 'object') {
+            return method;
+        }
+        const copy = Object.assign({}, method);
+        ATTACHMENT_AREAS.forEach((area) => {
+            if (!Array.isArray(copy[area])) {
+                return;
+            }
+            copy[area] = copy[area].map((entry) => {
+                if (!entry || typeof entry !== 'object' || !entry.contentbase64) {
+                    return entry;
+                }
+                const stripped = Object.assign({}, entry);
+                delete stripped.contentbase64;
+                return stripped;
+            });
+        });
+        return copy;
+    };
+
+    const collectAttachmentJobs = (methodList) => {
+        const jobs = [];
+        (Array.isArray(methodList) ? methodList : []).forEach((method, mi) => {
+            if (!method || typeof method !== 'object') {
+                return;
+            }
+            ATTACHMENT_AREAS.forEach((area) => {
+                if (!Array.isArray(method[area])) {
+                    return;
+                }
+                method[area].forEach((entry, ei) => {
+                    if (entry && typeof entry === 'object' && entry.contentbase64) {
+                        jobs.push({mi, area, ei, size: String(entry.contentbase64).length});
+                    }
+                });
+            });
+        });
+        return jobs;
+    };
+
+    // Baut die Sendeliste eines Pakets: alle Einheiten ohne Dateiinhalte, nur
+    // die Anhänge dieses Pakets mit Inhalt.
+    const buildChunkPayload = (lightMethods, fullMethods, chunk) => {
+        const payload = lightMethods.slice();
+        const touched = new Map();
+        chunk.forEach((job) => {
+            if (!touched.has(job.mi)) {
+                const copy = Object.assign({}, lightMethods[job.mi]);
+                ATTACHMENT_AREAS.forEach((area) => {
+                    if (Array.isArray(copy[area])) {
+                        copy[area] = copy[area].slice();
+                    }
+                });
+                touched.set(job.mi, copy);
+                payload[job.mi] = copy;
+            }
+            const target = touched.get(job.mi);
+            const source = fullMethods[job.mi];
+            if (Array.isArray(target[job.area]) && source && Array.isArray(source[job.area])) {
+                target[job.area][job.ei] = source[job.area][job.ei];
+            }
+        });
+        return payload;
+    };
+
+    const saveMethodsChunked = async (cmid, newMethods, onProgress) => {
+        const full = Array.isArray(newMethods) ? newMethods : [];
+        const light = full.map(withoutAttachmentContent);
+        const chunks = [];
+        let current = [];
+        let currentsize = 0;
+        collectAttachmentJobs(full).forEach((job) => {
+            if (current.length && (currentsize + job.size) > SAVE_PAYLOAD_BUDGET_BYTES) {
+                chunks.push(current);
+                current = [];
+                currentsize = 0;
+            }
+            current.push(job);
+            currentsize += job.size;
+        });
+        if (current.length) {
+            chunks.push(current);
+        }
+
+        const total = chunks.length + 1;
+        const report = (stepnr) => {
+            if (typeof onProgress === 'function' && total > 1) {
+                onProgress(stepnr, total);
+            }
+        };
+
+        report(1);
+        let result = await saveMethods(cmid, light);
+        for (let i = 0; i < chunks.length; i++) {
+            report(i + 2);
+            result = await saveMethods(cmid, buildChunkPayload(light, full, chunks[i]));
+        }
+        return result;
+    };
+
+    // Fehler aus core/ajax haben nicht immer eine Nachricht: bricht die
+    // Anfrage unterhalb von Moodle ab (zu große Nutzlast, 500er, Timeout),
+    // kommt der reine jQuery-Fehler an - ohne message zeigte der
+    // Fehlerdialog dann eine leere Fläche.
+    const describeError = (e) => {
+        if (!e) {
+            return 'Unbekannter Fehler.';
+        }
+        if (typeof e === 'string') {
+            return e;
+        }
+        const message = String(e.message || e.error || e.errorcode || '').trim();
+        if (message) {
+            return message;
+        }
+        const status = Number(e.status || 0);
+        if (status === 413 || status === 0) {
+            return 'Der Server hat die Anfrage ohne Fehlermeldung abgewiesen - vermutlich ist die Datei '
+                + 'bzw. ein einzelner Anhang größer, als der Server annimmt.';
+        }
+        if (status) {
+            return `Der Server antwortete mit HTTP ${status} ohne Fehlermeldung.`;
+        }
+        return 'Der Server hat die Anfrage ohne Fehlermeldung abgewiesen.';
+    };
+
     const normalizeTitle = (title) => String(title || '').trim().toLowerCase();
 
     const mergeImportedMethods = (existingMethods, importedRows) => {
@@ -2118,8 +2309,15 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
         const planningstate = object.planningstate && typeof object.planningstate === 'object' ? object.planningstate : null;
         const bausteineFromObject = Array.isArray(object.bausteine) ? object.bausteine : [];
         const bausteineFromState = planningstate && Array.isArray(planningstate.units) ? planningstate.units : [];
-        const bausteineArr = normalizeImportedPlanningUnits(bausteineFromObject.length ? bausteineFromObject : bausteineFromState);
         const seminarplaene = Array.isArray(object.seminarplaene) ? object.seminarplaene : [];
+        // Ältere Exportdateien führen die Bausteine nur im sequenz-Abschnitt der
+        // Seminarpläne mit, weil der Export sie damals aus dem (leeren)
+        // Planungszustand gezogen hat. Dann von dort lesen, sonst zeigt die
+        // Vorschau „0 Bausteine", obwohl welche in der Datei stehen.
+        const bausteinequelle = bausteineFromObject.length
+            ? bausteineFromObject
+            : (bausteineFromState.length ? bausteineFromState : bausteineFromPlans(seminarplaene));
+        const bausteineArr = normalizeImportedPlanningUnits(bausteinequelle);
         const explicitComponents = object.components && typeof object.components === 'object' ? object.components : {};
 
         const hasMethods = !!(explicitComponents.methods || methodsArr.length);
@@ -2317,7 +2515,7 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
                     previewUnits = [];
                     previewGrids = [];
                     renderPreview();
-                    setStatus(`Analyse fehlgeschlagen: ${e.message || e}`, true);
+                    setStatus(`Analyse fehlgeschlagen: ${describeError(e)}`, true);
                 }
             });
         }
@@ -2372,7 +2570,9 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
 
                     if (selectedRows.length) {
                         const result = mergeImportedMethods(methods, selectedRows);
-                        const saveres = await saveMethods(cmid, result.merged);
+                        const saveres = await saveMethodsChunked(cmid, result.merged, (stepnr, total) => {
+                            setImportStatus(`Import läuft … Paket ${stepnr} von ${total} wird übertragen.`, false);
+                        });
                         methods = result.merged;
                         successParts.push(
                             `Seminareinheiten: ${selectedRows.length} verarbeitet (+${result.stats.added}, `
@@ -2446,8 +2646,11 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
                     step(1);
                     setImportStatus(`Import erfolgreich: ${successParts.join(' | ')}`, false);
                 } catch (e) {
-                    Notification.exception(e);
-                    setImportStatus(`Import fehlgeschlagen: ${e.message || e}`, true);
+                    const message = describeError(e);
+                    if (e && e.message) {
+                        Notification.exception(e);
+                    }
+                    setImportStatus(`Import fehlgeschlagen: ${message}`, true);
                 }
             });
         }
