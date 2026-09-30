@@ -8978,3 +8978,14 @@ details.sq-menu[open] > summary.sq-menu__btn {
 .sq-modal--picker .sq-picker__createrow {
     flex: 0 0 auto;
 }
+
+/* +/−-Knopf: gezeichnetes Symbol exakt mittig (vorher sass die Schrift-Glyphe
+   zu tief). */
+.sq-unit__toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.sq-unit__toggle svg {
+    display: block;
+}

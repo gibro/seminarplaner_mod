@@ -226,6 +226,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
     const ICON_LIBRARY = svgIcon('<path d="M4 4h4v16H4zM10 4h4v16h-4zM15 5.5l3.9-1 3.1 14.6-3.9 1z"/>');
     const ICON_NEW = svgIcon('<path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M12.5 7.5l4 4"/>'
         + '<path d="M19 14v7M15.5 17.5h7"/>');
+    // +/− des Aufklapp-Knopfs gezeichnet statt als Schriftzeichen: die Glyphen
+    // der Meta-Schrift sitzen unterhalb der optischen Mitte, der Knopf wirkte
+    // dadurch schief befuellt.
+    const toggleIcon = (paths) => '<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" '
+        + 'focusable="false" fill="none" stroke="currentColor" stroke-width="2">' + paths + '</svg>';
+    const ICON_EXPAND = toggleIcon('<path d="M6 1v10M1 6h10"/>');
+    const ICON_COLLAPSE = toggleIcon('<path d="M1 6h10"/>');
     const formatFileSize = (bytes) => {
         const size = Number(bytes) || 0;
         if (size <= 0) {
@@ -6162,7 +6169,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                   data-pid="${escapeHtml(pid)}" aria-expanded="${open ? 'true' : 'false'}"
                   aria-controls="sq-details-${escapeHtml(pid)}" aria-label="${label}"
                   data-sq-tip="${open ? 'Inhalte ausblenden' : 'Inhalte anzeigen'}"
-                  draggable="false">${open ? '−' : '+'}</button>`;
+                  draggable="false">${open ? ICON_COLLAPSE : ICON_EXPAND}</button>`;
         }
 
         // Inhalte der aktiven Karte hinter einer Platzierung. note steht als
