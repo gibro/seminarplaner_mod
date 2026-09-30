@@ -88,26 +88,34 @@ echo html_writer::empty_tag('input', [
 ]);
 echo html_writer::tag('button', '✎', [
     'type' => 'button', 'id' => 'sq-rename-plan', 'class' => 'sq-planpicker__rename',
-    'title' => 'Seminarplan umbenennen', 'aria-label' => 'Seminarplan umbenennen',
+    'aria-label' => 'Seminarplan umbenennen', 'data-sq-tip' => 'Seminarplan umbenennen',
 ]);
 echo html_writer::end_div();
-echo html_writer::tag('button', '＋ Neuer Seminarplan', [
-    'type' => 'button', 'id' => 'sq-new-plan', 'class' => 'kg-btn',
-]);
-echo html_writer::tag('button', 'Einrichtung', [
-    'type' => 'button', 'id' => 'sq-edit-setup', 'class' => 'kg-btn',
-    'title' => 'Tage und Seminarzeiten dieses Seminarplans anpassen',
-]);
+// Plan-Aktionen als Symbol-Buttons, damit die Leiste einzeilig bleibt. Die
+// Bedeutung steht als Hinweis darunter (data-sq-tip, per CSS bei Hover und
+// Tastaturfokus) und für Screenreader im aria-label. Kein title-Attribut:
+// der Browser-Tooltip erschiene verzögert zusätzlich zum eigenen Hinweis.
+$sqiconbutton = static function (string $id, string $label, string $svgpaths, string $extraclass = ''): string {
+    $svg = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" '
+        . 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">' . $svgpaths . '</svg>';
+    return html_writer::tag('button', $svg, [
+        'type' => 'button', 'id' => $id, 'class' => trim('kg-btn sq-iconbtn ' . $extraclass),
+        'aria-label' => $label, 'data-sq-tip' => $label,
+    ]);
+};
+echo $sqiconbutton('sq-new-plan', 'Neuen Seminarplan erstellen',
+    '<path d="M12 5v14M5 12h14"/>');
+echo $sqiconbutton('sq-edit-setup', 'Einrichtung: Tage und Seminarzeiten anpassen',
+    '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3'
+    . 'M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>');
 // D67: Kopieren steht bei den übrigen plan-bezogenen Aktionen, nicht in
 // einer eigenen Ansicht – hier erwarten Referentinnen alles zum Seminarplan.
-echo html_writer::tag('button', 'Kopieren', [
-    'type' => 'button', 'id' => 'sq-copy-plan', 'class' => 'kg-btn',
-    'title' => 'Eine eigenständige Zweitfassung dieses Seminarplans anlegen',
-]);
-echo html_writer::tag('button', 'Seminarplan löschen', [
-    'type' => 'button', 'id' => 'sq-delete-plan', 'class' => 'kg-btn kg-btn--outline-red',
-    'title' => 'Den aktuell gewählten Seminarplan löschen',
-]);
+echo $sqiconbutton('sq-copy-plan', 'Seminarplan kopieren',
+    '<rect x="8" y="8" width="12" height="12"/><path d="M16 8V4H4v12h4"/>');
+// Löschen bleibt rot umrandet: als einzige endgültige Aktion soll es sich
+// auch als Symbol von den übrigen abheben.
+echo $sqiconbutton('sq-delete-plan', 'Seminarplan löschen',
+    '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', 'kg-btn--outline-red');
 echo html_writer::end_div();
 
 // Setup panel (create new plan / reconfigure the loaded one).
