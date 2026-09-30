@@ -8889,3 +8889,15 @@ details.sq-menu[open] > summary.sq-menu__btn {
     .sq-details__list dd { margin-bottom: 8px; }
     .sq-unit__details { padding-left: 16px; }
 }
+/* Ueberschriften aus dem Ablauf-Feld (Tiny) wuerden sonst in Theme-Groesse
+   erscheinen und den Aufklappbereich dominieren. */
+.sq-unit__details h1,
+.sq-unit__details h2,
+.sq-unit__details h3,
+.sq-unit__details h4,
+.sq-unit__details h5,
+.sq-unit__details h6 {
+    margin: 0.9em 0 0.3em;
+    font-size: 15px;
+    line-height: 1.3;
+}
