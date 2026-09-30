@@ -14,8 +14,9 @@
  *
  * @module mod_seminarplaner/sequenz
  */
-define(['core/ajax', 'core_user/repository', 'core/fragment', 'core/templates', 'mod_seminarplaner/lernzieleditor'],
-function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
+define(['core/ajax', 'core_user/repository', 'core/fragment', 'core/templates', 'mod_seminarplaner/lernzieleditor',
+    'mod_seminarplaner/livemodel'],
+function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
     const DEFAULT_BOUNDARY_MIN = 750; // 12:30 fallback, same rule as the PHP converter.
     const ANCHORS = ['vormittag', 'nachmittag'];
     const DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
@@ -199,6 +200,33 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
     // Mehrfach-Auswahlen mit denselben Dropdown-Bedienelementen wie im
     // Bibliotheks-Editor (D17: ein Editor, drei Einstiege).
     const UNIT_MULTI_FIELDS = ['seminarphase', 'sozialform', 'raum'];
+    // Aufklappbereich einer Einheit in der Sequenz: dieselbe Reihenfolge wie
+    // im Einheiten-Editor, damit man die Inhalte dort wiederfindet. Zeitbedarf
+    // fehlt bewusst - die geplante Dauer steht schon in der Zeit-Spalte.
+    const UNIT_DETAIL_FIELDS = [
+        ['lernziele', 'Lernziele', 'rich'],
+        ['kurzbeschreibung', 'Kurzbeschreibung', 'rich'],
+        ['seminarphase', 'Seminarphase', 'list'],
+        ['sozialform', 'Sozialform', 'list'],
+        ['ablauf', 'Ablauf', 'rich'],
+        ['raum', 'Raumanforderungen', 'list'],
+        ['gruppengroesse', 'Gruppengröße', 'text'],
+        ['risiken', 'Risiken/Tipps', 'rich'],
+        ['debrief', 'Debrief/Reflexionsfragen', 'rich'],
+        ['tags', 'Tags/Schlüsselworte', 'text'],
+        ['autor', 'Autor*in / Kontakt', 'text'],
+        ['materialtechnik', 'Material/Technik', 'rich'],
+    ];
+    const formatFileSize = (bytes) => {
+        const size = Number(bytes) || 0;
+        if (size <= 0) {
+            return '';
+        }
+        if (size < 1024 * 1024) {
+            return `${Math.max(1, Math.round(size / 1024))} KB`;
+        }
+        return `${(size / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
+    };
 
     const unitMultiDropdown = (selector) => document.querySelector(
         `[data-kg-form-multi-dropdown="1"][data-kg-field="${selector}"]`);
@@ -507,6 +535,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             this.gridid = 0;
             // Laufendes Umbenennen im Plan-Dropdown ({gridid, option}) oder null.
             this.renamingPlan = null;
+            // Aufgeklappte Einheiten (Platzierungs-IDs). Nur Ansichtszustand:
+            // wird nicht gespeichert und ueberlebt so jedes Neu-Rendern.
+            this.openDetails = new Set();
             this.state = null;
             this.sequenz = null;
             this.versionhash = '';
@@ -2385,6 +2416,20 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         // still cover fine-grained moves and cross-day moves.
 
         initDragAndDrop(container) {
+            // Im Aufklappbereich soll man Text markieren koennen. Solange die
+            // Zeile draggable ist, startet der Browser dort aber einen Drag statt
+            // einer Markierung - deshalb fuer die Dauer des Mausdrucks aus.
+            container.addEventListener('mousedown', (event) => {
+                if (!event.target.closest || !event.target.closest('.sq-unit__details')) {
+                    return;
+                }
+                const row = event.target.closest('[data-sq-drag]');
+                if (!row) {
+                    return;
+                }
+                row.setAttribute('draggable', 'false');
+                document.addEventListener('mouseup', () => row.setAttribute('draggable', 'true'), {once: true});
+            });
             container.addEventListener('dragstart', (event) => {
                 const row = event.target.closest('[data-sq-drag]');
                 if (!row) {
@@ -5334,6 +5379,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         handleDayClick(event) {
             const action = event.target.closest('[data-sq-action]');
             if (!action) {
+                this.maybeToggleDetailsFromClick(event);
                 return;
             }
             const type = action.getAttribute('data-sq-action');
@@ -5345,6 +5391,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (type === 'menu-toggle') {
                 this.openMenuPid = this.openMenuPid === pid ? '' : pid;
                 this.render();
+            } else if (type === 'details-toggle') {
+                this.toggleDetails(pid);
             } else if (type === 'move-up') {
                 this.movePlacement(pid, -1);
             } else if (type === 'move-down') {
@@ -6065,6 +6113,103 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         // ⇄-Popover, damit Titel und Dauer mitziehen). Gibt '' zurueck, wenn
         // die Platzierung kein Zweier-Paar ist - dann zeichnet der Aufrufer
         // die normale Zeile.
+        // ---- Aufklappbereich: Inhalte der Seminareinheit ------------------
+
+        toggleDetails(pid) {
+            if (!pid) {
+                return;
+            }
+            if (this.openDetails.has(pid)) {
+                this.openDetails.delete(pid);
+            } else {
+                this.openDetails.add(pid);
+            }
+            this.render();
+        }
+
+        // Klick irgendwo auf die Karte klappt auf. Ausgenommen ist alles, was
+        // selbst schon eine Bedeutung hat: der Titel (per Klick editierbar),
+        // Buttons, Links, Menues - und der Aufklappbereich selbst, damit man
+        // darin Text markieren und Dateien oeffnen kann.
+        maybeToggleDetailsFromClick(event) {
+            const unit = event.target.closest('[data-sq-unit]');
+            if (!unit) {
+                return;
+            }
+            if (event.target.closest('a, button, input, select, textarea, label, [contenteditable], '
+                + '.sq-unit__details, .sq-unit__actions')) {
+                return;
+            }
+            const selection = window.getSelection ? String(window.getSelection() || '') : '';
+            if (selection.trim() !== '') {
+                return;
+            }
+            this.toggleDetails(unit.getAttribute('data-sq-unit') || '');
+        }
+
+        renderDetailsToggle(pid) {
+            const open = this.openDetails.has(pid);
+            const label = open ? 'Inhalte der Seminareinheit ausblenden' : 'Inhalte der Seminareinheit anzeigen';
+            return `
+                <button type="button" class="sq-unit__toggle" data-sq-action="details-toggle"
+                  data-pid="${escapeHtml(pid)}" aria-expanded="${open ? 'true' : 'false'}"
+                  aria-controls="sq-details-${escapeHtml(pid)}" aria-label="${label}"
+                  data-sq-tip="${open ? 'Inhalte ausblenden' : 'Inhalte anzeigen'}"
+                  draggable="false">${open ? '−' : '+'}</button>`;
+        }
+
+        // Inhalte der aktiven Karte hinter einer Platzierung. note steht als
+        // Hinweiszeile obenan (z. B. welche Alternative gezeigt wird).
+        renderUnitDetails(pid, card, note) {
+            if (!this.openDetails.has(pid)) {
+                return '';
+            }
+            const rows = [];
+            if (card) {
+                UNIT_DETAIL_FIELDS.forEach(([key, label, kind]) => {
+                    let html = '';
+                    if (kind === 'rich') {
+                        html = LiveModel.richText(card[key]);
+                        if (String(html).replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim() === '') {
+                            html = '';
+                        }
+                    } else if (kind === 'list') {
+                        html = escapeHtml(splitMultiValue(card[key]).join(', '));
+                    } else {
+                        html = escapeHtml(this.fieldValue(card, key).trim());
+                    }
+                    if (html) {
+                        rows.push(`<dt>${escapeHtml(label)}</dt><dd>${html}</dd>`);
+                    }
+                });
+                const files = (Array.isArray(card.materialien) ? card.materialien : [])
+                    .filter((file) => file && file.fileurl);
+                if (files.length) {
+                    rows.push(`<dt>Materialien (Dateien)</dt><dd><ul class="sq-details__files">${files.map((file) => {
+                        const size = formatFileSize(file.filesize);
+                        return `<li><a href="${escapeHtml(file.fileurl)}" target="_blank" rel="noopener noreferrer"
+                            >${escapeHtml(file.name || 'Datei')}</a>${size
+                            ? ` <span class="sq-details__size">${escapeHtml(size)}</span>` : ''}</li>`;
+                    }).join('')}</ul></dd>`);
+                }
+            }
+            let body;
+            if (!card) {
+                body = '<p class="sq-details__empty">Diese Einheit hat keinen Bibliothekseintrag – '
+                    + 'es gibt keine weiteren Inhalte anzuzeigen.</p>';
+            } else if (!rows.length) {
+                body = '<p class="sq-details__empty">Für diese Seminareinheit sind noch keine Inhalte hinterlegt. '
+                    + 'Über „Bearbeiten" lassen sie sich ergänzen.</p>';
+            } else {
+                body = `<dl class="sq-details__list">${rows.join('')}</dl>`;
+            }
+            return `
+                <div class="sq-unit__details" id="sq-details-${escapeHtml(pid)}" draggable="false">
+                  ${note ? `<p class="sq-details__note">${escapeHtml(note)}</p>` : ''}
+                  ${body}
+                </div>`;
+        }
+
         renderAlternativePair(p, inBaustein) {
             const data = p.data;
             if (data.splitgroup) {
@@ -6108,10 +6253,17 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                     </div>`;
             }).join('<span class="sq-alt__or">oder</span>');
 
+            // Ein Klick auf eine der beiden Karten waehlt sie aus - aufgeklappt
+            // wird hier deshalb nur ueber den +/−-Knopf, und gezeigt werden die
+            // Inhalte der gewaehlten Alternative.
+            const activecard = this.methodCardForRef(auswahl.aktiv);
+            const activelabel = this.candidateLabel(auswahl.aktiv);
             return `
-                <div class="sq-alt${inBaustein ? '' : ' sq-alt--standalone'}" role="radiogroup"
+                <div class="sq-alt${inBaustein ? '' : ' sq-alt--standalone'}${this.openDetails.has(p.pid)
+                    ? ' is-open' : ''}" role="radiogroup"
                   aria-label="Zwei Alternativen – eine davon wird durchgeführt">
                   ${inBaustein ? '' : this.renderGrip()}
+                  ${this.renderDetailsToggle(p.pid)}
                   <div class="sq-alt__options">${options}</div>
                   <div class="sq-unit__actions">
                     ${this.renderReferentChip(p)}
@@ -6119,6 +6271,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                       data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
                     ${this.renderRowMenu(p, inBaustein)}
                   </div>
+                  ${this.renderUnitDetails(p.pid, activecard, `Gewählte Alternative: ${activelabel}`)}
                 </div>`;
         }
 
@@ -6165,6 +6318,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
 
             const phase = this.placementPhase(data);
             const groupsize = this.placementGroupSize(data);
+            const detailsopen = this.openDetails.has(p.pid);
+            const detailauswahl = this.auswahl(data);
+            const detailcard = detailauswahl ? this.methodCardForRef(detailauswahl.aktiv) : null;
 
             // Genau zwei Alternativen: beide nebeneinander, je halbe Breite.
             // Nur die aktive zaehlt in die Zeitbilanz - im Seminar laeuft nur
@@ -6190,9 +6346,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             return `
                 <div class="sq-row"${inBaustein ? '' : ` draggable="true" data-sq-drag="${escapeHtml(p.pid)}"`}>
                   ${this.renderTimeColumn(startMin, duration, p.pid)}
-                  <div class="sq-unit${inBaustein ? '' : ' sq-unit--standalone'}" title="${escapeHtml(timelabel)}">
+                  <div class="sq-unit${inBaustein ? '' : ' sq-unit--standalone'}${detailsopen ? ' is-open' : ''}"
+                    title="${escapeHtml(timelabel)}" data-sq-unit="${escapeHtml(p.pid)}">
                     <div class="sq-unit__phase${phase ? ' sq-phase-bg--' + phase : ''}"></div>
                     ${inBaustein ? '' : this.renderGrip()}
+                    ${this.renderDetailsToggle(p.pid)}
                     <div class="sq-unit__main">
                       <div class="sq-unit__title sq-titleedit" ${EDITABLE}
                         data-sq-title="${escapeHtml(p.pid)}" draggable="false"
@@ -6208,6 +6366,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                       <button type="button" class="kg-btn" data-sq-action="edit" data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
                       ${this.renderRowMenu(p, inBaustein)}
                     </div>
+                    ${this.renderUnitDetails(p.pid, detailcard, '')}
                   </div>
                 </div>`;
         }

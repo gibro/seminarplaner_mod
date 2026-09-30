@@ -8795,3 +8795,97 @@ details.sq-menu[open] > summary.sq-menu__btn {
     right: 0;
     transform: none;
 }
+
+/* ---- Aufklappbereich einer Seminareinheit in der Sequenz ----
+   Die Karte ist eine Flex-Zeile (Phasenstreifen, Griff, +/−, Titel,
+   Aktionen). Aufgeklappt bricht sie um und der Inhaltsbereich nimmt die
+   volle Breite unter der Kopfzeile ein. */
+.sq-unit[data-sq-unit] {
+    cursor: pointer;
+}
+.sq-unit.is-open,
+.sq-alt.is-open {
+    flex-wrap: wrap;
+}
+.sq-unit__toggle {
+    position: relative; /* Bezug fuer den data-sq-tip-Hinweis */
+    flex: 0 0 auto;
+    align-self: flex-start;
+    width: 22px;
+    height: 22px;
+    margin: 8px 0 0 8px;
+    padding: 0;
+    border: 1px solid var(--ig-midgray);
+    border-radius: 0;
+    background: #fff;
+    color: var(--ig-anthracite);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+.sq-alt .sq-unit__toggle {
+    align-self: center;
+    margin: 0 0 0 8px;
+}
+.sq-unit__toggle:hover,
+.sq-unit__toggle:focus-visible {
+    border-color: var(--ig-red);
+    color: var(--ig-red);
+    outline: none;
+}
+.sq-unit.is-open .sq-unit__toggle,
+.sq-alt.is-open .sq-unit__toggle {
+    border-color: var(--ig-red);
+    background: var(--ig-red);
+    color: #fff;
+}
+.sq-unit__details {
+    flex: 0 0 100%;
+    box-sizing: border-box;
+    padding: 12px 16px 14px 36px;
+    border-top: 1px solid var(--sq-border);
+    background: #fafafa;
+    font-size: 14px;
+    cursor: auto;
+    user-select: text;
+}
+.sq-details__note {
+    margin: 0 0 8px;
+    color: var(--sq-text-muted);
+    font-size: 13px;
+}
+.sq-details__empty {
+    margin: 0;
+    color: var(--sq-text-muted);
+}
+.sq-details__list {
+    display: grid;
+    grid-template-columns: minmax(130px, 190px) minmax(0, 1fr);
+    gap: 8px 18px;
+    margin: 0;
+}
+.sq-details__list dt {
+    font-weight: 600;
+    color: var(--sq-text-muted);
+}
+.sq-details__list dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.sq-details__list dd > :first-child { margin-top: 0; }
+.sq-details__list dd > :last-child { margin-bottom: 0; }
+.sq-details__files {
+    margin: 0;
+    padding-left: 18px;
+}
+.sq-details__size {
+    color: var(--sq-text-muted);
+    font-size: 12px;
+}
+@media (max-width: 640px) {
+    .sq-details__list { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+    .sq-details__list dd { margin-bottom: 8px; }
+    .sq-unit__details { padding-left: 16px; }
+}
