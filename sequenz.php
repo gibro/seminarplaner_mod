@@ -78,24 +78,44 @@ echo html_writer::tag(
     get_string('sequenz_planlabel', 'mod_seminarplaner'),
     ['for' => 'sq-grid-select', 'class' => 'kg-label sq-planbar__label']
 );
+// Umbenennen direkt im Dropdown: der Stift legt ein Eingabefeld genau über die
+// Auswahl, statt einen weiteren Button in die Leiste zu stellen.
+echo html_writer::start_div('sq-planpicker', ['id' => 'sq-planpicker']);
 echo html_writer::tag('select', '', ['id' => 'sq-grid-select', 'class' => 'kg-input sq-planbar__select']);
-echo html_writer::tag('button', '＋ Neuer Seminarplan', [
-    'type' => 'button', 'id' => 'sq-new-plan', 'class' => 'kg-btn',
+echo html_writer::empty_tag('input', [
+    'type' => 'text', 'id' => 'sq-plan-nameedit', 'class' => 'kg-input sq-planpicker__edit',
+    'maxlength' => 255, 'aria-label' => 'Name des Seminarplans', 'hidden' => 'hidden',
 ]);
-echo html_writer::tag('button', 'Einrichtung', [
-    'type' => 'button', 'id' => 'sq-edit-setup', 'class' => 'kg-btn',
-    'title' => 'Tage und Seminarzeiten dieses Seminarplans anpassen',
+echo html_writer::tag('button', '✎', [
+    'type' => 'button', 'id' => 'sq-rename-plan', 'class' => 'sq-planpicker__rename',
+    'aria-label' => 'Seminarplan umbenennen', 'data-sq-tip' => 'Seminarplan umbenennen',
 ]);
+echo html_writer::end_div();
+// Plan-Aktionen als Symbol-Buttons, damit die Leiste einzeilig bleibt. Die
+// Bedeutung steht als Hinweis darunter (data-sq-tip, per CSS bei Hover und
+// Tastaturfokus) und für Screenreader im aria-label. Kein title-Attribut:
+// der Browser-Tooltip erschiene verzögert zusätzlich zum eigenen Hinweis.
+$sqiconbutton = static function (string $id, string $label, string $svgpaths, string $extraclass = ''): string {
+    $svg = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" '
+        . 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">' . $svgpaths . '</svg>';
+    return html_writer::tag('button', $svg, [
+        'type' => 'button', 'id' => $id, 'class' => trim('kg-btn sq-iconbtn ' . $extraclass),
+        'aria-label' => $label, 'data-sq-tip' => $label,
+    ]);
+};
+echo $sqiconbutton('sq-new-plan', 'Neuen Seminarplan erstellen',
+    '<path d="M12 5v14M5 12h14"/>');
+echo $sqiconbutton('sq-edit-setup', 'Einrichtung: Tage und Seminarzeiten anpassen',
+    '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h11M19 18h1"/>'
+    . '<circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>');
 // D67: Kopieren steht bei den übrigen plan-bezogenen Aktionen, nicht in
 // einer eigenen Ansicht – hier erwarten Referentinnen alles zum Seminarplan.
-echo html_writer::tag('button', 'Kopieren', [
-    'type' => 'button', 'id' => 'sq-copy-plan', 'class' => 'kg-btn',
-    'title' => 'Eine eigenständige Zweitfassung dieses Seminarplans anlegen',
-]);
-echo html_writer::tag('button', 'Seminarplan löschen', [
-    'type' => 'button', 'id' => 'sq-delete-plan', 'class' => 'kg-btn kg-btn--outline-red',
-    'title' => 'Den aktuell gewählten Seminarplan löschen',
-]);
+echo $sqiconbutton('sq-copy-plan', 'Seminarplan kopieren',
+    '<rect x="8" y="8" width="12" height="12"/><path d="M16 8V4H4v12h4"/>');
+// Löschen bleibt rot umrandet: als einzige endgültige Aktion soll es sich
+// auch als Symbol von den übrigen abheben.
+echo $sqiconbutton('sq-delete-plan', 'Seminarplan löschen',
+    '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', 'kg-btn--outline-red');
 echo html_writer::end_div();
 
 // Setup panel (create new plan / reconfigure the loaded one).
@@ -248,14 +268,18 @@ echo html_writer::tag(
 );
 echo html_writer::end_tag('span');
 // CD-Handoff: Neue Einheiten lassen sich jederzeit aus der Werkzeugleiste
-// heraus gestalten (Quick-Create). Dieser Button plant in den ERSTEN aktiven
-// Anker des Tages; seit 17. Juli 2026 steht derselbe Aufruf zusaetzlich in
-// jeder Anker-Gruppe (sequenz.js, data-sq-action="create-unit") und plant
-// dann gezielt dorthin -- vorher war eine neue Einheit direkt im Nachmittag
-// gar nicht anlegbar.
-echo html_writer::tag('button', '＋ Neue Einheit anlegen', [
-    'type' => 'button', 'id' => 'sq-new-unit', 'class' => 'kg-btn',
-    'title' => 'Neue Seminareinheit anlegen und in den aktuellen Tag einplanen',
+// heraus schreiben. Dieser Button plant in den ERSTEN aktiven Anker des
+// Tages. In den Anker-Gruppen gibt es dafuer keinen eigenen Knopf mehr: dort
+// fuehrt „Einheit einplanen" erst in die Bibliothekssuche, und deren
+// Fusszeile („Nicht dabei? Neue Einheit schreiben") plant gezielt in diesen
+// Anker. Stift-Symbol und gestrichelter Rahmen wie dort (sequenz.js ICON_NEW).
+echo html_writer::tag('button',
+    '<svg class="sq-btnicon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" '
+    . 'fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">'
+    . '<path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M12.5 7.5l4 4"/><path d="M19 14v7M15.5 17.5h7"/></svg>'
+    . html_writer::span('Neue Einheit schreiben'), [
+    'type' => 'button', 'id' => 'sq-new-unit', 'class' => 'kg-btn sq-btn-new',
+    'title' => 'Eine Seminareinheit, die es noch nicht in der Bibliothek gibt, neu schreiben und einplanen',
 ]);
 // Saving happens automatically in the background; this passive indicator
 // replaces the former Speichern button (it only confused once nothing

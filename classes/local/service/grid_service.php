@@ -227,6 +227,50 @@ class grid_service {
     }
 
     /**
+     * Rename a plan inside its activity.
+     *
+     * Mainly meant for copies (D67), whose generated "(Kopie)" name is only a
+     * placeholder, but it works for every plan. The name has to stay unique
+     * inside the activity for the same reason build_copy_name() counts up:
+     * two equal entries could not be told apart in the plan dropdown (D46).
+     * The description is kept as it is.
+     *
+     * @param int $cmid Course module id.
+     * @param int $gridid Grid id of the plan to rename.
+     * @param string $name New name.
+     * @param int $userid User id of the actor.
+     * @return string The stored name.
+     */
+    public function rename_grid(int $cmid, int $gridid, string $name, int $userid): string {
+        $name = trim($name);
+        if ($cmid <= 0 || $gridid <= 0 || $userid <= 0) {
+            throw new coding_exception('Invalid input for rename_grid');
+        }
+        if ($name === '') {
+            throw new \invalid_parameter_exception('Empty plan name');
+        }
+        if (\core_text::strlen($name) > 255) {
+            throw new \invalid_parameter_exception('Plan name too long');
+        }
+        $grid = $this->repository->get_grid($gridid);
+        if (!$grid || (int)$grid->cmid !== $cmid || (int)$grid->isarchived === 1) {
+            throw new \invalid_parameter_exception('Grid not found');
+        }
+
+        $wanted = \core_text::strtolower($name);
+        foreach ($this->repository->get_active_grids($cmid) as $other) {
+            if ((int)$other->id !== $gridid && \core_text::strtolower(trim((string)$other->name)) === $wanted) {
+                throw new \invalid_parameter_exception('Plan name already taken');
+            }
+        }
+
+        $description = $grid->description === null ? null : (string)$grid->description;
+        $this->repository->update_grid($gridid, $name, $userid, $description);
+
+        return $name;
+    }
+
+    /**
      * Archive a grid in current activity context.
      *
      * @param int $cmid Course module id.

@@ -6541,23 +6541,15 @@ body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
 /* ---- Sekundär-Aktionen (Handoff: 2px rote Outline, Fill-Invert on hover).
    Diese Regeln brauchen kein !important mehr: sie sind spezifischer
    (Attribut + Klasse) als die neutrale Button-Basis. */
-[data-sq-action="add-unit"].kg-btn,
 [data-sq-action="add-pause"].kg-btn,
-[data-sq-action="picker-create"].kg-btn,
-[data-sq-action="create-unit"].kg-btn,
-[data-sq-action="add-baustein"].kg-btn,
-#sq-new-unit.kg-btn {
+[data-sq-action="add-baustein"].kg-btn {
     border: 2px solid var(--ig-red);
     color: var(--ig-red);
     background: #fff;
 }
 
-[data-sq-action="add-unit"].kg-btn:hover:not(:disabled),
 [data-sq-action="add-pause"].kg-btn:hover:not(:disabled),
-[data-sq-action="picker-create"].kg-btn:hover:not(:disabled),
-[data-sq-action="create-unit"].kg-btn:hover:not(:disabled),
-[data-sq-action="add-baustein"].kg-btn:hover:not(:disabled),
-#sq-new-unit.kg-btn:hover:not(:disabled) {
+[data-sq-action="add-baustein"].kg-btn:hover:not(:disabled) {
     background: var(--ig-red);
     border-color: var(--ig-red);
     color: #fff;
@@ -6572,12 +6564,8 @@ body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
 /* Entfallende Anker (An-/Abreisetag): Hinzufügen bleibt gedämpft. */
 /* Deaktiviert gilt fuer ALLE roten Anker-Buttons — vorher fehlten picker-create und
    #sq-new-unit in dieser Liste, sie blieben deaktiviert rot (sahen also aktiv aus). */
-[data-sq-action="add-unit"].kg-btn:disabled,
 [data-sq-action="add-pause"].kg-btn:disabled,
-[data-sq-action="picker-create"].kg-btn:disabled,
-[data-sq-action="create-unit"].kg-btn:disabled,
-[data-sq-action="add-baustein"].kg-btn:disabled,
-#sq-new-unit.kg-btn:disabled {
+[data-sq-action="add-baustein"].kg-btn:disabled {
     border-color: var(--ig-lightgray);
     color: var(--ig-midgray);
     background: #fff;
@@ -8683,4 +8671,321 @@ details.sq-menu[open] > summary.sq-menu__btn {
     .live-card__title {
         font-size: 23px;
     }
+}
+
+/* ---- Seminarplan direkt im Dropdown umbenennen ----
+   Der Stift sitzt IN der Auswahl, links vom Chevron; das Eingabefeld liegt
+   beim Bearbeiten deckungsgleich über dem Select. So braucht Umbenennen
+   keinen eigenen Button, der die Plan-Leiste in eine zweite Zeile drückt. */
+.sq-planpicker {
+    position: relative;
+    display: inline-flex;
+    max-width: 320px;
+    flex: 0 1 320px;
+}
+.sq-planpicker .sq-planbar__select {
+    width: 100%;
+    max-width: none;
+    padding-right: 60px; /* Platz fuer Stift + Chevron */
+}
+.sq-planpicker__rename {
+    position: absolute;
+    top: 50%;
+    right: 30px;
+    transform: translateY(-50%);
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--ig-anthracite);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+}
+.sq-planpicker__rename:hover,
+.sq-planpicker__rename:focus-visible {
+    border-color: var(--ig-red);
+    color: var(--ig-red);
+    background: #fff;
+    outline: none;
+}
+.sq-planpicker__edit {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    border-color: var(--ig-red);
+    background: #fff;
+}
+.sq-planpicker__edit:focus {
+    border-color: var(--ig-red);
+    outline: none;
+    box-shadow: none;
+}
+.sq-planpicker.is-editing .sq-planpicker__rename {
+    display: none;
+}
+
+/* ---- Plan-Aktionen als Symbol-Buttons (Neu, Einrichtung, Kopieren, Löschen) ----
+   Quadratisch in Hoehe der Plan-Auswahl; die Bedeutung erscheint als Hinweis
+   darunter (data-sq-tip). Der Hinweis gilt auch fuer den Stift im Dropdown. */
+.kg-btn.sq-iconbtn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    flex: 0 0 auto;
+}
+.kg-btn.sq-iconbtn svg {
+    display: block;
+}
+
+[data-sq-tip]::after {
+    content: attr(data-sq-tip);
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    padding: 4px 8px;
+    background: var(--ig-anthracite);
+    color: #fff;
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.3;
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--transition-fast), visibility var(--transition-fast);
+}
+[data-sq-tip]:hover::after,
+[data-sq-tip]:focus-visible::after {
+    opacity: 1;
+    visibility: visible;
+}
+/* Der Loeschen-Button steht ganz rechts: Hinweis rechtsbuendig, damit er
+   auf schmalen Schirmen nicht ueber den Rand ragt. */
+#sq-delete-plan[data-sq-tip]::after {
+    left: auto;
+    right: 0;
+    transform: none;
+}
+
+/* ---- Aufklappbereich einer Seminareinheit in der Sequenz ----
+   Die Karte ist eine Flex-Zeile (Phasenstreifen, Griff, +/−, Titel,
+   Aktionen). Aufgeklappt bricht sie um und der Inhaltsbereich nimmt die
+   volle Breite unter der Kopfzeile ein. */
+.sq-unit[data-sq-unit] {
+    cursor: pointer;
+}
+.sq-unit.is-open,
+.sq-alt.is-open {
+    flex-wrap: wrap;
+}
+.sq-unit__toggle {
+    position: relative; /* Bezug fuer den data-sq-tip-Hinweis */
+    flex: 0 0 auto;
+    align-self: flex-start;
+    width: 22px;
+    height: 22px;
+    margin: 8px 0 0 8px;
+    padding: 0;
+    border: 1px solid var(--ig-midgray);
+    border-radius: 0;
+    background: #fff;
+    color: var(--ig-anthracite);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+.sq-alt .sq-unit__toggle {
+    align-self: center;
+    margin: 0 0 0 8px;
+}
+.sq-unit__toggle:hover,
+.sq-unit__toggle:focus-visible {
+    border-color: var(--ig-red);
+    color: var(--ig-red);
+    outline: none;
+}
+.sq-unit.is-open .sq-unit__toggle,
+.sq-alt.is-open .sq-unit__toggle {
+    border-color: var(--ig-red);
+    background: var(--ig-red);
+    color: #fff;
+}
+.sq-unit__details {
+    flex: 0 0 100%;
+    box-sizing: border-box;
+    padding: 12px 16px 14px 36px;
+    border-top: 1px solid var(--sq-border);
+    background: #fafafa;
+    font-size: 14px;
+    cursor: auto;
+    user-select: text;
+}
+.sq-details__note {
+    margin: 0 0 8px;
+    color: var(--sq-text-muted);
+    font-size: 13px;
+}
+.sq-details__empty {
+    margin: 0;
+    color: var(--sq-text-muted);
+}
+.sq-details__list {
+    display: grid;
+    grid-template-columns: minmax(130px, 190px) minmax(0, 1fr);
+    gap: 8px 18px;
+    margin: 0;
+}
+.sq-details__list dt {
+    font-weight: 600;
+    color: var(--sq-text-muted);
+}
+.sq-details__list dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.sq-details__list dd > :first-child { margin-top: 0; }
+.sq-details__list dd > :last-child { margin-bottom: 0; }
+.sq-details__files {
+    margin: 0;
+    padding-left: 18px;
+}
+.sq-details__size {
+    color: var(--sq-text-muted);
+    font-size: 12px;
+}
+@media (max-width: 640px) {
+    .sq-details__list { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+    .sq-details__list dd { margin-bottom: 8px; }
+    .sq-unit__details { padding-left: 16px; }
+}
+/* Ueberschriften aus dem Ablauf-Feld (Tiny) wuerden sonst in Theme-Groesse
+   erscheinen und den Aufklappbereich dominieren. */
+.sq-unit__details h1,
+.sq-unit__details h2,
+.sq-unit__details h3,
+.sq-unit__details h4,
+.sq-unit__details h5,
+.sq-unit__details h6 {
+    margin: 0.9em 0 0.3em;
+    font-size: 15px;
+    line-height: 1.3;
+}
+
+/* ---- Einheit einplanen vs. neu schreiben (Variante B, 30. September 2026) ----
+   Vorher trugen beide Knoepfe dieselbe rote Outline und dasselbe ＋. Jetzt:
+   - .sq-btn-library: gefuellt, Buecher-Symbol - die Einheit gibt es schon.
+   - .sq-btn-new: gestrichelter Rahmen, Stift-Symbol - sie entsteht erst
+     (gestrichelt wie die Reservierungen in der Sequenz).
+   Die Selektoren sind absichtlich spezifischer als die alte gemeinsame
+   Regel ([data-sq-action=…].kg-btn, #sq-new-unit.kg-btn), weil Moodle eine
+   gebuendelte Altkopie dieser Datei mitliefern kann; alle Werte stehen
+   deshalb explizit da. */
+.kg-btn.sq-btn-library[data-sq-action],
+.kg-btn.sq-btn-new[data-sq-action],
+#sq-new-unit.kg-btn.sq-btn-new {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+.sq-btnicon {
+    display: block;
+    flex: 0 0 auto;
+}
+.kg-btn.sq-btn-library[data-sq-action] {
+    border: 2px solid var(--ig-red);
+    background: var(--ig-red);
+    color: #fff;
+}
+.kg-btn.sq-btn-library[data-sq-action]:hover:not(:disabled) {
+    border-color: var(--ig-darkred, #882A30);
+    background: var(--ig-darkred, #882A30);
+    color: #fff;
+}
+.kg-btn.sq-btn-new[data-sq-action],
+#sq-new-unit.kg-btn.sq-btn-new {
+    border: 2px dashed var(--ig-red);
+    background: #fff;
+    color: var(--ig-red);
+}
+.kg-btn.sq-btn-new[data-sq-action]:hover:not(:disabled),
+#sq-new-unit.kg-btn.sq-btn-new:hover:not(:disabled) {
+    border-style: solid;
+    border-color: var(--ig-red);
+    background: #fff5f5;
+    color: var(--ig-red);
+}
+.kg-btn.sq-btn-library[data-sq-action]:disabled,
+.kg-btn.sq-btn-new[data-sq-action]:disabled,
+#sq-new-unit.kg-btn.sq-btn-new:disabled {
+    border-color: var(--ig-lightgray);
+    background: #fff;
+    color: var(--ig-midgray);
+}
+.sq-picker__createrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.sq-picker__createhint {
+    color: var(--sq-text-muted, #5b6b79);
+}
+
+/* ---- Einheiten-Picker: Fusszeile immer sichtbar ----
+   Vorher begrenzte .sq-modal__body die Hoehe (70vh) und die Liste darin
+   zusaetzlich (46vh); auf niedrigen Fenstern rutschte „Nicht dabei? Neue
+   Einheit schreiben" unter den Rand. Jetzt ist das Modal eine Spalte in
+   Hoehe des freien Overlay-Raums (oben 80px, unten 40px Abstand): Kopf,
+   Tabs, Suche und Fusszeile bleiben stehen, nur die Trefferliste scrollt. */
+.sq-modal.sq-modal--picker {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 120px);
+}
+.sq-modal--picker .sq-modal__body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow: hidden;
+}
+.sq-modal--picker .sq-picker {
+    flex: 1 1 auto;
+    min-height: 120px;
+    max-height: none;
+    overflow-y: auto;
+}
+.sq-modal--picker .sq-picker__createrow {
+    flex: 0 0 auto;
+}
+
+/* +/−-Knopf: gezeichnetes Symbol exakt mittig (vorher sass die Schrift-Glyphe
+   zu tief). */
+.sq-unit__toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.sq-unit__toggle svg {
+    display: block;
 }
