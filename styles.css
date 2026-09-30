@@ -8949,3 +8949,32 @@ details.sq-menu[open] > summary.sq-menu__btn {
 .sq-picker__createhint {
     color: var(--sq-text-muted, #5b6b79);
 }
+
+/* ---- Einheiten-Picker: Fusszeile immer sichtbar ----
+   Vorher begrenzte .sq-modal__body die Hoehe (70vh) und die Liste darin
+   zusaetzlich (46vh); auf niedrigen Fenstern rutschte „Nicht dabei? Neue
+   Einheit schreiben" unter den Rand. Jetzt ist das Modal eine Spalte in
+   Hoehe des freien Overlay-Raums (oben 80px, unten 40px Abstand): Kopf,
+   Tabs, Suche und Fusszeile bleiben stehen, nur die Trefferliste scrollt. */
+.sq-modal.sq-modal--picker {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 120px);
+}
+.sq-modal--picker .sq-modal__body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow: hidden;
+}
+.sq-modal--picker .sq-picker {
+    flex: 1 1 auto;
+    min-height: 120px;
+    max-height: none;
+    overflow-y: auto;
+}
+.sq-modal--picker .sq-picker__createrow {
+    flex: 0 0 auto;
+}

@@ -4281,7 +4281,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 + ` data-sq-action="picker-tab" data-tab="${id}">${label}</button>`;
             const root = this.modalRoot();
             root.innerHTML = `
-                <div class="sq-modal">
+                <div class="sq-modal sq-modal--picker">
                   <div class="sq-modal__head">
                     <h3>Einheit einplanen</h3>
                     <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
