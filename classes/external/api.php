@@ -3220,6 +3220,61 @@ class api extends external_api {
     }
 
     /**
+     * Definiert die Eingabeparameter für das Umbenennen eines Seminarplans.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
+    public static function rename_grid_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'gridid' => new external_value(PARAM_INT, 'Id of the Seminarplan to rename'),
+            'name' => new external_value(PARAM_TEXT, 'New Seminarplan name'),
+        ]);
+    }
+
+    /**
+     * Benennt einen Seminarplan der Aktivität um (vor allem Kopien aus D67).
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $gridid ID des Seminarplans.
+     * @param string $name Neuer Name.
+     *
+     * @return array Array mit den Schlüsseln gridid und name.
+     */
+    public static function rename_grid(int $cmid, int $gridid, string $name): array {
+        $params = self::validate_parameters(self::rename_grid_parameters(), [
+            'cmid' => $cmid,
+            'gridid' => $gridid,
+            'name' => $name,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('rename_grid', 40, 60);
+
+        $service = new grid_service();
+        $stored = $service->rename_grid(
+            (int)$resolved['cm']->id,
+            (int)$params['gridid'],
+            (string)$params['name'],
+            (int)$GLOBALS['USER']->id
+        );
+
+        return ['gridid' => (int)$params['gridid'], 'name' => $stored];
+    }
+
+    /**
+     * Beschreibt die Rückgabestruktur des Umbenennens (ID und gespeicherter Name).
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
+    public static function rename_grid_returns(): external_single_structure {
+        return new external_single_structure([
+            'gridid' => new external_value(PARAM_INT, 'Seminarplan id'),
+            'name' => new external_value(PARAM_TEXT, 'Stored name'),
+        ]);
+    }
+
+    /**
      * Definiert die Eingabeparameter für das Löschen eines Seminarplans.
      *
      * @return external_function_parameters Parameterdefinition der Webservice-Funktion.

@@ -350,4 +350,75 @@ final class grid_service_test extends advanced_testcase {
         $this->expectException(\invalid_parameter_exception::class);
         $service->copy_grid(1010, $foreignid, 4);
     }
+
+    /**
+     * Eine Kopie bekommt einen sprechenden Namen; Zustand und Beschreibung bleiben.
+     */
+    public function test_rename_grid_keeps_state_and_description(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $sourceid = $service->create_grid(1011, 'Grundkurs', 4, 'Beschreibung');
+        $service->save_user_state($sourceid, 4, [
+            'config' => ['days' => ['Montag']],
+            'seminarziele' => [['id' => 'z1', 'text' => 'Ziel eins']],
+        ]);
+        $copy = $service->copy_grid(1011, $sourceid, 4);
+
+        $stored = $service->rename_grid(1011, $copy['gridid'], '  Grundkurs Herbst  ', 4);
+
+        $this->assertSame('Grundkurs Herbst', $stored);
+        $grids = $service->list_grids(1011);
+        $this->assertSame('Grundkurs Herbst', $grids[$copy['gridid']]->name);
+        $this->assertSame('Beschreibung', $grids[$copy['gridid']]->description);
+        $this->assertSame('Grundkurs', $grids[$sourceid]->name);
+        $renamed = $service->get_user_state($copy['gridid'], 4);
+        $this->assertSame('Ziel eins', $renamed['state']['seminarziele'][0]['text']);
+    }
+
+    /**
+     * Gleichnamige Plaene waeren im Dropdown nicht zu unterscheiden (D46).
+     */
+    public function test_rename_grid_rejects_taken_name(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $service->create_grid(1012, 'Grundkurs', 4);
+        $otherid = $service->create_grid(1012, 'Aufbaukurs', 4);
+
+        $this->expectException(\invalid_parameter_exception::class);
+        $service->rename_grid(1012, $otherid, 'grundkurs', 4);
+    }
+
+    /**
+     * Nur Gross-/Kleinschreibung am eigenen Namen aendern ist erlaubt.
+     */
+    public function test_rename_grid_allows_own_name_in_other_case(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $gridid = $service->create_grid(1013, 'grundkurs', 4);
+
+        $this->assertSame('Grundkurs', $service->rename_grid(1013, $gridid, 'Grundkurs', 4));
+    }
+
+    /**
+     * Leere Namen und Plaene fremder Aktivitaeten werden abgewiesen.
+     */
+    public function test_rename_grid_rejects_empty_name_and_foreign_plan(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $gridid = $service->create_grid(1014, 'Grundkurs', 4);
+
+        try {
+            $service->rename_grid(1014, $gridid, '   ', 4);
+            $this->fail('Leerer Name wurde angenommen');
+        } catch (\invalid_parameter_exception $e) {
+            $this->assertSame('Grundkurs', $service->list_grids(1014)[$gridid]->name);
+        }
+
+        $this->expectException(\invalid_parameter_exception::class);
+        $service->rename_grid(1015, $gridid, 'Anders', 4);
+    }
 }

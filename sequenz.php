@@ -92,6 +92,12 @@ echo html_writer::tag('button', 'Kopieren', [
     'type' => 'button', 'id' => 'sq-copy-plan', 'class' => 'kg-btn',
     'title' => 'Eine eigenständige Zweitfassung dieses Seminarplans anlegen',
 ]);
+// Umbenennen gehört direkt neben Kopieren: die Kopie heißt zunächst nur
+// „… (Kopie)" und soll einen sprechenden Namen bekommen können.
+echo html_writer::tag('button', 'Umbenennen', [
+    'type' => 'button', 'id' => 'sq-rename-plan', 'class' => 'kg-btn',
+    'title' => 'Dem aktuell gewählten Seminarplan einen neuen Namen geben',
+]);
 echo html_writer::tag('button', 'Seminarplan löschen', [
     'type' => 'button', 'id' => 'sq-delete-plan', 'class' => 'kg-btn kg-btn--outline-red',
     'title' => 'Den aktuell gewählten Seminarplan löschen',

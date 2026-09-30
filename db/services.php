@@ -193,6 +193,13 @@ $functions = [
         'type' => 'write',
         'ajax' => true,
     ],
+    'mod_seminarplaner_rename_grid' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'rename_grid',
+        'description' => 'Rename a seminar plan inside its Seminarplaner activity.',
+        'type' => 'write',
+        'ajax' => true,
+    ],
     'mod_seminarplaner_delete_grid' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'delete_grid',

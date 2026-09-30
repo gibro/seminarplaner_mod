@@ -869,6 +869,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             if (copybtn) {
                 copybtn.addEventListener('click', () => this.copyPlan());
             }
+            const renamebtn = bySel('#sq-rename-plan');
+            if (renamebtn) {
+                renamebtn.addEventListener('click', () => this.renamePlan());
+            }
             if (cancel) {
                 cancel.addEventListener('click', () => this.closeSetup());
             }
@@ -1436,6 +1440,56 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
                 this.setStatus(String(error && error.message) === 'save-before-copy-failed'
                     ? 'Kopieren abgebrochen – die letzten Änderungen sind noch nicht gesichert.'
                     : 'Seminarplan kopieren fehlgeschlagen.', true);
+            }).then(() => {
+                if (button) {
+                    button.disabled = false;
+                }
+            });
+        }
+
+        // Vor allem für Kopien (D67), deren „(Kopie)"-Name nur ein Platzhalter
+        // ist. Der Name steht allein in der Plan-Liste, nicht im Planzustand -
+        // deshalb wird nach dem Speichern nur der Dropdown-Eintrag angepasst
+        // und nichts neu geladen; offene Änderungen bleiben unberührt.
+        renamePlan() {
+            const select = bySel('#sq-grid-select');
+            const gridid = this.gridid || (select ? Number(select.value) : 0);
+            const option = select ? Array.from(select.options).find((opt) => Number(opt.value) === gridid) : null;
+            if (!gridid || !option) {
+                this.setStatus('Kein Seminarplan ausgewählt.', true);
+                return;
+            }
+            const current = option.textContent;
+            const answer = window.prompt('Neuer Name für den Seminarplan:', current);
+            if (answer === null) {
+                return;
+            }
+            const name = answer.trim();
+            if (name === '' || name === current) {
+                if (name === '') {
+                    this.setStatus('Der Name darf nicht leer sein.', true);
+                }
+                return;
+            }
+            // Dieselbe Regel wie serverseitig: gleichnamige Pläne wären im
+            // Dropdown nicht zu unterscheiden. Vorab prüfen, damit die
+            // Referentin eine verständliche Meldung bekommt.
+            const taken = Array.from(select.options).some((opt) =>
+                Number(opt.value) !== gridid && opt.textContent.trim().toLowerCase() === name.toLowerCase());
+            if (taken) {
+                this.setStatus(`Es gibt schon einen Seminarplan „${name}" – bitte einen anderen Namen wählen.`, true);
+                return;
+            }
+            const button = bySel('#sq-rename-plan');
+            if (button) {
+                button.disabled = true;
+            }
+            asCall('mod_seminarplaner_rename_grid', {cmid: this.cmid, gridid, name}).then((res) => {
+                const stored = String((res && res.name) || name);
+                option.textContent = stored;
+                this.setStatus(`Seminarplan heißt jetzt „${stored}".`);
+            }).catch(() => {
+                this.setStatus('Seminarplan umbenennen fehlgeschlagen.', true);
             }).then(() => {
                 if (button) {
                     button.disabled = false;
