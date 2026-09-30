@@ -106,8 +106,8 @@ $sqiconbutton = static function (string $id, string $label, string $svgpaths, st
 echo $sqiconbutton('sq-new-plan', 'Neuen Seminarplan erstellen',
     '<path d="M12 5v14M5 12h14"/>');
 echo $sqiconbutton('sq-edit-setup', 'Einrichtung: Tage und Seminarzeiten anpassen',
-    '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3'
-    . 'M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>');
+    '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h11M19 18h1"/>'
+    . '<circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>');
 // D67: Kopieren steht bei den übrigen plan-bezogenen Aktionen, nicht in
 // einer eigenen Ansicht – hier erwarten Referentinnen alles zum Seminarplan.
 echo $sqiconbutton('sq-copy-plan', 'Seminarplan kopieren',
