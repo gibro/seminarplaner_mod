@@ -505,6 +505,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         constructor(cmid) {
             this.cmid = cmid;
             this.gridid = 0;
+            // Laufendes Umbenennen im Plan-Dropdown ({gridid, option}) oder null.
+            this.renamingPlan = null;
             this.state = null;
             this.sequenz = null;
             this.versionhash = '';
@@ -871,7 +873,22 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
             }
             const renamebtn = bySel('#sq-rename-plan');
             if (renamebtn) {
-                renamebtn.addEventListener('click', () => this.renamePlan());
+                renamebtn.addEventListener('click', () => this.startPlanRename());
+            }
+            const nameedit = bySel('#sq-plan-nameedit');
+            if (nameedit) {
+                // Wie bei den Einheitentiteln: Enter oder Verlassen uebernimmt,
+                // Escape verwirft.
+                nameedit.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        this.finishPlanRename(true);
+                    } else if (event.key === 'Escape') {
+                        event.preventDefault();
+                        this.finishPlanRename(false);
+                    }
+                });
+                nameedit.addEventListener('blur', () => this.finishPlanRename(true));
             }
             if (cancel) {
                 cancel.addEventListener('click', () => this.closeSetup());
@@ -1448,52 +1465,88 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor) {
         }
 
         // Vor allem für Kopien (D67), deren „(Kopie)"-Name nur ein Platzhalter
-        // ist. Der Name steht allein in der Plan-Liste, nicht im Planzustand -
-        // deshalb wird nach dem Speichern nur der Dropdown-Eintrag angepasst
-        // und nichts neu geladen; offene Änderungen bleiben unberührt.
-        renamePlan() {
+        // ist. Bearbeitet wird direkt im Dropdown: der Stift legt ein
+        // Eingabefeld deckungsgleich über die Auswahl. Hier ein <input> und
+        // kein contenteditable wie bei den Einheitentiteln - die Auswahl selbst
+        // ist einzeilig, das Feld kann also nichts abschneiden, was sie zeigt.
+        // Der Name steht allein in der Plan-Liste, nicht im Planzustand -
+        // deshalb wird danach nur der Dropdown-Eintrag angepasst und nichts
+        // neu geladen; offene Änderungen bleiben unberührt.
+        startPlanRename() {
             const select = bySel('#sq-grid-select');
-            const gridid = this.gridid || (select ? Number(select.value) : 0);
-            const option = select ? Array.from(select.options).find((opt) => Number(opt.value) === gridid) : null;
-            if (!gridid || !option) {
+            const input = bySel('#sq-plan-nameedit');
+            const picker = bySel('#sq-planpicker');
+            const option = this.currentPlanOption();
+            if (!select || !input || !picker || !option) {
                 this.setStatus('Kein Seminarplan ausgewählt.', true);
                 return;
             }
-            const current = option.textContent;
-            const answer = window.prompt('Neuer Name für den Seminarplan:', current);
-            if (answer === null) {
+            this.renamingPlan = {gridid: Number(option.value), option};
+            input.value = option.textContent;
+            input.hidden = false;
+            picker.classList.add('is-editing');
+            input.focus();
+            input.select();
+        }
+
+        currentPlanOption() {
+            const select = bySel('#sq-grid-select');
+            const gridid = this.gridid || (select ? Number(select.value) : 0);
+            if (!select || !gridid) {
+                return null;
+            }
+            return Array.from(select.options).find((opt) => Number(opt.value) === gridid) || null;
+        }
+
+        finishPlanRename(commit) {
+            const pending = this.renamingPlan;
+            if (!pending) {
                 return;
             }
-            const name = answer.trim();
-            if (name === '' || name === current) {
-                if (name === '') {
-                    this.setStatus('Der Name darf nicht leer sein.', true);
-                }
+            // Vor dem Ausblenden zuruecksetzen: hidden=true loest selbst ein
+            // blur aus, das sonst ein zweites Mal hier hereinkaeme.
+            this.renamingPlan = null;
+            const input = bySel('#sq-plan-nameedit');
+            const picker = bySel('#sq-planpicker');
+            const select = bySel('#sq-grid-select');
+            const name = input ? input.value.trim() : '';
+            if (input) {
+                input.hidden = true;
+            }
+            if (picker) {
+                picker.classList.remove('is-editing');
+            }
+            const {gridid, option} = pending;
+            const current = option.textContent;
+            if (!commit || name === current) {
+                return;
+            }
+            if (name === '') {
+                this.setStatus('Der Name darf nicht leer sein – der Seminarplan heißt weiter so wie bisher.', true);
                 return;
             }
             // Dieselbe Regel wie serverseitig: gleichnamige Pläne wären im
             // Dropdown nicht zu unterscheiden. Vorab prüfen, damit die
             // Referentin eine verständliche Meldung bekommt.
-            const taken = Array.from(select.options).some((opt) =>
+            const taken = select && Array.from(select.options).some((opt) =>
                 Number(opt.value) !== gridid && opt.textContent.trim().toLowerCase() === name.toLowerCase());
             if (taken) {
                 this.setStatus(`Es gibt schon einen Seminarplan „${name}" – bitte einen anderen Namen wählen.`, true);
                 return;
             }
-            const button = bySel('#sq-rename-plan');
-            if (button) {
-                button.disabled = true;
-            }
+            // Sofort anzeigen, bei einem Fehler zuruecknehmen. Die Kopfzeile
+            // liest den Namen aus der Auswahl und zieht so mit.
+            option.textContent = name;
+            this.renderHead();
             asCall('mod_seminarplaner_rename_grid', {cmid: this.cmid, gridid, name}).then((res) => {
                 const stored = String((res && res.name) || name);
                 option.textContent = stored;
+                this.renderHead();
                 this.setStatus(`Seminarplan heißt jetzt „${stored}".`);
             }).catch(() => {
+                option.textContent = current;
+                this.renderHead();
                 this.setStatus('Seminarplan umbenennen fehlgeschlagen.', true);
-            }).then(() => {
-                if (button) {
-                    button.disabled = false;
-                }
             });
         }
 

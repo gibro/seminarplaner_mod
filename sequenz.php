@@ -78,7 +78,19 @@ echo html_writer::tag(
     get_string('sequenz_planlabel', 'mod_seminarplaner'),
     ['for' => 'sq-grid-select', 'class' => 'kg-label sq-planbar__label']
 );
+// Umbenennen direkt im Dropdown: der Stift legt ein Eingabefeld genau über die
+// Auswahl, statt einen weiteren Button in die Leiste zu stellen.
+echo html_writer::start_div('sq-planpicker', ['id' => 'sq-planpicker']);
 echo html_writer::tag('select', '', ['id' => 'sq-grid-select', 'class' => 'kg-input sq-planbar__select']);
+echo html_writer::empty_tag('input', [
+    'type' => 'text', 'id' => 'sq-plan-nameedit', 'class' => 'kg-input sq-planpicker__edit',
+    'maxlength' => 255, 'aria-label' => 'Name des Seminarplans', 'hidden' => 'hidden',
+]);
+echo html_writer::tag('button', '✎', [
+    'type' => 'button', 'id' => 'sq-rename-plan', 'class' => 'sq-planpicker__rename',
+    'title' => 'Seminarplan umbenennen', 'aria-label' => 'Seminarplan umbenennen',
+]);
+echo html_writer::end_div();
 echo html_writer::tag('button', '＋ Neuer Seminarplan', [
     'type' => 'button', 'id' => 'sq-new-plan', 'class' => 'kg-btn',
 ]);
@@ -91,12 +103,6 @@ echo html_writer::tag('button', 'Einrichtung', [
 echo html_writer::tag('button', 'Kopieren', [
     'type' => 'button', 'id' => 'sq-copy-plan', 'class' => 'kg-btn',
     'title' => 'Eine eigenständige Zweitfassung dieses Seminarplans anlegen',
-]);
-// Umbenennen gehört direkt neben Kopieren: die Kopie heißt zunächst nur
-// „… (Kopie)" und soll einen sprechenden Namen bekommen können.
-echo html_writer::tag('button', 'Umbenennen', [
-    'type' => 'button', 'id' => 'sq-rename-plan', 'class' => 'kg-btn',
-    'title' => 'Dem aktuell gewählten Seminarplan einen neuen Namen geben',
 ]);
 echo html_writer::tag('button', 'Seminarplan löschen', [
     'type' => 'button', 'id' => 'sq-delete-plan', 'class' => 'kg-btn kg-btn--outline-red',
