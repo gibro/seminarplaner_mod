@@ -217,6 +217,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
         ['autor', 'Autor*in / Kontakt', 'text'],
         ['materialtechnik', 'Material/Technik', 'rich'],
     ];
+    // Zwei Wege zu einer Einheit, zwei Bildsprachen: Buecher fuer „aus der
+    // Bibliothek einplanen" (vorhanden), Stift mit Plus fuer „neu schreiben"
+    // (gibt es noch nicht). Gleiche Zeichnung in sequenz.php (#sq-new-unit).
+    const svgIcon = (paths) => '<svg class="sq-btnicon" viewBox="0 0 24 24" width="18" height="18" '
+        + 'aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" '
+        + 'stroke-linejoin="round">' + paths + '</svg>';
+    const ICON_LIBRARY = svgIcon('<path d="M4 4h4v16H4zM10 4h4v16h-4zM15 5.5l3.9-1 3.1 14.6-3.9 1z"/>');
+    const ICON_NEW = svgIcon('<path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M12.5 7.5l4 4"/>'
+        + '<path d="M19 14v7M15.5 17.5h7"/>');
     const formatFileSize = (bytes) => {
         const size = Number(bytes) || 0;
         if (size <= 0) {
@@ -3080,7 +3089,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             day.anker[ankername].sequenz.push(pid);
             this.setDirty(true);
             this.render();
-            this.toast('Leerer Baustein angelegt – Titel über „Bearbeiten", Einheiten über „＋ Einheit hinzufügen".');
+            this.toast('Leerer Baustein angelegt – Titel über „Bearbeiten", Einheiten über „Einheit einplanen".');
         }
 
         // ---- Removing and breaks --------------------------------------------
@@ -4274,7 +4283,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             root.innerHTML = `
                 <div class="sq-modal">
                   <div class="sq-modal__head">
-                    <h3>Einheit hinzufügen</h3>
+                    <h3>Einheit einplanen</h3>
                     <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
                   </div>
                   <div class="sq-modal__body">
@@ -4292,7 +4301,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                     </label>
                     <div id="sq-picker-list" class="sq-picker"></div>
                     <div class="sq-picker__createrow">
-                      <button type="button" class="kg-btn" data-sq-action="picker-create">＋ Neue Einheit anlegen</button>
+                      <span class="sq-picker__createhint">Nicht dabei?</span>
+                      <button type="button" class="kg-btn sq-btn-new" data-sq-action="picker-create"
+                        >${ICON_NEW}<span>Neue Einheit schreiben</span></button>
                     </div>
                   </div>
                 </div>`;
@@ -4341,7 +4352,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                     ? 'Keine noch nicht verwendete Einheit gefunden.'
                     : (tab === 'global'
                         ? 'Keine globale Methode gefunden (oder Methodensammlung nicht verfügbar).'
-                        : 'Keine passende Einheit gefunden.');
+                        : 'Keine passende Einheit gefunden.') + ' Unten kannst du eine neue schreiben.';
                 list.innerHTML = `<div class="sq-empty">${empty}</div>`;
                 return;
             }
@@ -5437,10 +5448,6 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 this.openEditor(pid);
             } else if (type === 'add-unit') {
                 this.openPicker(action.getAttribute('data-anker') || 'vormittag');
-            } else if (type === 'create-unit') {
-                // Wie #sq-new-unit in der Werkzeugleiste, aber mit dem Anker
-                // dieser Gruppe statt firstActiveAnker().
-                this.openCreateEditor({anker: action.getAttribute('data-anker') || 'vormittag'});
             } else if (type === 'add-baustein') {
                 this.createEmptyBaustein(action.getAttribute('data-anker') || 'vormittag');
             } else if (type === 'baustein-add-unit') {
@@ -5670,19 +5677,19 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             const offattrs = anchoroff
                 ? ' disabled title="Dieser Abschnitt entfällt an diesem Tag."'
                 : '';
-            // „Neue Einheit anlegen" steht auch hier, nicht nur in der
-            // Werkzeugleiste: der Werkzeugleisten-Button plant immer in den
-            // ERSTEN aktiven Anker des Tages (firstActiveAnker), eine neue
-            // Einheit liess sich damit gar nicht direkt in den Nachmittag
-            // anlegen. Hier kennt der Button seinen Anker.
+            // Ein Einstieg je Anker: „Einheit einplanen" oeffnet die Suche in
+            // der Bibliothek. Neu geschrieben wird erst, wenn dort nichts
+            // passt - aus der Fusszeile des Pickers heraus, der dabei diesen
+            // Anker als Ziel mitnimmt (picker-create -> pickerTarget/-Anker).
+            // Vorher standen hier zwei gleich aussehende Knoepfe („Neue Einheit
+            // anlegen" / „Einheit hinzufuegen"), deren Unterschied man nur am
+            // Wortlaut erkannte.
             const addbutton = `
                 <div class="sq-anchor__add">
                   <button type="button" class="kg-btn" data-sq-action="add-baustein"
                     data-anker="${ankername}"${offattrs}>＋ Baustein</button>
-                  <button type="button" class="kg-btn" data-sq-action="create-unit"
-                    data-anker="${ankername}"${offattrs}>＋ Neue Einheit anlegen</button>
-                  <button type="button" class="kg-btn" data-sq-action="add-unit"
-                    data-anker="${ankername}"${offattrs}>＋ Einheit hinzufügen</button>
+                  <button type="button" class="kg-btn sq-btn-library" data-sq-action="add-unit"
+                    data-anker="${ankername}"${offattrs}>${ICON_LIBRARY}<span>Einheit einplanen</span></button>
                   <button type="button" class="kg-btn" data-sq-action="add-pause"
                     data-anker="${ankername}"${offattrs}>＋ Pause</button>
                 </div>`;
@@ -5850,8 +5857,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                     <div class="sq-baustein__units">
                       <div class="sq-baustein__empty">
                         <span class="sq-baustein__emptyhint">Noch keine Einheit in diesem Baustein.</span>
-                        <button type="button" class="kg-btn kg-btn-primary" data-sq-action="baustein-add-unit"
-                          data-pid="${escapeHtml(target)}">＋ Einheit hinzufügen</button>
+                        <button type="button" class="kg-btn sq-btn-library" data-sq-action="baustein-add-unit"
+                          data-pid="${escapeHtml(target)}">${ICON_LIBRARY}<span>Einheit einplanen</span></button>
                       </div>
                     </div>`;
             }

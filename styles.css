@@ -6541,23 +6541,15 @@ body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
 /* ---- Sekundär-Aktionen (Handoff: 2px rote Outline, Fill-Invert on hover).
    Diese Regeln brauchen kein !important mehr: sie sind spezifischer
    (Attribut + Klasse) als die neutrale Button-Basis. */
-[data-sq-action="add-unit"].kg-btn,
 [data-sq-action="add-pause"].kg-btn,
-[data-sq-action="picker-create"].kg-btn,
-[data-sq-action="create-unit"].kg-btn,
-[data-sq-action="add-baustein"].kg-btn,
-#sq-new-unit.kg-btn {
+[data-sq-action="add-baustein"].kg-btn {
     border: 2px solid var(--ig-red);
     color: var(--ig-red);
     background: #fff;
 }
 
-[data-sq-action="add-unit"].kg-btn:hover:not(:disabled),
 [data-sq-action="add-pause"].kg-btn:hover:not(:disabled),
-[data-sq-action="picker-create"].kg-btn:hover:not(:disabled),
-[data-sq-action="create-unit"].kg-btn:hover:not(:disabled),
-[data-sq-action="add-baustein"].kg-btn:hover:not(:disabled),
-#sq-new-unit.kg-btn:hover:not(:disabled) {
+[data-sq-action="add-baustein"].kg-btn:hover:not(:disabled) {
     background: var(--ig-red);
     border-color: var(--ig-red);
     color: #fff;
@@ -6572,12 +6564,8 @@ body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
 /* Entfallende Anker (An-/Abreisetag): Hinzufügen bleibt gedämpft. */
 /* Deaktiviert gilt fuer ALLE roten Anker-Buttons — vorher fehlten picker-create und
    #sq-new-unit in dieser Liste, sie blieben deaktiviert rot (sahen also aktiv aus). */
-[data-sq-action="add-unit"].kg-btn:disabled,
 [data-sq-action="add-pause"].kg-btn:disabled,
-[data-sq-action="picker-create"].kg-btn:disabled,
-[data-sq-action="create-unit"].kg-btn:disabled,
-[data-sq-action="add-baustein"].kg-btn:disabled,
-#sq-new-unit.kg-btn:disabled {
+[data-sq-action="add-baustein"].kg-btn:disabled {
     border-color: var(--ig-lightgray);
     color: var(--ig-midgray);
     background: #fff;
@@ -8900,4 +8888,64 @@ details.sq-menu[open] > summary.sq-menu__btn {
     margin: 0.9em 0 0.3em;
     font-size: 15px;
     line-height: 1.3;
+}
+
+/* ---- Einheit einplanen vs. neu schreiben (Variante B, 30. September 2026) ----
+   Vorher trugen beide Knoepfe dieselbe rote Outline und dasselbe ＋. Jetzt:
+   - .sq-btn-library: gefuellt, Buecher-Symbol - die Einheit gibt es schon.
+   - .sq-btn-new: gestrichelter Rahmen, Stift-Symbol - sie entsteht erst
+     (gestrichelt wie die Reservierungen in der Sequenz).
+   Die Selektoren sind absichtlich spezifischer als die alte gemeinsame
+   Regel ([data-sq-action=…].kg-btn, #sq-new-unit.kg-btn), weil Moodle eine
+   gebuendelte Altkopie dieser Datei mitliefern kann; alle Werte stehen
+   deshalb explizit da. */
+.kg-btn.sq-btn-library[data-sq-action],
+.kg-btn.sq-btn-new[data-sq-action],
+#sq-new-unit.kg-btn.sq-btn-new {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+.sq-btnicon {
+    display: block;
+    flex: 0 0 auto;
+}
+.kg-btn.sq-btn-library[data-sq-action] {
+    border: 2px solid var(--ig-red);
+    background: var(--ig-red);
+    color: #fff;
+}
+.kg-btn.sq-btn-library[data-sq-action]:hover:not(:disabled) {
+    border-color: var(--ig-darkred, #882A30);
+    background: var(--ig-darkred, #882A30);
+    color: #fff;
+}
+.kg-btn.sq-btn-new[data-sq-action],
+#sq-new-unit.kg-btn.sq-btn-new {
+    border: 2px dashed var(--ig-red);
+    background: #fff;
+    color: var(--ig-red);
+}
+.kg-btn.sq-btn-new[data-sq-action]:hover:not(:disabled),
+#sq-new-unit.kg-btn.sq-btn-new:hover:not(:disabled) {
+    border-style: solid;
+    border-color: var(--ig-red);
+    background: #fff5f5;
+    color: var(--ig-red);
+}
+.kg-btn.sq-btn-library[data-sq-action]:disabled,
+.kg-btn.sq-btn-new[data-sq-action]:disabled,
+#sq-new-unit.kg-btn.sq-btn-new:disabled {
+    border-color: var(--ig-lightgray);
+    background: #fff;
+    color: var(--ig-midgray);
+}
+.sq-picker__createrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.sq-picker__createhint {
+    color: var(--sq-text-muted, #5b6b79);
 }
