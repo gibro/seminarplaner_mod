@@ -400,7 +400,8 @@ echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'gl-section'
 echo html_writer::tag('h4', 'Methodensammlungen');
 echo html_writer::tag('p', 'Stöbere in den Methoden aller veröffentlichten Methoden-Sammlungen – '
     . 'ohne sie vorher importieren zu müssen. „Übernehmen" legt sofort eine eigene Kopie '
-    . 'in deinem Bestand (Tab „Lokale Seminareinheiten") an; das globale Original bleibt unberührt.');
+    . 'in deinem Bestand (Tab „Lokale Seminareinheiten") an; das globale Original bleibt unberührt. '
+    . 'Gibt es dort schon eine Einheit mit demselben Titel, bleibt es bei dieser – eine zweite entsteht nicht.');
 echo '<label class="sp-filter"><span class="sp-filter__label">Suche</span>'
     . '<input id="gl-search" class="kg-input" type="search" placeholder="Titel, Beschreibung, Tags, Sammlung"></label>';
 echo html_writer::tag('div', '', ['id' => 'gl-facets', 'class' => 'gl-facets']);
