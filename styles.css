@@ -2971,9 +2971,19 @@ body.sp-resizing * {
     margin-bottom: 20px;
   }
   
+  /* Schmal: Kacheln so breit wie ihr Tagesname, die Zeile auffuellend.
+     Zwei feste Spalten (je ~114px auf dem Handy) schnitten fast alle
+     Tagesnamen ab. */
   .sp-days-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .sp-days-grid .sp-day-checkbox {
+    flex: 1 1 auto;
+    gap: 6px;
+    padding: 8px 10px;
   }
   
   .sp-time-range {
