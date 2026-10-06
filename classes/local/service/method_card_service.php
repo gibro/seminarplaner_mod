@@ -380,6 +380,16 @@ class method_card_service {
                 throw new coding_exception('Unable to resolve file itemid');
             }
 
+            // Kopie einer Einheit: Die Anhänge bekommt sie als eigene Dateien, damit
+            // Ändern oder Löschen in der Kopie das Original nicht mitreißt. Die
+            // Dateiliste im Payload stammt vom Original und bleibt deshalb unberücksichtigt.
+            $copyfrom = substr(clean_param((string)($method['_copyfrom'] ?? ''), PARAM_ALPHANUMEXT), 0, 255);
+            unset($method['_copyfrom']);
+            if ($copyfrom !== '' && $copyfrom !== $methoduid) {
+                $this->copy_method_files($cmid, $userid, $contextid, $copyfrom, $itemid);
+                unset($method['materialien'], $method['h5p'], $method['materialiendraftitemid'], $method['h5pdraftitemid']);
+            }
+
             // Sync_file_area() deletes every file the payload does not list. A payload
             // without the key means "not touched" and must not wipe the attachments -
             // only an explicitly empty list removes them.
@@ -556,6 +566,35 @@ class method_card_service {
             } catch (\Exception $e) {
                 // Skip broken file records and continue with valid files.
                 continue;
+            }
+        }
+    }
+
+    /**
+     * Kopiert die Anhänge (Materialien und H5P) einer Einheit derselben Aktivität
+     * in den Dateibereich einer anderen. Ein Bereich, der schon Dateien hat, bleibt
+     * unberührt - so legt ein wiederholter Speichervorgang keine Doppel an.
+     *
+     * @param int $cmid
+     * @param int $userid
+     * @param int $contextid
+     * @param string $sourceuid Uid der Einheit, deren Anhänge kopiert werden.
+     * @param int $targetitemid Dateibereich der Kopie.
+     * @return void
+     */
+    private function copy_method_files(int $cmid, int $userid, int $contextid, string $sourceuid, int $targetitemid): void {
+        $sourceitemid = $this->resolve_effective_itemid($cmid, $userid, $sourceuid, false, $contextid);
+        if ($sourceitemid === null || $sourceitemid === $targetitemid) {
+            return;
+        }
+        $fs = get_file_storage();
+        foreach ([self::FILEAREA_MATERIALIEN, self::FILEAREA_H5P] as $filearea) {
+            if (!$fs->is_area_empty($contextid, 'mod_seminarplaner', $filearea, $targetitemid)) {
+                continue;
+            }
+            $files = $fs->get_area_files($contextid, 'mod_seminarplaner', $filearea, $sourceitemid, 'id ASC', false);
+            foreach ($files as $file) {
+                $fs->create_file_from_storedfile(['itemid' => $targetitemid, 'userid' => $userid], $file);
             }
         }
     }

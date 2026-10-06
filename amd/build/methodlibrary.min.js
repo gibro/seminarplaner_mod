@@ -13,6 +13,7 @@ function(Ajax, Notification, LernzielEditor) {
         + ` aria-hidden="true" focusable="false">${paths}</svg>`;
     const ML_MENU_ICONS = {
         edit: mlMenuIcon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/>'),
+        copy: mlMenuIcon('<rect x="9" y="9" width="12" height="12" rx="1"/><path d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"/>'),
         replace: mlMenuIcon('<path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 21h14"/>'),
         lock: mlMenuIcon('<rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V7a4 4 0 018 0v4"/>'),
         remove: mlMenuIcon('<path d="M6 6l12 12M18 6L6 18"/>'),
@@ -1100,6 +1101,8 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                       <button type="button" class="sq-menu__item"
                         data-act="edit">${ML_MENU_ICONS.edit}<span>Bearbeiten</span></button>
                       <button type="button" class="sq-menu__item"
+                        data-act="copy">${ML_MENU_ICONS.copy}<span>Kopieren</span></button>
+                      <button type="button" class="sq-menu__item"
                         data-act="overwrite-import">${ML_MENU_ICONS.replace}<span>Aus Datei ersetzen…</span></button>
                       ${freezeaction}
                       <button type="button" class="sq-menu__item sq-menu__item--danger"
@@ -1139,6 +1142,7 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
             const editbtn = card.querySelector('[data-act="edit"]');
             const freezebtn = card.querySelector('[data-act="freeze"]');
             const deletebtn = card.querySelector('[data-act="delete"]');
+            const copybtn = card.querySelector('[data-act="copy"]');
             const overwritebtn = card.querySelector('[data-act="overwrite-import"]');
             card.addEventListener('dragstart', (event) => {
                 if (event.target.closest('.ml-card-menu, button, input, select, textarea, a')) {
@@ -1235,6 +1239,15 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                     toggleMethodFreeze(m.id).catch((e) => {
                         Notification.exception(e);
                         setStatus('Fixieren fehlgeschlagen.', true);
+                    });
+                });
+            }
+            if (copybtn) {
+                copybtn.addEventListener('click', () => {
+                    closeMenu(copybtn);
+                    copyMethod(m.id).catch((e) => {
+                        Notification.exception(e);
+                        setStatus('Kopieren fehlgeschlagen.', true);
                     });
                 });
             }
@@ -2052,6 +2065,54 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
             }
             throw error;
         }
+    };
+
+    // Titel für eine Kopie, der in der Bibliothek noch nicht vorkommt - der Import
+    // gleicht Einheiten über den Titel ab, zwei gleichnamige würden zusammenfallen.
+    const copyTitleFor = (title) => {
+        const base = String(title || '(ohne Titel)').trim().replace(/\s*\(Kopie(?: \d+)?\)$/, '');
+        const taken = new Set(methods.map((m) => String(m.titel || '').trim().toLowerCase()));
+        let candidate = `${base} (Kopie)`;
+        for (let n = 2; taken.has(candidate.toLowerCase()); n++) {
+            candidate = `${base} (Kopie ${n})`;
+        }
+        return candidate;
+    };
+
+    // Legt eine eigenständige Kopie direkt hinter dem Original an. Die Kopie ist
+    // eine lokale Einheit: ohne Verknüpfung zur globalen Sammlung bzw. zum
+    // Seminarkonzept und ohne Alternativen-Paare. Die Anhänge dupliziert der
+    // Server (_copyfrom), damit Original und Kopie getrennte Dateien haben.
+    const copyMethod = async (id) => {
+        const idx = methods.findIndex((m) => String(m.id) === String(id));
+        if (idx < 0) {
+            return;
+        }
+        const source = methods[idx];
+        const copy = touchMethod(JSON.parse(JSON.stringify(source)));
+        copy.id = uid();
+        copy.titel = copyTitleFor(source.titel);
+        copy.alternativen = [];
+        copy._copyfrom = String(source.id);
+        delete copy._kgsync;
+        delete copy._kgkonzept;
+        delete copy.materialiendraftitemid;
+        delete copy.h5pdraftitemid;
+
+        const previousMethods = methods.slice();
+        methods.splice(idx + 1, 0, copy);
+        renderList();
+        try {
+            await persist(runtimeCmid);
+        } catch (error) {
+            methods = previousMethods;
+            renderList();
+            throw error;
+        }
+        await loadMethods(runtimeCmid);
+        setStatus(isKonzeptCard(source)
+            ? `Kopie "${copy.titel}" unter „Lokale Seminareinheiten" angelegt.`
+            : `Kopie "${copy.titel}" angelegt und gespeichert.`, false);
     };
 
     const toggleMethodFreeze = async (id) => {
