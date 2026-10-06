@@ -2393,6 +2393,23 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             return list;
         }
 
+        // D45: An An-/Abreisetagen hat ein Abschnitt kein Zeitfenster. Dorthin
+        // darf nichts verschoben werden - weder per Pfeil noch per Ueberlauf;
+        // Drag & Drop sperrt ihn schon (dropTarget).
+        anchorIsOff(dayIdx, ankername) {
+            return this.anchorBudget(this.dayFrame(dayIdx), ankername) === 0;
+        }
+
+        // Naechster stattfindender Abschnitt ab fromIdx in Richtung delta
+        // (+1/-1); entfallende werden uebersprungen. -1, wenn es keinen gibt.
+        openAnchorIdx(anchors, fromIdx, delta) {
+            let idx = fromIdx + delta;
+            while (idx >= 0 && idx < anchors.length && this.anchorIsOff(anchors[idx].dayIdx, anchors[idx].ankername)) {
+                idx += delta;
+            }
+            return idx >= 0 && idx < anchors.length ? idx : -1;
+        }
+
         locate(pid) {
             const anchors = this.anchorList();
             for (let i = 0; i < anchors.length; i++) {
@@ -2416,8 +2433,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 seq.splice(pos, 1);
                 seq.splice(target, 0, pid);
             } else {
-                const nextAnchorIdx = anchorIdx + delta;
-                if (nextAnchorIdx < 0 || nextAnchorIdx >= anchors.length) {
+                const nextAnchorIdx = this.openAnchorIdx(anchors, anchorIdx, delta);
+                if (nextAnchorIdx < 0) {
+                    this.setStatus(delta < 0
+                        ? 'Davor gibt es keinen Abschnitt, der stattfindet.'
+                        : 'Danach gibt es keinen Abschnitt, der stattfindet.');
                     return;
                 }
                 seq.splice(pos, 1);
@@ -2610,11 +2630,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const frame = this.dayFrame(this.dayIndex);
             const anchors = this.anchorList();
             const anchorIdx = this.dayIndex * 2 + (ankername === 'vormittag' ? 0 : 1);
-            if (anchorIdx + 1 >= anchors.length) {
+            const targetIdx = this.openAnchorIdx(anchors, anchorIdx, 1);
+            if (targetIdx < 0) {
                 return;
             }
             const seq = anchors[anchorIdx].seq;
-            const nextSeq = anchors[anchorIdx + 1].seq;
+            const nextSeq = anchors[targetIdx].seq;
             const budget = this.anchorBudget(frame, ankername);
 
             let movedwhole = 0;
@@ -2643,8 +2664,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             if (!movedwhole && !didsplit) {
                 return;
             }
-            const targetname = anchors[anchorIdx + 1].ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag';
-            const targetday = this.sequenz.tage[anchors[anchorIdx + 1].dayIdx];
+            const targetname = anchors[targetIdx].ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag';
+            const targetday = this.sequenz.tage[anchors[targetIdx].dayIdx];
             let msg;
             if (didsplit && !movedwhole) {
                 msg = `Einheit geteilt – der Rest läuft am ${targetname} von Tag ${targetday.tag} als Fortsetzung weiter.`;
@@ -5691,25 +5712,33 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                     : '<div class="sq-empty">Noch keine Einheiten in diesem Abschnitt.</div>';
             }
 
-            const hasNext = this.dayIndex * 2 + (isMorning ? 0 : 1) + 1 < this.dayCount() * 2;
-            const movetarget = isMorning ? 'auf den Nachmittag' : 'auf den nächsten Vormittag';
-            const offnext = isMorning ? 'auf den Nachmittag' : 'auf den nächsten Tag';
+            // Ziel ist der naechste Abschnitt, der stattfindet - entfallende
+            // (An-/Abreisetag) werden uebersprungen, die Beschriftung folgt dem.
+            const anchorsAll = this.anchorList();
+            const targetIdx = this.openAnchorIdx(anchorsAll, this.dayIndex * 2 + (isMorning ? 0 : 1), 1);
+            const hasNext = targetIdx >= 0;
+            const target = hasNext ? anchorsAll[targetIdx] : null;
+            const targetlabel = !target ? ''
+                : target.dayIdx === this.dayIndex ? 'den Nachmittag'
+                : target.dayIdx === this.dayIndex + 1
+                    ? (target.ankername === 'vormittag' ? 'den nächsten Vormittag' : 'den nächsten Nachmittag')
+                    : `den ${target.ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag'} von Tag ${this.sequenz.tage[target.dayIdx].tag}`;
             const overrun = (anchoroff && used > 0)
                 ? `<div class="sq-overrun">
                      <span><strong>Dieser Abschnitt entfällt an diesem Tag.</strong>
-                       Was hier noch steht, findet so nicht statt – verschiebe es ${offnext}.</span>
+                       Was hier noch steht, findet so nicht statt${hasNext ? ` – verschiebe es auf ${targetlabel}` : ''}.</span>
                      ${hasNext ? `<button type="button" class="kg-btn kg-btn-primary"
                        data-sq-action="overflow" data-anker="${ankername}">
-                       ${isMorning ? 'Alles auf den Nachmittag verschieben' : 'Alles auf den nächsten Tag verschieben'}</button>` : ''}
+                       Alles auf ${targetlabel} verschieben</button>` : ''}
                    </div>`
                 : over > 0
                 ? `<div class="sq-overrun">
                      <span><strong>+${over} Min. über ${overtarget}.</strong>
-                       Die letzte Einheit wird ${movetarget} verschoben – oder geteilt und als Fortsetzung
-                       weitergeführt, wenn beide Teile sinnvoll bleiben.</span>
+                       ${hasNext ? `Die letzte Einheit wird auf ${targetlabel} verschoben – oder geteilt und als Fortsetzung
+                       weitergeführt, wenn beide Teile sinnvoll bleiben.` : 'Kürze oder entferne etwas – danach findet kein Abschnitt mehr statt.'}</span>
                      ${hasNext ? `<button type="button" class="kg-btn kg-btn-primary"
                        data-sq-action="overflow" data-anker="${ankername}">
-                       ${isMorning ? 'Auf den Nachmittag verschieben' : 'Auf den nächsten Tag verschieben'}</button>` : ''}
+                       Auf ${targetlabel} verschieben</button>` : ''}
                    </div>`
                 : '';
 
