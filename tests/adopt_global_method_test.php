@@ -168,4 +168,49 @@ final class adopt_global_method_test extends advanced_testcase {
         $this->assertFalse($result['alreadylocal']);
         $this->assertSame(['Blitzlicht', 'Gruppenarbeit'], array_column($this->get_library(), 'titel'));
     }
+
+    /**
+     * Die Detailansicht liefert die vollen Texte (bereinigt) und laesst den Bestand unberuehrt.
+     */
+    public function test_details_show_full_content_without_adopting(): void {
+        global $DB;
+        $this->resetAfterTest(true);
+        $this->setAdminUser();
+        [$methodid] = $this->setup_activity_and_set(['Blitzlicht']);
+        $DB->update_record('local_kgen_method', (object)[
+            'id' => $methodid,
+            'ablauf' => '<p>Reihum ein Satz.</p><script>alert(1)</script>',
+            'lernziele' => '<ul><li>Stimmung erfassen</li></ul>',
+            'raumanforderungen' => 'Stuhlkreis',
+            'zeitbedarf' => '15',
+        ]);
+
+        $details = api::get_global_method_details($this->cmid, $methodid);
+        $details = \core_external\external_api::clean_returnvalue(api::get_global_method_details_returns(), $details);
+
+        $this->assertSame('Blitzlicht', $details['titel']);
+        $this->assertSame('Sammlung', $details['setname']);
+        $this->assertSame('15', $details['zeitbedarf']);
+        $this->assertSame(['Stuhlkreis'], $details['raum']);
+        $this->assertStringContainsString('Reihum ein Satz.', $details['ablauf']);
+        $this->assertStringNotContainsString('<script', $details['ablauf']);
+        $this->assertStringContainsString('Stimmung erfassen', $details['lernziele']);
+        $this->assertSame([], $details['attachments']);
+        $this->assertCount(0, $this->get_library());
+    }
+
+    /**
+     * Methoden ausserhalb der fuer die Aktivitaet sichtbaren Sammlungen bleiben verborgen.
+     */
+    public function test_details_reject_method_outside_visible_sets(): void {
+        global $DB;
+        $this->resetAfterTest(true);
+        $this->setAdminUser();
+        [$methodid] = $this->setup_activity_and_set(['Blitzlicht']);
+        $setid = (int)$DB->get_field('local_kgen_method', 'methodsetid', ['id' => $methodid]);
+        $DB->set_field('local_kgen_methodset', 'status', 'draft', ['id' => $setid]);
+
+        $this->expectException(invalid_parameter_exception::class);
+        api::get_global_method_details($this->cmid, $methodid);
+    }
 }

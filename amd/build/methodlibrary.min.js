@@ -2448,8 +2448,12 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                 </div>
                 <div class="ml-card-footer">
                   <span class="gl-card__source">Aus „${escapeHtml(m.setname)}"</span>
-                  <button type="button" class="kg-btn kg-btn-primary gl-card__adopt" data-gl-adopt="${m.methodid}">
-                    Übernehmen</button>
+                  <span class="gl-card__actions">
+                    <button type="button" class="ml-card-details" data-gl-details="${m.methodid}">Details <span
+                      class="ml-card-details__chevron" aria-hidden="true">›</span></button>
+                    <button type="button" class="kg-btn kg-btn-primary gl-card__adopt" data-gl-adopt="${m.methodid}">
+                      Übernehmen</button>
+                  </span>
                 </div>
               </div>`;
         }).join('');
@@ -2460,26 +2464,173 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
     };
 
     const adoptGlobalMethod = (cmid, methodid, button) => {
-        if (button) {
-            button.disabled = true;
-            button.textContent = 'Übernehme …';
+        // Karte und Detail-Modal tragen denselben Knopf - beide zeigen den Zustand.
+        const buttons = Array.from(document.querySelectorAll(`[data-gl-adopt="${methodid}"]`));
+        if (button && !buttons.includes(button)) {
+            buttons.push(button);
         }
+        const setButtons = (text, disabled) => buttons.forEach((b) => {
+            b.disabled = disabled;
+            b.textContent = text;
+        });
+        setButtons('Übernehme …', true);
         asCall('mod_seminarplaner_adopt_global_method', {cmid, methodid}).then((result) => {
             setGlobalStatus(result.alreadylocal
                 ? `„${result.titel}" ist bereits in deinem Bestand – es wurde keine zweite Kopie angelegt.`
                 : `„${result.titel}" ist jetzt als eigene Kopie in deinem Bestand.`);
-            if (button) {
-                button.textContent = result.alreadylocal ? '✓ Schon vorhanden' : '✓ Übernommen';
+            setButtons(result.alreadylocal ? '✓ Schon vorhanden' : '✓ Übernommen', true);
+            const hint = bySel('#gl-detail-local');
+            if (hint && Number(hint.getAttribute('data-methodid')) === methodid) {
+                hint.classList.add('kg-hidden');
             }
             // Den lokalen Bestand oben direkt auffrischen, damit die Kopie sichtbar ist.
             return loadMethods(cmid).then(() => renderList());
         }).catch((e) => {
             Notification.exception(e);
             setGlobalStatus('Übernehmen fehlgeschlagen.', true);
-            if (button) {
-                button.disabled = false;
-                button.textContent = 'Übernehmen';
+            setButtons('Übernehmen', false);
+        });
+    };
+
+    // ---- Detail-Modal der Methodensammlung ----
+    // Zeigt alle Inhalte einer globalen Methode, damit man vor dem Übernehmen
+    // entscheiden kann. Die vollen Texte lädt erst das Öffnen
+    // (get_global_method_details); die Liste kommt mit Kurzfassungen aus.
+    let glDetailModal = null;
+    let glDetailReturnFocus = null;
+
+    const closeGlobalDetail = () => {
+        if (!glDetailModal) {
+            return;
+        }
+        glDetailModal.classList.remove('sp-modal--visible');
+        glDetailModal.setAttribute('aria-hidden', 'true');
+        if (glDetailReturnFocus && typeof glDetailReturnFocus.focus === 'function') {
+            glDetailReturnFocus.focus();
+        }
+        glDetailReturnFocus = null;
+    };
+
+    const ensureGlobalDetailModal = (cmid) => {
+        if (glDetailModal) {
+            return glDetailModal;
+        }
+        const modal = document.createElement('div');
+        // moodle-has-zindex: siehe sequenz.php - sonst legen sich Moodles
+        // eigene Modale (core/modal) hinter dieses Overlay.
+        modal.className = 'sp-modal gl-detail moodle-has-zindex';
+        modal.setAttribute('aria-hidden', 'true');
+        modal.innerHTML = `
+            <div class="sp-modal__backdrop" data-gl-detail-close="1"></div>
+            <div class="sp-modal__dialog sp-modal__dialog--large" role="dialog" aria-modal="true"
+                aria-labelledby="gl-detail-title">
+                <header class="sp-modal__header">
+                    <h2 id="gl-detail-title">Methode</h2>
+                    <button type="button" class="sp-modal__close" data-gl-detail-close="1"
+                        aria-label="Details schließen">✕</button>
+                </header>
+                <div class="sp-modal__body sp-method-detail__body" id="gl-detail-body" aria-live="polite"></div>
+                <div class="sp-modal__actions gl-detail__actions">
+                    <button type="button" class="kg-btn" data-gl-detail-close="1">Schließen</button>
+                    <button type="button" class="kg-btn kg-btn-primary gl-card__adopt" id="gl-detail-adopt">
+                        Übernehmen</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (event) => {
+            if (event.target.closest('[data-gl-detail-close]')) {
+                closeGlobalDetail();
+                return;
             }
+            const adopt = event.target.closest('#gl-detail-adopt');
+            if (adopt && !adopt.disabled) {
+                adoptGlobalMethod(cmid, Number.parseInt(adopt.getAttribute('data-gl-adopt'), 10), adopt);
+            }
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && modal.classList.contains('sp-modal--visible')) {
+                closeGlobalDetail();
+            }
+        });
+        glDetailModal = modal;
+        return modal;
+    };
+
+    const isLocallyPresent = (titel) => {
+        const wanted = String(titel || '').trim().toLowerCase();
+        return wanted !== '' && methods.some((m) => String(m.titel || '').trim().toLowerCase() === wanted);
+    };
+
+    const buildGlobalDetailBody = (d) => {
+        const join = (list) => (Array.isArray(list) ? list.filter(Boolean).join(', ') : '');
+        const meta = [
+            {label: 'Zeitbedarf', value: d.zeitbedarf ? `${d.zeitbedarf} Min` : ''},
+            {label: 'Gruppengröße', value: d.gruppengroesse},
+            {label: 'Seminarphase', value: join(d.seminarphase)},
+            {label: 'Sozialform', value: join(d.sozialform)},
+            {label: 'Raum', value: join(d.raum)},
+            {label: 'Vorbereitung', value: d.vorbereitung},
+            {label: 'Autor:in', value: d.autor},
+        ].filter((entry) => String(entry.value || '').trim() !== '');
+        const sections = [
+            {title: 'Kurzbeschreibung', html: d.kurzbeschreibung},
+            {title: 'Lernziele', html: d.lernziele},
+            {title: 'Ablauf', html: d.ablauf},
+            {title: 'Material/Technik', html: d.materialtechnik},
+            {title: 'Risiken/Tipps', html: d.risiken},
+            {title: 'Debrief/Reflexion', html: d.debrief},
+        ].filter((entry) => stripHtml(entry.html || '').trim() !== '');
+        const tags = (d.tags || []).map((tag) => `<span class="ml-card-tag">${escapeHtml(tag)}</span>`).join('');
+        const files = (d.attachments || []).map((name) => `<li>${escapeHtml(name)}</li>`).join('');
+
+        return `
+            <p class="gl-card__source">Aus „${escapeHtml(d.setname)}"</p>
+            <p class="gl-detail__local${isLocallyPresent(d.titel) ? '' : ' kg-hidden'}" id="gl-detail-local"
+                data-methodid="${Number(d.methodid)}">
+                In deinem Bestand gibt es schon eine Einheit mit diesem Titel – „Übernehmen" legt keine zweite an.</p>
+            ${meta.length ? `<div class="sp-method-detail__meta">${meta.map((entry) =>
+                `<span class="sp-method-detail__meta-item sp-badge"><strong>${escapeHtml(entry.label)}:</strong> `
+                + `${escapeHtml(entry.value)}</span>`).join('')}</div>` : ''}
+            ${tags ? `<div class="ml-card-tags">${tags}</div>` : ''}
+            ${sections.length ? sections.map((entry) => `
+                <section class="sp-method-detail__section">
+                    <h3>${escapeHtml(entry.title)}</h3>
+                    <div class="sp-method-detail__text">${entry.html}</div>
+                </section>`).join('')
+                : '<p class="sp-method-detail__empty">Zu dieser Methode gibt es keine weiteren Beschreibungen.</p>'}
+            ${files ? `<section class="sp-method-detail__section">
+                    <h3>Materialien</h3>
+                    <ul class="gl-detail__files">${files}</ul>
+                </section>` : ''}`;
+    };
+
+    const openGlobalDetail = (cmid, methodid, trigger) => {
+        const modal = ensureGlobalDetailModal(cmid);
+        const listed = globalMethods.find((m) => m.methodid === methodid);
+        const title = modal.querySelector('#gl-detail-title');
+        const body = modal.querySelector('#gl-detail-body');
+        const adopt = modal.querySelector('#gl-detail-adopt');
+        title.textContent = listed ? listed.titel : 'Methode';
+        body.innerHTML = '<p class="sp-method-detail__empty">Details werden geladen …</p>';
+        // Den Zustand des Karten-Knopfs übernehmen (z. B. „✓ Übernommen").
+        const cardbtn = document.querySelector(`#gl-list [data-gl-adopt="${methodid}"]`);
+        adopt.setAttribute('data-gl-adopt', String(methodid));
+        adopt.disabled = cardbtn ? cardbtn.disabled : false;
+        adopt.textContent = cardbtn ? cardbtn.textContent.trim() : 'Übernehmen';
+        glDetailReturnFocus = trigger || null;
+        modal.classList.add('sp-modal--visible');
+        modal.removeAttribute('aria-hidden');
+        modal.querySelector('.sp-modal__close').focus();
+
+        asCall('mod_seminarplaner_get_global_method_details', {cmid, methodid}).then((details) => {
+            if (adopt.getAttribute('data-gl-adopt') !== String(methodid)) {
+                return; // Inzwischen eine andere Methode geöffnet.
+            }
+            title.textContent = details.titel || title.textContent;
+            body.innerHTML = buildGlobalDetailBody(details);
+        }).catch((e) => {
+            Notification.exception(e);
+            body.innerHTML = '<p class="sp-method-detail__empty kg-status-error">Details konnten nicht geladen werden.</p>';
         });
     };
 
@@ -2633,6 +2784,11 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                 const adopt = event.target.closest('[data-gl-adopt]');
                 if (adopt) {
                     adoptGlobalMethod(cmid, Number.parseInt(adopt.getAttribute('data-gl-adopt'), 10), adopt);
+                    return;
+                }
+                const details = event.target.closest('[data-gl-details]');
+                if (details) {
+                    openGlobalDetail(cmid, Number.parseInt(details.getAttribute('data-gl-details'), 10), details);
                 }
             });
         }

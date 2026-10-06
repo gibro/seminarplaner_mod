@@ -60,6 +60,13 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
     ],
+    'mod_seminarplaner_get_global_method_details' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'get_global_method_details',
+        'description' => 'Read all fields of one method from a published global collection (preview before adopting).',
+        'type' => 'read',
+        'ajax' => true,
+    ],
     'mod_seminarplaner_list_imported_konzepte' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'list_imported_konzepte',
