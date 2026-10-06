@@ -1,5 +1,5 @@
-define(['core/ajax', 'core/notification', 'mod_seminarplaner/lernzieleditor'],
-function(Ajax, Notification, LernzielEditor) {
+define(['core/ajax', 'core/notification', 'mod_seminarplaner/lernzieleditor', 'mod_seminarplaner/tagsuggest'],
+function(Ajax, Notification, LernzielEditor, TagSuggest) {
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
     const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -3080,6 +3080,8 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                     });
                 });
             }
+            // Beim Tippen die Tags vorschlagen, die die Bibliothek schon verwendet.
+            TagSuggest.attach(bySel('#ml-e-tags'), () => methods.flatMap((m) => splitMulti(m.tags)));
             // D62: geführter Lernziel-Editor am Lernziele-Feld des Editors –
             // Satz anhängen und die abgeleitete Seminarphase vorbelegen.
             const lzopen = bySel('#ml-lz-open-lernziele');

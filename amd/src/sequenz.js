@@ -15,8 +15,8 @@
  * @module mod_seminarplaner/sequenz
  */
 define(['core/ajax', 'core_user/repository', 'core/fragment', 'core/templates', 'mod_seminarplaner/lernzieleditor',
-    'mod_seminarplaner/livemodel', 'mod_seminarplaner/planmemory'],
-function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, PlanMemory) {
+    'mod_seminarplaner/livemodel', 'mod_seminarplaner/planmemory', 'mod_seminarplaner/tagsuggest'],
+function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, PlanMemory, TagSuggest) {
     const DEFAULT_BOUNDARY_MIN = 750; // 12:30 fallback, same rule as the PHP converter.
     const ANCHORS = ['vormittag', 'nachmittag'];
     const DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
@@ -673,6 +673,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             // Statisches Einheiten-Modal (Rich-Text, D17/D50): Speichern,
             // Abbrechen/Schließen und Klick auf den Overlay-Hintergrund.
             bindUnitMultiDropdowns();
+            // Beim Tippen die Tags vorschlagen, die die Bibliothek schon verwendet.
+            TagSuggest.attach(bySel('#sq-e-tags'), () => this.methodCardList.flatMap((c) => splitMultiValue(c && c.tags)));
             // D62: geführter Lernziel-Editor am Lernziele-Feld des Einheiten-Modals.
             const lzopen = bySel('#sq-lz-open-lernziele');
             if (lzopen) {

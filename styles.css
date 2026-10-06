@@ -9067,3 +9067,54 @@ details.sq-menu[open] > summary.sq-menu__btn {
         padding-top: 0;
     }
 }
+
+/* ==========================================================================
+   Tag-Vorschläge beim Tippen (amd/src/tagsuggest.js)
+   ========================================================================== */
+.kg-tagsuggest-host {
+    position: relative;
+}
+
+.kg-tagsuggest {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    max-height: 260px;
+    overflow-y: auto;
+    margin: 2px 0 0;
+    padding: 4px 0;
+    list-style: none;
+    background: var(--color-background, #fff);
+    border: 1px solid var(--ig-midgray);
+    box-shadow: var(--ig-shadow-strong);
+}
+
+.kg-tagsuggest[hidden] {
+    display: none;
+}
+
+.kg-tagsuggest__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.kg-tagsuggest__item:hover,
+.kg-tagsuggest__item--active {
+    background: var(--ig-blue-soft);
+}
+
+.kg-tagsuggest__label strong {
+    font-weight: 700;
+}
+
+.kg-tagsuggest__count {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--ig-gray);
+}
