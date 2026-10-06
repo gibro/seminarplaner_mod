@@ -286,7 +286,16 @@ class grid_service {
         if (!$grid || (int)$grid->cmid !== $cmid || (int)$grid->isarchived === 1) {
             throw new \invalid_parameter_exception('Grid not found');
         }
-        return $this->repository->archive_grid($gridid, $userid);
+        $archived = $this->repository->archive_grid($gridid, $userid);
+        // Ist genau dieser Plan als Roter Faden veroeffentlicht, verschwindet die
+        // Veroeffentlichung mit ihm. Sonst saehen die Teilnehmenden (und das
+        // Handout) weiter einen Plan, den es nicht mehr gibt - und zurueckziehen
+        // liesse er sich auch nicht, weil er in keiner Auswahl mehr steht.
+        $roterfaden = $this->repository->get_roterfaden_state($cmid);
+        if ($roterfaden && (int)$roterfaden->ispublished === 1 && (int)$roterfaden->gridid === $gridid) {
+            $this->repository->set_roterfaden_visibility($cmid, false, $userid);
+        }
+        return $archived;
     }
 
     /**
@@ -943,8 +952,18 @@ class grid_service {
             }
         }
 
+        // Altfaelle vor dem Fix in delete_grid(): Schnappschuss eines inzwischen
+        // geloeschten (archivierten) Plans gilt als nicht veroeffentlicht.
+        $ispublished = (int)$record->ispublished === 1;
+        if ($ispublished && (int)$record->gridid > 0) {
+            $grid = $this->repository->get_grid((int)$record->gridid);
+            if (!$grid || (int)$grid->isarchived === 1) {
+                $ispublished = false;
+            }
+        }
+
         return [
-            'ispublished' => (int)$record->ispublished === 1,
+            'ispublished' => $ispublished,
             'gridid' => (int)$record->gridid,
             'state' => $decoded,
         ];

@@ -182,6 +182,56 @@ final class grid_service_test extends advanced_testcase {
     }
 
     /**
+     * Wer einen veroeffentlichten Plan loescht, zieht damit seinen Roten Faden zurueck.
+     */
+    public function test_delete_grid_unpublishes_its_roterfaden(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $gridid = $service->create_grid(1007, 'Veroeffentlicht', 9);
+        $service->publish_roterfaden(1007, $gridid, ['units' => [['uid' => 'a']]], 9);
+
+        $service->delete_grid(1007, $gridid, 9);
+
+        $this->assertFalse($service->get_roterfaden_state(1007)['ispublished']);
+    }
+
+    /**
+     * Ein anderer Plan zu loeschen laesst die Veroeffentlichung unangetastet.
+     */
+    public function test_delete_other_grid_keeps_roterfaden(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $published = $service->create_grid(1008, 'Veroeffentlicht', 9);
+        $other = $service->create_grid(1008, 'Entwurf', 9);
+        $service->publish_roterfaden(1008, $published, ['units' => [['uid' => 'a']]], 9);
+
+        $service->delete_grid(1008, $other, 9);
+
+        $state = $service->get_roterfaden_state(1008);
+        $this->assertTrue($state['ispublished']);
+        $this->assertSame($published, $state['gridid']);
+    }
+
+    /**
+     * Altfall: Schnappschuss eines schon vor dem Fix archivierten Plans gilt als
+     * nicht veroeffentlicht.
+     */
+    public function test_roterfaden_of_archived_grid_reads_as_unpublished(): void {
+        global $DB;
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $gridid = $service->create_grid(1009, 'Altfall', 9);
+        $service->publish_roterfaden(1009, $gridid, ['units' => [['uid' => 'a']]], 9);
+        // Archivieren am Service vorbei - so wie es geloeschte Plaene vor dem Fix waren.
+        $DB->set_field('kgen_grid', 'isarchived', 1, ['id' => $gridid]);
+
+        $this->assertFalse($service->get_roterfaden_state(1009)['ispublished']);
+    }
+
+    /**
      * D67: Die Kopie traegt den Zustand des Originals, ist aber ein eigener Plan.
      */
     public function test_copy_grid_duplicates_state_into_an_independent_plan(): void {

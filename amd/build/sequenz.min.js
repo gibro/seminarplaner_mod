@@ -161,6 +161,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
         return `${String(Math.floor(clean / 60)).padStart(2, '0')}:${String(clean % 60).padStart(2, '0')}`;
     };
 
+    // Minuten aus einem Zeitbedarf lesen. Massgeblich ist die erste Zahl:
+    // Importierte Karten tragen auch Spannen wie "30 | 45" oder "30-45" - alle
+    // Ziffern zusammenzukleben machte daraus 3045 Minuten.
+    const parseMinutes = (value) => {
+        const match = String(value === undefined || value === null ? '' : value).match(/\d+/);
+        return match ? Number.parseInt(match[0], 10) : Number.NaN;
+    };
     const cardTitle = (card) => String((card && (card.titel || card.title)) || '');
 
     // Eine Einheit stammt aus einem globalen Seminarkonzept, wenn sie dessen
@@ -1607,7 +1614,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             const name = select && select.selectedOptions && select.selectedOptions[0]
                 ? select.selectedOptions[0].textContent
                 : `#${gridid}`;
-            if (!window.confirm(`Soll der Seminarplan „${name}" wirklich gelöscht werden?`)) {
+            const published = this.roterFadenState && this.roterFadenState.ispublished
+                && Number(this.roterFadenState.gridid) === Number(gridid);
+            const hint = published ? ' Er ist als Roter Faden veröffentlicht – die Veröffentlichung wird zurückgezogen.' : '';
+            if (!window.confirm(`Soll der Seminarplan „${name}" wirklich gelöscht werden?${hint}`)) {
                 return;
             }
             // Ungespeicherte Änderungen sind nach dem Löschen gegenstandslos –
@@ -1616,7 +1626,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             asCall('mod_seminarplaner_delete_grid', {cmid: this.cmid, gridid}).then(() => {
                 this.gridid = 0;
                 this.setStatus('Seminarplan gelöscht.');
-                return this.loadGrids();
+                // Das Loeschen kann die Veroeffentlichung zurueckgezogen haben.
+                return Promise.all([this.loadRoterFadenState(), this.loadGrids()]);
             }).catch(() => {
                 this.setStatus('Seminarplan löschen fehlgeschlagen.', true);
             });
@@ -2729,7 +2740,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 if (cardTitle(card)) {
                     placement.titel = cardTitle(card);
                 }
-                const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
+                const duration = parseMinutes(card.zeitbedarf);
                 if (Number.isFinite(duration) && duration > 0) {
                     placement.dauer = duration;
                 }
@@ -3617,7 +3628,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             UNIT_FIELD_KEYS.forEach((key) => {
                 values[key] = this.getUnitField(key);
             });
-            const duration = Number.parseInt(String(values.zeitbedarf || '').replace(/\D+/g, ''), 10);
+            const duration = parseMinutes(values.zeitbedarf);
             Object.keys(values).forEach((key) => {
                 const incoming = values[key];
                 if (UNIT_MULTI_FIELDS.includes(key)) {
@@ -3731,7 +3742,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             root.querySelectorAll('[data-sq-field]').forEach((field) => {
                 values[field.getAttribute('data-sq-field')] = field.value;
             });
-            const duration = Number.parseInt(String(values.zeitbedarf || '').replace(/\D+/g, ''), 10);
+            const duration = parseMinutes(values.zeitbedarf);
             if (values.titel && values.titel.trim()) {
                 placement.titel = values.titel.trim();
             }
@@ -3906,7 +3917,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             if (!placement) {
                 return;
             }
-            const parsed = Number.parseInt(String(raw).replace(/\D+/g, ''), 10);
+            const parsed = parseMinutes(raw);
             const previous = Math.max(0, Number(placement.dauer) || 0);
             // Leeres oder unlesbares Feld heisst „nichts aendern", nicht „0" —
             // eine Einheit auf 0 zu setzen waere fast immer ein Vertipper.
@@ -3952,7 +3963,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 return;
             }
             this.setUnitFormError('');
-            const duration = Number.parseInt(String(values.zeitbedarf || '').replace(/\D+/g, ''), 10);
+            const duration = parseMinutes(values.zeitbedarf);
             // Feldform wie beim Anlegen in der Bibliothek (methods-Karten):
             // seminarphase/sozialform/raum sind Arrays (kommen so aus den
             // Multi-Dropdowns), der Rest Strings.
@@ -4364,7 +4375,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 return;
             }
             const row = (card) => {
-                const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
+                const duration = parseMinutes(card.zeitbedarf);
                 const phase = this.fieldValue(card, 'seminarphase');
                 const used = placedRefs.has(String(card.id));
                 const globalid = card._isglobal ? (Number(card._globalid) || 0) : 0;
@@ -4431,7 +4442,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             if (!card || !day) {
                 return;
             }
-            const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
+            const duration = parseMinutes(card.zeitbedarf);
             const eaid = this.uniqueId('eax', this.sequenz.einheitenauswahlen);
             // D21: alternatives stored on the unit become preselected candidates.
             const alternativen = (Array.isArray(card.alternativen) ? card.alternativen : [])
@@ -5037,7 +5048,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
         }
 
         cardDuration(card) {
-            const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
+            const duration = parseMinutes(card.zeitbedarf);
             return Number.isFinite(duration) && duration > 0 ? duration : null;
         }
 
@@ -5807,7 +5818,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 return '';
             }
             return open.map((card) => {
-                const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
+                const duration = parseMinutes(card.zeitbedarf);
                 const pkey = phaseKey(card.seminarphase);
                 const placebtn = placeholderpid
                     ? `<button type="button" class="kg-btn kg-btn-primary sq-unit__place"`

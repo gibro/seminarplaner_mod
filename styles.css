@@ -8989,3 +8989,36 @@ details.sq-menu[open] > summary.sq-menu__btn {
 .sq-unit__toggle svg {
     display: block;
 }
+
+/* Schmale Bildschirme (Handy): Die Aktionsleiste einer Einheit (Referent*in,
+   Phase, Bearbeiten, ⋮) braucht allein rund 300px und schrumpft nie
+   (flex: 0 0 auto) - der Titel bekam daneben Breite 0 und brach nach jedem
+   Buchstaben um, Bearbeiten und ⋮ lagen ausserhalb des Bildschirms. Hier
+   rutscht die Leiste in eine eigene Zeile unter den Titel; der Phasenstreifen
+   ist absolut gesetzt, damit er ueber beide Zeilen laeuft. */
+@media (max-width: 640px) {
+    .sq-row {
+        gap: 8px;
+    }
+    .sq-time {
+        width: 48px;
+        flex-basis: 48px;
+    }
+    .sq-row > .sq-unit {
+        flex-wrap: wrap;
+        position: relative;
+        padding-left: 6px;
+    }
+    .sq-row > .sq-unit > .sq-unit__phase {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+    }
+    .sq-row > .sq-unit > .sq-unit__actions {
+        flex: 1 1 100%;
+        min-width: 0;
+        justify-content: flex-end;
+        padding-top: 0;
+    }
+}
