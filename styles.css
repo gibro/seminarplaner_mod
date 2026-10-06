@@ -9122,11 +9122,15 @@ details.sq-menu[open] > summary.sq-menu__btn {
    Erweiterbare Mehrfach-Dropdowns, z. B. eigene Sozialformen (amd/src/multiextend.js)
    ========================================================================== */
 .kg-form-multi-add {
+    /* Bleibt am Panel-Boden sichtbar, auch wenn die Optionen scrollen. */
+    position: sticky;
+    bottom: -8px;
     display: flex;
     gap: 6px;
-    margin-top: 6px;
-    padding-top: 8px;
+    margin: 6px -8px -8px;
+    padding: 8px;
     border-top: 1px solid var(--ig-lightgray);
+    background: #fff;
 }
 
 .kg-form-multi-add .kg-input {
