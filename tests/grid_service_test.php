@@ -185,6 +185,7 @@ final class grid_service_test extends advanced_testcase {
      * Wer einen veroeffentlichten Plan loescht, zieht damit seinen Roten Faden zurueck.
      */
     public function test_delete_grid_unpublishes_its_roterfaden(): void {
+        global $DB;
         $this->resetAfterTest(true);
 
         $service = new grid_service();
@@ -194,6 +195,9 @@ final class grid_service_test extends advanced_testcase {
         $service->delete_grid(1007, $gridid, 9);
 
         $this->assertFalse($service->get_roterfaden_state(1007)['ispublished']);
+        // Am gespeicherten Datensatz pruefen: der Lesepfad allein wuerde einen
+        // archivierten Plan schon als unveroeffentlicht melden.
+        $this->assertSame(0, (int)$DB->get_field('kgen_roterfaden_state', 'ispublished', ['cmid' => 1007]));
     }
 
     /**
