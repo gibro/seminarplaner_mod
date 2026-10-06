@@ -1,5 +1,6 @@
-define(['core/ajax', 'core/notification', 'mod_seminarplaner/lernzieleditor', 'mod_seminarplaner/tagsuggest'],
-function(Ajax, Notification, LernzielEditor, TagSuggest) {
+define(['core/ajax', 'core/notification', 'mod_seminarplaner/lernzieleditor', 'mod_seminarplaner/tagsuggest',
+    'mod_seminarplaner/multiextend'],
+function(Ajax, Notification, LernzielEditor, TagSuggest, MultiExtend) {
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
     const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -334,8 +335,16 @@ function(Ajax, Notification, LernzielEditor, TagSuggest) {
                         return;
                     }
                     const mapped = normalizedMap[normalizeMultiToken(value)];
-                    if (mapped && !resolved.includes(mapped)) {
-                        resolved.push(mapped);
+                    if (mapped) {
+                        if (!resolved.includes(mapped)) {
+                            resolved.push(mapped);
+                        }
+                        return;
+                    }
+                    // Erweiterbares Feld: einen eigenen Wert als Option aufnehmen statt ihn zu verwerfen.
+                    const custom = MultiExtend.isExtensible(dropdown) ? MultiExtend.ensureOption(dropdown, value) : null;
+                    if (custom && !resolved.includes(custom.value)) {
+                        resolved.push(custom.value);
                     }
                 });
                 cleanvalues = resolved;
@@ -413,14 +422,13 @@ function(Ajax, Notification, LernzielEditor, TagSuggest) {
                     }
                 });
             }
-            dropdown.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
-                checkbox.addEventListener('change', () => {
-                    const selected = Array.from(dropdown.querySelectorAll('[data-kg-form-multi-option="1"]:checked'))
-                        .map((cb) => String(cb.value || '').trim())
-                        .filter(Boolean);
-                    setFormMultiDropdownValues(selector, selected);
-                });
+            // Delegiert, damit auch später angelegte Optionen (multiextend) greifen.
+            dropdown.addEventListener('change', (event) => {
+                if (event.target.matches('[data-kg-form-multi-option="1"]')) {
+                    setFormMultiDropdownValues(selector, MultiExtend.selectedValues(dropdown));
+                }
             });
+            MultiExtend.bindAdder(dropdown, (selected) => setFormMultiDropdownValues(selector, selected));
             const searchinput = dropdown.querySelector('[data-kg-form-multi-search="1"]');
             if (searchinput) {
                 searchinput.addEventListener('input', () => {
@@ -2282,6 +2290,7 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                 return normalized;
             });
             normalizeMethodAlternatives();
+            MultiExtend.addLibraryValues(methods, splitMulti);
             renderList();
             setStatus(`Seminareinheiten geladen (${methods.length}).`, false);
         });

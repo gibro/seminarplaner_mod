@@ -9117,3 +9117,23 @@ details.sq-menu[open] > summary.sq-menu__btn {
     font-size: 12px;
     color: var(--ig-gray);
 }
+
+/* ==========================================================================
+   Erweiterbare Mehrfach-Dropdowns, z. B. eigene Sozialformen (amd/src/multiextend.js)
+   ========================================================================== */
+.kg-form-multi-add {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+    padding-top: 8px;
+    border-top: 1px solid var(--ig-lightgray);
+}
+
+.kg-form-multi-add .kg-input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.kg-form-multi-add .kg-btn {
+    flex-shrink: 0;
+}

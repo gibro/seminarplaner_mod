@@ -15,8 +15,9 @@
  * @module mod_seminarplaner/sequenz
  */
 define(['core/ajax', 'core_user/repository', 'core/fragment', 'core/templates', 'mod_seminarplaner/lernzieleditor',
-    'mod_seminarplaner/livemodel', 'mod_seminarplaner/planmemory', 'mod_seminarplaner/tagsuggest'],
-function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, PlanMemory, TagSuggest) {
+    'mod_seminarplaner/livemodel', 'mod_seminarplaner/planmemory', 'mod_seminarplaner/tagsuggest',
+    'mod_seminarplaner/multiextend'],
+function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, PlanMemory, TagSuggest, MultiExtend) {
     const DEFAULT_BOUNDARY_MIN = 750; // 12:30 fallback, same rule as the PHP converter.
     const ANCHORS = ['vormittag', 'nachmittag'];
     const DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
@@ -266,21 +267,27 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         const hidden = bySel(selector);
         let clean = splitMultiValue(values);
         if (dropdown) {
-            // Werte case-insensitiv auf die Options-Schreibweise auflösen;
-            // Unbekanntes fällt weg (gleiche Regel wie im Bibliotheks-Editor).
-            const boxes = Array.from(dropdown.querySelectorAll('[data-kg-form-multi-option="1"]'));
+            // Werte case-insensitiv auf die Options-Schreibweise auflösen.
+            // Unbekanntes fällt weg - außer bei erweiterbaren Feldern
+            // (Sozialform): dort wird es zur eigenen Option (multiextend).
+            const extensible = MultiExtend.isExtensible(dropdown);
             const bynorm = {};
-            boxes.forEach((cb) => {
+            dropdown.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((cb) => {
                 bynorm[String(cb.value).trim().toLowerCase()] = String(cb.value);
             });
             const resolved = [];
             clean.forEach((value) => {
-                const mapped = bynorm[value.toLowerCase()];
+                let mapped = bynorm[value.toLowerCase()];
+                if (!mapped && extensible) {
+                    const custom = MultiExtend.ensureOption(dropdown, value);
+                    mapped = custom ? custom.value : '';
+                }
                 if (mapped && !resolved.includes(mapped)) {
                     resolved.push(mapped);
                 }
             });
             clean = resolved;
+            const boxes = Array.from(dropdown.querySelectorAll('[data-kg-form-multi-option="1"]'));
             const valueset = new Set(clean);
             boxes.forEach((cb) => {
                 cb.checked = valueset.has(String(cb.value));
@@ -333,14 +340,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 }
             });
         }
-        dropdown.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
-            checkbox.addEventListener('change', () => {
-                const selected = Array.from(dropdown.querySelectorAll('[data-kg-form-multi-option="1"]:checked'))
-                    .map((cb) => String(cb.value || '').trim())
-                    .filter(Boolean);
-                setMultiDropdownValues(selector, selected);
-            });
+        // Delegiert, damit auch später angelegte Optionen (multiextend) greifen.
+        dropdown.addEventListener('change', (event) => {
+            if (event.target.matches('[data-kg-form-multi-option="1"]')) {
+                setMultiDropdownValues(selector, MultiExtend.selectedValues(dropdown));
+            }
         });
+        MultiExtend.bindAdder(dropdown, (selected) => setMultiDropdownValues(selector, selected));
         // Suchfeld (nur beim Alternativen-Dropdown): filtert die Optionen
         // live – greift auch für später dynamisch ergänzte Optionen.
         const searchinput = dropdown.querySelector('[data-kg-form-multi-search="1"]');
@@ -1662,6 +1668,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                     decoded = [];
                 }
                 this.methodCardList = Array.isArray(decoded) ? decoded : [];
+                MultiExtend.addLibraryValues(this.methodCardList, splitMultiValue);
                 this.methodCardList.forEach((card) => {
                     if (card && card.id !== undefined) {
                         this.methodCards[String(card.id)] = card;
@@ -5283,6 +5290,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                         decoded = [];
                     }
                     this.methodCardList = Array.isArray(decoded) ? decoded : [];
+                    MultiExtend.addLibraryValues(this.methodCardList, splitMultiValue);
                     this.methodCards = {};
                     this.methodCardList.forEach((card) => {
                         if (card && card.id !== undefined) {

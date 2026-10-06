@@ -246,18 +246,12 @@ $bulkmultifields = [
         'Gruppenräume' => 'Gruppenräume',
         'akustisch ruhig' => 'akustisch ruhig',
     ], 'Raumanforderungen wählen', 'Raumanforderungen'],
-    'sozialform' => ['Sozialform', [
-        'Vortrag' => 'Vortrag',
-        'Diskussion' => 'Diskussion',
-        'Einzelarbeit' => 'Einzelarbeit',
-        'Partnerarbeit' => 'Partnerarbeit',
-        'Kleingruppen' => 'Kleingruppen',
-        'Galeriegang' => 'Galeriegang',
-        'Fishbowl' => 'Fishbowl',
-    ], 'Sozialformen wählen', 'Sozialformen'],
+    'sozialform' => ['Sozialform', seminarplaner_sozialform_options(), 'Sozialformen wählen', 'Sozialformen',
+        'Weitere Sozialform'],
 ];
 foreach ($bulkmultifields as $fieldname => $fielddef) {
     [$label, $options, $placeholder, $labelprefix] = $fielddef;
+    $addlabel = (string)($fielddef[4] ?? '');
     echo html_writer::start_div('field-card');
     echo html_writer::tag('label', $label, ['class' => 'kg-label']);
     echo html_writer::start_div('kg-two');
@@ -272,7 +266,7 @@ foreach ($bulkmultifields as $fieldname => $fielddef) {
     echo html_writer::tag('option', 'Ersetzen', ['value' => 'replace']);
     echo html_writer::end_tag('select');
     echo html_writer::start_div('kg-bulk-value kg-bulk-value--disabled', ['id' => 'ml-bulk-' . $fieldname . '-value']);
-    echo seminarplaner_render_multi_dropdown('ml-bulk-' . $fieldname, $options, $placeholder, $labelprefix);
+    echo seminarplaner_render_multi_dropdown('ml-bulk-' . $fieldname, $options, $placeholder, $labelprefix, $addlabel);
     echo html_writer::end_div();
     echo html_writer::end_div();
     echo html_writer::end_div();
