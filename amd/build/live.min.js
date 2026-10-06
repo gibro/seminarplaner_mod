@@ -16,8 +16,9 @@ define([
     'core/ajax',
     'core/notification',
     'mod_seminarplaner/livemodel',
-    'mod_seminarplaner/roterfadenmodel'
-], function(Ajax, Notification, LiveModel, Model) {
+    'mod_seminarplaner/roterfadenmodel',
+    'mod_seminarplaner/planmemory'
+], function(Ajax, Notification, LiveModel, Model, PlanMemory) {
     const DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
     const CLOCK_STORAGE_KEY = 'kg_live_showclock';
 
@@ -95,7 +96,7 @@ define([
             this.bindControls();
             this.applyClockVisibility(this.readStoredClock());
             this.loadReferenten();
-            this.load(0);
+            this.load(PlanMemory.read(this.cmid));
         }
 
         // D84: Name und Profilbild der Referent*innen. Die Zuordnung selbst
@@ -135,6 +136,7 @@ define([
             return asCall('mod_seminarplaner_get_live_state', {cmid: this.cmid, gridid: gridid || 0})
                 .then((res) => {
                     this.gridid = Number(res.gridid) || 0;
+                    PlanMemory.remember(this.cmid, this.gridid);
                     this.grids = Array.isArray(res.grids) ? res.grids : [];
                     let state = {};
                     let cards = [];

@@ -2404,9 +2404,11 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
             button.textContent = 'Übernehme …';
         }
         asCall('mod_seminarplaner_adopt_global_method', {cmid, methodid}).then((result) => {
-            setGlobalStatus(`„${result.titel}" ist jetzt als eigene Kopie in deinem Bestand.`);
+            setGlobalStatus(result.alreadylocal
+                ? `„${result.titel}" ist bereits in deinem Bestand – es wurde keine zweite Kopie angelegt.`
+                : `„${result.titel}" ist jetzt als eigene Kopie in deinem Bestand.`);
             if (button) {
-                button.textContent = '✓ Übernommen';
+                button.textContent = result.alreadylocal ? '✓ Schon vorhanden' : '✓ Übernommen';
             }
             // Den lokalen Bestand oben direkt auffrischen, damit die Kopie sichtbar ist.
             return loadMethods(cmid).then(() => renderList());

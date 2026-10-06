@@ -2829,9 +2829,11 @@ body.sp-resizing * {
   margin-bottom: 0;
 }
 
+/* Mindestbreite nach dem laengsten Tagesnamen: "Donnerstag" braucht mit
+   Haekchen und Innenabstand gut 144px - bei 120px wurde er abgeschnitten. */
 .sp-days-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--spacing-sm);
   margin-top: var(--spacing-sm);
 }

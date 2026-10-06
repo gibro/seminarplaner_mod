@@ -1875,14 +1875,32 @@ class api extends external_api {
             throw new invalid_parameter_exception('Keine Berechtigung für die gewählte Sammlung');
         }
 
-        $attachments = self::load_global_method_material_attachments([(int)$row->id]);
-        $mapped = self::map_global_method_record($row, 0, 0, $attachments[(int)$row->id] ?? []);
-
         $service = new method_card_service();
         $existing = $service->get_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id, (int)$resolved['context']->id);
         if (!is_array($existing)) {
             $existing = [];
         }
+
+        // Gibt es lokal schon eine Einheit mit diesem Titel, wird sie verwendet
+        // statt eine zweite gleichnamige Kopie anzulegen - wie beim Import
+        // (Upsert per Titel) und den Vorschlaegen, die solche globalen Treffer
+        // ohnehin ausblenden.
+        $wanted = \core_text::strtolower(trim((string)($row->title ?? '')));
+        foreach ($existing as $card) {
+            if (is_array($card) && isset($card['id']) && $wanted !== ''
+                    && \core_text::strtolower(trim((string)($card['titel'] ?? ''))) === $wanted) {
+                return [
+                    'success' => true,
+                    'localid' => (string)$card['id'],
+                    'titel' => (string)$card['titel'],
+                    'totalcount' => count($existing),
+                    'alreadylocal' => true,
+                ];
+            }
+        }
+
+        $attachments = self::load_global_method_material_attachments([(int)$row->id]);
+        $mapped = self::map_global_method_record($row, 0, 0, $attachments[(int)$row->id] ?? []);
         $existing[] = $mapped;
         $service->save_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id, (int)$resolved['context']->id, $existing);
 
@@ -1891,6 +1909,7 @@ class api extends external_api {
             'localid' => (string)$mapped['id'],
             'titel' => (string)$mapped['titel'],
             'totalcount' => count($existing),
+            'alreadylocal' => false,
         ];
     }
 
@@ -1905,6 +1924,7 @@ class api extends external_api {
             'localid' => new external_value(PARAM_RAW, 'New local method card id'),
             'titel' => new external_value(PARAM_RAW, 'Adopted title'),
             'totalcount' => new external_value(PARAM_INT, 'Total local methods after adoption'),
+            'alreadylocal' => new external_value(PARAM_BOOL, 'A local unit with this title existed and was reused', VALUE_DEFAULT, false),
         ]);
     }
 

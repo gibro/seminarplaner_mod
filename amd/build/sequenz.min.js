@@ -15,8 +15,8 @@
  * @module mod_seminarplaner/sequenz
  */
 define(['core/ajax', 'core_user/repository', 'core/fragment', 'core/templates', 'mod_seminarplaner/lernzieleditor',
-    'mod_seminarplaner/livemodel'],
-function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
+    'mod_seminarplaner/livemodel', 'mod_seminarplaner/planmemory'],
+function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, PlanMemory) {
     const DEFAULT_BOUNDARY_MIN = 750; // 12:30 fallback, same rule as the PHP converter.
     const ANCHORS = ['vormittag', 'nachmittag'];
     const DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
@@ -848,7 +848,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             this.initDramaToggle();
             this.initSetupPanel();
             this.initPublishControl();
-            this.loadGrids(this.requestedGrid || undefined);
+            this.loadGrids(this.requestedGrid || PlanMemory.read(this.cmid) || undefined);
             this.loadEnrichment();
             this.loadReferenten();
         }
@@ -1712,6 +1712,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                     state = {};
                 }
                 this.gridid = gridid;
+                PlanMemory.remember(this.cmid, gridid);
                 this.state = state;
                 this.sequenz = (state && typeof state.sequenz === 'object' && state.sequenz) ? state.sequenz : null;
                 this.normalizeSequenz();
@@ -4916,6 +4917,21 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                     this.deleteGoal(action.getAttribute('data-goalid') || '');
                 }
             });
+            // Enter im Eingabefeld fuegt das Ziel hinzu wie der Knopf daneben.
+            host.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' || !event.target || event.target.id !== 'sq-goal-new') {
+                    return;
+                }
+                event.preventDefault();
+                const text = event.target.value.trim();
+                if (text) {
+                    this.addGoal(text);
+                    const input = bySel('#sq-goal-new');
+                    if (input) {
+                        input.focus();
+                    }
+                }
+            });
             host.addEventListener('change', (event) => {
                 const checkbox = event.target.closest('.sq-goal-link__cb');
                 if (checkbox) {
@@ -5251,7 +5267,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                         }
                     });
                     this.applySuggestTarget(newid, target);
-                    this.setStatus('Übernommen und eingeplant.');
+                    this.setStatus(res.alreadylocal
+                        ? 'Eingeplant – die Einheit gab es schon in deiner Bibliothek.'
+                        : 'Übernommen und eingeplant.');
                 });
             }).catch(() => {
                 this.setStatus('Übernehmen aus der globalen Sammlung ist fehlgeschlagen.', true);
@@ -5662,7 +5680,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 budgetlabel = used > 0 ? `${used} Min. in einem entfallenden Abschnitt` : '';
             }
 
+            // Ein entfallender Abschnitt hat keine Uhrzeiten: gezaehlt ab dem
+            // Tagesbeginn standen dort sonst Zeiten des Nachmittags (13:00 …).
+            this.timesOff = anchoroff;
             let body = this.renderSequence(placements, anchorStart, seenBausteine);
+            this.timesOff = false;
             if (!placements.length) {
                 body = anchoroff
                     ? '<div class="sq-empty">Dieser Abschnitt entfällt an diesem Tag.</div>'
@@ -5671,7 +5693,16 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
 
             const hasNext = this.dayIndex * 2 + (isMorning ? 0 : 1) + 1 < this.dayCount() * 2;
             const movetarget = isMorning ? 'auf den Nachmittag' : 'auf den nächsten Vormittag';
-            const overrun = over > 0
+            const offnext = isMorning ? 'auf den Nachmittag' : 'auf den nächsten Tag';
+            const overrun = (anchoroff && used > 0)
+                ? `<div class="sq-overrun">
+                     <span><strong>Dieser Abschnitt entfällt an diesem Tag.</strong>
+                       Was hier noch steht, findet so nicht statt – verschiebe es ${offnext}.</span>
+                     ${hasNext ? `<button type="button" class="kg-btn kg-btn-primary"
+                       data-sq-action="overflow" data-anker="${ankername}">
+                       ${isMorning ? 'Alles auf den Nachmittag verschieben' : 'Alles auf den nächsten Tag verschieben'}</button>` : ''}
+                   </div>`
+                : over > 0
                 ? `<div class="sq-overrun">
                      <span><strong>+${over} Min. über ${overtarget}.</strong>
                        Die letzte Einheit wird ${movetarget} verschoben – oder geteilt und als Fortsetzung
@@ -6127,7 +6158,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 : `<div class="sq-time__dur">${duration}</div>`;
             return `
                 <div class="sq-time">
-                  <div class="sq-time__start">${minutesToLabel(startMin)}</div>
+                  <div class="sq-time__start">${this.timesOff ? '–' : minutesToLabel(startMin)}</div>
                   <div class="sq-time__durwrap">${dur}</div>
                   <div class="sq-time__unit">Min.</div>
                 </div>`;
@@ -6303,7 +6334,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
         renderPlacement(p, startMin, inBaustein) {
             const data = p.data;
             const duration = Math.max(0, Number(data.dauer) || 0);
-            const timelabel = `${minutesToLabel(startMin)}–${minutesToLabel(startMin + duration)}`;
+            const timelabel = this.timesOff
+                ? 'Abschnitt entfällt an diesem Tag'
+                : `${minutesToLabel(startMin)}–${minutesToLabel(startMin + duration)}`;
 
             if (data.typ === 'pause') {
                 return `
