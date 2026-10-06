@@ -184,6 +184,9 @@ define([], function() {
                   <span class="kg-tagsuggest__label">${highlight(entry.label, query)}</span>
                   <span class="kg-tagsuggest__count" title="So oft in der Bibliothek verwendet">${entry.count}</span>
                 </li>`).join('');
+            // Bündig unter dem Feld, auch wenn der umgebende Block Innenabstand hat.
+            list.style.left = `${input.offsetLeft}px`;
+            list.style.width = `${input.offsetWidth}px`;
             list.hidden = false;
             input.setAttribute('aria-expanded', 'true');
             setActive(-1);
