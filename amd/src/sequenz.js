@@ -5693,7 +5693,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const timespan = anchoroff
                 ? `entfällt (${isMorning ? 'Anreisetag' : 'Abreisetag'})`
                 : `${minutesToLabel(anchorStart)}–${minutesToLabel(anchorEnd)}`;
-            const overtarget = isMorning ? 'der Mittagspause' : 'dem Tagesende';
+            // Am Abreisetag endet der Tag mit dem Vormittag - dann gibt es keine
+            // Mittagspause, ueber die etwas hinausragen koennte.
+            const overtarget = isMorning && !this.anchorIsOff(this.dayIndex, 'nachmittag')
+                ? 'der Mittagspause'
+                : 'dem Tagesende';
             let budgetlabel = over > 0
                 ? `+${over} Min. über ${overtarget}`
                 : `${used} von ${budget} Min. belegt`;
