@@ -1,5 +1,6 @@
-define(['core/ajax', 'core/notification', 'mod_seminarplaner/lernzieleditor'],
-function(Ajax, Notification, LernzielEditor) {
+define(['core/ajax', 'core/notification', 'mod_seminarplaner/lernzieleditor', 'mod_seminarplaner/tagsuggest',
+    'mod_seminarplaner/multiextend'],
+function(Ajax, Notification, LernzielEditor, TagSuggest, MultiExtend) {
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
     const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -13,6 +14,7 @@ function(Ajax, Notification, LernzielEditor) {
         + ` aria-hidden="true" focusable="false">${paths}</svg>`;
     const ML_MENU_ICONS = {
         edit: mlMenuIcon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/>'),
+        copy: mlMenuIcon('<rect x="9" y="9" width="12" height="12" rx="1"/><path d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"/>'),
         replace: mlMenuIcon('<path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 21h14"/>'),
         lock: mlMenuIcon('<rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V7a4 4 0 018 0v4"/>'),
         remove: mlMenuIcon('<path d="M6 6l12 12M18 6L6 18"/>'),
@@ -333,8 +335,16 @@ function(Ajax, Notification, LernzielEditor) {
                         return;
                     }
                     const mapped = normalizedMap[normalizeMultiToken(value)];
-                    if (mapped && !resolved.includes(mapped)) {
-                        resolved.push(mapped);
+                    if (mapped) {
+                        if (!resolved.includes(mapped)) {
+                            resolved.push(mapped);
+                        }
+                        return;
+                    }
+                    // Erweiterbares Feld: einen eigenen Wert als Option aufnehmen statt ihn zu verwerfen.
+                    const custom = MultiExtend.isExtensible(dropdown) ? MultiExtend.ensureOption(dropdown, value) : null;
+                    if (custom && !resolved.includes(custom.value)) {
+                        resolved.push(custom.value);
                     }
                 });
                 cleanvalues = resolved;
@@ -412,14 +422,13 @@ function(Ajax, Notification, LernzielEditor) {
                     }
                 });
             }
-            dropdown.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
-                checkbox.addEventListener('change', () => {
-                    const selected = Array.from(dropdown.querySelectorAll('[data-kg-form-multi-option="1"]:checked'))
-                        .map((cb) => String(cb.value || '').trim())
-                        .filter(Boolean);
-                    setFormMultiDropdownValues(selector, selected);
-                });
+            // Delegiert, damit auch später angelegte Optionen (multiextend) greifen.
+            dropdown.addEventListener('change', (event) => {
+                if (event.target.matches('[data-kg-form-multi-option="1"]')) {
+                    setFormMultiDropdownValues(selector, MultiExtend.selectedValues(dropdown));
+                }
             });
+            MultiExtend.bindAdder(dropdown, (selected) => setFormMultiDropdownValues(selector, selected));
             const searchinput = dropdown.querySelector('[data-kg-form-multi-search="1"]');
             if (searchinput) {
                 searchinput.addEventListener('input', () => {
@@ -1100,6 +1109,8 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                       <button type="button" class="sq-menu__item"
                         data-act="edit">${ML_MENU_ICONS.edit}<span>Bearbeiten</span></button>
                       <button type="button" class="sq-menu__item"
+                        data-act="copy">${ML_MENU_ICONS.copy}<span>Kopieren</span></button>
+                      <button type="button" class="sq-menu__item"
                         data-act="overwrite-import">${ML_MENU_ICONS.replace}<span>Aus Datei ersetzen…</span></button>
                       ${freezeaction}
                       <button type="button" class="sq-menu__item sq-menu__item--danger"
@@ -1139,6 +1150,7 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
             const editbtn = card.querySelector('[data-act="edit"]');
             const freezebtn = card.querySelector('[data-act="freeze"]');
             const deletebtn = card.querySelector('[data-act="delete"]');
+            const copybtn = card.querySelector('[data-act="copy"]');
             const overwritebtn = card.querySelector('[data-act="overwrite-import"]');
             card.addEventListener('dragstart', (event) => {
                 if (event.target.closest('.ml-card-menu, button, input, select, textarea, a')) {
@@ -1235,6 +1247,15 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                     toggleMethodFreeze(m.id).catch((e) => {
                         Notification.exception(e);
                         setStatus('Fixieren fehlgeschlagen.', true);
+                    });
+                });
+            }
+            if (copybtn) {
+                copybtn.addEventListener('click', () => {
+                    closeMenu(copybtn);
+                    copyMethod(m.id).catch((e) => {
+                        Notification.exception(e);
+                        setStatus('Kopieren fehlgeschlagen.', true);
                     });
                 });
             }
@@ -2054,6 +2075,54 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
         }
     };
 
+    // Titel für eine Kopie, der in der Bibliothek noch nicht vorkommt - der Import
+    // gleicht Einheiten über den Titel ab, zwei gleichnamige würden zusammenfallen.
+    const copyTitleFor = (title) => {
+        const base = String(title || '(ohne Titel)').trim().replace(/\s*\(Kopie(?: \d+)?\)$/, '');
+        const taken = new Set(methods.map((m) => String(m.titel || '').trim().toLowerCase()));
+        let candidate = `${base} (Kopie)`;
+        for (let n = 2; taken.has(candidate.toLowerCase()); n++) {
+            candidate = `${base} (Kopie ${n})`;
+        }
+        return candidate;
+    };
+
+    // Legt eine eigenständige Kopie direkt hinter dem Original an. Die Kopie ist
+    // eine lokale Einheit: ohne Verknüpfung zur globalen Sammlung bzw. zum
+    // Seminarkonzept und ohne Alternativen-Paare. Die Anhänge dupliziert der
+    // Server (_copyfrom), damit Original und Kopie getrennte Dateien haben.
+    const copyMethod = async (id) => {
+        const idx = methods.findIndex((m) => String(m.id) === String(id));
+        if (idx < 0) {
+            return;
+        }
+        const source = methods[idx];
+        const copy = touchMethod(JSON.parse(JSON.stringify(source)));
+        copy.id = uid();
+        copy.titel = copyTitleFor(source.titel);
+        copy.alternativen = [];
+        copy._copyfrom = String(source.id);
+        delete copy._kgsync;
+        delete copy._kgkonzept;
+        delete copy.materialiendraftitemid;
+        delete copy.h5pdraftitemid;
+
+        const previousMethods = methods.slice();
+        methods.splice(idx + 1, 0, copy);
+        renderList();
+        try {
+            await persist(runtimeCmid);
+        } catch (error) {
+            methods = previousMethods;
+            renderList();
+            throw error;
+        }
+        await loadMethods(runtimeCmid);
+        setStatus(isKonzeptCard(source)
+            ? `Kopie "${copy.titel}" unter „Lokale Seminareinheiten" angelegt.`
+            : `Kopie "${copy.titel}" angelegt und gespeichert.`, false);
+    };
+
     const toggleMethodFreeze = async (id) => {
         const idx = methods.findIndex((m) => String(m.id) === String(id));
         if (idx < 0) {
@@ -2221,6 +2290,7 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                 return normalized;
             });
             normalizeMethodAlternatives();
+            MultiExtend.addLibraryValues(methods, splitMulti);
             renderList();
             setStatus(`Seminareinheiten geladen (${methods.length}).`, false);
         });
@@ -2387,8 +2457,12 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                 </div>
                 <div class="ml-card-footer">
                   <span class="gl-card__source">Aus „${escapeHtml(m.setname)}"</span>
-                  <button type="button" class="kg-btn kg-btn-primary gl-card__adopt" data-gl-adopt="${m.methodid}">
-                    Übernehmen</button>
+                  <span class="gl-card__actions">
+                    <button type="button" class="ml-card-details" data-gl-details="${m.methodid}">Details <span
+                      class="ml-card-details__chevron" aria-hidden="true">›</span></button>
+                    <button type="button" class="kg-btn kg-btn-primary gl-card__adopt" data-gl-adopt="${m.methodid}">
+                      Übernehmen</button>
+                  </span>
                 </div>
               </div>`;
         }).join('');
@@ -2399,24 +2473,173 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
     };
 
     const adoptGlobalMethod = (cmid, methodid, button) => {
-        if (button) {
-            button.disabled = true;
-            button.textContent = 'Übernehme …';
+        // Karte und Detail-Modal tragen denselben Knopf - beide zeigen den Zustand.
+        const buttons = Array.from(document.querySelectorAll(`[data-gl-adopt="${methodid}"]`));
+        if (button && !buttons.includes(button)) {
+            buttons.push(button);
         }
+        const setButtons = (text, disabled) => buttons.forEach((b) => {
+            b.disabled = disabled;
+            b.textContent = text;
+        });
+        setButtons('Übernehme …', true);
         asCall('mod_seminarplaner_adopt_global_method', {cmid, methodid}).then((result) => {
-            setGlobalStatus(`„${result.titel}" ist jetzt als eigene Kopie in deinem Bestand.`);
-            if (button) {
-                button.textContent = '✓ Übernommen';
+            setGlobalStatus(result.alreadylocal
+                ? `„${result.titel}" ist bereits in deinem Bestand – es wurde keine zweite Kopie angelegt.`
+                : `„${result.titel}" ist jetzt als eigene Kopie in deinem Bestand.`);
+            setButtons(result.alreadylocal ? '✓ Schon vorhanden' : '✓ Übernommen', true);
+            const hint = bySel('#gl-detail-local');
+            if (hint && Number(hint.getAttribute('data-methodid')) === methodid) {
+                hint.classList.add('kg-hidden');
             }
             // Den lokalen Bestand oben direkt auffrischen, damit die Kopie sichtbar ist.
             return loadMethods(cmid).then(() => renderList());
         }).catch((e) => {
             Notification.exception(e);
             setGlobalStatus('Übernehmen fehlgeschlagen.', true);
-            if (button) {
-                button.disabled = false;
-                button.textContent = 'Übernehmen';
+            setButtons('Übernehmen', false);
+        });
+    };
+
+    // ---- Detail-Modal der Methodensammlung ----
+    // Zeigt alle Inhalte einer globalen Methode, damit man vor dem Übernehmen
+    // entscheiden kann. Die vollen Texte lädt erst das Öffnen
+    // (get_global_method_details); die Liste kommt mit Kurzfassungen aus.
+    let glDetailModal = null;
+    let glDetailReturnFocus = null;
+
+    const closeGlobalDetail = () => {
+        if (!glDetailModal) {
+            return;
+        }
+        glDetailModal.classList.remove('sp-modal--visible');
+        glDetailModal.setAttribute('aria-hidden', 'true');
+        if (glDetailReturnFocus && typeof glDetailReturnFocus.focus === 'function') {
+            glDetailReturnFocus.focus();
+        }
+        glDetailReturnFocus = null;
+    };
+
+    const ensureGlobalDetailModal = (cmid) => {
+        if (glDetailModal) {
+            return glDetailModal;
+        }
+        const modal = document.createElement('div');
+        // moodle-has-zindex: siehe sequenz.php - sonst legen sich Moodles
+        // eigene Modale (core/modal) hinter dieses Overlay.
+        modal.className = 'sp-modal gl-detail moodle-has-zindex';
+        modal.setAttribute('aria-hidden', 'true');
+        modal.innerHTML = `
+            <div class="sp-modal__backdrop" data-gl-detail-close="1"></div>
+            <div class="sp-modal__dialog sp-modal__dialog--large" role="dialog" aria-modal="true"
+                aria-labelledby="gl-detail-title">
+                <header class="sp-modal__header">
+                    <h2 id="gl-detail-title">Methode</h2>
+                    <button type="button" class="sp-modal__close" data-gl-detail-close="1"
+                        aria-label="Details schließen">✕</button>
+                </header>
+                <div class="sp-modal__body sp-method-detail__body" id="gl-detail-body" aria-live="polite"></div>
+                <div class="sp-modal__actions gl-detail__actions">
+                    <button type="button" class="kg-btn" data-gl-detail-close="1">Schließen</button>
+                    <button type="button" class="kg-btn kg-btn-primary gl-card__adopt" id="gl-detail-adopt">
+                        Übernehmen</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (event) => {
+            if (event.target.closest('[data-gl-detail-close]')) {
+                closeGlobalDetail();
+                return;
             }
+            const adopt = event.target.closest('#gl-detail-adopt');
+            if (adopt && !adopt.disabled) {
+                adoptGlobalMethod(cmid, Number.parseInt(adopt.getAttribute('data-gl-adopt'), 10), adopt);
+            }
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && modal.classList.contains('sp-modal--visible')) {
+                closeGlobalDetail();
+            }
+        });
+        glDetailModal = modal;
+        return modal;
+    };
+
+    const isLocallyPresent = (titel) => {
+        const wanted = String(titel || '').trim().toLowerCase();
+        return wanted !== '' && methods.some((m) => String(m.titel || '').trim().toLowerCase() === wanted);
+    };
+
+    const buildGlobalDetailBody = (d) => {
+        const join = (list) => (Array.isArray(list) ? list.filter(Boolean).join(', ') : '');
+        const meta = [
+            {label: 'Zeitbedarf', value: d.zeitbedarf ? `${d.zeitbedarf} Min` : ''},
+            {label: 'Gruppengröße', value: d.gruppengroesse},
+            {label: 'Seminarphase', value: join(d.seminarphase)},
+            {label: 'Sozialform', value: join(d.sozialform)},
+            {label: 'Raum', value: join(d.raum)},
+            {label: 'Vorbereitung', value: d.vorbereitung},
+            {label: 'Autor:in', value: d.autor},
+        ].filter((entry) => String(entry.value || '').trim() !== '');
+        const sections = [
+            {title: 'Kurzbeschreibung', html: d.kurzbeschreibung},
+            {title: 'Lernziele', html: d.lernziele},
+            {title: 'Ablauf', html: d.ablauf},
+            {title: 'Material/Technik', html: d.materialtechnik},
+            {title: 'Risiken/Tipps', html: d.risiken},
+            {title: 'Debrief/Reflexion', html: d.debrief},
+        ].filter((entry) => stripHtml(entry.html || '').trim() !== '');
+        const tags = (d.tags || []).map((tag) => `<span class="ml-card-tag">${escapeHtml(tag)}</span>`).join('');
+        const files = (d.attachments || []).map((name) => `<li>${escapeHtml(name)}</li>`).join('');
+
+        return `
+            <p class="gl-card__source">Aus „${escapeHtml(d.setname)}"</p>
+            <p class="gl-detail__local${isLocallyPresent(d.titel) ? '' : ' kg-hidden'}" id="gl-detail-local"
+                data-methodid="${Number(d.methodid)}">
+                In deinem Bestand gibt es schon eine Einheit mit diesem Titel – „Übernehmen" legt keine zweite an.</p>
+            ${meta.length ? `<div class="sp-method-detail__meta">${meta.map((entry) =>
+                `<span class="sp-method-detail__meta-item sp-badge"><strong>${escapeHtml(entry.label)}:</strong> `
+                + `${escapeHtml(entry.value)}</span>`).join('')}</div>` : ''}
+            ${tags ? `<div class="ml-card-tags">${tags}</div>` : ''}
+            ${sections.length ? sections.map((entry) => `
+                <section class="sp-method-detail__section">
+                    <h3>${escapeHtml(entry.title)}</h3>
+                    <div class="sp-method-detail__text">${entry.html}</div>
+                </section>`).join('')
+                : '<p class="sp-method-detail__empty">Zu dieser Methode gibt es keine weiteren Beschreibungen.</p>'}
+            ${files ? `<section class="sp-method-detail__section">
+                    <h3>Materialien</h3>
+                    <ul class="gl-detail__files">${files}</ul>
+                </section>` : ''}`;
+    };
+
+    const openGlobalDetail = (cmid, methodid, trigger) => {
+        const modal = ensureGlobalDetailModal(cmid);
+        const listed = globalMethods.find((m) => m.methodid === methodid);
+        const title = modal.querySelector('#gl-detail-title');
+        const body = modal.querySelector('#gl-detail-body');
+        const adopt = modal.querySelector('#gl-detail-adopt');
+        title.textContent = listed ? listed.titel : 'Methode';
+        body.innerHTML = '<p class="sp-method-detail__empty">Details werden geladen …</p>';
+        // Den Zustand des Karten-Knopfs übernehmen (z. B. „✓ Übernommen").
+        const cardbtn = document.querySelector(`#gl-list [data-gl-adopt="${methodid}"]`);
+        adopt.setAttribute('data-gl-adopt', String(methodid));
+        adopt.disabled = cardbtn ? cardbtn.disabled : false;
+        adopt.textContent = cardbtn ? cardbtn.textContent.trim() : 'Übernehmen';
+        glDetailReturnFocus = trigger || null;
+        modal.classList.add('sp-modal--visible');
+        modal.removeAttribute('aria-hidden');
+        modal.querySelector('.sp-modal__close').focus();
+
+        asCall('mod_seminarplaner_get_global_method_details', {cmid, methodid}).then((details) => {
+            if (adopt.getAttribute('data-gl-adopt') !== String(methodid)) {
+                return; // Inzwischen eine andere Methode geöffnet.
+            }
+            title.textContent = details.titel || title.textContent;
+            body.innerHTML = buildGlobalDetailBody(details);
+        }).catch((e) => {
+            Notification.exception(e);
+            body.innerHTML = '<p class="sp-method-detail__empty kg-status-error">Details konnten nicht geladen werden.</p>';
         });
     };
 
@@ -2570,6 +2793,11 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                 const adopt = event.target.closest('[data-gl-adopt]');
                 if (adopt) {
                     adoptGlobalMethod(cmid, Number.parseInt(adopt.getAttribute('data-gl-adopt'), 10), adopt);
+                    return;
+                }
+                const details = event.target.closest('[data-gl-details]');
+                if (details) {
+                    openGlobalDetail(cmid, Number.parseInt(details.getAttribute('data-gl-details'), 10), details);
                 }
             });
         }
@@ -2861,6 +3089,8 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                     });
                 });
             }
+            // Beim Tippen die Tags vorschlagen, die die Bibliothek schon verwendet.
+            TagSuggest.attach(bySel('#ml-e-tags'), () => methods.flatMap((m) => splitMulti(m.tags)));
             // D62: geführter Lernziel-Editor am Lernziele-Feld des Editors –
             // Satz anhängen und die abgeleitete Seminarphase vorbelegen.
             const lzopen = bySel('#ml-lz-open-lernziele');

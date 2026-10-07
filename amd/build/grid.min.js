@@ -3527,7 +3527,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             const selectedName = select && select.selectedOptions && select.selectedOptions[0]
                 ? select.selectedOptions[0].textContent
                 : `#${gridid}`;
-            if (!window.confirm(`Soll der Seminarplan "${selectedName}" wirklich gelöscht werden?`)) {
+            const published = this.roterFadenState && this.roterFadenState.ispublished
+                && Number(this.roterFadenState.gridid) === Number(gridid);
+            const hint = published ? ' Er ist als Roter Faden veröffentlicht – die Veröffentlichung wird zurückgezogen.' : '';
+            if (!window.confirm(`Soll der Seminarplan "${selectedName}" wirklich gelöscht werden?${hint}`)) {
                 return;
             }
             this.closeConfigPanel();
@@ -3545,6 +3548,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                         this.setSavedState('Gespeichert: -');
                     }
                     this.setStatus('Seminarplan gelöscht.', false);
+                    // Das Loeschen kann die Veroeffentlichung zurueckgezogen haben.
+                    return this.loadRoterFadenState();
                 });
             }).catch((error) => {
                 Notification.exception(error);

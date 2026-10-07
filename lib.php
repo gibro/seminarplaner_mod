@@ -188,7 +188,9 @@ function seminarplaner_extend_settings_navigation(settings_navigation $settingsn
 
     $cmid = (int)$PAGE->cm->id;
     $context = context_module::instance($cmid);
-    if (has_capability('mod/seminarplaner:view', $context)) {
+    // Nur anbieten, was die Seite dahinter auch zulaesst - sonst fuehrten die
+    // Eintraege Teilnehmende (nur :view) geradewegs auf eine Fehlerseite.
+    if (has_capability('mod/seminarplaner:managemethods', $context)) {
         $modulenode->add(
             get_string('managemethodlibrarymenu', 'mod_seminarplaner'),
             new moodle_url('/mod/seminarplaner/methodlibrary.php', ['id' => $cmid]),
@@ -212,7 +214,12 @@ function seminarplaner_extend_settings_navigation(settings_navigation $settingsn
             'seminarplaner_review'
         );
     }
-    if (has_capability('mod/seminarplaner:view', $context)) {
+    // Gleiche Bedingung wie in importexport.php.
+    $canuseimportexport = has_capability('mod/seminarplaner:managemethods', $context)
+        || has_capability('mod/seminarplaner:managegrids', $context)
+        || has_capability('mod/seminarplaner:importfrommoddata', $context)
+        || has_capability('mod/seminarplaner:exporttomoddata', $context);
+    if ($canuseimportexport) {
         $modulenode->add(
             get_string('importexport', 'mod_seminarplaner'),
             new moodle_url('/mod/seminarplaner/importexport.php', ['id' => $cmid]),

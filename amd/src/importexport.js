@@ -1,4 +1,5 @@
-define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function(Ajax, Notification, Handout) {
+define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout', 'mod_seminarplaner/planmemory'],
+function(Ajax, Notification, Handout, PlanMemory) {
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
     const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -723,6 +724,13 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
                 opt.textContent = `${grid.name} (#${grid.id})`;
                 select.appendChild(opt);
             });
+            // Den in einem anderen Reiter gewaehlten Plan vorauswaehlen; geladen
+            // wird er ueber das change-Ereignis, sobald bind() gelaufen ist.
+            const remembered = PlanMemory.read(cmid);
+            if (remembered && grids.some((grid) => Number(grid.id) === remembered)) {
+                select.value = String(remembered);
+                select.setAttribute('data-preselected', '1');
+            }
         });
     };
 
@@ -2667,6 +2675,7 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
         if (pdfGrid) {
             pdfGrid.addEventListener('change', () => {
                 const gridid = Number.parseInt(pdfGrid.value || '0', 10) || 0;
+                PlanMemory.remember(cmid, gridid);
                 loadGridState(cmid, gridid).then(() => {
                     if (currentGridState && currentGridState.meta) {
                         if (bySel('#kg-pdf-title') && !bySel('#kg-pdf-title').value) {
@@ -2872,6 +2881,11 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/handout'], function
                 ]);
             }).then(() => {
                     bind(cmid);
+                    const pdfselect = bySel('#kg-pdf-grid');
+                    if (pdfselect && pdfselect.getAttribute('data-preselected') === '1') {
+                        pdfselect.removeAttribute('data-preselected');
+                        pdfselect.dispatchEvent(new Event('change'));
+                    }
                     step(1);
                     refreshGlobalSyncUi();
                     runDeepLinkExport(cmid);

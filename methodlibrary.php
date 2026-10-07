@@ -246,18 +246,12 @@ $bulkmultifields = [
         'Gruppenräume' => 'Gruppenräume',
         'akustisch ruhig' => 'akustisch ruhig',
     ], 'Raumanforderungen wählen', 'Raumanforderungen'],
-    'sozialform' => ['Sozialform', [
-        'Vortrag' => 'Vortrag',
-        'Diskussion' => 'Diskussion',
-        'Einzelarbeit' => 'Einzelarbeit',
-        'Partnerarbeit' => 'Partnerarbeit',
-        'Kleingruppen' => 'Kleingruppen',
-        'Galeriegang' => 'Galeriegang',
-        'Fishbowl' => 'Fishbowl',
-    ], 'Sozialformen wählen', 'Sozialformen'],
+    'sozialform' => ['Sozialform', seminarplaner_sozialform_options(), 'Sozialformen wählen', 'Sozialformen',
+        'Weitere Sozialform'],
 ];
 foreach ($bulkmultifields as $fieldname => $fielddef) {
     [$label, $options, $placeholder, $labelprefix] = $fielddef;
+    $addlabel = (string)($fielddef[4] ?? '');
     echo html_writer::start_div('field-card');
     echo html_writer::tag('label', $label, ['class' => 'kg-label']);
     echo html_writer::start_div('kg-two');
@@ -272,7 +266,7 @@ foreach ($bulkmultifields as $fieldname => $fielddef) {
     echo html_writer::tag('option', 'Ersetzen', ['value' => 'replace']);
     echo html_writer::end_tag('select');
     echo html_writer::start_div('kg-bulk-value kg-bulk-value--disabled', ['id' => 'ml-bulk-' . $fieldname . '-value']);
-    echo seminarplaner_render_multi_dropdown('ml-bulk-' . $fieldname, $options, $placeholder, $labelprefix);
+    echo seminarplaner_render_multi_dropdown('ml-bulk-' . $fieldname, $options, $placeholder, $labelprefix, $addlabel);
     echo html_writer::end_div();
     echo html_writer::end_div();
     echo html_writer::end_div();
@@ -400,7 +394,8 @@ echo html_writer::start_div('kg-ie-block kg-library-step', ['id' => 'gl-section'
 echo html_writer::tag('h4', 'Methodensammlungen');
 echo html_writer::tag('p', 'Stöbere in den Methoden aller veröffentlichten Methoden-Sammlungen – '
     . 'ohne sie vorher importieren zu müssen. „Übernehmen" legt sofort eine eigene Kopie '
-    . 'in deinem Bestand (Tab „Lokale Seminareinheiten") an; das globale Original bleibt unberührt.');
+    . 'in deinem Bestand (Tab „Lokale Seminareinheiten") an; das globale Original bleibt unberührt. '
+    . 'Gibt es dort schon eine Einheit mit demselben Titel, bleibt es bei dieser – eine zweite entsteht nicht.');
 echo '<label class="sp-filter"><span class="sp-filter__label">Suche</span>'
     . '<input id="gl-search" class="kg-input" type="search" placeholder="Titel, Beschreibung, Tags, Sammlung"></label>';
 echo html_writer::tag('div', '', ['id' => 'gl-facets', 'class' => 'gl-facets']);

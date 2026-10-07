@@ -2829,9 +2829,11 @@ body.sp-resizing * {
   margin-bottom: 0;
 }
 
+/* Mindestbreite nach dem laengsten Tagesnamen: "Donnerstag" braucht mit
+   Haekchen und Innenabstand gut 144px - bei 120px wurde er abgeschnitten. */
 .sp-days-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--spacing-sm);
   margin-top: var(--spacing-sm);
 }
@@ -2969,9 +2971,19 @@ body.sp-resizing * {
     margin-bottom: 20px;
   }
   
+  /* Schmal: Kacheln so breit wie ihr Tagesname, die Zeile auffuellend.
+     Zwei feste Spalten (je ~114px auf dem Handy) schnitten fast alle
+     Tagesnamen ab. */
   .sp-days-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .sp-days-grid .sp-day-checkbox {
+    flex: 1 1 auto;
+    gap: 6px;
+    padding: 8px 10px;
   }
   
   .sp-time-range {
@@ -6426,6 +6438,39 @@ body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
     cursor: default;
 }
 
+.gl-card__actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Detail-Modal der Methodensammlung */
+.gl-detail .sp-modal__body {
+    padding: 16px var(--spacing-xl);
+}
+
+.gl-detail .gl-card__source {
+    margin: 0;
+}
+
+.gl-detail__local {
+    margin: 0;
+    padding: 8px 12px;
+    border-left: 3px solid var(--ig-blue);
+    background: var(--ig-blue-soft);
+    font-size: 13px;
+}
+
+.gl-detail__files {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.gl-detail__actions {
+    margin-top: 0;
+    background: var(--color-background);
+}
+
 /* ==========================================================================
    D37: Statusliste laufender Einreichungen im Einreichen-Tab
    ========================================================================== */
@@ -8988,4 +9033,111 @@ details.sq-menu[open] > summary.sq-menu__btn {
 }
 .sq-unit__toggle svg {
     display: block;
+}
+
+/* Schmale Bildschirme (Handy): Die Aktionsleiste einer Einheit (Referent*in,
+   Phase, Bearbeiten, ⋮) braucht allein rund 300px und schrumpft nie
+   (flex: 0 0 auto) - der Titel bekam daneben Breite 0 und brach nach jedem
+   Buchstaben um, Bearbeiten und ⋮ lagen ausserhalb des Bildschirms. Hier
+   rutscht die Leiste in eine eigene Zeile unter den Titel; der Phasenstreifen
+   ist absolut gesetzt, damit er ueber beide Zeilen laeuft. */
+@media (max-width: 640px) {
+    .sq-row {
+        gap: 8px;
+    }
+    .sq-time {
+        width: 48px;
+        flex-basis: 48px;
+    }
+    .sq-row > .sq-unit {
+        flex-wrap: wrap;
+        position: relative;
+        padding-left: 6px;
+    }
+    .sq-row > .sq-unit > .sq-unit__phase {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+    }
+    .sq-row > .sq-unit > .sq-unit__actions {
+        flex: 1 1 100%;
+        min-width: 0;
+        justify-content: flex-end;
+        padding-top: 0;
+    }
+}
+
+/* ==========================================================================
+   Tag-Vorschläge beim Tippen (amd/src/tagsuggest.js)
+   ========================================================================== */
+.kg-tagsuggest-host {
+    position: relative;
+}
+
+.kg-tagsuggest {
+    position: absolute;
+    left: 0;
+    z-index: 30;
+    max-height: 260px;
+    overflow-y: auto;
+    margin: 2px 0 0;
+    padding: 4px 0;
+    list-style: none;
+    background: var(--color-background, #fff);
+    border: 1px solid var(--ig-midgray);
+    box-shadow: var(--ig-shadow-strong);
+}
+
+.kg-tagsuggest[hidden] {
+    display: none;
+}
+
+.kg-tagsuggest__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.kg-tagsuggest__item:hover,
+.kg-tagsuggest__item--active {
+    background: var(--ig-blue-soft);
+}
+
+.kg-tagsuggest__label strong {
+    font-weight: 700;
+}
+
+.kg-tagsuggest__count {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--ig-gray);
+}
+
+/* ==========================================================================
+   Erweiterbare Mehrfach-Dropdowns, z. B. eigene Sozialformen (amd/src/multiextend.js)
+   ========================================================================== */
+.kg-form-multi-add {
+    /* Bleibt am Panel-Boden sichtbar, auch wenn die Optionen scrollen. */
+    position: sticky;
+    bottom: -8px;
+    display: flex;
+    gap: 6px;
+    margin: 6px -8px -8px;
+    padding: 8px;
+    border-top: 1px solid var(--ig-lightgray);
+    background: #fff;
+}
+
+.kg-form-multi-add .kg-input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.kg-form-multi-add .kg-btn {
+    flex-shrink: 0;
 }

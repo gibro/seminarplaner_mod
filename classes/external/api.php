@@ -1567,6 +1567,127 @@ class api extends external_api {
     }
 
     /**
+     * Definiert die Eingabeparameter für die Detailansicht einer globalen Methode.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
+    public static function get_global_method_details_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'methodid' => new external_value(PARAM_INT, 'Global method id'),
+        ]);
+    }
+
+    /**
+     * Liefert alle Inhalte einer Methode aus einer veröffentlichten Sammlung, damit man
+     * vor dem Übernehmen hineinschauen kann. Reiner Lesezugriff; sichtbar ist nur, was
+     * auch browse_global_library dieser Aktivität zeigt.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $methodid ID der globalen Methode.
+     *
+     * @return array Felder der Methode; Textfelder als bereinigtes HTML.
+     */
+    public static function get_global_method_details(int $cmid, int $methodid): array {
+        global $DB;
+
+        $params = self::validate_parameters(self::get_global_method_details_parameters(), [
+            'cmid' => $cmid,
+            'methodid' => $methodid,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:view', $resolved['context']);
+
+        if (!self::global_plugin_available()) {
+            throw new invalid_parameter_exception('local_seminarplaner ist nicht installiert');
+        }
+        if (!self::can_view_global_methodsets($resolved['context'])) {
+            throw new invalid_parameter_exception('Keine Berechtigung für die globale Bibliothek');
+        }
+        $collected = self::collect_published_global_methods($resolved['course']);
+        $row = $collected['rows'][(int)$params['methodid']] ?? null;
+        if (!$row) {
+            throw new invalid_parameter_exception('Unbekannte Methode');
+        }
+        $set = $collected['sets'][(int)$row->methodsetid] ?? null;
+
+        $html = function($value) use ($resolved): string {
+            $value = trim((string)($value ?? ''));
+            return $value === '' ? '' : format_text($value, FORMAT_HTML, ['context' => $resolved['context']]);
+        };
+
+        // Nur die Dateinamen - zum Ansehen reicht, was dabei ist; geladen wird erst beim Übernehmen.
+        $attachments = [];
+        $itemids = $DB->get_fieldset_select(
+            'local_kgen_method_file',
+            'fileitemid',
+            'methodid = :methodid AND kind = :kind',
+            ['methodid' => (int)$row->id, 'kind' => 'material']
+        );
+        $itemids = array_values(array_unique(array_filter(array_map('intval', $itemids))));
+        if ($itemids) {
+            [$insql, $inparams] = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
+            $attachments = array_values(array_unique($DB->get_fieldset_select(
+                'files',
+                'filename',
+                "itemid {$insql} AND component = :component AND filearea = :filearea
+                     AND filename <> :dot AND filesize > 0",
+                $inparams + ['component' => 'local_seminarplaner', 'filearea' => 'method_material', 'dot' => '.']
+            )));
+            sort($attachments);
+        }
+
+        return [
+            'methodid' => (int)$row->id,
+            'setname' => $set ? (string)$set->displayname : '',
+            'titel' => trim(strip_tags((string)($row->title ?? ''))),
+            'seminarphase' => self::split_multi_text($row->seminarphase ?? '', true),
+            'zeitbedarf' => trim((string)($row->zeitbedarf ?? '')),
+            'gruppengroesse' => trim((string)($row->gruppengroesse ?? '')),
+            'sozialform' => self::split_multi_text($row->sozialform ?? ''),
+            'raum' => self::split_multi_text($row->raumanforderungen ?? ''),
+            'vorbereitung' => trim((string)($row->vorbereitung ?? '')),
+            'autor' => trim((string)($row->autor_kontakt ?? '')),
+            'tags' => self::split_multi_text($row->tags ?? ''),
+            'kurzbeschreibung' => $html($row->kurzbeschreibung ?? ''),
+            'lernziele' => $html($row->lernziele ?? ''),
+            'ablauf' => $html($row->ablauf ?? ''),
+            'materialtechnik' => $html($row->material_technik ?? ''),
+            'risiken' => $html($row->risiken_tipps ?? ''),
+            'debrief' => $html($row->debrief ?? ''),
+            'attachments' => $attachments,
+        ];
+    }
+
+    /**
+     * Beschreibt die Rückgabestruktur der Detailansicht einer globalen Methode.
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
+    public static function get_global_method_details_returns(): external_single_structure {
+        return new external_single_structure([
+            'methodid' => new external_value(PARAM_INT, 'Global method id'),
+            'setname' => new external_value(PARAM_TEXT, 'Method set display name'),
+            'titel' => new external_value(PARAM_TEXT, 'Title'),
+            'seminarphase' => new external_multiple_structure(new external_value(PARAM_TEXT, 'Phase')),
+            'zeitbedarf' => new external_value(PARAM_RAW, 'Duration'),
+            'gruppengroesse' => new external_value(PARAM_RAW, 'Group size'),
+            'sozialform' => new external_multiple_structure(new external_value(PARAM_RAW, 'Social form')),
+            'raum' => new external_multiple_structure(new external_value(PARAM_RAW, 'Room requirement')),
+            'vorbereitung' => new external_value(PARAM_RAW, 'Preparation'),
+            'autor' => new external_value(PARAM_RAW, 'Author / contact'),
+            'tags' => new external_multiple_structure(new external_value(PARAM_TEXT, 'Tag')),
+            'kurzbeschreibung' => new external_value(PARAM_RAW, 'Short description (HTML)'),
+            'lernziele' => new external_value(PARAM_RAW, 'Learning objectives (HTML)'),
+            'ablauf' => new external_value(PARAM_RAW, 'Procedure (HTML)'),
+            'materialtechnik' => new external_value(PARAM_RAW, 'Material and technology (HTML)'),
+            'risiken' => new external_value(PARAM_RAW, 'Risks and tips (HTML)'),
+            'debrief' => new external_value(PARAM_RAW, 'Debrief (HTML)'),
+            'attachments' => new external_multiple_structure(new external_value(PARAM_FILE, 'Attachment file name')),
+        ]);
+    }
+
+    /**
      * Definiert die Eingabeparameter für das Auflisten der importierten Seminarkonzepte.
      *
      * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
@@ -1875,14 +1996,32 @@ class api extends external_api {
             throw new invalid_parameter_exception('Keine Berechtigung für die gewählte Sammlung');
         }
 
-        $attachments = self::load_global_method_material_attachments([(int)$row->id]);
-        $mapped = self::map_global_method_record($row, 0, 0, $attachments[(int)$row->id] ?? []);
-
         $service = new method_card_service();
         $existing = $service->get_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id, (int)$resolved['context']->id);
         if (!is_array($existing)) {
             $existing = [];
         }
+
+        // Gibt es lokal schon eine Einheit mit diesem Titel, wird sie verwendet
+        // statt eine zweite gleichnamige Kopie anzulegen - wie beim Import
+        // (Upsert per Titel) und den Vorschlaegen, die solche globalen Treffer
+        // ohnehin ausblenden.
+        $wanted = \core_text::strtolower(trim((string)($row->title ?? '')));
+        foreach ($existing as $card) {
+            if (is_array($card) && isset($card['id']) && $wanted !== ''
+                    && \core_text::strtolower(trim((string)($card['titel'] ?? ''))) === $wanted) {
+                return [
+                    'success' => true,
+                    'localid' => (string)$card['id'],
+                    'titel' => (string)$card['titel'],
+                    'totalcount' => count($existing),
+                    'alreadylocal' => true,
+                ];
+            }
+        }
+
+        $attachments = self::load_global_method_material_attachments([(int)$row->id]);
+        $mapped = self::map_global_method_record($row, 0, 0, $attachments[(int)$row->id] ?? []);
         $existing[] = $mapped;
         $service->save_methods((int)$resolved['cm']->id, (int)$GLOBALS['USER']->id, (int)$resolved['context']->id, $existing);
 
@@ -1891,6 +2030,7 @@ class api extends external_api {
             'localid' => (string)$mapped['id'],
             'titel' => (string)$mapped['titel'],
             'totalcount' => count($existing),
+            'alreadylocal' => false,
         ];
     }
 
@@ -1905,6 +2045,7 @@ class api extends external_api {
             'localid' => new external_value(PARAM_RAW, 'New local method card id'),
             'titel' => new external_value(PARAM_RAW, 'Adopted title'),
             'totalcount' => new external_value(PARAM_INT, 'Total local methods after adoption'),
+            'alreadylocal' => new external_value(PARAM_BOOL, 'A local unit with this title existed and was reused', VALUE_DEFAULT, false),
         ]);
     }
 

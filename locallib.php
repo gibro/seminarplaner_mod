@@ -339,6 +339,24 @@ function seminarplaner_cleanup_invalid_fileprefs(int $userid): void {
 }
 
 /**
+ * Vorgegebene Sozialformen. Weitere legt man im Dropdown selbst an; sie stehen
+ * danach über die Bibliothek der Aktivität auch für andere Einheiten zur Wahl.
+ *
+ * @return array<string, string>
+ */
+function seminarplaner_sozialform_options(): array {
+    return [
+        'Vortrag' => 'Vortrag',
+        'Diskussion' => 'Diskussion',
+        'Einzelarbeit' => 'Einzelarbeit',
+        'Partnerarbeit' => 'Partnerarbeit',
+        'Kleingruppen' => 'Kleingruppen',
+        'Galeriegang' => 'Galeriegang',
+        'Fishbowl' => 'Fishbowl',
+    ];
+}
+
+/**
  * Canonical seminar phase options used by forms and filters.
  *
  * @return array<string, string>
@@ -565,14 +583,25 @@ function seminarplaner_render_tabs(int $cmid, string $active, ?context_module $c
  * @param string $labelprefix Prefix used by JS label updates.
  * @return string
  */
-function seminarplaner_render_multi_dropdown(string $fieldid, array $options, string $placeholder, string $labelprefix): string {
-    $out = html_writer::start_div('kg-tag-dropdown', [
+function seminarplaner_render_multi_dropdown(
+    string $fieldid,
+    array $options,
+    string $placeholder,
+    string $labelprefix,
+    string $addlabel = ''
+): string {
+    $attributes = [
         'id' => $fieldid . '-dropdown',
         'data-kg-form-multi-dropdown' => '1',
         'data-kg-field' => '#' . $fieldid,
         'data-kg-label-prefix' => $labelprefix,
         'data-kg-placeholder' => $placeholder,
-    ]);
+    ];
+    if ($addlabel !== '') {
+        // Erweiterbar: eigene Werte neben den vorgegebenen (amd/src/multiextend.js).
+        $attributes['data-kg-form-multi-extensible'] = '1';
+    }
+    $out = html_writer::start_div('kg-tag-dropdown', $attributes);
     $out .= html_writer::tag('button', $placeholder, [
         'type' => 'button',
         'class' => 'kg-input kg-tag-dropdown-toggle',
@@ -592,6 +621,23 @@ function seminarplaner_render_multi_dropdown(string $fieldid, array $options, st
         ]);
         $out .= html_writer::tag('span', s((string)$label));
         $out .= html_writer::end_tag('label');
+    }
+    if ($addlabel !== '') {
+        $out .= html_writer::start_div('kg-form-multi-add', ['data-kg-form-multi-add' => '1']);
+        $out .= html_writer::empty_tag('input', [
+            'type' => 'text',
+            'class' => 'kg-input',
+            'placeholder' => $addlabel . ' …',
+            'aria-label' => $addlabel,
+            'maxlength' => '80',
+            'data-kg-form-multi-add-input' => '1',
+        ]);
+        $out .= html_writer::tag('button', 'Hinzufügen', [
+            'type' => 'button',
+            'class' => 'kg-btn',
+            'data-kg-form-multi-add-button' => '1',
+        ]);
+        $out .= html_writer::end_div();
     }
     $out .= html_writer::end_div();
     $out .= html_writer::end_div();
@@ -662,10 +708,11 @@ function seminarplaner_render_unit_form_fields(string $prefix, array $options = 
         string $key,
         array $choices,
         string $placeholder,
-        string $labelprefix
+        string $labelprefix,
+        string $addlabel = ''
     ) use ($prefix, $open, $close): string {
         return $open($label, $key)
-            . seminarplaner_render_multi_dropdown($prefix . $key, $choices, $placeholder, $labelprefix)
+            . seminarplaner_render_multi_dropdown($prefix . $key, $choices, $placeholder, $labelprefix, $addlabel)
             . $close();
     };
     $select = static function (string $label, string $key, array $choices) use ($prefix, $open, $close): string {
@@ -738,15 +785,8 @@ function seminarplaner_render_unit_form_fields(string $prefix, array $options = 
     $out .= $alternativen();
     $out .= $text('Zeitbedarf (Minuten)', 'zeitbedarf');
     $out .= $multi('Seminarphase', 'seminarphase', seminarplaner_phase_options(), 'Seminarphasen wählen', 'Seminarphasen');
-    $out .= $multi('Sozialform', 'sozialform', [
-        'Vortrag' => 'Vortrag',
-        'Diskussion' => 'Diskussion',
-        'Einzelarbeit' => 'Einzelarbeit',
-        'Partnerarbeit' => 'Partnerarbeit',
-        'Kleingruppen' => 'Kleingruppen',
-        'Galeriegang' => 'Galeriegang',
-        'Fishbowl' => 'Fishbowl',
-    ], 'Sozialformen wählen', 'Sozialformen');
+    $out .= $multi('Sozialform', 'sozialform', seminarplaner_sozialform_options(),
+        'Sozialformen wählen', 'Sozialformen', 'Weitere Sozialform');
     $out .= html_writer::end_div();
 
     $out .= html_writer::start_tag('details', $processid !== ''

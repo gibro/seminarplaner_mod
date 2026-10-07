@@ -15,8 +15,9 @@
  * @module mod_seminarplaner/sequenz
  */
 define(['core/ajax', 'core_user/repository', 'core/fragment', 'core/templates', 'mod_seminarplaner/lernzieleditor',
-    'mod_seminarplaner/livemodel'],
-function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
+    'mod_seminarplaner/livemodel', 'mod_seminarplaner/planmemory', 'mod_seminarplaner/tagsuggest',
+    'mod_seminarplaner/multiextend'],
+function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, PlanMemory, TagSuggest, MultiExtend) {
     const DEFAULT_BOUNDARY_MIN = 750; // 12:30 fallback, same rule as the PHP converter.
     const ANCHORS = ['vormittag', 'nachmittag'];
     const DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
@@ -161,6 +162,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
         return `${String(Math.floor(clean / 60)).padStart(2, '0')}:${String(clean % 60).padStart(2, '0')}`;
     };
 
+    // Minuten aus einem Zeitbedarf lesen. Massgeblich ist die erste Zahl:
+    // Importierte Karten tragen auch Spannen wie "30 | 45" oder "30-45" - alle
+    // Ziffern zusammenzukleben machte daraus 3045 Minuten.
+    const parseMinutes = (value) => {
+        const match = String(value === undefined || value === null ? '' : value).match(/\d+/);
+        return match ? Number.parseInt(match[0], 10) : Number.NaN;
+    };
     const cardTitle = (card) => String((card && (card.titel || card.title)) || '');
 
     // Eine Einheit stammt aus einem globalen Seminarkonzept, wenn sie dessen
@@ -259,21 +267,27 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
         const hidden = bySel(selector);
         let clean = splitMultiValue(values);
         if (dropdown) {
-            // Werte case-insensitiv auf die Options-Schreibweise auflösen;
-            // Unbekanntes fällt weg (gleiche Regel wie im Bibliotheks-Editor).
-            const boxes = Array.from(dropdown.querySelectorAll('[data-kg-form-multi-option="1"]'));
+            // Werte case-insensitiv auf die Options-Schreibweise auflösen.
+            // Unbekanntes fällt weg - außer bei erweiterbaren Feldern
+            // (Sozialform): dort wird es zur eigenen Option (multiextend).
+            const extensible = MultiExtend.isExtensible(dropdown);
             const bynorm = {};
-            boxes.forEach((cb) => {
+            dropdown.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((cb) => {
                 bynorm[String(cb.value).trim().toLowerCase()] = String(cb.value);
             });
             const resolved = [];
             clean.forEach((value) => {
-                const mapped = bynorm[value.toLowerCase()];
+                let mapped = bynorm[value.toLowerCase()];
+                if (!mapped && extensible) {
+                    const custom = MultiExtend.ensureOption(dropdown, value);
+                    mapped = custom ? custom.value : '';
+                }
                 if (mapped && !resolved.includes(mapped)) {
                     resolved.push(mapped);
                 }
             });
             clean = resolved;
+            const boxes = Array.from(dropdown.querySelectorAll('[data-kg-form-multi-option="1"]'));
             const valueset = new Set(clean);
             boxes.forEach((cb) => {
                 cb.checked = valueset.has(String(cb.value));
@@ -326,14 +340,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 }
             });
         }
-        dropdown.querySelectorAll('[data-kg-form-multi-option="1"]').forEach((checkbox) => {
-            checkbox.addEventListener('change', () => {
-                const selected = Array.from(dropdown.querySelectorAll('[data-kg-form-multi-option="1"]:checked'))
-                    .map((cb) => String(cb.value || '').trim())
-                    .filter(Boolean);
-                setMultiDropdownValues(selector, selected);
-            });
+        // Delegiert, damit auch später angelegte Optionen (multiextend) greifen.
+        dropdown.addEventListener('change', (event) => {
+            if (event.target.matches('[data-kg-form-multi-option="1"]')) {
+                setMultiDropdownValues(selector, MultiExtend.selectedValues(dropdown));
+            }
         });
+        MultiExtend.bindAdder(dropdown, (selected) => setMultiDropdownValues(selector, selected));
         // Suchfeld (nur beim Alternativen-Dropdown): filtert die Optionen
         // live – greift auch für später dynamisch ergänzte Optionen.
         const searchinput = dropdown.querySelector('[data-kg-form-multi-search="1"]');
@@ -666,6 +679,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             // Statisches Einheiten-Modal (Rich-Text, D17/D50): Speichern,
             // Abbrechen/Schließen und Klick auf den Overlay-Hintergrund.
             bindUnitMultiDropdowns();
+            // Beim Tippen die Tags vorschlagen, die die Bibliothek schon verwendet.
+            TagSuggest.attach(bySel('#sq-e-tags'), () => this.methodCardList.flatMap((c) => splitMultiValue(c && c.tags)));
             // D62: geführter Lernziel-Editor am Lernziele-Feld des Einheiten-Modals.
             const lzopen = bySel('#sq-lz-open-lernziele');
             if (lzopen) {
@@ -841,7 +856,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             this.initDramaToggle();
             this.initSetupPanel();
             this.initPublishControl();
-            this.loadGrids(this.requestedGrid || undefined);
+            this.loadGrids(this.requestedGrid || PlanMemory.read(this.cmid) || undefined);
             this.loadEnrichment();
             this.loadReferenten();
         }
@@ -1607,7 +1622,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             const name = select && select.selectedOptions && select.selectedOptions[0]
                 ? select.selectedOptions[0].textContent
                 : `#${gridid}`;
-            if (!window.confirm(`Soll der Seminarplan „${name}" wirklich gelöscht werden?`)) {
+            const published = this.roterFadenState && this.roterFadenState.ispublished
+                && Number(this.roterFadenState.gridid) === Number(gridid);
+            const hint = published ? ' Er ist als Roter Faden veröffentlicht – die Veröffentlichung wird zurückgezogen.' : '';
+            if (!window.confirm(`Soll der Seminarplan „${name}" wirklich gelöscht werden?${hint}`)) {
                 return;
             }
             // Ungespeicherte Änderungen sind nach dem Löschen gegenstandslos –
@@ -1616,7 +1634,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             asCall('mod_seminarplaner_delete_grid', {cmid: this.cmid, gridid}).then(() => {
                 this.gridid = 0;
                 this.setStatus('Seminarplan gelöscht.');
-                return this.loadGrids();
+                // Das Loeschen kann die Veroeffentlichung zurueckgezogen haben.
+                return Promise.all([this.loadRoterFadenState(), this.loadGrids()]);
             }).catch(() => {
                 this.setStatus('Seminarplan löschen fehlgeschlagen.', true);
             });
@@ -1649,6 +1668,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                     decoded = [];
                 }
                 this.methodCardList = Array.isArray(decoded) ? decoded : [];
+                MultiExtend.addLibraryValues(this.methodCardList, splitMultiValue);
                 this.methodCardList.forEach((card) => {
                     if (card && card.id !== undefined) {
                         this.methodCards[String(card.id)] = card;
@@ -1701,6 +1721,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                     state = {};
                 }
                 this.gridid = gridid;
+                PlanMemory.remember(this.cmid, gridid);
                 this.state = state;
                 this.sequenz = (state && typeof state.sequenz === 'object' && state.sequenz) ? state.sequenz : null;
                 this.normalizeSequenz();
@@ -2381,6 +2402,23 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             return list;
         }
 
+        // D45: An An-/Abreisetagen hat ein Abschnitt kein Zeitfenster. Dorthin
+        // darf nichts verschoben werden - weder per Pfeil noch per Ueberlauf;
+        // Drag & Drop sperrt ihn schon (dropTarget).
+        anchorIsOff(dayIdx, ankername) {
+            return this.anchorBudget(this.dayFrame(dayIdx), ankername) === 0;
+        }
+
+        // Naechster stattfindender Abschnitt ab fromIdx in Richtung delta
+        // (+1/-1); entfallende werden uebersprungen. -1, wenn es keinen gibt.
+        openAnchorIdx(anchors, fromIdx, delta) {
+            let idx = fromIdx + delta;
+            while (idx >= 0 && idx < anchors.length && this.anchorIsOff(anchors[idx].dayIdx, anchors[idx].ankername)) {
+                idx += delta;
+            }
+            return idx >= 0 && idx < anchors.length ? idx : -1;
+        }
+
         locate(pid) {
             const anchors = this.anchorList();
             for (let i = 0; i < anchors.length; i++) {
@@ -2404,8 +2442,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 seq.splice(pos, 1);
                 seq.splice(target, 0, pid);
             } else {
-                const nextAnchorIdx = anchorIdx + delta;
-                if (nextAnchorIdx < 0 || nextAnchorIdx >= anchors.length) {
+                const nextAnchorIdx = this.openAnchorIdx(anchors, anchorIdx, delta);
+                if (nextAnchorIdx < 0) {
+                    this.setStatus(delta < 0
+                        ? 'Davor gibt es keinen Abschnitt, der stattfindet.'
+                        : 'Danach gibt es keinen Abschnitt, der stattfindet.');
                     return;
                 }
                 seq.splice(pos, 1);
@@ -2598,11 +2639,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             const frame = this.dayFrame(this.dayIndex);
             const anchors = this.anchorList();
             const anchorIdx = this.dayIndex * 2 + (ankername === 'vormittag' ? 0 : 1);
-            if (anchorIdx + 1 >= anchors.length) {
+            const targetIdx = this.openAnchorIdx(anchors, anchorIdx, 1);
+            if (targetIdx < 0) {
                 return;
             }
             const seq = anchors[anchorIdx].seq;
-            const nextSeq = anchors[anchorIdx + 1].seq;
+            const nextSeq = anchors[targetIdx].seq;
             const budget = this.anchorBudget(frame, ankername);
 
             let movedwhole = 0;
@@ -2631,8 +2673,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             if (!movedwhole && !didsplit) {
                 return;
             }
-            const targetname = anchors[anchorIdx + 1].ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag';
-            const targetday = this.sequenz.tage[anchors[anchorIdx + 1].dayIdx];
+            const targetname = anchors[targetIdx].ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag';
+            const targetday = this.sequenz.tage[anchors[targetIdx].dayIdx];
             let msg;
             if (didsplit && !movedwhole) {
                 msg = `Einheit geteilt – der Rest läuft am ${targetname} von Tag ${targetday.tag} als Fortsetzung weiter.`;
@@ -2729,7 +2771,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 if (cardTitle(card)) {
                     placement.titel = cardTitle(card);
                 }
-                const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
+                const duration = parseMinutes(card.zeitbedarf);
                 if (Number.isFinite(duration) && duration > 0) {
                     placement.dauer = duration;
                 }
@@ -3617,7 +3659,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             UNIT_FIELD_KEYS.forEach((key) => {
                 values[key] = this.getUnitField(key);
             });
-            const duration = Number.parseInt(String(values.zeitbedarf || '').replace(/\D+/g, ''), 10);
+            const duration = parseMinutes(values.zeitbedarf);
             Object.keys(values).forEach((key) => {
                 const incoming = values[key];
                 if (UNIT_MULTI_FIELDS.includes(key)) {
@@ -3731,7 +3773,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             root.querySelectorAll('[data-sq-field]').forEach((field) => {
                 values[field.getAttribute('data-sq-field')] = field.value;
             });
-            const duration = Number.parseInt(String(values.zeitbedarf || '').replace(/\D+/g, ''), 10);
+            const duration = parseMinutes(values.zeitbedarf);
             if (values.titel && values.titel.trim()) {
                 placement.titel = values.titel.trim();
             }
@@ -3906,7 +3948,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             if (!placement) {
                 return;
             }
-            const parsed = Number.parseInt(String(raw).replace(/\D+/g, ''), 10);
+            const parsed = parseMinutes(raw);
             const previous = Math.max(0, Number(placement.dauer) || 0);
             // Leeres oder unlesbares Feld heisst „nichts aendern", nicht „0" —
             // eine Einheit auf 0 zu setzen waere fast immer ein Vertipper.
@@ -3952,7 +3994,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 return;
             }
             this.setUnitFormError('');
-            const duration = Number.parseInt(String(values.zeitbedarf || '').replace(/\D+/g, ''), 10);
+            const duration = parseMinutes(values.zeitbedarf);
             // Feldform wie beim Anlegen in der Bibliothek (methods-Karten):
             // seminarphase/sozialform/raum sind Arrays (kommen so aus den
             // Multi-Dropdowns), der Rest Strings.
@@ -4364,7 +4406,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 return;
             }
             const row = (card) => {
-                const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
+                const duration = parseMinutes(card.zeitbedarf);
                 const phase = this.fieldValue(card, 'seminarphase');
                 const used = placedRefs.has(String(card.id));
                 const globalid = card._isglobal ? (Number(card._globalid) || 0) : 0;
@@ -4431,7 +4473,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             if (!card || !day) {
                 return;
             }
-            const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
+            const duration = parseMinutes(card.zeitbedarf);
             const eaid = this.uniqueId('eax', this.sequenz.einheitenauswahlen);
             // D21: alternatives stored on the unit become preselected candidates.
             const alternativen = (Array.isArray(card.alternativen) ? card.alternativen : [])
@@ -4905,6 +4947,21 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                     this.deleteGoal(action.getAttribute('data-goalid') || '');
                 }
             });
+            // Enter im Eingabefeld fuegt das Ziel hinzu wie der Knopf daneben.
+            host.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' || !event.target || event.target.id !== 'sq-goal-new') {
+                    return;
+                }
+                event.preventDefault();
+                const text = event.target.value.trim();
+                if (text) {
+                    this.addGoal(text);
+                    const input = bySel('#sq-goal-new');
+                    if (input) {
+                        input.focus();
+                    }
+                }
+            });
             host.addEventListener('change', (event) => {
                 const checkbox = event.target.closest('.sq-goal-link__cb');
                 if (checkbox) {
@@ -5037,7 +5094,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
         }
 
         cardDuration(card) {
-            const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
+            const duration = parseMinutes(card.zeitbedarf);
             return Number.isFinite(duration) && duration > 0 ? duration : null;
         }
 
@@ -5233,6 +5290,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                         decoded = [];
                     }
                     this.methodCardList = Array.isArray(decoded) ? decoded : [];
+                    MultiExtend.addLibraryValues(this.methodCardList, splitMultiValue);
                     this.methodCards = {};
                     this.methodCardList.forEach((card) => {
                         if (card && card.id !== undefined) {
@@ -5240,7 +5298,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                         }
                     });
                     this.applySuggestTarget(newid, target);
-                    this.setStatus('Übernommen und eingeplant.');
+                    this.setStatus(res.alreadylocal
+                        ? 'Eingeplant – die Einheit gab es schon in deiner Bibliothek.'
+                        : 'Übernommen und eingeplant.');
                 });
             }).catch(() => {
                 this.setStatus('Übernehmen aus der globalen Sammlung ist fehlgeschlagen.', true);
@@ -5643,7 +5703,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
             const timespan = anchoroff
                 ? `entfällt (${isMorning ? 'Anreisetag' : 'Abreisetag'})`
                 : `${minutesToLabel(anchorStart)}–${minutesToLabel(anchorEnd)}`;
-            const overtarget = isMorning ? 'der Mittagspause' : 'dem Tagesende';
+            // Am Abreisetag endet der Tag mit dem Vormittag - dann gibt es keine
+            // Mittagspause, ueber die etwas hinausragen koennte.
+            const overtarget = isMorning && !this.anchorIsOff(this.dayIndex, 'nachmittag')
+                ? 'der Mittagspause'
+                : 'dem Tagesende';
             let budgetlabel = over > 0
                 ? `+${over} Min. über ${overtarget}`
                 : `${used} von ${budget} Min. belegt`;
@@ -5651,23 +5715,44 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 budgetlabel = used > 0 ? `${used} Min. in einem entfallenden Abschnitt` : '';
             }
 
+            // Ein entfallender Abschnitt hat keine Uhrzeiten: gezaehlt ab dem
+            // Tagesbeginn standen dort sonst Zeiten des Nachmittags (13:00 …).
+            this.timesOff = anchoroff;
             let body = this.renderSequence(placements, anchorStart, seenBausteine);
+            this.timesOff = false;
             if (!placements.length) {
                 body = anchoroff
                     ? '<div class="sq-empty">Dieser Abschnitt entfällt an diesem Tag.</div>'
                     : '<div class="sq-empty">Noch keine Einheiten in diesem Abschnitt.</div>';
             }
 
-            const hasNext = this.dayIndex * 2 + (isMorning ? 0 : 1) + 1 < this.dayCount() * 2;
-            const movetarget = isMorning ? 'auf den Nachmittag' : 'auf den nächsten Vormittag';
-            const overrun = over > 0
+            // Ziel ist der naechste Abschnitt, der stattfindet - entfallende
+            // (An-/Abreisetag) werden uebersprungen, die Beschriftung folgt dem.
+            const anchorsAll = this.anchorList();
+            const targetIdx = this.openAnchorIdx(anchorsAll, this.dayIndex * 2 + (isMorning ? 0 : 1), 1);
+            const hasNext = targetIdx >= 0;
+            const target = hasNext ? anchorsAll[targetIdx] : null;
+            const targetlabel = !target ? ''
+                : target.dayIdx === this.dayIndex ? 'den Nachmittag'
+                : target.dayIdx === this.dayIndex + 1
+                    ? (target.ankername === 'vormittag' ? 'den nächsten Vormittag' : 'den nächsten Nachmittag')
+                    : `den ${target.ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag'} von Tag ${this.sequenz.tage[target.dayIdx].tag}`;
+            const overrun = (anchoroff && used > 0)
                 ? `<div class="sq-overrun">
-                     <span><strong>+${over} Min. über ${overtarget}.</strong>
-                       Die letzte Einheit wird ${movetarget} verschoben – oder geteilt und als Fortsetzung
-                       weitergeführt, wenn beide Teile sinnvoll bleiben.</span>
+                     <span><strong>Dieser Abschnitt entfällt an diesem Tag.</strong>
+                       Was hier noch steht, findet so nicht statt${hasNext ? ` – verschiebe es auf ${targetlabel}` : ''}.</span>
                      ${hasNext ? `<button type="button" class="kg-btn kg-btn-primary"
                        data-sq-action="overflow" data-anker="${ankername}">
-                       ${isMorning ? 'Auf den Nachmittag verschieben' : 'Auf den nächsten Tag verschieben'}</button>` : ''}
+                       Alles auf ${targetlabel} verschieben</button>` : ''}
+                   </div>`
+                : over > 0
+                ? `<div class="sq-overrun">
+                     <span><strong>+${over} Min. über ${overtarget}.</strong>
+                       ${hasNext ? `Die letzte Einheit wird auf ${targetlabel} verschoben – oder geteilt und als Fortsetzung
+                       weitergeführt, wenn beide Teile sinnvoll bleiben.` : 'Kürze oder entferne etwas – danach findet kein Abschnitt mehr statt.'}</span>
+                     ${hasNext ? `<button type="button" class="kg-btn kg-btn-primary"
+                       data-sq-action="overflow" data-anker="${ankername}">
+                       Auf ${targetlabel} verschieben</button>` : ''}
                    </div>`
                 : '';
 
@@ -5807,7 +5892,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 return '';
             }
             return open.map((card) => {
-                const duration = Number.parseInt(String(card.zeitbedarf || '').replace(/\D+/g, ''), 10);
+                const duration = parseMinutes(card.zeitbedarf);
                 const pkey = phaseKey(card.seminarphase);
                 const placebtn = placeholderpid
                     ? `<button type="button" class="kg-btn kg-btn-primary sq-unit__place"`
@@ -6116,7 +6201,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
                 : `<div class="sq-time__dur">${duration}</div>`;
             return `
                 <div class="sq-time">
-                  <div class="sq-time__start">${minutesToLabel(startMin)}</div>
+                  <div class="sq-time__start">${this.timesOff ? '–' : minutesToLabel(startMin)}</div>
                   <div class="sq-time__durwrap">${dur}</div>
                   <div class="sq-time__unit">Min.</div>
                 </div>`;
@@ -6292,7 +6377,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel) {
         renderPlacement(p, startMin, inBaustein) {
             const data = p.data;
             const duration = Math.max(0, Number(data.dauer) || 0);
-            const timelabel = `${minutesToLabel(startMin)}–${minutesToLabel(startMin + duration)}`;
+            const timelabel = this.timesOff
+                ? 'Abschnitt entfällt an diesem Tag'
+                : `${minutesToLabel(startMin)}–${minutesToLabel(startMin + duration)}`;
 
             if (data.typ === 'pause') {
                 return `

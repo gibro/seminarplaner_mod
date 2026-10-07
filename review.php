@@ -26,7 +26,10 @@ require_once(__DIR__ . '/bootstrap.php');
 require_once(__DIR__ . '/locallib.php');
 
 $id = required_param('id', PARAM_INT);
-$activity = seminarplaner_require_activity_context($id, 'mod/seminarplaner:view');
+// Einreichen ist Sache derer, die Seminareinheiten verwalten - dieselbe
+// Capability verlangen alle Einreichungs-Endpunkte. Mit blossem :view war die
+// Seite fuer Teilnehmende per URL erreichbar, ohne dass dort etwas ging.
+$activity = seminarplaner_require_activity_context($id, 'mod/seminarplaner:managemethods');
 $cm = $activity['cm'];
 $course = $activity['course'];
 $seminarplaner = $activity['seminarplaner'];
