@@ -3138,6 +3138,9 @@ body.sp-resizing * {
 }
 
 .sp-unit-slot__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: .95rem;
   line-height: 1.25;
 }
@@ -3150,11 +3153,6 @@ body.sp-resizing * {
   flex-wrap: wrap;
 }
 
-.sp-unit-slot__chevron {
-  margin-left: auto;
-  color: var(--ig-gray);
-  font-weight: 700;
-}
 
 .sp-unit-slot__content {
   padding: 10px;
@@ -4263,14 +4261,6 @@ select.kg-input.rf-select {
   outline-offset: 2px;
 }
 
-/* Einzige Bewegung im Roten Faden. */
-.rf-toggle .rf-icon:last-child {
-  transition: transform .15s;
-}
-
-.rf-block.is-open .rf-toggle .rf-icon:last-child {
-  transform: rotate(180deg);
-}
 
 /* ---- Themen eines Blocks ---- */
 .rf-themen {
@@ -4736,16 +4726,47 @@ select.kg-input.rf-select {
    Ein Indikator, der ueberall gleich aussehen soll, darf an keinem der beiden
    haengen. 12px entspricht dem Play-Dreieck aus dem Handoff. */
 .sq-tri {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex: 0 0 auto;
+    box-sizing: border-box;
+    width: 20px;
+    height: 20px;
+    border: 1px solid var(--ig-midgray, #9A9A9A);
+    background: #fff;
     color: var(--ig-anthracite, #3C3C3C);
-    font-size: 12px;
-    line-height: 1;
+    /* Das ▸ im Markup bleibt nur als Text-Rückfall stehen: seine Größe und
+       Form hängen von der Schrift ab (deshalb waren die Dreiecke je Stelle
+       verschieden). Gezeichnet wird das Dreieck unten per clip-path. */
+    font-size: 0;
+    line-height: 0;
+    vertical-align: middle;
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+}
+.sq-tri::before {
+    content: "";
+    width: 8px;
+    height: 10px;
+    background: currentColor;
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+    /* Optisch zentriert: der Schwerpunkt eines Dreiecks liegt links der Mitte. */
+    transform: translateX(1px);
     transition: transform .15s;
 }
-details[open] > summary .sq-tri,
-.sq-head[data-open="1"] .sq-tri {
-    transform: rotate(90deg);
+details[open] > summary .sq-tri::before,
+.sq-head[data-open="1"] .sq-tri::before,
+[aria-expanded="true"] .sq-tri::before {
+    transform: rotate(90deg) translateX(1px);
+}
+/* Wie der +/−-Schalter der Einheiten (.sq-unit__toggle): beim Überfahren rot. */
+summary:hover .sq-tri,
+summary:focus-visible .sq-tri,
+button:hover .sq-tri,
+button:focus-visible .sq-tri {
+    border-color: var(--ig-red, #E2001A);
+    color: var(--ig-red, #E2001A);
 }
 /* Nativen Marker abschalten, wo der eigene Indikator steht — sonst stehen zwei
    Pfeile nebeneinander. */
@@ -7317,16 +7338,6 @@ a.kg-btn-primary:focus {
     display: none;
 }
 
-.kg-review-diff > summary::before {
-    content: "\203A";
-    display: inline-block;
-    margin-right: 8px;
-    transition: transform 0.15s ease;
-}
-
-.kg-review-diff[open] > summary::before {
-    transform: rotate(90deg);
-}
 
 .kg-review-diff__body {
     padding: 4px 14px 14px;

@@ -1962,6 +1962,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             <button type="button" class="sp-unit-slot__header" data-action="toggle-unit-slot"
                                 data-slot-key="${escapeHtml(String(slot.key))}" aria-expanded="${expanded ? 'true' : 'false'}">
                                 <div class="sp-unit-slot__title">
+                                    ${ismobile ? '<span class="sq-tri" aria-hidden="true">▸</span>' : ''}
                                     <strong class="sp-titletext"
                                         data-full-title="${escapeHtml(unit.title)}">${escapeHtml(unit.title)}</strong>
                                 </div>
@@ -1970,7 +1971,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                                     <span
                                         class="sp-badge">${escapeHtml(String((unit.methods || []).length))} Seminareinheiten</span>
                                     ${slot.units.length > 1 ? '<span class="sp-badge">Alternative</span>' : ''}
-                                    <span class="sp-unit-slot__chevron" aria-hidden="true">${expanded ? '▾' : '▸'}</span>
                                 </div>
                             </button>
                             <div class="sp-unit-slot__content ${expanded ? '' : 'kg-hidden'}"

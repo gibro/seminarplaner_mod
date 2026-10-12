@@ -47,7 +47,6 @@ define([
             + 'M16 19a4 4 0 00-8 0"/>', 16),
         clock: () => icon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', 14),
         list: () => icon('<path d="M4 6h16M4 12h16M4 18h16"/>', 14, 2),
-        chevron: () => icon('<path d="M6 9l6 6 6-6"/>', 14, 2.2),
     };
 
     class RoterFadenView {
@@ -145,7 +144,7 @@ define([
                             <span class="rf-dur">${escapeHtml(Model.durationLabel(block.minutes))}</span>
                             <button type="button" class="rf-toggle" data-rf-toggle="${escapeHtml(block.id)}"
                                 aria-expanded="${open ? 'true' : 'false'}" aria-controls="rf-themen-${escapeHtml(block.id)}">
-                                ${ICONS.list()}<span>Themen (${block.themen.length})</span>${ICONS.chevron()}
+                                <span class="sq-tri" aria-hidden="true">▸</span>${ICONS.list()}<span>Themen (${block.themen.length})</span>
                             </button>
                         </div>
                         <ul class="rf-themen" id="rf-themen-${escapeHtml(block.id)}">
