@@ -6641,7 +6641,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const pair = this.renderAlternativePair(p, inBaustein);
             if (pair) {
                 return `
-                    <div class="sq-row"${inBaustein ? '' : ` draggable="true" data-sq-drag="${escapeHtml(p.pid)}"`}>
+                    <div class="sq-row" draggable="true" data-sq-drag="${escapeHtml(p.pid)}">
                       ${this.renderTimeColumn(startMin, duration, p.pid)}
                       ${pair}
                     </div>`;
@@ -6656,7 +6656,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             ].filter((m) => m).join('');
 
             return `
-                <div class="sq-row"${inBaustein ? '' : ` draggable="true" data-sq-drag="${escapeHtml(p.pid)}"`}>
+                <div class="sq-row" draggable="true" data-sq-drag="${escapeHtml(p.pid)}">
                   ${this.renderTimeColumn(startMin, duration, p.pid)}
                   <div class="sq-unit${inBaustein ? '' : ' sq-unit--standalone'}${detailsopen ? ' is-open' : ''}"
                     title="${escapeHtml(timelabel)}" data-sq-unit="${escapeHtml(p.pid)}">
