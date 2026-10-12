@@ -3345,6 +3345,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             if (!placement || !found) {
                 return;
             }
+            if (placement.typ === 'einheit' && placement.bausteinid && this.isUnfilled(placement)) {
+                this.removeBausteinPlaceholder(pid, found);
+                return;
+            }
             const question = placement.typ === 'pause'
                 ? 'Diese Pause aus dem Plan entfernen?'
                 : 'Diese Einheit aus dem Plan entfernen? Der Bibliothekseintrag bleibt erhalten.';
@@ -3366,6 +3370,62 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             this.setDirty(true);
             this.render();
             this.toast('Entfernt – die Zeiten sind nachgerückt.');
+        }
+
+        // ⋮ „Baustein entfernen" / „Reservierung entfernen". Hat der Baustein
+        // sonst nichts (leerer oder nur reservierter Baustein), geht der ganze
+        // zusammenhängende Platzhalter-Lauf und - wenn danach nirgends mehr
+        // etwas von ihm im Plan steht - auch der Baustein selbst. Steht der
+        // Platzhalter in einem teilweise gefüllten Baustein, geht nur die
+        // Reservierung; die Einheiten bleiben.
+        removeBausteinPlaceholder(pid, found) {
+            const placement = this.placement(pid);
+            const bid = placement.bausteinid;
+            const seq = found.anchors[found.anchorIdx].seq;
+            const run = this.findRunAt(seq, found.pos, bid);
+            const hasunits = run.some((rpid) => !this.isUnfilled(this.placement(rpid)));
+            const pids = hasunits ? [pid] : run.filter((rpid) => this.isUnfilled(this.placement(rpid)));
+            const question = hasunits
+                ? 'Die reservierte Zeit aus dem Baustein entfernen? Die Einheiten bleiben.'
+                : `Den leeren Baustein „${this.bausteinTitle(bid)}" aus dem Plan entfernen?`;
+            if (!window.confirm(question)) {
+                return;
+            }
+            pids.forEach((rpid) => {
+                const pos = seq.indexOf(rpid);
+                if (pos >= 0) {
+                    seq.splice(pos, 1);
+                }
+                const auswahlid = this.placement(rpid).einheitenauswahl;
+                delete this.sequenz.platzierungen[rpid];
+                if (auswahlid && !this.auswahlInUse(auswahlid)) {
+                    delete this.sequenz.einheitenauswahlen[auswahlid];
+                }
+            });
+            const baustein = this.baustein(bid);
+            if (baustein && !this.bausteinRuns(bid).length && !Object.keys(baustein.varianten || {}).length) {
+                delete this.sequenz.bausteine[bid];
+            }
+            this.setDirty(true);
+            this.render();
+            this.toast(hasunits ? 'Reservierung entfernt – die Zeiten sind nachgerückt.' : 'Leerer Baustein entfernt.');
+        }
+
+        // Der zusammenhängende Lauf des Bausteins `bid` um Position `pos`.
+        findRunAt(seq, pos, bid) {
+            const inrun = (i) => {
+                const p = this.placement(seq[i]);
+                return p && p.typ === 'einheit' && String(p.bausteinid || '') === String(bid);
+            };
+            let start = pos;
+            while (start > 0 && inrun(start - 1)) {
+                start--;
+            }
+            let end = pos;
+            while (end < seq.length - 1 && inrun(end + 1)) {
+                end++;
+            }
+            return seq.slice(start, end + 1);
         }
 
         cleanupSplitGroup(splitid) {
@@ -4508,10 +4568,29 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             if (!window.confirm('Die Überschrift auflösen? Die Einheiten bleiben an ihrem Platz im Plan.')) {
                 return;
             }
+            // Der Platzhalter eines leeren Bausteins (Dauer 0) ist keine
+            // Einheit - ohne Überschrift bliebe er als leere Einheit im Plan.
+            const anchors = this.anchorList();
             Object.keys(this.sequenz.platzierungen).forEach((pid) => {
-                if (String(this.sequenz.platzierungen[pid].bausteinid || '') === String(bid)) {
-                    this.sequenz.platzierungen[pid].bausteinid = null;
+                const placement = this.sequenz.platzierungen[pid];
+                if (String(placement.bausteinid || '') !== String(bid)) {
+                    return;
                 }
+                if (this.isUnfilled(placement) && !(Number(placement.dauer) > 0)) {
+                    anchors.forEach((anchor) => {
+                        const pos = anchor.seq.indexOf(pid);
+                        if (pos >= 0) {
+                            anchor.seq.splice(pos, 1);
+                        }
+                    });
+                    const auswahlid = placement.einheitenauswahl;
+                    delete this.sequenz.platzierungen[pid];
+                    if (auswahlid && !this.auswahlInUse(auswahlid)) {
+                        delete this.sequenz.einheitenauswahlen[auswahlid];
+                    }
+                    return;
+                }
+                placement.bausteinid = null;
             });
             delete this.sequenz.bausteine[bid];
             this.closeModal();
@@ -6234,7 +6313,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             items.push(item('move-up', 'up', 'Nach vorne schieben'));
             items.push(item('move-down', 'down', 'Nach hinten schieben'));
 
-            if (isunit && inBaustein) {
+            // Platzhalter eines Bausteins (leerer Baustein bzw. offene
+            // Reservierung) sind keine Einheit: Aufnehmen, Lösen oder eine
+            // Überschrift geben ergäbe eine leere Seminareinheit im Plan.
+            const placeholder = isunit && !!p.data.bausteinid && this.isUnfilled(p.data);
+            if (placeholder) {
+                items.push(item('remove', 'remove', inBaustein ? 'Reservierung entfernen' : 'Baustein entfernen'));
+            } else if (isunit && inBaustein) {
                 items.push(item('leave-baustein', 'unlink', 'Aus der Überschrift lösen'));
             } else if (isunit) {
                 const bid = this.adjacentBausteinId(pid);
@@ -6247,7 +6332,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 }
             }
 
-            items.push(item('remove', 'remove', 'Aus dem Plan entfernen'));
+            if (!placeholder) {
+                items.push(item('remove', 'remove', 'Aus dem Plan entfernen'));
+            }
 
             return `
                 <span class="sq-menu">
