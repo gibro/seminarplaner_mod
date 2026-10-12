@@ -2987,8 +2987,14 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         // Ein Baustein, dem gerade die letzte Einheit genommen wurde, soll nicht
         // spurlos verschwinden: er bekommt wieder den unsichtbaren Platzhalter
         // eines frisch angelegten leeren Bausteins (Dauer 0, leere Auswahl).
+        // Maßgeblich ist der Abschnitt, aus dem die Einheit kam: läuft der
+        // Baustein über mehrere Tage, bleibt sein Kasten hier trotzdem stehen.
         keepBausteinVisible(bid, seq, beforePid) {
-            if (!this.baustein(bid) || this.bausteinRuns(bid).length) {
+            const here = seq.some((pid) => {
+                const placement = this.placement(pid);
+                return placement && placement.typ === 'einheit' && String(placement.bausteinid || '') === String(bid);
+            });
+            if (!this.baustein(bid) || here) {
                 return;
             }
             const eaid = this.uniqueId('eax', this.sequenz.einheitenauswahlen);
@@ -3016,13 +3022,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const isSpent = (placement) => placement && placement.typ === 'einheit'
                 && placement.bausteinid && this.isUnfilled(placement)
                 && Math.max(0, Number(placement.dauer) || 0) === 0;
-            const hasContent = {};
-            anchors.forEach((anchor) => anchor.seq.forEach((pid) => {
-                const placement = this.placement(pid);
-                if (placement && placement.typ === 'einheit' && placement.bausteinid && !isSpent(placement)) {
-                    hasContent[String(placement.bausteinid)] = true;
-                }
-            }));
+            // Verbraucht ist ein Platzhalter nur, wenn in SEINER Gruppe (dem
+            // zusammenhängenden Lauf) echte Einheiten stehen - ein leerer Kasten
+            // an Tag 1 bleibt, auch wenn derselbe Baustein an Tag 2 gefüllt ist.
+            const runHasContent = (seq, pos, bid) => this.findRunAt(seq, pos, bid)
+                .some((rpid) => !isSpent(this.placement(rpid)));
             const inVariant = (pid) => Object.values(this.sequenz.bausteine || {}).some((b) =>
                 Object.values((b && b.varianten) || {}).some((v) =>
                     Array.isArray(v.platzierungen) && v.platzierungen.indexOf(pid) >= 0));
@@ -3031,7 +3035,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 for (let i = anchor.seq.length - 1; i >= 0; i--) {
                     const pid = anchor.seq[i];
                     const placement = this.placement(pid);
-                    if (!isSpent(placement) || !hasContent[String(placement.bausteinid)]) {
+                    if (!isSpent(placement) || !runHasContent(anchor.seq, i, placement.bausteinid)) {
                         continue;
                     }
                     anchor.seq.splice(i, 1);
