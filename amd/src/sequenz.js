@@ -1008,6 +1008,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 }
                 if (nameinput) {
                     nameinput.value = '';
+                    // Leer lassen geht: dann trägt der Plan diesen Namen.
+                    nameinput.placeholder = this.defaultPlanName();
                 }
                 this.fillSetupForm({preset: 'standard-week', days: GRID_PRESETS['standard-week'].days,
                     ankerzeiten: DEFAULT_ANKERZEITEN});
@@ -1142,15 +1144,28 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }
             if (this.setupMode === 'create') {
                 const nameinput = bySel('#sq-setup-name');
-                const name = nameinput ? nameinput.value.trim() : '';
-                if (!name) {
-                    this.setStatus('Bitte einen Namen für den Seminarplan eingeben.', true);
-                    return;
-                }
+                // Ohne Namen trotzdem anlegen - mit dem ersten freien
+                // „Seminarplan (n)".
+                const name = (nameinput ? nameinput.value.trim() : '') || this.defaultPlanName();
                 this.createPlan(name, config);
                 return;
             }
             this.applySetupToCurrentPlan(config);
+        }
+
+        // Erster freier Name der Form „Seminarplan (1)", „Seminarplan (2)" …
+        // in dieser Aktivität (Groß-/Kleinschreibung egal, archivierte zählen mit).
+        defaultPlanName() {
+            const taken = new Set((this.gridNames || []).map((name) => name.toLowerCase()));
+            const select = bySel('#sq-grid-select');
+            if (select) {
+                Array.from(select.options).forEach((opt) => taken.add(String(opt.textContent || '').trim().toLowerCase()));
+            }
+            let n = 1;
+            while (taken.has(`seminarplan (${n})`)) {
+                n++;
+            }
+            return `Seminarplan (${n})`;
         }
 
         createPlan(name, config) {
@@ -1484,6 +1499,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
 
         loadGrids(preferredid) {
             return asCall('mod_seminarplaner_list_grids', {cmid: this.cmid}).then((res) => {
+                // Alle Namen (auch archivierte) - Grundlage für „Seminarplan (n)".
+                this.gridNames = (res.grids || []).map((grid) => String(grid.name || '').trim());
                 const grids = (res.grids || []).filter((grid) => !Number(grid.isarchived));
                 const select = bySel('#sq-grid-select');
                 if (!select) {
