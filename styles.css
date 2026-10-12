@@ -6378,6 +6378,13 @@ body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
     box-shadow: 0 -3px 0 0 var(--color-primary);
 }
 
+/* Drop in den Kasten eines Bausteins: die Einheit wird Teil des Bausteins. */
+.sq-baustein.sq-drop-into {
+    outline: 2px dashed var(--color-primary);
+    outline-offset: 2px;
+    background: var(--sq-accent-bg, #fdf2f3);
+}
+
 /* Drop auf dem Anker-Body hängt ans Ende an. */
 .sq-anchor__body.sq-drop-append {
     outline: 2px dashed var(--color-primary);

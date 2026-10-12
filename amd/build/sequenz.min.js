@@ -2467,9 +2467,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         }
 
         // ---- D47: drag & drop as the second way to reorder (besides ↑/↓) --
-        // Draggable are the top-level rows of the current day: standalone
-        // units, breaks and whole modules. Units inside a module are not
-        // draggable (membership stays a deliberate action); the arrows
+        // Draggable are the rows of the current day: standalone units, breaks,
+        // whole modules and the units inside a module. Where a single unit is
+        // dropped decides its membership: inside a module's box it joins that
+        // module, anywhere else it is standalone (see dropTarget). The arrows
         // still cover fine-grained moves and cross-day moves.
 
         initDragAndDrop(container) {
@@ -2540,6 +2541,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 return null;
             }
             const ankername = anchorEl.getAttribute('data-anker') || 'vormittag';
+            const group = event.target.closest('.sq-row--baustein');
+            if (group) {
+                return this.bausteinDropTarget(event, ankername, group);
+            }
             const row = event.target.closest('[data-sq-drag]');
             if (row) {
                 return row.classList.contains('sq-dragging')
@@ -2550,6 +2555,53 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             return body ? {ankername, beforePid: '', el: body} : null;
         }
 
+        // Drop über einem Baustein. Nur eine einzelne Seminareinheit kann
+        // hinein: über einer enthaltenen Einheit landet sie davor, sonst im
+        // Kasten am Ende des Bausteins. Ausgenommen ist die obere Hälfte des
+        // Kopfs - dort sortiert sie wie bisher VOR den Baustein ein. Bausteine
+        // und Pausen kommen nie hinein (Bausteine verschachteln nicht, Pausen
+        // gehören keinem), für sie bleibt jeder Drop „vor den Baustein".
+        bausteinDropTarget(event, ankername, group) {
+            if (group.classList.contains('sq-dragging')) {
+                return null;
+            }
+            const grouppid = group.getAttribute('data-sq-drag');
+            const before = {ankername, beforePid: grouppid, el: group};
+            const bid = group.getAttribute('data-sq-group') || '';
+            if (!this.dragIsSingleUnit() || !bid) {
+                return before;
+            }
+            const box = event.target.closest('.sq-baustein');
+            if (!box) {
+                // Zeit-Spalte links neben dem Kasten.
+                return before;
+            }
+            const head = event.target.closest('.sq-baustein__head');
+            if (head) {
+                const rect = head.getBoundingClientRect();
+                if (event.clientY < rect.top + rect.height / 2) {
+                    return before;
+                }
+            }
+            const inner = event.target.closest('.sq-baustein__units [data-sq-drag]');
+            if (inner && group.contains(inner)) {
+                return inner.classList.contains('sq-dragging')
+                    ? null
+                    : {ankername, beforePid: inner.getAttribute('data-sq-drag'), el: inner, joinBid: bid};
+            }
+            return {ankername, beforePid: '', el: box, joinBid: bid, groupPid: grouppid};
+        }
+
+        // Wird gerade genau eine Seminareinheit gezogen (kein Baustein, keine
+        // Pause)? Nur sie kann ihre Baustein-Zugehörigkeit per Drop wechseln.
+        dragIsSingleUnit() {
+            if (!this.drag || this.drag.bid) {
+                return false;
+            }
+            const placement = this.placement(this.drag.pid);
+            return !!placement && placement.typ === 'einheit';
+        }
+
         markDropTarget(target) {
             const el = target ? target.el : null;
             if (this.dropMarkerEl === el) {
@@ -2557,14 +2609,18 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }
             this.clearDropMarkers();
             if (el) {
-                el.classList.add(target.beforePid ? 'sq-drop-before' : 'sq-drop-append');
+                let cls = target.beforePid ? 'sq-drop-before' : 'sq-drop-append';
+                if (target.joinBid && !target.beforePid) {
+                    cls = 'sq-drop-into';
+                }
+                el.classList.add(cls);
                 this.dropMarkerEl = el;
             }
         }
 
         clearDropMarkers() {
-            document.querySelectorAll('.sq-drop-before, .sq-drop-append').forEach((el) => {
-                el.classList.remove('sq-drop-before', 'sq-drop-append');
+            document.querySelectorAll('.sq-drop-before, .sq-drop-append, .sq-drop-into').forEach((el) => {
+                el.classList.remove('sq-drop-before', 'sq-drop-append', 'sq-drop-into');
             });
             this.dropMarkerEl = null;
         }
@@ -2607,18 +2663,50 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 return;
             }
             const dstSeq = anchors[dstAnchorIdx].seq;
+            let beforePid = target.beforePid;
+            if (target.joinBid && !beforePid) {
+                // „In den Kasten": ans Ende des Baustein-Laufs, also vor das
+                // erste Element dahinter.
+                beforePid = this.pidAfterRun(dstSeq, target.groupPid, target.joinBid, pids);
+            }
+
+            // Eine einzeln gezogene Einheit gehört danach dem Baustein, in den
+            // sie fiel - oder keinem. Ganze Bausteine und Pausen behalten ihre
+            // Zugehörigkeit.
+            const single = this.dragIsSingleUnit() ? this.placement(pids[0]) : null;
+            const oldBid = single ? (single.bausteinid || null) : null;
+            const newBid = single ? (target.joinBid || null) : oldBid;
+            const membershipChanges = String(oldBid || '') !== String(newBid || '');
+
+            let positionChanges = true;
             if (srcSeq === dstSeq) {
-                const refIdx = target.beforePid ? srcSeq.indexOf(target.beforePid) : srcSeq.length;
-                if (refIdx === found.pos || refIdx === found.pos + pids.length) {
-                    return;
+                const refIdx = beforePid ? srcSeq.indexOf(beforePid) : srcSeq.length;
+                positionChanges = !(refIdx === found.pos || refIdx === found.pos + pids.length);
+            }
+            if (!positionChanges && !membershipChanges) {
+                return;
+            }
+            // Der Nachbar hinter der alten Stelle - dort bekommt ein Baustein,
+            // dem die letzte Einheit herausgezogen wurde, seinen Platzhalter.
+            const oldNeighbor = srcSeq[found.pos + pids.length] || '';
+            if (positionChanges) {
+                srcSeq.splice(found.pos, pids.length);
+                let insertAt = beforePid ? dstSeq.indexOf(beforePid) : dstSeq.length;
+                if (insertAt < 0) {
+                    insertAt = dstSeq.length;
+                }
+                dstSeq.splice(insertAt, 0, ...pids);
+            }
+            if (membershipChanges) {
+                single.bausteinid = newBid;
+                if (newBid) {
+                    this.consumeReservation(newBid, dstSeq, Math.max(0, Number(single.dauer) || 0));
+                }
+                if (oldBid) {
+                    this.keepBausteinVisible(oldBid, srcSeq, oldNeighbor);
                 }
             }
-            srcSeq.splice(found.pos, pids.length);
-            let insertAt = target.beforePid ? dstSeq.indexOf(target.beforePid) : dstSeq.length;
-            if (insertAt < 0) {
-                insertAt = dstSeq.length;
-            }
-            dstSeq.splice(insertAt, 0, ...pids);
+
             if (found.anchorIdx !== dstAnchorIdx) {
                 const targetDay = this.sequenz.tage[anchors[dstAnchorIdx].dayIdx];
                 const targetAnkerName = target.ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag';
@@ -2626,6 +2714,114 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }
             this.setDirty(true);
             this.render();
+            if (membershipChanges && newBid) {
+                this.toast(`In „${this.bausteinTitle(newBid)}" aufgenommen.`);
+            } else if (membershipChanges) {
+                this.toast('Aus dem Baustein gelöst.');
+            }
+        }
+
+        // Das erste Element hinter dem Lauf des Bausteins `bid`, der bei
+        // `startPid` beginnt ('' = Ende des Abschnitts). Die gezogenen pids
+        // zählen nicht als Grenze - sie werden ohnehin herausgenommen.
+        pidAfterRun(seq, startPid, bid, skip) {
+            let i = seq.indexOf(startPid);
+            if (i < 0) {
+                return '';
+            }
+            while (i < seq.length) {
+                const placement = this.placement(seq[i]);
+                const inRun = skip.indexOf(seq[i]) >= 0
+                    || (placement && placement.typ === 'einheit' && String(placement.bausteinid || '') === String(bid));
+                if (!inRun) {
+                    break;
+                }
+                i++;
+            }
+            return i < seq.length ? seq[i] : '';
+        }
+
+        // Eine Einheit kommt in einen Baustein mit offener Reservierung: die
+        // Reservierung schrumpft um ihre Dauer, wie beim Platzieren über
+        // „＋ Platzieren" (addCardToBaustein). Ist sie aufgebraucht, räumt
+        // dropSpentPlaceholders den leeren Rest beim nächsten Zeichnen weg.
+        consumeReservation(bid, seq, minutes) {
+            let rest = minutes;
+            seq.forEach((pid) => {
+                const placement = this.placement(pid);
+                if (rest <= 0 || !placement || String(placement.bausteinid || '') !== String(bid)
+                        || !this.isUnfilled(placement)) {
+                    return;
+                }
+                const dauer = Math.max(0, Number(placement.dauer) || 0);
+                const take = Math.min(dauer, rest);
+                placement.dauer = dauer - take;
+                rest -= take;
+            });
+        }
+
+        // Ein Baustein, dem gerade die letzte Einheit genommen wurde, soll nicht
+        // spurlos verschwinden: er bekommt wieder den unsichtbaren Platzhalter
+        // eines frisch angelegten leeren Bausteins (Dauer 0, leere Auswahl).
+        keepBausteinVisible(bid, seq, beforePid) {
+            if (!this.baustein(bid) || this.bausteinRuns(bid).length) {
+                return;
+            }
+            const eaid = this.uniqueId('eax', this.sequenz.einheitenauswahlen);
+            this.sequenz.einheitenauswahlen[eaid] = {kandidaten: [], aktiv: null};
+            const pid = this.uniqueId('px', this.sequenz.platzierungen);
+            this.sequenz.platzierungen[pid] = {
+                typ: 'einheit',
+                bausteinid: bid,
+                einheitenauswahl: eaid,
+                titel: '',
+                dauer: 0,
+            };
+            const at = beforePid ? seq.indexOf(beforePid) : -1;
+            seq.splice(at >= 0 ? at : seq.length, 0, pid);
+        }
+
+        // Ein leerer Baustein hält seine Stelle mit einem Platzhalter ohne
+        // Dauer (createEmptyBaustein). Sobald der Baustein eine echte Einheit
+        // hat - egal ob über „Einheit einplanen", „In … aufnehmen" oder Drag &
+        // Drop -, ist dieser Platzhalter verbraucht. Blieb er stehen, zeigte
+        // der Baustein eine leere Zeile „Noch offen · reserviert" mit 0 Min.
+        // Heilt auch bestehende Pläne. Rückgabe: true, wenn etwas entfernt wurde.
+        dropSpentPlaceholders() {
+            const anchors = this.anchorList();
+            const isSpent = (placement) => placement && placement.typ === 'einheit'
+                && placement.bausteinid && this.isUnfilled(placement)
+                && Math.max(0, Number(placement.dauer) || 0) === 0;
+            const hasContent = {};
+            anchors.forEach((anchor) => anchor.seq.forEach((pid) => {
+                const placement = this.placement(pid);
+                if (placement && placement.typ === 'einheit' && placement.bausteinid && !isSpent(placement)) {
+                    hasContent[String(placement.bausteinid)] = true;
+                }
+            }));
+            const inVariant = (pid) => Object.values(this.sequenz.bausteine || {}).some((b) =>
+                Object.values((b && b.varianten) || {}).some((v) =>
+                    Array.isArray(v.platzierungen) && v.platzierungen.indexOf(pid) >= 0));
+            let changed = false;
+            anchors.forEach((anchor) => {
+                for (let i = anchor.seq.length - 1; i >= 0; i--) {
+                    const pid = anchor.seq[i];
+                    const placement = this.placement(pid);
+                    if (!isSpent(placement) || !hasContent[String(placement.bausteinid)]) {
+                        continue;
+                    }
+                    anchor.seq.splice(i, 1);
+                    if (!inVariant(pid)) {
+                        const auswahlid = placement.einheitenauswahl;
+                        delete this.sequenz.platzierungen[pid];
+                        if (auswahlid && !this.auswahlInUse(auswahlid)) {
+                            delete this.sequenz.einheitenauswahlen[auswahlid];
+                        }
+                    }
+                    changed = true;
+                }
+            });
+            return changed;
         }
 
         // C1: resolve an anchor overflow. Trailing placements move into the
@@ -3281,6 +3477,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 return;
             }
             placement.bausteinid = bid;
+            const found = this.locate(pid);
+            if (found) {
+                this.consumeReservation(bid, found.anchors[found.anchorIdx].seq, Math.max(0, Number(placement.dauer) || 0));
+            }
             this.setDirty(true);
             this.render();
             this.toast(`In „${(this.baustein(bid) || {}).titel || 'Baustein'}" aufgenommen.`);
@@ -3291,7 +3491,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             if (!placement || !placement.bausteinid) {
                 return;
             }
+            const oldbid = placement.bausteinid;
             placement.bausteinid = null;
+            const found = this.locate(pid);
+            if (found) {
+                const seq = found.anchors[found.anchorIdx].seq;
+                this.keepBausteinVisible(oldbid, seq, seq[found.pos + 1] || '');
+            }
             this.setDirty(true);
             this.render();
             this.toast('Aus dem Baustein gelöst.');
@@ -5636,6 +5842,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             // Eindeutige Reservierungen aus der Migration selbst füllen, statt
             // dafür einen Klick zu verlangen (heilt auch bestehende Pläne).
             if (this.autoFillObviousReservations()) {
+                this.setDirty(true);
+            }
+
+            // Verbrauchte Platzhalter leerer Bausteine wegräumen.
+            if (this.dropSpentPlaceholders()) {
                 this.setDirty(true);
             }
 
