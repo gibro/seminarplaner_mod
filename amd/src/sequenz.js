@@ -2462,8 +2462,61 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                     : 'Nachmittag';
                 this.setStatus(`Verschoben: jetzt am ${targetAnkerName} von Tag ${targetDay.tag}.`);
             }
+            const rejoined = this.rejoinSplitParts([pid]);
             this.setDirty(true);
             this.render();
+            this.toastRejoined(rejoined);
+        }
+
+        // Eine geteilte Einheit (resolveOverflow/splitPlacement), von der ein
+        // Teil verschoben wird, wird wieder eine ganze Einheit: der verschobene
+        // Teil sammelt die übrigen Teile ein (Dauern summiert) und steht an
+        // der neuen Stelle. Passt sie dort nicht, zeigt der Abschnitt wie
+        // gewohnt den Überlauf und bietet erneut das Teilen an.
+        // Rückgabe: Titel der wieder zusammengefügten Einheiten.
+        rejoinSplitParts(pids) {
+            const titles = [];
+            const done = {};
+            pids.forEach((pid) => {
+                const survivor = this.placement(pid);
+                const sg = survivor && survivor.splitgroup ? String(survivor.splitgroup) : '';
+                if (!sg || done[sg]) {
+                    return;
+                }
+                done[sg] = true;
+                let total = Math.max(0, Number(survivor.dauer) || 0);
+                Object.keys(this.sequenz.platzierungen).forEach((other) => {
+                    const part = this.sequenz.platzierungen[other];
+                    if (other === pid || !part || String(part.splitgroup || '') !== sg) {
+                        return;
+                    }
+                    total += Math.max(0, Number(part.dauer) || 0);
+                    this.anchorList().forEach((anchor) => {
+                        const pos = anchor.seq.indexOf(other);
+                        if (pos >= 0) {
+                            anchor.seq.splice(pos, 1);
+                        }
+                    });
+                    const auswahlid = part.einheitenauswahl;
+                    delete this.sequenz.platzierungen[other];
+                    if (auswahlid && !this.auswahlInUse(auswahlid)) {
+                        delete this.sequenz.einheitenauswahlen[auswahlid];
+                    }
+                });
+                survivor.dauer = total;
+                delete survivor.splitgroup;
+                delete survivor.fortsetzung;
+                titles.push(String(survivor.titel || 'Einheit'));
+            });
+            return titles;
+        }
+
+        toastRejoined(titles) {
+            if (titles.length === 1) {
+                this.toast(`„${titles[0]}" wieder zusammengefügt.`);
+            } else if (titles.length > 1) {
+                this.toast(`${titles.length} geteilte Einheiten wieder zusammengefügt.`);
+            }
         }
 
         // ---- D47: drag & drop as the second way to reorder (besides ↑/↓) --
@@ -2712,8 +2765,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 const targetAnkerName = target.ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag';
                 this.setStatus(`Verschoben: jetzt am ${targetAnkerName} von Tag ${targetDay.tag}.`);
             }
+            const rejoined = positionChanges ? this.rejoinSplitParts(pids) : [];
             this.setDirty(true);
             this.render();
+            this.toastRejoined(rejoined);
             if (membershipChanges && newBid) {
                 this.toast(`In „${this.bausteinTitle(newBid)}" aufgenommen.`);
             } else if (membershipChanges) {
