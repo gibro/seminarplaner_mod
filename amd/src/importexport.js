@@ -1921,7 +1921,15 @@ function(Ajax, Notification, Handout, PlanMemory) {
         }
     };
 
-    const drawPdfTitlePage = (doc, title, meta, subtitle = '') => {
+    // Seminarziele des geladenen Plans (Sequenz, D-Seminarziele): nur Ziele mit Text.
+    const getSeminarGoalsForPdf = () => {
+        const seq = (currentGridState && currentGridState.sequenz) || {};
+        return (Array.isArray(seq.seminarziele) ? seq.seminarziele : [])
+            .map((ziel) => String((ziel && ziel.text) || '').trim())
+            .filter(Boolean);
+    };
+
+    const drawPdfTitlePage = (doc, title, meta, subtitle = '', options = {}) => {
         stampPdfLogo(doc);
         const pageHeight = doc.internal.pageSize.getHeight();
         let y = 48;
@@ -1960,9 +1968,29 @@ function(Ajax, Notification, Handout, PlanMemory) {
             y += 9;
         });
 
+        // Seminarziele auf dem Deckblatt (ZIM-Papier, Konzeptsammlung) - nur,
+        // wenn der Plan welche hat.
+        const goals = options.goals ? getSeminarGoalsForPdf() : [];
+        if (goals.length) {
+            y += 6;
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(13);
+            doc.text('Seminarziele', 14, y);
+            y += 7;
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(10);
+            const escape = (text) => text.replace(/[&<>]/g, (ch) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;'}[ch]));
+            renderHtmlToPdf(doc, `<ul>${goals.map((goal) => `<li>${escape(goal)}</li>`).join('')}</ul>`,
+                14, y, doc.internal.pageSize.getWidth() - 28);
+        }
+
         doc.setFont(undefined, 'normal');
         doc.setFontSize(9);
+        // Fußzeile auf der ersten Seite (bei sehr vielen Zielen kann das
+        // Deckblatt umbrechen).
+        doc.setPage(1);
         doc.text('Seminarplaner', 14, pageHeight - 14);
+        doc.setPage(doc.getNumberOfPages());
     };
 
     const addBausteinCoverPage = (doc, day, unit, methodCount) => {
@@ -2177,7 +2205,7 @@ function(Ajax, Notification, Handout, PlanMemory) {
             throw new Error('PDF-Tabellenbibliothek nicht geladen');
         }
 
-        drawPdfTitlePage(doc, 'ZIM', meta, 'Deckblatt');
+        drawPdfTitlePage(doc, 'ZIM', meta, 'Deckblatt', {goals: true});
         drawPdfInfoPage(doc);
         doc.addPage();
         let header = 'ZIM-Papier';
@@ -2261,7 +2289,7 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const plan = getPlanByDay();
         const doc = new jsPDF();
 
-        drawPdfTitlePage(doc, 'ZIM', meta, 'Konzeptsammlung');
+        drawPdfTitlePage(doc, 'ZIM', meta, 'Konzeptsammlung', {goals: true});
         drawPdfInfoPage(doc);
 
         days.forEach((day) => {
