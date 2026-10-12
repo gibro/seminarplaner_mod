@@ -490,8 +490,6 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         + ` stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"`
         + ` aria-hidden="true" focusable="false">${paths}</svg>`;
     const MENU_ICONS = {
-        up: menuIcon('<path d="M12 19V5M5 12l7-7 7 7"/>'),
-        down: menuIcon('<path d="M12 5v14M5 12l7 7 7-7"/>'),
         // Kette mit Bruch = aus der Klammer lösen; geschlossene Kette = aufnehmen.
         unlink: menuIcon('<path d="M9 17H7a5 5 0 010-10h2M15 7h2a5 5 0 014 8"/><path d="M3 3l18 18"/>'),
         link: menuIcon('<path d="M9 17H7a5 5 0 010-10h2M15 7h2a5 5 0 010 10h-2M8 12h8"/>'),
@@ -2449,78 +2447,45 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             return null;
         }
 
-        // ⋮ „Nach vorne/hinten schieben". Ein Baustein ist ein Kasten: was
-        // nicht zu ihm gehört (eigenständige Einheit, Pause, leerer Baustein),
-        // springt über den ganzen Nachbar-Baustein hinweg statt mitten hinein
-        // zu rutschen. Eine Einheit im Baustein rückt Schritt für Schritt
-        // innerhalb ihres Kastens; am Rand verlässt sie ihn - wie beim Ziehen
-        // aus dem Kasten - und wird mit Hinweis gelöst.
-        movePlacement(pid, delta) {
-            const found = this.locate(pid);
-            if (!found) {
+        // Drop auf ‹ / ›: an den Anfang des nächsten bzw. ans Ende des
+        // vorigen Tages (erster bzw. letzter Abschnitt, der stattfindet). Eine
+        // einzeln gezogene Einheit verlässt dabei ihren Baustein - wie beim
+        // Ablegen außerhalb des Kastens.
+        dropOnDay(delta) {
+            const dragged = this.draggedPids();
+            if (!dragged || !dragged.pids.length) {
                 return;
             }
-            const {anchorIdx, pos, anchors} = found;
-            const seq = anchors[anchorIdx].seq;
-            const placement = this.placement(pid);
-            const bid = placement && placement.typ === 'einheit' ? String(placement.bausteinid || '') : '';
-            let block = [pid];
-            if (bid) {
-                const run = this.findRunAt(seq, pos, bid);
-                if (run.every((rpid) => this.isUnfilled(this.placement(rpid)))) {
-                    // Leerer Baustein: er wandert als Ganzes.
-                    block = run;
-                } else {
-                    const runStart = seq.indexOf(run[0]);
-                    const atEdge = delta < 0 ? pos === runStart : pos === runStart + run.length - 1;
-                    if (!atEdge) {
-                        seq.splice(pos, 1);
-                        seq.splice(pos + delta, 0, pid);
-                        this.finishMove([pid]);
-                        return;
-                    }
-                    if (this.isUnfilled(placement)) {
-                        this.setStatus('Die Reservierung bleibt im Baustein. „Reservierung entfernen" nimmt sie heraus.');
-                        return;
-                    }
-                    this.leaveBausteinAtEdge(pid, delta, seq, pos);
-                    return;
-                }
-            }
-
-            const start = seq.indexOf(block[0]);
-            const end = start + block.length - 1;
-            const neighborIdx = delta > 0 ? end + 1 : start - 1;
-            if (neighborIdx >= 0 && neighborIdx < seq.length) {
-                const neighbor = this.placement(seq[neighborIdx]);
-                const hop = neighbor && neighbor.typ === 'einheit' && neighbor.bausteinid
-                    ? this.findRunAt(seq, neighborIdx, neighbor.bausteinid).length
-                    : 1;
-                seq.splice(start, block.length);
-                seq.splice(delta > 0 ? start + hop : start - hop, 0, ...block);
-                this.finishMove(block);
+            const {found, pids} = dragged;
+            const anchors = found.anchors;
+            const day = this.dayIndex + delta;
+            const open = [day * 2, day * 2 + 1].filter((i) => i >= 0 && i < anchors.length
+                && !this.anchorIsOff(anchors[i].dayIdx, anchors[i].ankername));
+            const tag = (this.sequenz.tage[day] || {}).tag || day + 1;
+            if (!open.length) {
+                this.setStatus(`An Tag ${tag} findet kein Abschnitt statt.`, true);
                 return;
             }
-            const nextAnchorIdx = this.openAnchorIdx(anchors, anchorIdx, delta);
-            if (nextAnchorIdx < 0) {
-                this.setStatus(delta < 0
-                    ? 'Davor gibt es keinen Abschnitt, der stattfindet.'
-                    : 'Danach gibt es keinen Abschnitt, der stattfindet.');
-                return;
-            }
-            seq.splice(start, block.length);
-            const nextSeq = anchors[nextAnchorIdx].seq;
+            const dstIdx = delta > 0 ? open[0] : open[open.length - 1];
+            const srcSeq = anchors[found.anchorIdx].seq;
+            const oldNeighbor = srcSeq[found.pos + pids.length] || '';
+            const single = this.dragIsSingleUnit() ? this.placement(pids[0]) : null;
+            srcSeq.splice(found.pos, pids.length);
+            const dstSeq = anchors[dstIdx].seq;
             if (delta > 0) {
-                nextSeq.unshift(...block);
+                dstSeq.unshift(...pids);
             } else {
-                nextSeq.push(...block);
+                dstSeq.push(...pids);
             }
-            const targetDay = this.sequenz.tage[anchors[nextAnchorIdx].dayIdx];
-            const targetAnkerName = anchors[nextAnchorIdx].ankername === 'vormittag'
-                ? 'Vormittag'
-                : 'Nachmittag';
-            this.setStatus(`Verschoben: jetzt am ${targetAnkerName} von Tag ${targetDay.tag}.`);
-            this.finishMove(block);
+            if (single && single.bausteinid) {
+                const oldbid = single.bausteinid;
+                single.bausteinid = null;
+                this.keepBausteinVisible(oldbid, srcSeq, oldNeighbor);
+            }
+            const ankertext = anchors[dstIdx].ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag';
+            this.setStatus(`Verschoben: jetzt ${delta > 0 ? 'am Anfang' : 'am Ende'} vom ${ankertext} von Tag ${tag}.`);
+            this.toast(`Auf Tag ${tag} verschoben.`);
+            this.finishMove(pids);
         }
 
         finishMove(pids) {
@@ -2528,21 +2493,6 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             this.setDirty(true);
             this.render();
             this.toastRejoined(rejoined);
-        }
-
-        // Die Einheit steht am Rand ihres Bausteins und soll weiter: sie bleibt
-        // an ihrer Stelle, gehört aber nicht mehr zum Kasten - steht also direkt
-        // vor bzw. hinter ihm. Der nächste Pfeil bewegt sie als eigenständige
-        // Einheit weiter. War sie die letzte, behält der Baustein seinen
-        // Platzhalter an der alten Stelle.
-        leaveBausteinAtEdge(pid, delta, seq, pos) {
-            const placement = this.placement(pid);
-            const oldbid = placement.bausteinid;
-            placement.bausteinid = null;
-            this.keepBausteinVisible(oldbid, seq, delta > 0 ? pid : (seq[pos + 1] || ''));
-            this.setDirty(true);
-            this.render();
-            this.toast(`Aus „${this.bausteinTitle(oldbid)}" gelöst.`);
         }
 
         // Eine geteilte Einheit (resolveOverflow/splitPlacement), von der ein
@@ -2600,8 +2550,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         // Draggable are the rows of the current day: standalone units, breaks,
         // whole modules and the units inside a module. Where a single unit is
         // dropped decides its membership: inside a module's box it joins that
-        // module, anywhere else it is standalone (see dropTarget). The arrows
-        // still cover fine-grained moves and cross-day moves.
+        // module, anywhere else it is standalone (see dropTarget). Dropping on
+        // the day buttons ‹ › moves to the previous/next day - since the arrow
+        // menu items are gone, that is the way across days. Touch devices
+        // drag via the grip with pointer events (initTouchDrag): HTML5 drag &
+        // drop does not start from a finger on Android.
 
         initDragAndDrop(container) {
             // Im Aufklappbereich soll man Text markieren koennen. Solange die
@@ -2619,6 +2572,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 document.addEventListener('mouseup', () => row.setAttribute('draggable', 'true'), {once: true});
             });
             container.addEventListener('dragstart', (event) => {
+                // Ein Finger-Zug läuft schon über initTouchDrag - den nativen
+                // Drag (iOS startet ihn nach langem Drücken) nicht zusätzlich.
+                if (this.drag && this.drag.touch) {
+                    event.preventDefault();
+                    return;
+                }
                 const row = event.target.closest('[data-sq-drag]');
                 if (!row) {
                     return;
@@ -2660,12 +2619,135 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 this.clearDropMarkers();
                 document.querySelectorAll('.sq-dragging').forEach((el) => el.classList.remove('sq-dragging'));
             });
+            // Die Tag-Knöpfe liegen außerhalb von container, nehmen aber Drops an.
+            ['#sq-prev-day', '#sq-next-day'].forEach((sel) => {
+                const btn = bySel(sel);
+                if (!btn) {
+                    return;
+                }
+                btn.addEventListener('dragover', (event) => {
+                    const target = this.drag ? this.dropTarget(event) : null;
+                    this.markDropTarget(target);
+                    if (target) {
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = 'move';
+                    }
+                });
+                btn.addEventListener('dragleave', () => this.clearDropMarkers());
+                btn.addEventListener('drop', (event) => {
+                    const target = this.drag ? this.dropTarget(event) : null;
+                    this.clearDropMarkers();
+                    if (target) {
+                        event.preventDefault();
+                        this.dropMove(target);
+                    }
+                });
+            });
+            this.initTouchDrag(container);
+        }
+
+        // Ziehen mit dem Finger: am Griff (⠿) anfassen und ziehen. Gleiche
+        // Ablageziele wie mit der Maus (dropTarget/dropMove), ermittelt über
+        // den Punkt unter dem Finger. Nur der Griff startet einen Zug - überall
+        // sonst scrollt die Seite wie gewohnt.
+        initTouchDrag(container) {
+            container.addEventListener('pointerdown', (event) => {
+                if (event.pointerType === 'mouse' || this.drag || !event.target.closest) {
+                    return;
+                }
+                const grip = event.target.closest('.sq-grip');
+                const row = grip ? grip.closest('[data-sq-drag]') : null;
+                if (!row || !container.contains(row)) {
+                    return;
+                }
+                event.preventDefault();
+                const pointerId = event.pointerId;
+                this.drag = {
+                    pid: row.getAttribute('data-sq-drag'),
+                    bid: row.getAttribute('data-sq-group') || '',
+                    touch: true,
+                };
+                row.classList.add('sq-dragging');
+                document.body.classList.add('sq-touch-dragging');
+                const scroller = this.scrollParent(container);
+                let target = null;
+                let lastY = event.clientY;
+                let frame = 0;
+                // Am oberen/unteren Rand mitscrollen, damit man auch Ziele
+                // außerhalb des sichtbaren Bereichs erreicht (z. B. die
+                // Tag-Knöpfe oben).
+                const autoscroll = () => {
+                    const edge = 70;
+                    const bottom = scroller === window ? window.innerHeight : scroller.getBoundingClientRect().bottom;
+                    const top = scroller === window ? 0 : scroller.getBoundingClientRect().top;
+                    let dy = 0;
+                    if (lastY < top + edge) {
+                        dy = -Math.ceil((top + edge - lastY) / 5);
+                    } else if (lastY > bottom - edge) {
+                        dy = Math.ceil((lastY - bottom + edge) / 5);
+                    }
+                    if (dy) {
+                        scroller.scrollBy(0, dy);
+                    }
+                    frame = window.requestAnimationFrame(autoscroll);
+                };
+                frame = window.requestAnimationFrame(autoscroll);
+                const onmove = (e) => {
+                    if (e.pointerId !== pointerId) {
+                        return;
+                    }
+                    e.preventDefault();
+                    lastY = e.clientY;
+                    const el = document.elementFromPoint(e.clientX, e.clientY);
+                    target = el ? this.dropTarget({target: el, clientX: e.clientX, clientY: e.clientY}) : null;
+                    this.markDropTarget(target);
+                };
+                const onend = (e) => {
+                    if (e.pointerId !== pointerId) {
+                        return;
+                    }
+                    document.removeEventListener('pointermove', onmove);
+                    document.removeEventListener('pointerup', onend);
+                    document.removeEventListener('pointercancel', onend);
+                    window.cancelAnimationFrame(frame);
+                    this.clearDropMarkers();
+                    document.body.classList.remove('sq-touch-dragging');
+                    document.querySelectorAll('.sq-dragging').forEach((el) => el.classList.remove('sq-dragging'));
+                    if (e.type === 'pointerup' && target) {
+                        this.dropMove(target);
+                    }
+                    this.drag = null;
+                };
+                document.addEventListener('pointermove', onmove, {passive: false});
+                document.addEventListener('pointerup', onend);
+                document.addEventListener('pointercancel', onend);
+            });
+        }
+
+        // Das Element, das die Seite tatsächlich scrollt (Moodle 5 scrollt je
+        // nach Theme im Seiten-Container statt im Fenster).
+        scrollParent(el) {
+            let node = el ? el.parentElement : null;
+            while (node && node !== document.body) {
+                const style = window.getComputedStyle(node);
+                if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight) {
+                    return node;
+                }
+                node = node.parentElement;
+            }
+            return window;
         }
 
         // Drop on a row = insert before it, drop on the anchor body = append
         // at the end. Anchors that do not take place (arrival/departure day)
         // accept no drops, mirroring their disabled add buttons.
         dropTarget(event) {
+            const nav = event.target.closest && event.target.closest('#sq-prev-day, #sq-next-day');
+            if (nav) {
+                const delta = nav.id === 'sq-next-day' ? 1 : -1;
+                const day = this.dayIndex + delta;
+                return day >= 0 && day < this.dayCount() ? {daynav: delta, el: nav} : null;
+            }
             const anchorEl = event.target.closest('.sq-anchor');
             if (!anchorEl || anchorEl.hasAttribute('data-off')) {
                 return null;
@@ -2743,14 +2825,17 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 if (target.joinBid && !target.beforePid) {
                     cls = 'sq-drop-into';
                 }
+                if (target.daynav) {
+                    cls = 'sq-drop-day';
+                }
                 el.classList.add(cls);
                 this.dropMarkerEl = el;
             }
         }
 
         clearDropMarkers() {
-            document.querySelectorAll('.sq-drop-before, .sq-drop-append, .sq-drop-into').forEach((el) => {
-                el.classList.remove('sq-drop-before', 'sq-drop-append', 'sq-drop-into');
+            document.querySelectorAll('.sq-drop-before, .sq-drop-append, .sq-drop-into, .sq-drop-day').forEach((el) => {
+                el.classList.remove('sq-drop-before', 'sq-drop-append', 'sq-drop-into', 'sq-drop-day');
             });
             this.dropMarkerEl = null;
         }
@@ -2780,6 +2865,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         }
 
         dropMove(target) {
+            if (target.daynav) {
+                this.dropOnDay(target.daynav);
+                return;
+            }
             const dragged = this.draggedPids();
             if (!dragged || !dragged.pids.length) {
                 return;
@@ -6153,10 +6242,6 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 this.render();
             } else if (type === 'details-toggle') {
                 this.toggleDetails(pid);
-            } else if (type === 'move-up') {
-                this.movePlacement(pid, -1);
-            } else if (type === 'move-down') {
-                this.movePlacement(pid, 1);
             } else if (type === 'overflow') {
                 this.resolveOverflow(action.getAttribute('data-anker') || 'vormittag');
             } else if (type === 'swap-toggle') {
@@ -6712,8 +6797,6 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                     ? `<span class="sq-menu__hint">${hint}</span>` : ''}</span></button>`;
 
             const items = [];
-            items.push(item('move-up', 'up', 'Nach vorne schieben'));
-            items.push(item('move-down', 'down', 'Nach hinten schieben'));
 
             // Platzhalter eines Bausteins (leerer Baustein bzw. offene
             // Reservierung) sind keine Einheit: Aufnehmen, Lösen oder eine
@@ -7072,7 +7155,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 <div class="sq-alt${inBaustein ? '' : ' sq-alt--standalone'}${this.openDetails.has(p.pid)
                     ? ' is-open' : ''}" role="radiogroup"
                   aria-label="Zwei Alternativen – eine davon wird durchgeführt">
-                  ${inBaustein ? '' : this.renderGrip()}
+                  ${this.renderGrip()}
                   ${this.renderDetailsToggle(p.pid)}
                   <div class="sq-alt__options">${options}</div>
                   <div class="sq-unit__actions">
@@ -7166,7 +7249,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                   <div class="sq-unit${inBaustein ? '' : ' sq-unit--standalone'}${detailsopen ? ' is-open' : ''}"
                     title="${escapeHtml(timelabel)}" data-sq-unit="${escapeHtml(p.pid)}">
                     <div class="sq-unit__phase${phase ? ' sq-phase-bg--' + phase : ''}"></div>
-                    ${inBaustein ? '' : this.renderGrip()}
+                    ${this.renderGrip()}
                     ${this.renderDetailsToggle(p.pid)}
                     <div class="sq-unit__main">
                       <div class="sq-unit__title sq-titleedit" ${EDITABLE}

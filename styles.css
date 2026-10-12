@@ -6389,6 +6389,33 @@ body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
     padding-left: 0;
 }
 
+/* Der Griff startet auf Touch-Geräten den Finger-Zug (sequenz.js,
+   initTouchDrag): dort darf der Browser nicht selbst scrollen. */
+.sq-grip {
+    touch-action: none;
+}
+@media (pointer: coarse) {
+    .sq-grip {
+        justify-content: center;
+        min-width: 34px;
+        min-height: 40px;
+        padding: 0 6px;
+        color: #8A8A8A;
+    }
+}
+body.sq-touch-dragging {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Tag-Knopf ‹ / › als Ablageziel: die Einheit wandert auf den Tag davor/danach. */
+.sq-toolbar__nav .kg-btn.sq-drop-day {
+    outline: 3px solid var(--ig-red, #E2001A);
+    outline-offset: 2px;
+    background: var(--ig-red, #E2001A);
+    color: #fff;
+}
+
 /* Gezogene Zeile bleibt sichtbar, aber erkennbar „unterwegs". */
 .sq-dragging {
     opacity: .45;
