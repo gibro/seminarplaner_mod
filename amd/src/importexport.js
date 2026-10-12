@@ -1336,30 +1336,51 @@ function(Ajax, Notification, Handout, PlanMemory) {
                     tokens.push({text: part, run, space: false});
                 });
             });
+            // Wörter gleicher Schrift gehen als EIN String ins PDF: jsPDF
+            // bettet für Standardschriften keine Zeichenbreiten ein, der
+            // Betrachter setzt mit seiner eigenen Helvetica. Einzeln platzierte
+            // Wörter ergäben dadurch ungleiche Wortabstände; so setzt der
+            // Betrachter die Leerzeichen selbst. Nur an Schriftwechseln wird
+            // neu positioniert.
             let cursor = 0;
-            const spaceWidth = () => doc.getTextWidth(' ');
+            let segment = null;
+            const flush = () => {
+                if (!segment) {
+                    return;
+                }
+                doc.setFont(undefined, fontFor(segment.run));
+                if (segment.run.link && typeof doc.textWithLink === 'function') {
+                    doc.setTextColor(25, 92, 179);
+                    doc.textWithLink(segment.text, segment.x, currentY, {url: segment.run.link});
+                    doc.setTextColor(savedColor);
+                } else {
+                    doc.text(segment.text, segment.x, currentY);
+                }
+                segment = null;
+            };
+            const sameStyle = (a, b) => fontFor(a) === fontFor(b) && (a.link || '') === (b.link || '');
             tokens.forEach((token, idx) => {
                 doc.setFont(undefined, fontFor(token.run));
                 const w = doc.getTextWidth(token.text);
                 const prev = idx > 0 ? tokens[idx - 1] : null;
-                const gap = prev && prev.space ? spaceWidth() : 0;
+                const gap = prev && prev.space ? doc.getTextWidth(' ') : 0;
                 if (cursor > 0 && cursor + gap + w > width) {
+                    flush();
                     currentY += lineHeight;
                     ensureSpace(lineHeight);
-                    doc.setFont(undefined, fontFor(token.run));
                     cursor = 0;
                 } else {
                     cursor += gap;
                 }
-                if (token.run.link && typeof doc.textWithLink === 'function') {
-                    doc.setTextColor(25, 92, 179);
-                    doc.textWithLink(token.text, left + cursor, currentY, {url: token.run.link});
-                    doc.setTextColor(savedColor);
+                if (segment && sameStyle(segment.run, token.run)) {
+                    segment.text += (gap ? ' ' : '') + token.text;
                 } else {
-                    doc.text(token.text, left + cursor, currentY);
+                    flush();
+                    segment = {run: token.run, text: token.text, x: left + cursor};
                 }
                 cursor += w;
             });
+            flush();
             currentY += lineHeight;
         });
 
