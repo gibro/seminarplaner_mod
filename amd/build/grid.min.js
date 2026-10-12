@@ -32,7 +32,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     // die Überblick-Projektion färbt Einträge nach der Phasenpalette des
     // Design-Handoffs statt nach Bloom-Levels.
     const PHASE_KEYS = [
-        {key: 'orientierung', match: ['orientierung', 'warm-up', 'einstieg']},
+        {key: 'warmup', match: ['warmup', 'warm-up', 'warm up', 'aktivierung']},
+        {key: 'orientierung', match: ['orientierung', 'einstieg']},
         {key: 'erfahrung', match: ['erfahrung', 'erwartungsabfrage', 'vorwissen']},
         {key: 'analyse', match: ['analyse']},
         {key: 'handlung', match: ['handlung', 'aktion', 'praxis']},
@@ -249,7 +250,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const normalizePhase = (phase) => {
         const clean = String(phase || '').trim();
         const aliases = {
-            'warm-up': 'Orientierung',
+            'warm-up': 'Warmup/Aktivierung',
+            'warmup': 'Warmup/Aktivierung',
+            'warm up': 'Warmup/Aktivierung',
+            'aktivierung': 'Warmup/Aktivierung',
             'einstieg': 'Orientierung',
             'erwartungsabfrage': 'Erfahrungserhebung',
             'vorwissen aktivieren': 'Erfahrungserhebung',
@@ -1962,6 +1966,7 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                             <button type="button" class="sp-unit-slot__header" data-action="toggle-unit-slot"
                                 data-slot-key="${escapeHtml(String(slot.key))}" aria-expanded="${expanded ? 'true' : 'false'}">
                                 <div class="sp-unit-slot__title">
+                                    ${ismobile ? '<span class="sq-tri" aria-hidden="true">▸</span>' : ''}
                                     <strong class="sp-titletext"
                                         data-full-title="${escapeHtml(unit.title)}">${escapeHtml(unit.title)}</strong>
                                 </div>
@@ -1970,7 +1975,6 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                                     <span
                                         class="sp-badge">${escapeHtml(String((unit.methods || []).length))} Seminareinheiten</span>
                                     ${slot.units.length > 1 ? '<span class="sp-badge">Alternative</span>' : ''}
-                                    <span class="sp-unit-slot__chevron" aria-hidden="true">${expanded ? '▾' : '▸'}</span>
                                 </div>
                             </button>
                             <div class="sp-unit-slot__content ${expanded ? '' : 'kg-hidden'}"

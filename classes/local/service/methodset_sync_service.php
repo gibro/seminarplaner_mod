@@ -636,7 +636,10 @@ class methodset_sync_service {
         }
 
         $aliases = [
-            'warm-up' => 'Orientierung',
+            'warm-up' => 'Warmup/Aktivierung',
+            'warmup' => 'Warmup/Aktivierung',
+            'warm up' => 'Warmup/Aktivierung',
+            'aktivierung' => 'Warmup/Aktivierung',
             'einstieg' => 'Orientierung',
             'erwartungsabfrage' => 'Erfahrungserhebung',
             'vorwissen aktivieren' => 'Erfahrungserhebung',

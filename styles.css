@@ -715,10 +715,50 @@ select.kg-input:-moz-focusring {
    hier aber ohne dessen Rahmen/Linksbalken/Fuellung wie ein normales Feld
    wirken. */
 .kg-ie-columns.field-card {
+  margin: 18px 0 15px;
+  padding: 15px 0 0;
+  border: 0;
+  /* Trennstrich zwischen Infofeld und den ZIM-Einstellungen darunter. */
+  border-top: 1px solid var(--ig-lightgray, #DADADA);
+  background: transparent;
+}
+
+/* Infofeld je Seminarplan (Seminarzeiten, allgemeine Infos …). */
+.kg-ie-info {
+  margin: 0 0 15px;
+}
+.kg-ie-info__hint {
+  margin: 0 0 6px;
+}
+.kg-ie-info__status {
+  min-height: 1.2em;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ig-gray, #646464);
+}
+
+/* Format ZIM-Papier: zwei Optionen nebeneinander. */
+.kg-ie-orientation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
   margin: 0 0 15px;
   padding: 0;
   border: 0;
-  background: transparent;
+}
+.kg-ie-orientation legend {
+  float: left;
+  width: 100%;
+  margin: 0 0 4px;
+  padding: 0;
+}
+.kg-ie-orientation__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  cursor: pointer;
 }
 
 .kg-ie-pdfactions {
@@ -1205,6 +1245,7 @@ select.kg-input:-moz-focusring {
      gelten - auch im Ueberblick ohne .sq-shell. .sq-shell setzt sie zusaetzlich
      lokal mit identischen Werten (Refactoring: zweiter :root-Block Z.~6555
      hierher zusammengefuehrt, gleiche Werte -> optikneutral). */
+  --sq-phase-warmup: #7B4FA0;
   --sq-phase-orientierung: #2F80AB;
   --sq-phase-erfahrung: #5B9945;
   --sq-phase-analyse: #EAB500;
@@ -3138,6 +3179,9 @@ body.sp-resizing * {
 }
 
 .sp-unit-slot__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: .95rem;
   line-height: 1.25;
 }
@@ -3150,11 +3194,6 @@ body.sp-resizing * {
   flex-wrap: wrap;
 }
 
-.sp-unit-slot__chevron {
-  margin-left: auto;
-  color: var(--ig-gray);
-  font-weight: 700;
-}
 
 .sp-unit-slot__content {
   padding: 10px;
@@ -4263,14 +4302,6 @@ select.kg-input.rf-select {
   outline-offset: 2px;
 }
 
-/* Einzige Bewegung im Roten Faden. */
-.rf-toggle .rf-icon:last-child {
-  transition: transform .15s;
-}
-
-.rf-block.is-open .rf-toggle .rf-icon:last-child {
-  transform: rotate(180deg);
-}
 
 /* ---- Themen eines Blocks ---- */
 .rf-themen {
@@ -4328,6 +4359,12 @@ select.kg-input.rf-select {
 }
 
 /* ---- Seminarphasen: Volltonfarbe, heller Grund, dunkle Schrift ---- */
+.rf-phase--warmup {
+  --rf-color: #7B4FA0;
+  --rf-tint: #EFE8F5;
+  --rf-text: #5B3780;
+}
+
 .rf-phase--orientierung {
   --rf-color: var(--ig-blue);
   --rf-tint: #e7f0f5;
@@ -4709,11 +4746,17 @@ select.kg-input.rf-select {
     --sq-warn-bg: #FBF1D0;
     --sq-radius: 0;
     --sq-shadow: none;
+    --sq-phase-warmup: #7B4FA0;
     --sq-phase-orientierung: #2F80AB;
     --sq-phase-erfahrung: #5B9945;
     --sq-phase-analyse: #EAB500;
     --sq-phase-handlung: #882A30;
     --sq-phase-transfer: #646464;
+    /* Pausen in Petrol: kommt weder unter den Phasenfarben noch im roten
+       Akzent vor, damit sie in der Sequenz sofort ins Auge fallen. */
+    --sq-pause: #1F7A6E;
+    --sq-pause-text: #155E54;
+    --sq-pause-bg: #E3F2EF;
 }
 /* ---- Klapp-Indikator: EIN Muster fuer alle Aufklapp-Elemente ----
    Vorher gab es drei: den nativen <details>-Marker (Seminarziele, Ziel-
@@ -4731,16 +4774,47 @@ select.kg-input.rf-select {
    Ein Indikator, der ueberall gleich aussehen soll, darf an keinem der beiden
    haengen. 12px entspricht dem Play-Dreieck aus dem Handoff. */
 .sq-tri {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex: 0 0 auto;
+    box-sizing: border-box;
+    width: 20px;
+    height: 20px;
+    border: 1px solid var(--ig-midgray, #9A9A9A);
+    background: #fff;
     color: var(--ig-anthracite, #3C3C3C);
-    font-size: 12px;
-    line-height: 1;
+    /* Das ▸ im Markup bleibt nur als Text-Rückfall stehen: seine Größe und
+       Form hängen von der Schrift ab (deshalb waren die Dreiecke je Stelle
+       verschieden). Gezeichnet wird das Dreieck unten per clip-path. */
+    font-size: 0;
+    line-height: 0;
+    vertical-align: middle;
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+}
+.sq-tri::before {
+    content: "";
+    width: 8px;
+    height: 10px;
+    background: currentColor;
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+    /* Optisch zentriert: der Schwerpunkt eines Dreiecks liegt links der Mitte. */
+    transform: translateX(1px);
     transition: transform .15s;
 }
-details[open] > summary .sq-tri,
-.sq-head[data-open="1"] .sq-tri {
-    transform: rotate(90deg);
+details[open] > summary .sq-tri::before,
+.sq-head[data-open="1"] .sq-tri::before,
+[aria-expanded="true"] .sq-tri::before {
+    transform: rotate(90deg) translateX(1px);
+}
+/* Wie der +/−-Schalter der Einheiten (.sq-unit__toggle): beim Überfahren rot. */
+summary:hover .sq-tri,
+summary:focus-visible .sq-tri,
+button:hover .sq-tri,
+button:focus-visible .sq-tri {
+    border-color: var(--ig-red, #E2001A);
+    color: var(--ig-red, #E2001A);
 }
 /* Nativen Marker abschalten, wo der eigene Indikator steht — sonst stehen zwei
    Pfeile nebeneinander. */
@@ -5030,11 +5104,12 @@ details[open] > summary .sq-tri,
     display: flex;
     align-items: center;
     gap: 8px;
-    border: 1px dashed var(--sq-border-strong);
+    border: 1px solid var(--sq-pause);
+    border-left-width: 6px;
     border-radius: 0;
-    background: #fafbfc;
+    background: var(--sq-pause-bg);
     padding: 6px 10px;
-    color: var(--sq-text-muted);
+    color: var(--sq-pause-text);
     font-size: 12px;
 }
 .sq-row > .sq-pause { flex: 1; min-width: 0; }
@@ -5053,6 +5128,7 @@ details[open] > summary .sq-tri,
 }
 .sq-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .sq-legend__dot { width: 9px; height: 9px; border-radius: 0; display: inline-block; background: #cfd6dd; }
+.sq-phase-bg--warmup { background: var(--sq-phase-warmup, #7B4FA0); }
 .sq-phase-bg--orientierung { background: var(--sq-phase-orientierung, #5b8fb0); }
 .sq-phase-bg--erfahrung { background: var(--sq-phase-erfahrung, #6f9e6c); }
 .sq-phase-bg--analyse { background: var(--sq-phase-analyse, #c99a3e); }
@@ -5499,6 +5575,7 @@ details[open] > summary .sq-tri,
     line-height: 1.2;
 }
 /* Volle Phasenfarbe wie die Bloecke im Ueberblick. */
+.sq-intro__block--warmup { background: var(--sq-phase-warmup, #7B4FA0); }
 .sq-intro__block--orientierung { background: var(--sq-phase-orientierung, #2F80AB); }
 .sq-intro__block--erfahrung { background: var(--sq-phase-erfahrung, #5B9945); }
 .sq-intro__block--analyse { background: var(--sq-phase-analyse, #EAB500); color: var(--ig-anthracite); }
@@ -6016,6 +6093,7 @@ body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
     font-size: 11px;
 }
 
+.sq-badge--phase-warmup { background: #EFE8F5; color: #5B3780; border-color: var(--sq-phase-warmup); }
 .sq-badge--phase-orientierung { background: #E7F0F5; color: #215d7e; border-color: var(--sq-phase-orientierung); }
 .sq-badge--phase-erfahrung { background: #E7F1E3; color: #3f6e2f; border-color: var(--sq-phase-erfahrung); }
 .sq-badge--phase-analyse { background: #FBF1D0; color: #8a6d00; border-color: var(--sq-phase-analyse); }
@@ -6152,6 +6230,7 @@ body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
     padding: 10px;
 }
 
+.sq-suggest__card--warmup { border-top-color: var(--sq-phase-warmup); }
 .sq-suggest__card--orientierung { border-top-color: var(--sq-phase-orientierung); }
 .sq-suggest__card--erfahrung { border-top-color: var(--sq-phase-erfahrung); }
 .sq-suggest__card--analyse { border-top-color: var(--sq-phase-analyse); }
@@ -6362,6 +6441,33 @@ body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
     padding-left: 0;
 }
 
+/* Der Griff startet auf Touch-Geräten den Finger-Zug (sequenz.js,
+   initTouchDrag): dort darf der Browser nicht selbst scrollen. */
+.sq-grip {
+    touch-action: none;
+}
+@media (pointer: coarse) {
+    .sq-grip {
+        justify-content: center;
+        min-width: 34px;
+        min-height: 40px;
+        padding: 0 6px;
+        color: #8A8A8A;
+    }
+}
+body.sq-touch-dragging {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Tag-Knopf ‹ / › als Ablageziel: die Einheit wandert auf den Tag davor/danach. */
+.sq-toolbar__nav .kg-btn.sq-drop-day {
+    outline: 3px solid var(--ig-red, #E2001A);
+    outline-offset: 2px;
+    background: var(--ig-red, #E2001A);
+    color: #fff;
+}
+
 /* Gezogene Zeile bleibt sichtbar, aber erkennbar „unterwegs". */
 .sq-dragging {
     opacity: .45;
@@ -6370,6 +6476,13 @@ body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
 /* Einfüge-Linie: Drop auf einer Zeile sortiert davor ein. */
 .sq-drop-before {
     box-shadow: 0 -3px 0 0 var(--color-primary);
+}
+
+/* Drop in den Kasten eines Bausteins: die Einheit wird Teil des Bausteins. */
+.sq-baustein.sq-drop-into {
+    outline: 2px dashed var(--color-primary);
+    outline-offset: 2px;
+    background: var(--sq-accent-bg, #fdf2f3);
 }
 
 /* Drop auf dem Anker-Body hängt ans Ende an. */
@@ -6874,6 +6987,7 @@ a.kg-btn-primary:focus {
     display: none;
 }
 
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--warmup,
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--orientierung,
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--erfahrung,
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--handlung,
@@ -6882,6 +6996,7 @@ a.kg-btn-primary:focus {
     border: none;
 }
 
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--warmup { background: var(--sq-phase-warmup); }
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--orientierung { background: var(--sq-phase-orientierung); }
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--erfahrung { background: var(--sq-phase-erfahrung); }
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--handlung { background: var(--sq-phase-handlung); }
@@ -6893,6 +7008,7 @@ a.kg-btn-primary:focus {
     border: none;
 }
 
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--warmup .sp-meta,
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--orientierung .sp-meta,
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--erfahrung .sp-meta,
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--handlung .sp-meta,
@@ -7005,6 +7121,7 @@ a.kg-btn-primary:focus {
     border-top: 3px solid var(--ig-lightgray);
 }
 
+.kg-library-card.sp-card.ml-phase--warmup { border-top-color: var(--sq-phase-warmup); }
 .kg-library-card.sp-card.ml-phase--orientierung { border-top-color: var(--sq-phase-orientierung); }
 .kg-library-card.sp-card.ml-phase--erfahrung { border-top-color: var(--sq-phase-erfahrung); }
 .kg-library-card.sp-card.ml-phase--analyse { border-top-color: var(--sq-phase-analyse); }
@@ -7304,16 +7421,6 @@ a.kg-btn-primary:focus {
     display: none;
 }
 
-.kg-review-diff > summary::before {
-    content: "\203A";
-    display: inline-block;
-    margin-right: 8px;
-    transition: transform 0.15s ease;
-}
-
-.kg-review-diff[open] > summary::before {
-    transform: rotate(90deg);
-}
 
 .kg-review-diff__body {
     padding: 4px 14px 14px;
@@ -7945,6 +8052,11 @@ details.sq-menu[open] > summary.sq-menu__btn {
    Badge-Regel ein !important und machte jede Toenung wirkungslos (die alten
    .ml-phase--*-Regeln waren deshalb toter Code); seit dem Abbau reicht die
    Spezifitaet. */
+.kg-library-card.sp-card .sp-card-meta .sp-badge--phase-warmup {
+  background: #EFE8F5;
+  border-color: #7B4FA0;
+  color: #5B3780;
+}
 .kg-library-card.sp-card .sp-card-meta .sp-badge--phase-orientierung {
   background: #E7F0F5;
   border-color: var(--ig-blue);
@@ -9140,4 +9252,52 @@ details.sq-menu[open] > summary.sq-menu__btn {
 
 .kg-form-multi-add .kg-btn {
     flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Noch einmal einplanen / Als neue Einheit duplizieren
+   ========================================================================== */
+/* Erklärzeile unter einem Menüeintrag (Sequenz-⋮ und Bibliothek-⋮). */
+.sq-menu__hint {
+    display: block;
+    max-width: 260px;
+    margin-top: 2px;
+    white-space: normal;
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--ig-gray, #646464);
+}
+.sq-menu__item:hover .sq-menu__hint {
+    color: inherit;
+}
+
+/* Dieselbe Einheit mehrfach im Plan. */
+.sq-badge--shared {
+    background: #fff;
+    border: 1px dashed var(--ig-anthracite, #3C3C3C);
+    color: var(--ig-anthracite, #3C3C3C);
+}
+
+/* Hinweis oben im Bearbeiten-Fenster. */
+.sq-unit-shared {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    border-left: 4px solid var(--sq-warn, #7a5e00);
+    background: var(--sq-warn-bg, #FBF1D0);
+    color: var(--ig-anthracite, #3C3C3C);
+    font-size: 13px;
+}
+.sq-unit-shared[hidden] {
+    display: none;
+}
+.sq-unit-shared__text {
+    flex: 1 1 260px;
+}
+.sq-unit-shared--done {
+    border-left-color: var(--sq-pause, #1F7A6E);
+    background: var(--sq-pause-bg, #E3F2EF);
 }

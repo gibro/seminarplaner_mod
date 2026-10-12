@@ -305,6 +305,20 @@ $functions = [
         'type' => 'write',
         'ajax' => true,
     ],
+    'mod_seminarplaner_get_pdf_info' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'get_pdf_info',
+        'description' => 'Read the PDF info text (seminar times, general info, …) of a seminar plan.',
+        'type' => 'read',
+        'ajax' => true,
+    ],
+    'mod_seminarplaner_set_pdf_info' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'set_pdf_info',
+        'description' => 'Save the PDF info text of a seminar plan.',
+        'type' => 'write',
+        'ajax' => true,
+    ],
     'mod_seminarplaner_get_referenten' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'get_referenten',

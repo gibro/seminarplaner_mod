@@ -193,7 +193,8 @@ Der Unterschied ist der Ablauf.">
 </svg>
 SVG;
 echo html_writer::start_tag('details', ['class' => 'kg-review-diff']);
-echo html_writer::tag('summary', 'Worin liegt der Unterschied zwischen Methoden-Sammlung und Seminarkonzept?');
+echo html_writer::tag('summary', html_writer::tag('span', '▸', ['class' => 'sq-tri', 'aria-hidden' => 'true'])
+    . ' Worin liegt der Unterschied zwischen Methoden-Sammlung und Seminarkonzept?');
 echo html_writer::start_div('kg-review-diff__body');
 echo $diffsvg;
 echo html_writer::start_tag('ul', ['class' => 'kg-review-diff__list']);

@@ -122,7 +122,10 @@ class api extends external_api {
         }
 
         $aliases = [
-            'warm-up' => 'Orientierung',
+            'warm-up' => 'Warmup/Aktivierung',
+            'warmup' => 'Warmup/Aktivierung',
+            'warm up' => 'Warmup/Aktivierung',
+            'aktivierung' => 'Warmup/Aktivierung',
             'einstieg' => 'Orientierung',
             'erwartungsabfrage' => 'Erfahrungserhebung',
             'vorwissen aktivieren' => 'Erfahrungserhebung',
@@ -4444,7 +4447,7 @@ class api extends external_api {
     public static function set_pdf_columns_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
-            'columnsjson' => new external_value(PARAM_RAW, 'PDF column setting as JSON {all, order, selected}'),
+            'columnsjson' => new external_value(PARAM_RAW, 'PDF column setting as JSON {all, order, selected, orientation}'),
         ]);
     }
 
@@ -4488,6 +4491,7 @@ class api extends external_api {
             'all' => !empty($decoded['all']),
             'order' => $order,
             'selected' => $selected,
+            'orientation' => seminarplaner_pdf_orientation($decoded['orientation'] ?? ''),
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         set_config('pdfcolumns_cmid_' . (int)$resolved['cm']->id, $payload, 'mod_seminarplaner');
@@ -4503,6 +4507,104 @@ class api extends external_api {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'Save result'),
         ]);
+    }
+
+    /**
+     * Definiert die Eingabeparameter für das Lesen des PDF-Infofelds.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
+    public static function get_pdf_info_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'gridid' => new external_value(PARAM_INT, 'Seminar plan id'),
+        ]);
+    }
+
+    /**
+     * Infofeld eines Seminarplans für die PDF-Exporte lesen (Seminarzeiten,
+     * allgemeine Infos, Vorbereitungstreffen …).
+     */
+    public static function get_pdf_info(int $cmid, int $gridid): array {
+        global $CFG;
+        require_once($CFG->dirroot . '/mod/seminarplaner/locallib.php');
+
+        $params = self::validate_parameters(self::get_pdf_info_parameters(), [
+            'cmid' => $cmid,
+            'gridid' => $gridid,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::require_pdf_info_grid((int)$resolved['cm']->id, (int)$params['gridid']);
+        return ['infohtml' => seminarplaner_get_pdf_info((int)$resolved['cm']->id, (int)$params['gridid'])];
+    }
+
+    /**
+     * Beschreibt die Rückgabestruktur des PDF-Infofelds.
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
+    public static function get_pdf_info_returns(): external_single_structure {
+        return new external_single_structure([
+            'infohtml' => new external_value(PARAM_RAW, 'Info text as HTML (empty when unset)'),
+        ]);
+    }
+
+    /**
+     * Definiert die Eingabeparameter für das Speichern des PDF-Infofelds.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
+    public static function set_pdf_info_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'gridid' => new external_value(PARAM_INT, 'Seminar plan id'),
+            'infohtml' => new external_value(PARAM_RAW, 'Info text as HTML'),
+        ]);
+    }
+
+    /**
+     * Infofeld eines Seminarplans speichern. Leerer Inhalt löscht den Eintrag.
+     */
+    public static function set_pdf_info(int $cmid, int $gridid, string $infohtml): array {
+        global $CFG;
+        require_once($CFG->dirroot . '/mod/seminarplaner/locallib.php');
+
+        $params = self::validate_parameters(self::set_pdf_info_parameters(), [
+            'cmid' => $cmid,
+            'gridid' => $gridid,
+            'infohtml' => $infohtml,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::enforce_write_rate_limit('set_pdf_info', 120, 60);
+        self::require_pdf_info_grid((int)$resolved['cm']->id, (int)$params['gridid']);
+        seminarplaner_set_pdf_info((int)$resolved['cm']->id, (int)$params['gridid'], (string)$params['infohtml']);
+        return ['success' => true];
+    }
+
+    /**
+     * Beschreibt die Rückgabestruktur der Speicherung des PDF-Infofelds.
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
+    public static function set_pdf_info_returns(): external_single_structure {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'Save result'),
+        ]);
+    }
+
+    /**
+     * Der Seminarplan muss zu dieser Aktivität gehören.
+     *
+     * @param int $cmid Course module id.
+     * @param int $gridid Seminar plan id.
+     */
+    private static function require_pdf_info_grid(int $cmid, int $gridid): void {
+        global $DB;
+        if (!$DB->record_exists('kgen_grid', ['id' => $gridid, 'cmid' => $cmid])) {
+            throw new invalid_parameter_exception('Seminar plan does not belong to this activity');
+        }
     }
 
     /**

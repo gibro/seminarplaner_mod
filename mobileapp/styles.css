@@ -217,6 +217,12 @@
 
 /* ---- Seminarphasen: dieselbe Zuordnung wie im Browser ---- */
 
+.sp-phase--warmup {
+  --sp-color: #7B4FA0;
+  --sp-tint: #EFE8F5;
+  --sp-text: #5B3780;
+}
+
 .sp-phase--orientierung {
   --sp-color: var(--sp-blue);
   --sp-tint: #e7f0f5;

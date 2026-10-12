@@ -457,9 +457,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
     // `label` ist der kanonische Wert, der in die Karte geschrieben wird — er
     // muss mit seminarplaner_phase_options() (locallib.php) uebereinstimmen,
     // aus der Legende und das Editor-Dropdown gespeist werden. `match` bleibt
-    // die lose Erkennung fuer Alt-Bestand („Warm-up" -> Orientierung).
+    // die lose Erkennung fuer Alt-Bestand („Warm-up" -> Warmup/Aktivierung,
+    // „Einstieg" -> Orientierung).
     const PHASE_KEYS = [
-        {key: 'orientierung', label: 'Orientierung', match: ['orientierung', 'warm-up', 'einstieg']},
+        {key: 'warmup', label: 'Warmup/Aktivierung', match: ['warmup', 'warm-up', 'warm up', 'aktivierung']},
+        {key: 'orientierung', label: 'Orientierung', match: ['orientierung', 'einstieg']},
         {key: 'erfahrung', label: 'Erfahrungserhebung', match: ['erfahrung', 'erwartungsabfrage', 'vorwissen']},
         {key: 'analyse', label: 'Analyse', match: ['analyse']},
         {key: 'handlung', label: 'Handlungsteil', match: ['handlung', 'aktion', 'praxis']},
@@ -476,6 +478,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
     };
 
     const PHASE_LABELS = {
+        warmup: 'Warmup/Aktivierung',
         orientierung: 'Orientierung',
         erfahrung: 'Erfahrungserhebung',
         analyse: 'Analyse',
@@ -490,13 +493,30 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         + ` stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"`
         + ` aria-hidden="true" focusable="false">${paths}</svg>`;
     const MENU_ICONS = {
-        up: menuIcon('<path d="M12 19V5M5 12l7-7 7 7"/>'),
-        down: menuIcon('<path d="M12 5v14M5 12l7 7 7-7"/>'),
         // Kette mit Bruch = aus der Klammer lösen; geschlossene Kette = aufnehmen.
         unlink: menuIcon('<path d="M9 17H7a5 5 0 010-10h2M15 7h2a5 5 0 014 8"/><path d="M3 3l18 18"/>'),
         link: menuIcon('<path d="M9 17H7a5 5 0 010-10h2M15 7h2a5 5 0 010 10h-2M8 12h8"/>'),
         heading: menuIcon('<path d="M6 4v16M18 4v16M6 12h12"/>'),
+        // Zwei Pfeile im Kreis = dieselbe Einheit noch einmal; zwei Blätter =
+        // eigenständiges Duplikat (dasselbe Symbol wie in der Bibliothek).
+        again: menuIcon('<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 013-3h15"/>'
+            + '<path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 01-3 3H3"/>'),
+        duplicate: menuIcon('<rect x="9" y="9" width="12" height="12" rx="1"/>'
+            + '<path d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"/>'),
         remove: menuIcon('<path d="M6 6l12 12M18 6L6 18"/>'),
+    };
+
+    // Titel für ein Duplikat: „Titel (2)", bei Bedarf (3), (4) … - eine schon
+    // vorhandene Nummer am Ende wird ersetzt, nicht angehängt. Dieselbe Regel
+    // gilt in der Bibliothek (methodlibrary.js, numberedTitleFor).
+    const numberedTitleFor = (title, cards) => {
+        const base = String(title || '(ohne Titel)').trim().replace(/\s*\((?:Kopie(?: \d+)?|\d+)\)$/, '');
+        const taken = new Set((cards || []).map((c) => String((c && c.titel) || '').trim().toLowerCase()));
+        let n = 2;
+        while (taken.has(`${base} (${n})`.toLowerCase())) {
+            n++;
+        }
+        return `${base} (${n})`;
     };
 
     // Obergrenze der direkt editierbaren Dauer (Handoff: clamp 0–600). 600 Min.
@@ -988,6 +1008,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 }
                 if (nameinput) {
                     nameinput.value = '';
+                    // Leer lassen geht: dann trägt der Plan diesen Namen.
+                    nameinput.placeholder = this.defaultPlanName();
                 }
                 this.fillSetupForm({preset: 'standard-week', days: GRID_PRESETS['standard-week'].days,
                     ankerzeiten: DEFAULT_ANKERZEITEN});
@@ -1122,15 +1144,28 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }
             if (this.setupMode === 'create') {
                 const nameinput = bySel('#sq-setup-name');
-                const name = nameinput ? nameinput.value.trim() : '';
-                if (!name) {
-                    this.setStatus('Bitte einen Namen für den Seminarplan eingeben.', true);
-                    return;
-                }
+                // Ohne Namen trotzdem anlegen - mit dem ersten freien
+                // „Seminarplan (n)".
+                const name = (nameinput ? nameinput.value.trim() : '') || this.defaultPlanName();
                 this.createPlan(name, config);
                 return;
             }
             this.applySetupToCurrentPlan(config);
+        }
+
+        // Erster freier Name der Form „Seminarplan (1)", „Seminarplan (2)" …
+        // in dieser Aktivität (Groß-/Kleinschreibung egal, archivierte zählen mit).
+        defaultPlanName() {
+            const taken = new Set((this.gridNames || []).map((name) => name.toLowerCase()));
+            const select = bySel('#sq-grid-select');
+            if (select) {
+                Array.from(select.options).forEach((opt) => taken.add(String(opt.textContent || '').trim().toLowerCase()));
+            }
+            let n = 1;
+            while (taken.has(`seminarplan (${n})`)) {
+                n++;
+            }
+            return `Seminarplan (${n})`;
         }
 
         createPlan(name, config) {
@@ -1464,6 +1499,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
 
         loadGrids(preferredid) {
             return asCall('mod_seminarplaner_list_grids', {cmid: this.cmid}).then((res) => {
+                // Alle Namen (auch archivierte) - Grundlage für „Seminarplan (n)".
+                this.gridNames = (res.grids || []).map((grid) => String(grid.name || '').trim());
                 const grids = (res.grids || []).filter((grid) => !Number(grid.isarchived));
                 const select = bySel('#sq-grid-select');
                 if (!select) {
@@ -2430,47 +2467,114 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             return null;
         }
 
-        movePlacement(pid, delta) {
-            const found = this.locate(pid);
-            if (!found) {
+        // Drop auf ‹ / ›: an den Anfang des nächsten bzw. ans Ende des
+        // vorigen Tages (erster bzw. letzter Abschnitt, der stattfindet). Eine
+        // einzeln gezogene Einheit verlässt dabei ihren Baustein - wie beim
+        // Ablegen außerhalb des Kastens.
+        dropOnDay(delta) {
+            const dragged = this.draggedPids();
+            if (!dragged || !dragged.pids.length) {
                 return;
             }
-            const {anchorIdx, pos, anchors} = found;
-            const seq = anchors[anchorIdx].seq;
-            const target = pos + delta;
-            if (target >= 0 && target < seq.length) {
-                seq.splice(pos, 1);
-                seq.splice(target, 0, pid);
-            } else {
-                const nextAnchorIdx = this.openAnchorIdx(anchors, anchorIdx, delta);
-                if (nextAnchorIdx < 0) {
-                    this.setStatus(delta < 0
-                        ? 'Davor gibt es keinen Abschnitt, der stattfindet.'
-                        : 'Danach gibt es keinen Abschnitt, der stattfindet.');
-                    return;
-                }
-                seq.splice(pos, 1);
-                const nextSeq = anchors[nextAnchorIdx].seq;
-                if (delta > 0) {
-                    nextSeq.unshift(pid);
-                } else {
-                    nextSeq.push(pid);
-                }
-                const targetDay = this.sequenz.tage[anchors[nextAnchorIdx].dayIdx];
-                const targetAnkerName = anchors[nextAnchorIdx].ankername === 'vormittag'
-                    ? 'Vormittag'
-                    : 'Nachmittag';
-                this.setStatus(`Verschoben: jetzt am ${targetAnkerName} von Tag ${targetDay.tag}.`);
+            const {found, pids} = dragged;
+            const anchors = found.anchors;
+            const day = this.dayIndex + delta;
+            const open = [day * 2, day * 2 + 1].filter((i) => i >= 0 && i < anchors.length
+                && !this.anchorIsOff(anchors[i].dayIdx, anchors[i].ankername));
+            const tag = (this.sequenz.tage[day] || {}).tag || day + 1;
+            if (!open.length) {
+                this.setStatus(`An Tag ${tag} findet kein Abschnitt statt.`, true);
+                return;
             }
+            const dstIdx = delta > 0 ? open[0] : open[open.length - 1];
+            const srcSeq = anchors[found.anchorIdx].seq;
+            const oldNeighbor = srcSeq[found.pos + pids.length] || '';
+            const single = this.dragIsSingleUnit() ? this.placement(pids[0]) : null;
+            srcSeq.splice(found.pos, pids.length);
+            const dstSeq = anchors[dstIdx].seq;
+            if (delta > 0) {
+                dstSeq.unshift(...pids);
+            } else {
+                dstSeq.push(...pids);
+            }
+            if (single && single.bausteinid) {
+                const oldbid = single.bausteinid;
+                single.bausteinid = null;
+                this.keepBausteinVisible(oldbid, srcSeq, oldNeighbor);
+            }
+            const ankertext = anchors[dstIdx].ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag';
+            this.setStatus(`Verschoben: jetzt ${delta > 0 ? 'am Anfang' : 'am Ende'} vom ${ankertext} von Tag ${tag}.`);
+            this.toast(`Auf Tag ${tag} verschoben.`);
+            this.finishMove(pids);
+        }
+
+        finishMove(pids) {
+            const rejoined = this.rejoinSplitParts(pids);
             this.setDirty(true);
             this.render();
+            this.toastRejoined(rejoined);
+        }
+
+        // Eine geteilte Einheit (resolveOverflow/splitPlacement), von der ein
+        // Teil verschoben wird, wird wieder eine ganze Einheit: der verschobene
+        // Teil sammelt die übrigen Teile ein (Dauern summiert) und steht an
+        // der neuen Stelle. Passt sie dort nicht, zeigt der Abschnitt wie
+        // gewohnt den Überlauf und bietet erneut das Teilen an.
+        // Rückgabe: Titel der wieder zusammengefügten Einheiten.
+        rejoinSplitParts(pids) {
+            const titles = [];
+            const done = {};
+            pids.forEach((pid) => {
+                const survivor = this.placement(pid);
+                const sg = survivor && survivor.splitgroup ? String(survivor.splitgroup) : '';
+                if (!sg || done[sg]) {
+                    return;
+                }
+                done[sg] = true;
+                let total = Math.max(0, Number(survivor.dauer) || 0);
+                Object.keys(this.sequenz.platzierungen).forEach((other) => {
+                    const part = this.sequenz.platzierungen[other];
+                    if (other === pid || !part || String(part.splitgroup || '') !== sg) {
+                        return;
+                    }
+                    total += Math.max(0, Number(part.dauer) || 0);
+                    this.anchorList().forEach((anchor) => {
+                        const pos = anchor.seq.indexOf(other);
+                        if (pos >= 0) {
+                            anchor.seq.splice(pos, 1);
+                        }
+                    });
+                    const auswahlid = part.einheitenauswahl;
+                    delete this.sequenz.platzierungen[other];
+                    if (auswahlid && !this.auswahlInUse(auswahlid)) {
+                        delete this.sequenz.einheitenauswahlen[auswahlid];
+                    }
+                });
+                survivor.dauer = total;
+                delete survivor.splitgroup;
+                delete survivor.fortsetzung;
+                titles.push(String(survivor.titel || 'Einheit'));
+            });
+            return titles;
+        }
+
+        toastRejoined(titles) {
+            if (titles.length === 1) {
+                this.toast(`„${titles[0]}" wieder zusammengefügt.`);
+            } else if (titles.length > 1) {
+                this.toast(`${titles.length} geteilte Einheiten wieder zusammengefügt.`);
+            }
         }
 
         // ---- D47: drag & drop as the second way to reorder (besides ↑/↓) --
-        // Draggable are the top-level rows of the current day: standalone
-        // units, breaks and whole modules. Units inside a module are not
-        // draggable (membership stays a deliberate action); the arrows
-        // still cover fine-grained moves and cross-day moves.
+        // Draggable are the rows of the current day: standalone units, breaks,
+        // whole modules and the units inside a module. Where a single unit is
+        // dropped decides its membership: inside a module's box it joins that
+        // module, anywhere else it is standalone (see dropTarget). Dropping on
+        // the day buttons ‹ › moves to the previous/next day - since the arrow
+        // menu items are gone, that is the way across days. Touch devices
+        // drag via the grip with pointer events (initTouchDrag): HTML5 drag &
+        // drop does not start from a finger on Android.
 
         initDragAndDrop(container) {
             // Im Aufklappbereich soll man Text markieren koennen. Solange die
@@ -2488,6 +2592,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 document.addEventListener('mouseup', () => row.setAttribute('draggable', 'true'), {once: true});
             });
             container.addEventListener('dragstart', (event) => {
+                // Ein Finger-Zug läuft schon über initTouchDrag - den nativen
+                // Drag (iOS startet ihn nach langem Drücken) nicht zusätzlich.
+                if (this.drag && this.drag.touch) {
+                    event.preventDefault();
+                    return;
+                }
                 const row = event.target.closest('[data-sq-drag]');
                 if (!row) {
                     return;
@@ -2529,17 +2639,147 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 this.clearDropMarkers();
                 document.querySelectorAll('.sq-dragging').forEach((el) => el.classList.remove('sq-dragging'));
             });
+            // Die Tag-Knöpfe liegen außerhalb von container, nehmen aber Drops an.
+            ['#sq-prev-day', '#sq-next-day'].forEach((sel) => {
+                const btn = bySel(sel);
+                if (!btn) {
+                    return;
+                }
+                btn.addEventListener('dragover', (event) => {
+                    const target = this.drag ? this.dropTarget(event) : null;
+                    this.markDropTarget(target);
+                    if (target) {
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = 'move';
+                    }
+                });
+                btn.addEventListener('dragleave', () => this.clearDropMarkers());
+                btn.addEventListener('drop', (event) => {
+                    const target = this.drag ? this.dropTarget(event) : null;
+                    this.clearDropMarkers();
+                    if (target) {
+                        event.preventDefault();
+                        this.dropMove(target);
+                    }
+                });
+            });
+            this.initTouchDrag(container);
+        }
+
+        // Ziehen mit dem Finger: am Griff (⠿) anfassen und ziehen. Gleiche
+        // Ablageziele wie mit der Maus (dropTarget/dropMove), ermittelt über
+        // den Punkt unter dem Finger. Nur der Griff startet einen Zug - überall
+        // sonst scrollt die Seite wie gewohnt.
+        initTouchDrag(container) {
+            container.addEventListener('pointerdown', (event) => {
+                if (event.pointerType === 'mouse' || this.drag || !event.target.closest) {
+                    return;
+                }
+                const grip = event.target.closest('.sq-grip');
+                const row = grip ? grip.closest('[data-sq-drag]') : null;
+                if (!row || !container.contains(row)) {
+                    return;
+                }
+                event.preventDefault();
+                const pointerId = event.pointerId;
+                this.drag = {
+                    pid: row.getAttribute('data-sq-drag'),
+                    bid: row.getAttribute('data-sq-group') || '',
+                    touch: true,
+                };
+                row.classList.add('sq-dragging');
+                document.body.classList.add('sq-touch-dragging');
+                const scroller = this.scrollParent(container);
+                let target = null;
+                let lastY = event.clientY;
+                let frame = 0;
+                // Am oberen/unteren Rand mitscrollen, damit man auch Ziele
+                // außerhalb des sichtbaren Bereichs erreicht (z. B. die
+                // Tag-Knöpfe oben).
+                const autoscroll = () => {
+                    const edge = 70;
+                    const bottom = scroller === window ? window.innerHeight : scroller.getBoundingClientRect().bottom;
+                    const top = scroller === window ? 0 : scroller.getBoundingClientRect().top;
+                    let dy = 0;
+                    if (lastY < top + edge) {
+                        dy = -Math.ceil((top + edge - lastY) / 5);
+                    } else if (lastY > bottom - edge) {
+                        dy = Math.ceil((lastY - bottom + edge) / 5);
+                    }
+                    if (dy) {
+                        // „instant": Moodle setzt scroll-behavior: smooth - dann
+                        // bräche jeder Aufruf die Animation des vorigen ab und die
+                        // Seite käme kaum vom Fleck.
+                        scroller.scrollBy({top: dy, behavior: 'instant'});
+                    }
+                    frame = window.requestAnimationFrame(autoscroll);
+                };
+                frame = window.requestAnimationFrame(autoscroll);
+                const onmove = (e) => {
+                    if (e.pointerId !== pointerId) {
+                        return;
+                    }
+                    e.preventDefault();
+                    lastY = e.clientY;
+                    const el = document.elementFromPoint(e.clientX, e.clientY);
+                    target = el ? this.dropTarget({target: el, clientX: e.clientX, clientY: e.clientY}) : null;
+                    this.markDropTarget(target);
+                };
+                const onend = (e) => {
+                    if (e.pointerId !== pointerId) {
+                        return;
+                    }
+                    document.removeEventListener('pointermove', onmove);
+                    document.removeEventListener('pointerup', onend);
+                    document.removeEventListener('pointercancel', onend);
+                    window.cancelAnimationFrame(frame);
+                    this.clearDropMarkers();
+                    document.body.classList.remove('sq-touch-dragging');
+                    document.querySelectorAll('.sq-dragging').forEach((el) => el.classList.remove('sq-dragging'));
+                    if (e.type === 'pointerup' && target) {
+                        this.dropMove(target);
+                    }
+                    this.drag = null;
+                };
+                document.addEventListener('pointermove', onmove, {passive: false});
+                document.addEventListener('pointerup', onend);
+                document.addEventListener('pointercancel', onend);
+            });
+        }
+
+        // Das Element, das die Seite tatsächlich scrollt (Moodle 5 scrollt je
+        // nach Theme im Seiten-Container statt im Fenster).
+        scrollParent(el) {
+            let node = el ? el.parentElement : null;
+            while (node && node !== document.body) {
+                const style = window.getComputedStyle(node);
+                if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight) {
+                    return node;
+                }
+                node = node.parentElement;
+            }
+            return window;
         }
 
         // Drop on a row = insert before it, drop on the anchor body = append
         // at the end. Anchors that do not take place (arrival/departure day)
         // accept no drops, mirroring their disabled add buttons.
         dropTarget(event) {
+            const nav = event.target.closest && event.target.closest('#sq-prev-day, #sq-next-day');
+            if (nav) {
+                const delta = nav.id === 'sq-next-day' ? 1 : -1;
+                const day = this.dayIndex + delta;
+                return day >= 0 && day < this.dayCount() ? {daynav: delta, el: nav} : null;
+            }
             const anchorEl = event.target.closest('.sq-anchor');
             if (!anchorEl || anchorEl.hasAttribute('data-off')) {
                 return null;
             }
             const ankername = anchorEl.getAttribute('data-anker') || 'vormittag';
+            const group = event.target.closest('.sq-row--baustein');
+            if (group) {
+                return this.bausteinDropTarget(event, ankername, group);
+            }
             const row = event.target.closest('[data-sq-drag]');
             if (row) {
                 return row.classList.contains('sq-dragging')
@@ -2550,6 +2790,53 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             return body ? {ankername, beforePid: '', el: body} : null;
         }
 
+        // Drop über einem Baustein. Nur eine einzelne Seminareinheit kann
+        // hinein: über einer enthaltenen Einheit landet sie davor, sonst im
+        // Kasten am Ende des Bausteins. Ausgenommen ist die obere Hälfte des
+        // Kopfs - dort sortiert sie wie bisher VOR den Baustein ein. Bausteine
+        // und Pausen kommen nie hinein (Bausteine verschachteln nicht, Pausen
+        // gehören keinem), für sie bleibt jeder Drop „vor den Baustein".
+        bausteinDropTarget(event, ankername, group) {
+            if (group.classList.contains('sq-dragging')) {
+                return null;
+            }
+            const grouppid = group.getAttribute('data-sq-drag');
+            const before = {ankername, beforePid: grouppid, el: group};
+            const bid = group.getAttribute('data-sq-group') || '';
+            if (!this.dragIsSingleUnit() || !bid) {
+                return before;
+            }
+            const box = event.target.closest('.sq-baustein');
+            if (!box) {
+                // Zeit-Spalte links neben dem Kasten.
+                return before;
+            }
+            const head = event.target.closest('.sq-baustein__head');
+            if (head) {
+                const rect = head.getBoundingClientRect();
+                if (event.clientY < rect.top + rect.height / 2) {
+                    return before;
+                }
+            }
+            const inner = event.target.closest('.sq-baustein__units [data-sq-drag]');
+            if (inner && group.contains(inner)) {
+                return inner.classList.contains('sq-dragging')
+                    ? null
+                    : {ankername, beforePid: inner.getAttribute('data-sq-drag'), el: inner, joinBid: bid};
+            }
+            return {ankername, beforePid: '', el: box, joinBid: bid, groupPid: grouppid};
+        }
+
+        // Wird gerade genau eine Seminareinheit gezogen (kein Baustein, keine
+        // Pause)? Nur sie kann ihre Baustein-Zugehörigkeit per Drop wechseln.
+        dragIsSingleUnit() {
+            if (!this.drag || this.drag.bid) {
+                return false;
+            }
+            const placement = this.placement(this.drag.pid);
+            return !!placement && placement.typ === 'einheit';
+        }
+
         markDropTarget(target) {
             const el = target ? target.el : null;
             if (this.dropMarkerEl === el) {
@@ -2557,14 +2844,21 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }
             this.clearDropMarkers();
             if (el) {
-                el.classList.add(target.beforePid ? 'sq-drop-before' : 'sq-drop-append');
+                let cls = target.beforePid ? 'sq-drop-before' : 'sq-drop-append';
+                if (target.joinBid && !target.beforePid) {
+                    cls = 'sq-drop-into';
+                }
+                if (target.daynav) {
+                    cls = 'sq-drop-day';
+                }
+                el.classList.add(cls);
                 this.dropMarkerEl = el;
             }
         }
 
         clearDropMarkers() {
-            document.querySelectorAll('.sq-drop-before, .sq-drop-append').forEach((el) => {
-                el.classList.remove('sq-drop-before', 'sq-drop-append');
+            document.querySelectorAll('.sq-drop-before, .sq-drop-append, .sq-drop-into, .sq-drop-day').forEach((el) => {
+                el.classList.remove('sq-drop-before', 'sq-drop-append', 'sq-drop-into', 'sq-drop-day');
             });
             this.dropMarkerEl = null;
         }
@@ -2594,6 +2888,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         }
 
         dropMove(target) {
+            if (target.daynav) {
+                this.dropOnDay(target.daynav);
+                return;
+            }
             const dragged = this.draggedPids();
             if (!dragged || !dragged.pids.length) {
                 return;
@@ -2607,25 +2905,171 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 return;
             }
             const dstSeq = anchors[dstAnchorIdx].seq;
+            let beforePid = target.beforePid;
+            if (target.joinBid && !beforePid) {
+                // „In den Kasten": ans Ende des Baustein-Laufs, also vor das
+                // erste Element dahinter.
+                beforePid = this.pidAfterRun(dstSeq, target.groupPid, target.joinBid, pids);
+            }
+
+            // Eine einzeln gezogene Einheit gehört danach dem Baustein, in den
+            // sie fiel - oder keinem. Ganze Bausteine und Pausen behalten ihre
+            // Zugehörigkeit.
+            const single = this.dragIsSingleUnit() ? this.placement(pids[0]) : null;
+            const oldBid = single ? (single.bausteinid || null) : null;
+            const newBid = single ? (target.joinBid || null) : oldBid;
+            const membershipChanges = String(oldBid || '') !== String(newBid || '');
+
+            let positionChanges = true;
             if (srcSeq === dstSeq) {
-                const refIdx = target.beforePid ? srcSeq.indexOf(target.beforePid) : srcSeq.length;
-                if (refIdx === found.pos || refIdx === found.pos + pids.length) {
-                    return;
+                const refIdx = beforePid ? srcSeq.indexOf(beforePid) : srcSeq.length;
+                positionChanges = !(refIdx === found.pos || refIdx === found.pos + pids.length);
+            }
+            if (!positionChanges && !membershipChanges) {
+                return;
+            }
+            // Der Nachbar hinter der alten Stelle - dort bekommt ein Baustein,
+            // dem die letzte Einheit herausgezogen wurde, seinen Platzhalter.
+            const oldNeighbor = srcSeq[found.pos + pids.length] || '';
+            if (positionChanges) {
+                srcSeq.splice(found.pos, pids.length);
+                let insertAt = beforePid ? dstSeq.indexOf(beforePid) : dstSeq.length;
+                if (insertAt < 0) {
+                    insertAt = dstSeq.length;
+                }
+                dstSeq.splice(insertAt, 0, ...pids);
+            }
+            if (membershipChanges) {
+                single.bausteinid = newBid;
+                if (newBid) {
+                    this.consumeReservation(newBid, dstSeq, Math.max(0, Number(single.dauer) || 0));
+                }
+                if (oldBid) {
+                    this.keepBausteinVisible(oldBid, srcSeq, oldNeighbor);
                 }
             }
-            srcSeq.splice(found.pos, pids.length);
-            let insertAt = target.beforePid ? dstSeq.indexOf(target.beforePid) : dstSeq.length;
-            if (insertAt < 0) {
-                insertAt = dstSeq.length;
-            }
-            dstSeq.splice(insertAt, 0, ...pids);
+
             if (found.anchorIdx !== dstAnchorIdx) {
                 const targetDay = this.sequenz.tage[anchors[dstAnchorIdx].dayIdx];
                 const targetAnkerName = target.ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag';
                 this.setStatus(`Verschoben: jetzt am ${targetAnkerName} von Tag ${targetDay.tag}.`);
             }
+            const rejoined = positionChanges ? this.rejoinSplitParts(pids) : [];
             this.setDirty(true);
             this.render();
+            this.toastRejoined(rejoined);
+            if (membershipChanges && newBid) {
+                this.toast(`In „${this.bausteinTitle(newBid)}" aufgenommen.`);
+            } else if (membershipChanges) {
+                this.toast('Aus dem Baustein gelöst.');
+            }
+        }
+
+        // Das erste Element hinter dem Lauf des Bausteins `bid`, der bei
+        // `startPid` beginnt ('' = Ende des Abschnitts). Die gezogenen pids
+        // zählen nicht als Grenze - sie werden ohnehin herausgenommen.
+        pidAfterRun(seq, startPid, bid, skip) {
+            let i = seq.indexOf(startPid);
+            if (i < 0) {
+                return '';
+            }
+            while (i < seq.length) {
+                const placement = this.placement(seq[i]);
+                const inRun = skip.indexOf(seq[i]) >= 0
+                    || (placement && placement.typ === 'einheit' && String(placement.bausteinid || '') === String(bid));
+                if (!inRun) {
+                    break;
+                }
+                i++;
+            }
+            return i < seq.length ? seq[i] : '';
+        }
+
+        // Eine Einheit kommt in einen Baustein mit offener Reservierung: die
+        // Reservierung schrumpft um ihre Dauer, wie beim Platzieren über
+        // „＋ Platzieren" (addCardToBaustein). Ist sie aufgebraucht, räumt
+        // dropSpentPlaceholders den leeren Rest beim nächsten Zeichnen weg.
+        consumeReservation(bid, seq, minutes) {
+            let rest = minutes;
+            seq.forEach((pid) => {
+                const placement = this.placement(pid);
+                if (rest <= 0 || !placement || String(placement.bausteinid || '') !== String(bid)
+                        || !this.isUnfilled(placement)) {
+                    return;
+                }
+                const dauer = Math.max(0, Number(placement.dauer) || 0);
+                const take = Math.min(dauer, rest);
+                placement.dauer = dauer - take;
+                rest -= take;
+            });
+        }
+
+        // Ein Baustein, dem gerade die letzte Einheit genommen wurde, soll nicht
+        // spurlos verschwinden: er bekommt wieder den unsichtbaren Platzhalter
+        // eines frisch angelegten leeren Bausteins (Dauer 0, leere Auswahl).
+        // Maßgeblich ist der Abschnitt, aus dem die Einheit kam: läuft der
+        // Baustein über mehrere Tage, bleibt sein Kasten hier trotzdem stehen.
+        keepBausteinVisible(bid, seq, beforePid) {
+            const here = seq.some((pid) => {
+                const placement = this.placement(pid);
+                return placement && placement.typ === 'einheit' && String(placement.bausteinid || '') === String(bid);
+            });
+            if (!this.baustein(bid) || here) {
+                return;
+            }
+            const eaid = this.uniqueId('eax', this.sequenz.einheitenauswahlen);
+            this.sequenz.einheitenauswahlen[eaid] = {kandidaten: [], aktiv: null};
+            const pid = this.uniqueId('px', this.sequenz.platzierungen);
+            this.sequenz.platzierungen[pid] = {
+                typ: 'einheit',
+                bausteinid: bid,
+                einheitenauswahl: eaid,
+                titel: '',
+                dauer: 0,
+            };
+            const at = beforePid ? seq.indexOf(beforePid) : -1;
+            seq.splice(at >= 0 ? at : seq.length, 0, pid);
+        }
+
+        // Ein leerer Baustein hält seine Stelle mit einem Platzhalter ohne
+        // Dauer (createEmptyBaustein). Sobald der Baustein eine echte Einheit
+        // hat - egal ob über „Einheit einplanen", „In … aufnehmen" oder Drag &
+        // Drop -, ist dieser Platzhalter verbraucht. Blieb er stehen, zeigte
+        // der Baustein eine leere Zeile „Noch offen · reserviert" mit 0 Min.
+        // Heilt auch bestehende Pläne. Rückgabe: true, wenn etwas entfernt wurde.
+        dropSpentPlaceholders() {
+            const anchors = this.anchorList();
+            const isSpent = (placement) => placement && placement.typ === 'einheit'
+                && placement.bausteinid && this.isUnfilled(placement)
+                && Math.max(0, Number(placement.dauer) || 0) === 0;
+            // Verbraucht ist ein Platzhalter nur, wenn in SEINER Gruppe (dem
+            // zusammenhängenden Lauf) echte Einheiten stehen - ein leerer Kasten
+            // an Tag 1 bleibt, auch wenn derselbe Baustein an Tag 2 gefüllt ist.
+            const runHasContent = (seq, pos, bid) => this.findRunAt(seq, pos, bid)
+                .some((rpid) => !isSpent(this.placement(rpid)));
+            const inVariant = (pid) => Object.values(this.sequenz.bausteine || {}).some((b) =>
+                Object.values((b && b.varianten) || {}).some((v) =>
+                    Array.isArray(v.platzierungen) && v.platzierungen.indexOf(pid) >= 0));
+            let changed = false;
+            anchors.forEach((anchor) => {
+                for (let i = anchor.seq.length - 1; i >= 0; i--) {
+                    const pid = anchor.seq[i];
+                    const placement = this.placement(pid);
+                    if (!isSpent(placement) || !runHasContent(anchor.seq, i, placement.bausteinid)) {
+                        continue;
+                    }
+                    anchor.seq.splice(i, 1);
+                    if (!inVariant(pid)) {
+                        const auswahlid = placement.einheitenauswahl;
+                        delete this.sequenz.platzierungen[pid];
+                        if (auswahlid && !this.auswahlInUse(auswahlid)) {
+                            delete this.sequenz.einheitenauswahlen[auswahlid];
+                        }
+                    }
+                    changed = true;
+                }
+            });
+            return changed;
         }
 
         // C1: resolve an anchor overflow. Trailing placements move into the
@@ -3149,17 +3593,27 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             if (!placement || !found) {
                 return;
             }
+            if (placement.typ === 'einheit' && placement.bausteinid && this.isUnfilled(placement)) {
+                this.removeBausteinPlaceholder(pid, found);
+                return;
+            }
             const question = placement.typ === 'pause'
                 ? 'Diese Pause aus dem Plan entfernen?'
                 : 'Diese Einheit aus dem Plan entfernen? Der Bibliothekseintrag bleibt erhalten.';
             if (!window.confirm(question)) {
                 return;
             }
-            found.anchors[found.anchorIdx].seq.splice(found.pos, 1);
+            const seq = found.anchors[found.anchorIdx].seq;
+            seq.splice(found.pos, 1);
             const auswahlid = placement.einheitenauswahl;
             delete this.sequenz.platzierungen[pid];
             if (auswahlid && !this.auswahlInUse(auswahlid)) {
                 delete this.sequenz.einheitenauswahlen[auswahlid];
+            }
+            // War es die letzte Einheit ihres Bausteins, bleibt der Baustein als
+            // leerer Kasten an derselben Stelle stehen (wie beim Lösen/Ziehen).
+            if (placement.typ === 'einheit' && placement.bausteinid) {
+                this.keepBausteinVisible(placement.bausteinid, seq, seq[found.pos] || '');
             }
             // If this was one half of a split unit, drop the split marker from
             // the lone survivor so it becomes an ordinary unit again (no stray
@@ -3170,6 +3624,62 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             this.setDirty(true);
             this.render();
             this.toast('Entfernt – die Zeiten sind nachgerückt.');
+        }
+
+        // ⋮ „Baustein entfernen" / „Reservierung entfernen". Hat der Baustein
+        // sonst nichts (leerer oder nur reservierter Baustein), geht der ganze
+        // zusammenhängende Platzhalter-Lauf und - wenn danach nirgends mehr
+        // etwas von ihm im Plan steht - auch der Baustein selbst. Steht der
+        // Platzhalter in einem teilweise gefüllten Baustein, geht nur die
+        // Reservierung; die Einheiten bleiben.
+        removeBausteinPlaceholder(pid, found) {
+            const placement = this.placement(pid);
+            const bid = placement.bausteinid;
+            const seq = found.anchors[found.anchorIdx].seq;
+            const run = this.findRunAt(seq, found.pos, bid);
+            const hasunits = run.some((rpid) => !this.isUnfilled(this.placement(rpid)));
+            const pids = hasunits ? [pid] : run.filter((rpid) => this.isUnfilled(this.placement(rpid)));
+            const question = hasunits
+                ? 'Die reservierte Zeit aus dem Baustein entfernen? Die Einheiten bleiben.'
+                : `Den leeren Baustein „${this.bausteinTitle(bid)}" aus dem Plan entfernen?`;
+            if (!window.confirm(question)) {
+                return;
+            }
+            pids.forEach((rpid) => {
+                const pos = seq.indexOf(rpid);
+                if (pos >= 0) {
+                    seq.splice(pos, 1);
+                }
+                const auswahlid = this.placement(rpid).einheitenauswahl;
+                delete this.sequenz.platzierungen[rpid];
+                if (auswahlid && !this.auswahlInUse(auswahlid)) {
+                    delete this.sequenz.einheitenauswahlen[auswahlid];
+                }
+            });
+            const baustein = this.baustein(bid);
+            if (baustein && !this.bausteinRuns(bid).length && !Object.keys(baustein.varianten || {}).length) {
+                delete this.sequenz.bausteine[bid];
+            }
+            this.setDirty(true);
+            this.render();
+            this.toast(hasunits ? 'Reservierung entfernt – die Zeiten sind nachgerückt.' : 'Leerer Baustein entfernt.');
+        }
+
+        // Der zusammenhängende Lauf des Bausteins `bid` um Position `pos`.
+        findRunAt(seq, pos, bid) {
+            const inrun = (i) => {
+                const p = this.placement(seq[i]);
+                return p && p.typ === 'einheit' && String(p.bausteinid || '') === String(bid);
+            };
+            let start = pos;
+            while (start > 0 && inrun(start - 1)) {
+                start--;
+            }
+            let end = pos;
+            while (end < seq.length - 1 && inrun(end + 1)) {
+                end++;
+            }
+            return seq.slice(start, end + 1);
         }
 
         cleanupSplitGroup(splitid) {
@@ -3281,6 +3791,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 return;
             }
             placement.bausteinid = bid;
+            const found = this.locate(pid);
+            if (found) {
+                this.consumeReservation(bid, found.anchors[found.anchorIdx].seq, Math.max(0, Number(placement.dauer) || 0));
+            }
             this.setDirty(true);
             this.render();
             this.toast(`In „${(this.baustein(bid) || {}).titel || 'Baustein'}" aufgenommen.`);
@@ -3291,7 +3805,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             if (!placement || !placement.bausteinid) {
                 return;
             }
+            const oldbid = placement.bausteinid;
             placement.bausteinid = null;
+            const found = this.locate(pid);
+            if (found) {
+                const seq = found.anchors[found.anchorIdx].seq;
+                this.keepBausteinVisible(oldbid, seq, seq[found.pos + 1] || '');
+            }
             this.setDirty(true);
             this.render();
             this.toast('Aus dem Baustein gelöst.');
@@ -3530,6 +4050,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             if (save) {
                 save.textContent = mode === 'create' ? 'Anlegen und einplanen' : 'Übernehmen';
             }
+            this.renderSharedHint(mode === 'edit' ? this.placement(this.editorPid) : null);
             const overlay = bySel('#sq-unit-modal');
             if (overlay) {
                 overlay.classList.add('open');
@@ -4302,10 +4823,29 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             if (!window.confirm('Die Überschrift auflösen? Die Einheiten bleiben an ihrem Platz im Plan.')) {
                 return;
             }
+            // Der Platzhalter eines leeren Bausteins (Dauer 0) ist keine
+            // Einheit - ohne Überschrift bliebe er als leere Einheit im Plan.
+            const anchors = this.anchorList();
             Object.keys(this.sequenz.platzierungen).forEach((pid) => {
-                if (String(this.sequenz.platzierungen[pid].bausteinid || '') === String(bid)) {
-                    this.sequenz.platzierungen[pid].bausteinid = null;
+                const placement = this.sequenz.platzierungen[pid];
+                if (String(placement.bausteinid || '') !== String(bid)) {
+                    return;
                 }
+                if (this.isUnfilled(placement) && !(Number(placement.dauer) > 0)) {
+                    anchors.forEach((anchor) => {
+                        const pos = anchor.seq.indexOf(pid);
+                        if (pos >= 0) {
+                            anchor.seq.splice(pos, 1);
+                        }
+                    });
+                    const auswahlid = placement.einheitenauswahl;
+                    delete this.sequenz.platzierungen[pid];
+                    if (auswahlid && !this.auswahlInUse(auswahlid)) {
+                        delete this.sequenz.einheitenauswahlen[auswahlid];
+                    }
+                    return;
+                }
+                placement.bausteinid = null;
             });
             delete this.sequenz.bausteine[bid];
             this.closeModal();
@@ -4467,6 +5007,270 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             return prefix + counter;
         }
 
+        // ---- Noch einmal einplanen / Als neue Einheit duplizieren ----------
+
+        // Platzierungen dieses Plans, die dieselbe aktive Karte zeigen. Die
+        // Teile einer geteilten Einheit zählen zusammen als EINE Stelle.
+        placementsShowingCard(cardid) {
+            const ziel = String(cardid || '');
+            const pids = [];
+            const seen = {};
+            if (!ziel) {
+                return pids;
+            }
+            this.anchorList().forEach((anchor) => anchor.seq.forEach((pid) => {
+                const placement = this.placement(pid);
+                const auswahl = placement && placement.typ === 'einheit' ? this.auswahl(placement) : null;
+                if (!auswahl || String(auswahl.aktiv || '') !== ziel) {
+                    return;
+                }
+                if (placement.splitgroup) {
+                    if (seen[placement.splitgroup]) {
+                        return;
+                    }
+                    seen[placement.splitgroup] = true;
+                }
+                pids.push(pid);
+            }));
+            return pids;
+        }
+
+        sharedCount(placement) {
+            const auswahl = placement && placement.typ === 'einheit' ? this.auswahl(placement) : null;
+            return auswahl && auswahl.aktiv ? this.placementsShowingCard(auswahl.aktiv).length : 0;
+        }
+
+        // Eine neue Platzierung direkt hinter `pid` (hinter dem letzten Teil,
+        // falls `pid` geteilt ist), im selben Baustein.
+        insertPlacementAfter(pid, placement) {
+            const found = this.locate(pid);
+            if (!found) {
+                return '';
+            }
+            const seq = found.anchors[found.anchorIdx].seq;
+            let pos = found.pos;
+            const origin = this.placement(pid);
+            if (origin && origin.splitgroup) {
+                while (pos + 1 < seq.length
+                        && String((this.placement(seq[pos + 1]) || {}).splitgroup || '') === String(origin.splitgroup)) {
+                    pos++;
+                }
+            }
+            const newpid = this.uniqueId('px', this.sequenz.platzierungen);
+            this.sequenz.platzierungen[newpid] = placement;
+            seq.splice(pos + 1, 0, newpid);
+            return newpid;
+        }
+
+        // Dieselbe Bibliothekskarte ein weiteres Mal einplanen: eigene Dauer,
+        // gemeinsamer Inhalt. Die Auswahl (Alternativen) wird mitgenommen.
+        placeAgain(pid) {
+            const placement = this.placement(pid);
+            const auswahl = this.auswahl(placement);
+            const card = placement ? this.activeCardForPlacement(placement) : null;
+            if (!placement || !auswahl || !card) {
+                return;
+            }
+            const eaid = this.uniqueId('eax', this.sequenz.einheitenauswahlen);
+            this.sequenz.einheitenauswahlen[eaid] = {
+                kandidaten: Array.isArray(auswahl.kandidaten) ? auswahl.kandidaten.slice() : [],
+                aktiv: auswahl.aktiv,
+            };
+            const total = placement.splitgroup
+                ? Object.values(this.sequenz.platzierungen)
+                    .filter((q) => q && String(q.splitgroup || '') === String(placement.splitgroup))
+                    .reduce((sum, q) => sum + Math.max(0, Number(q.dauer) || 0), 0)
+                : Math.max(0, Number(placement.dauer) || 0);
+            this.insertPlacementAfter(pid, {
+                typ: 'einheit',
+                bausteinid: placement.bausteinid || null,
+                einheitenauswahl: eaid,
+                titel: placement.titel || cardTitle(card),
+                dauer: total || 15,
+            });
+            this.openMenuPid = '';
+            this.setDirty(true);
+            this.render();
+            this.toast(`„${cardTitle(card)}" noch einmal eingeplant – Änderungen am Inhalt gelten an beiden Stellen.`);
+        }
+
+        // Eigenständiges Duplikat der aktiven Karte in der Bibliothek anlegen
+        // (wie „Als neue Einheit duplizieren" dort: lokale Einheit, ohne
+        // Alternativen und ohne Verknüpfung zur globalen Sammlung; die Anhänge
+        // kopiert der Server über _copyfrom). Rückgabe: Promise mit der neuen
+        // Karte (nach dem Neuladen der Bibliothek, damit die Anhänge stimmen).
+        createDuplicateCard(card) {
+            const copy = JSON.parse(JSON.stringify(card));
+            copy.id = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+            copy.titel = numberedTitleFor(cardTitle(card), this.methodCardList);
+            copy.alternativen = [];
+            copy._copyfrom = String(card.id);
+            copy.timemodified = Date.now();
+            delete copy._kgsync;
+            delete copy._kgkonzept;
+            delete copy._isglobal;
+            delete copy.materialiendraftitemid;
+            delete copy.h5pdraftitemid;
+            const list = this.methodCardList.slice();
+            const idx = list.findIndex((c) => String(c.id) === String(card.id));
+            list.splice(idx >= 0 ? idx + 1 : list.length, 0, copy);
+            return asCall('mod_seminarplaner_save_method_cards', {
+                cmid: this.cmid,
+                methodsjson: JSON.stringify(list),
+            }).then(() => this.reloadMethodCards()).then(() => this.methodCardForRef(copy.id) || copy);
+        }
+
+        reloadMethodCards() {
+            return asCall('mod_seminarplaner_get_method_cards', {cmid: this.cmid}).then((res) => {
+                let decoded = [];
+                try {
+                    decoded = res.methodsjson ? JSON.parse(res.methodsjson) : [];
+                } catch (e) {
+                    decoded = [];
+                }
+                this.methodCardList = Array.isArray(decoded) ? decoded : [];
+                MultiExtend.addLibraryValues(this.methodCardList, splitMultiValue);
+                this.methodCards = {};
+                this.methodCardList.forEach((c) => {
+                    if (c && c.id !== undefined) {
+                        this.methodCards[String(c.id)] = c;
+                    }
+                });
+            });
+        }
+
+        // ⋮ „Als neue Einheit duplizieren": Duplikat in der Bibliothek, direkt
+        // hinter dem Original eingeplant, und gleich zum Bearbeiten geöffnet -
+        // so ist sichtbar, dass hier etwas Eigenes entstanden ist.
+        duplicateUnit(pid) {
+            const placement = this.placement(pid);
+            const card = placement ? this.activeCardForPlacement(placement) : null;
+            if (!placement || !card) {
+                return;
+            }
+            this.openMenuPid = '';
+            this.setStatus('Neue Seminareinheit wird angelegt …');
+            this.createDuplicateCard(card).then((copy) => {
+                const eaid = this.uniqueId('eax', this.sequenz.einheitenauswahlen);
+                this.sequenz.einheitenauswahlen[eaid] = {kandidaten: [String(copy.id)], aktiv: String(copy.id)};
+                const duration = parseMinutes(copy.zeitbedarf);
+                const newpid = this.insertPlacementAfter(pid, {
+                    typ: 'einheit',
+                    bausteinid: placement.bausteinid || null,
+                    einheitenauswahl: eaid,
+                    titel: cardTitle(copy),
+                    dauer: Number.isFinite(duration) && duration > 0 ? duration : (Number(placement.dauer) || 15),
+                });
+                this.setDirty(true);
+                this.render();
+                this.setStatus(`Neue Seminareinheit „${cardTitle(copy)}" in der Bibliothek angelegt und eingeplant.`);
+                if (newpid) {
+                    this.openEditor(newpid);
+                    this.selectUnitTitle();
+                }
+                return null;
+            }).catch(() => {
+                this.setStatus('Die neue Seminareinheit konnte nicht angelegt werden.', true);
+            });
+        }
+
+        selectUnitTitle() {
+            const titlefield = bySel('#sq-e-titel');
+            if (titlefield && titlefield.select) {
+                titlefield.focus();
+                titlefield.select();
+            }
+        }
+
+        // Hinweis im Bearbeiten-Fenster: steht dieselbe Einheit mehrfach im
+        // Plan, gelten Änderungen überall - und genau dort entsteht das
+        // Missverständnis. Deshalb hier der Ausweg „nur hier ändern".
+        renderSharedHint(placement) {
+            const host = bySel('#sq-unit-shared');
+            if (!host) {
+                return;
+            }
+            host.classList.remove('sq-unit-shared--done');
+            const count = placement ? this.sharedCount(placement) : 0;
+            if (count < 2) {
+                host.hidden = true;
+                host.innerHTML = '';
+                return;
+            }
+            host.hidden = false;
+            host.innerHTML = `
+                <span class="sq-unit-shared__text">Diese Einheit steht <strong>${count}× in diesem Plan</strong>.
+                  Änderungen am Inhalt gelten an allen Stellen.</span>
+                <button type="button" class="kg-btn" id="sq-unit-splitoff">Stattdessen nur hier ändern</button>`;
+            const btn = host.querySelector('#sq-unit-splitoff');
+            btn.addEventListener('click', () => this.splitOffEditedPlacement(btn));
+        }
+
+        // „Stattdessen nur hier ändern": die gerade bearbeitete Stelle bekommt
+        // ein eigenes Duplikat der Karte; das Fenster bleibt offen und
+        // speichert ab jetzt in das Duplikat. Schon getippte Änderungen bleiben
+        // stehen; nur ein unveränderter Titel wird auf den neuen gesetzt, damit
+        // die Bibliothek nicht zwei gleichnamige Einheiten bekommt.
+        splitOffEditedPlacement(btn) {
+            const pid = this.editorPid;
+            const placement = this.placement(pid);
+            const auswahl = this.auswahl(placement);
+            const card = placement ? this.activeCardForPlacement(placement) : null;
+            if (!placement || !auswahl || !card) {
+                return;
+            }
+            const token = this.unitModalToken;
+            const oldtitle = cardTitle(card);
+            btn.disabled = true;
+            btn.textContent = 'Wird angelegt …';
+            this.createDuplicateCard(card).then((copy) => {
+                const newid = String(copy.id);
+                // Nur diese Stelle (samt ihren geteilten Teilen) zeigt jetzt auf
+                // das Duplikat; ihre Alternativen bleiben, das Original darin
+                // wird durch das Duplikat ersetzt.
+                const parts = placement.splitgroup
+                    ? Object.values(this.sequenz.platzierungen)
+                        .filter((q) => q && String(q.splitgroup || '') === String(placement.splitgroup))
+                    : [placement];
+                parts.forEach((part) => {
+                    const a = this.auswahl(part);
+                    if (!a) {
+                        return;
+                    }
+                    a.kandidaten = (Array.isArray(a.kandidaten) ? a.kandidaten : [])
+                        .map((ref) => (String(ref) === String(card.id) ? newid : String(ref)));
+                    a.aktiv = newid;
+                    if (String(part.titel || '') === oldtitle) {
+                        part.titel = cardTitle(copy);
+                    }
+                });
+                this.setDirty(true);
+                this.render();
+                if (token !== this.unitModalToken) {
+                    // Fenster inzwischen geschlossen - das Duplikat steht trotzdem.
+                    this.toast(`Neue Seminareinheit „${cardTitle(copy)}" angelegt – nur diese Stelle zeigt sie.`);
+                    return null;
+                }
+                const titlefield = bySel('#sq-e-titel');
+                if (titlefield && String(titlefield.value || '').trim() === oldtitle) {
+                    titlefield.value = cardTitle(copy);
+                }
+                const host = bySel('#sq-unit-shared');
+                if (host) {
+                    host.innerHTML = `<span class="sq-unit-shared__text">Du bearbeitest jetzt die neue Einheit
+                        <strong>„${escapeHtml(cardTitle(copy))}"</strong> – nur diese Stelle ändert sich.
+                        Das Original bleibt unverändert.</span>`;
+                    host.classList.add('sq-unit-shared--done');
+                }
+                this.selectUnitTitle();
+                return null;
+            }).catch(() => {
+                btn.disabled = false;
+                btn.textContent = 'Stattdessen nur hier ändern';
+                this.setUnitFormError('Die neue Seminareinheit konnte nicht angelegt werden.');
+            });
+        }
+
         addUnitFromCard(cardid) {
             const card = this.methodCardForRef(cardid);
             const day = this.sequenz.tage[this.dayIndex];
@@ -4555,7 +5359,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 });
             });
             if (anyphase) {
-                const missing = Object.keys(PHASE_LABELS).filter((key) => !allphases[key]);
+                // Warmup/Aktivierung ist kein Schritt des Fünf-Phasen-Bogens
+                // (Orientierung bis Transfer), sondern eine Methode für
+                // zwischendurch - sie zählt hier nicht mit.
+                const missing = Object.keys(PHASE_LABELS).filter((key) => key !== 'warmup' && !allphases[key]);
                 if (!missing.length) {
                     findings.push({ok: true, text: 'Alle fünf Phasen sind im Seminar vertreten.'});
                 } else {
@@ -4571,7 +5378,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             if (first) {
                 const key = phaseKey(this.placementRawPhase(first.data));
                 const title = String(first.data.titel || '').toLowerCase();
-                const opener = ['orientierung', 'erfahrung'].includes(key)
+                const opener = ['warmup', 'orientierung', 'erfahrung'].includes(key)
                     || /ankomm|begrüß|einstieg|warm|kennenlern|orientier/.test(title);
                 if (key || opener) {
                     findings.push(opener
@@ -4584,7 +5391,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const afternoonfirst = units.find((item) => item.ankername === 'nachmittag');
             if (afternoonfirst) {
                 const sozialform = this.placementSozialform(afternoonfirst.data).toLowerCase();
-                if (sozialform) {
+                if (phaseKey(this.placementRawPhase(afternoonfirst.data)) === 'warmup') {
+                    findings.push({ok: true, text: 'Nach der Mittagspause geht es mit einem Warmup weiter.'});
+                } else if (sozialform) {
                     const inputlike = /vortrag|input|präsentation/.test(sozialform);
                     findings.push(inputlike
                         ? {ok: false, text: 'Nach der Mittagspause könnte etwas Aktivierendes guttun'
@@ -5471,10 +6280,6 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 this.render();
             } else if (type === 'details-toggle') {
                 this.toggleDetails(pid);
-            } else if (type === 'move-up') {
-                this.movePlacement(pid, -1);
-            } else if (type === 'move-down') {
-                this.movePlacement(pid, 1);
             } else if (type === 'overflow') {
                 this.resolveOverflow(action.getAttribute('data-anker') || 'vormittag');
             } else if (type === 'swap-toggle') {
@@ -5513,6 +6318,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 this.createHeading(pid, input ? input.value : '');
             } else if (type === 'edit') {
                 this.openEditor(pid);
+            } else if (type === 'place-again') {
+                this.placeAgain(pid);
+            } else if (type === 'duplicate-unit') {
+                this.duplicateUnit(pid);
             } else if (type === 'add-unit') {
                 this.openPicker(action.getAttribute('data-anker') || 'vormittag');
             } else if (type === 'add-baustein') {
@@ -5636,6 +6445,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             // Eindeutige Reservierungen aus der Migration selbst füllen, statt
             // dafür einen Klick zu verlangen (heilt auch bestehende Pläne).
             if (this.autoFillObviousReservations()) {
+                this.setDirty(true);
+            }
+
+            // Verbrauchte Platzhalter leerer Bausteine wegräumen.
+            if (this.dropSpentPlaceholders()) {
                 this.setDirty(true);
             }
 
@@ -6015,16 +6829,21 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const pid = p.pid;
             const isunit = p.data.typ === 'einheit';
             const open = this.openMenuPid === pid;
-            const item = (action, glyph, label) => `
+            const item = (action, glyph, label, hint = '') => `
                 <button type="button" role="menuitem" class="sq-menu__item${action === 'remove' ? ' sq-menu__item--danger' : ''}"
-                  data-sq-action="${action}" data-pid="${escapeHtml(pid)}">${MENU_ICONS[glyph]}<span>${label}</span></button>`;
+                  data-sq-action="${action}" data-pid="${escapeHtml(pid)}">${MENU_ICONS[glyph]}<span>${label}${hint
+                    ? `<span class="sq-menu__hint">${hint}</span>` : ''}</span></button>`;
 
             const items = [];
-            items.push(item('move-up', 'up', 'Nach vorne schieben'));
-            items.push(item('move-down', 'down', 'Nach hinten schieben'));
 
-            if (isunit && inBaustein) {
-                items.push(item('leave-baustein', 'unlink', 'Aus der Überschrift lösen'));
+            // Platzhalter eines Bausteins (leerer Baustein bzw. offene
+            // Reservierung) sind keine Einheit: Aufnehmen, Lösen oder eine
+            // Überschrift geben ergäbe eine leere Seminareinheit im Plan.
+            const placeholder = isunit && !!p.data.bausteinid && this.isUnfilled(p.data);
+            if (placeholder) {
+                items.push(item('remove', 'remove', inBaustein ? 'Reservierung entfernen' : 'Baustein entfernen'));
+            } else if (isunit && inBaustein) {
+                items.push(item('leave-baustein', 'unlink', 'Aus dem Baustein lösen'));
             } else if (isunit) {
                 const bid = this.adjacentBausteinId(pid);
                 if (bid) {
@@ -6036,7 +6855,20 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 }
             }
 
-            items.push(item('remove', 'remove', 'Aus dem Plan entfernen'));
+            // Zwei Wege zu „noch so eine": dieselbe Einheit ein weiteres Mal
+            // (geteilter Inhalt) oder ein eigenständiges Duplikat in der
+            // Bibliothek. Bewusst zwei Verben, nie „kopieren" - das Wort steht
+            // für ganze Seminarpläne.
+            if (isunit && !placeholder && this.activeCardForPlacement(p.data)) {
+                items.push(item('place-again', 'again', 'Noch einmal einplanen',
+                    'Dieselbe Einheit – Änderungen gelten überall'));
+                items.push(item('duplicate-unit', 'duplicate', 'Als neue Einheit duplizieren',
+                    'Eigene Einheit in der Bibliothek, unabhängig bearbeitbar'));
+            }
+
+            if (!placeholder) {
+                items.push(item('remove', 'remove', 'Aus dem Plan entfernen'));
+            }
 
             return `
                 <span class="sq-menu">
@@ -6361,7 +7193,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 <div class="sq-alt${inBaustein ? '' : ' sq-alt--standalone'}${this.openDetails.has(p.pid)
                     ? ' is-open' : ''}" role="radiogroup"
                   aria-label="Zwei Alternativen – eine davon wird durchgeführt">
-                  ${inBaustein ? '' : this.renderGrip()}
+                  ${this.renderGrip()}
                   ${this.renderDetailsToggle(p.pid)}
                   <div class="sq-alt__options">${options}</div>
                   <div class="sq-unit__actions">
@@ -6430,7 +7262,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const pair = this.renderAlternativePair(p, inBaustein);
             if (pair) {
                 return `
-                    <div class="sq-row"${inBaustein ? '' : ` draggable="true" data-sq-drag="${escapeHtml(p.pid)}"`}>
+                    <div class="sq-row" draggable="true" data-sq-drag="${escapeHtml(p.pid)}">
                       ${this.renderTimeColumn(startMin, duration, p.pid)}
                       ${pair}
                     </div>`;
@@ -6439,18 +7271,23 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             // Dauer und Startzeit stehen jetzt in der Zeit-Spalte links, nicht
             // mehr als Badges hinter dem Titel. Zurueck bleibt in der Meta-Zeile
             // nur, was die Einheit inhaltlich beschreibt.
+            const shared = this.sharedCount(data);
             const meta = [
                 (!inBaustein && data.fortsetzung) ? '<span class="sq-badge sq-badge--variant">Fortsetzung</span>' : '',
+                shared > 1
+                    ? `<span class="sq-badge sq-badge--shared" title="Dieselbe Einheit steht ${shared}× in diesem Plan`
+                        + ` – Änderungen am Inhalt gelten an allen Stellen.">${shared}× im Plan</span>`
+                    : '',
                 groupsize ? `<span class="sq-badge">${escapeHtml(groupsize)}</span>` : '',
             ].filter((m) => m).join('');
 
             return `
-                <div class="sq-row"${inBaustein ? '' : ` draggable="true" data-sq-drag="${escapeHtml(p.pid)}"`}>
+                <div class="sq-row" draggable="true" data-sq-drag="${escapeHtml(p.pid)}">
                   ${this.renderTimeColumn(startMin, duration, p.pid)}
                   <div class="sq-unit${inBaustein ? '' : ' sq-unit--standalone'}${detailsopen ? ' is-open' : ''}"
                     title="${escapeHtml(timelabel)}" data-sq-unit="${escapeHtml(p.pid)}">
                     <div class="sq-unit__phase${phase ? ' sq-phase-bg--' + phase : ''}"></div>
-                    ${inBaustein ? '' : this.renderGrip()}
+                    ${this.renderGrip()}
                     ${this.renderDetailsToggle(p.pid)}
                     <div class="sq-unit__main">
                       <div class="sq-unit__title sq-titleedit" ${EDITABLE}

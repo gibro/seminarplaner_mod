@@ -20,13 +20,15 @@ define([], function() {
 
     // Seminarphasen wie in sequenz.js/grid.js (gleiche Zuordnung, gleiche Palette).
     const PHASE_KEYS = [
-        {key: 'orientierung', match: ['orientierung', 'warm-up', 'einstieg']},
+        {key: 'warmup', match: ['warmup', 'warm-up', 'warm up', 'aktivierung']},
+        {key: 'orientierung', match: ['orientierung', 'einstieg']},
         {key: 'erfahrung', match: ['erfahrung', 'erwartungsabfrage', 'vorwissen']},
         {key: 'analyse', match: ['analyse']},
         {key: 'handlung', match: ['handlung', 'aktion', 'praxis']},
         {key: 'transfer', match: ['transfer', 'abschluss', 'auswertung']},
     ];
     const PHASE_LABELS = {
+        warmup: 'Warmup/Aktivierung',
         orientierung: 'Orientierung',
         erfahrung: 'Erfahrungserhebung',
         analyse: 'Analyse',

@@ -162,7 +162,7 @@ function seminarplaner_allowed_referent_ids(int $cmid): ?array {
  * client falls back to "all columns in default order".
  *
  * @param int $cmid Course module id.
- * @return array|null {all: bool, order: string[]} or null.
+ * @return array|null {all: bool, order: string[], selected: string[], orientation: string} or null.
  */
 function seminarplaner_get_pdf_columns(int $cmid): ?array {
     $raw = get_config('mod_seminarplaner', 'pdfcolumns_cmid_' . $cmid);
@@ -196,7 +196,51 @@ function seminarplaner_get_pdf_columns(int $cmid): ?array {
             (array)($decoded['selected'] ?? []),
             static fn($key) => in_array((string)$key, $allowed, true)
         )),
+        'orientation' => seminarplaner_pdf_orientation($decoded['orientation'] ?? ''),
     ];
+}
+
+/**
+ * Infofeld eines Seminarplans für die PDF-Exporte (Seminarzeiten, allgemeine
+ * Infos, Vorbereitungstreffen …). Gespeichert je Seminarplan als Plugin-Config
+ * `pdfinfo_cmid_<cmid>_grid_<gridid>`, analog zur Spaltenwahl (D63).
+ *
+ * @param int $cmid Course module id.
+ * @param int $gridid Seminar plan id.
+ * @return string HTML, leer wenn nichts gespeichert ist.
+ */
+function seminarplaner_get_pdf_info(int $cmid, int $gridid): string {
+    $raw = get_config('mod_seminarplaner', 'pdfinfo_cmid_' . $cmid . '_grid_' . $gridid);
+    return is_string($raw) ? $raw : '';
+}
+
+/**
+ * Infofeld speichern. Das HTML wird bereinigt; ohne sichtbaren Text wird der
+ * Eintrag gelöscht, damit die PDFs den Abschnitt auslassen.
+ *
+ * @param int $cmid Course module id.
+ * @param int $gridid Seminar plan id.
+ * @param string $html Inhalt aus dem Editor.
+ */
+function seminarplaner_set_pdf_info(int $cmid, int $gridid, string $html): void {
+    $name = 'pdfinfo_cmid_' . $cmid . '_grid_' . $gridid;
+    $clean = trim(clean_text($html, FORMAT_HTML));
+    $visible = trim(str_replace("\u{00A0}", ' ', html_entity_decode(strip_tags($clean), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
+    if ($visible === '') {
+        unset_config($name, 'mod_seminarplaner');
+        return;
+    }
+    set_config($name, $clean, 'mod_seminarplaner');
+}
+
+/**
+ * Format des ZIM-Papiers: Querformat (Standard) oder Hochformat.
+ *
+ * @param mixed $value Gespeicherter oder übermittelter Wert.
+ * @return string 'landscape' oder 'portrait'.
+ */
+function seminarplaner_pdf_orientation($value): string {
+    return (string)$value === 'portrait' ? 'portrait' : 'landscape';
 }
 
 /**
@@ -363,6 +407,7 @@ function seminarplaner_sozialform_options(): array {
  */
 function seminarplaner_phase_options(): array {
     return [
+        'Warmup/Aktivierung' => 'Warmup/Aktivierung',
         'Orientierung' => 'Orientierung',
         'Erfahrungserhebung' => 'Erfahrungserhebung',
         'Analyse' => 'Analyse',
@@ -400,7 +445,10 @@ function seminarplaner_normalize_phase(string $phase): string {
     }
 
     $aliases = [
-        'warm-up' => 'Orientierung',
+        'warm-up' => 'Warmup/Aktivierung',
+        'warmup' => 'Warmup/Aktivierung',
+        'warm up' => 'Warmup/Aktivierung',
+        'aktivierung' => 'Warmup/Aktivierung',
         'einstieg' => 'Orientierung',
         'erwartungsabfrage' => 'Erfahrungserhebung',
         'vorwissen aktivieren' => 'Erfahrungserhebung',

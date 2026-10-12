@@ -214,7 +214,10 @@ function(Ajax, Notification, Handout, PlanMemory) {
     const normalizePhase = (phase) => {
         const clean = stripHtml(phase);
         const aliases = {
-            'warm-up': 'Orientierung',
+            'warm-up': 'Warmup/Aktivierung',
+            'warmup': 'Warmup/Aktivierung',
+            'warm up': 'Warmup/Aktivierung',
+            'aktivierung': 'Warmup/Aktivierung',
             'einstieg': 'Orientierung',
             'erwartungsabfrage': 'Erfahrungserhebung',
             'vorwissen aktivieren': 'Erfahrungserhebung',
@@ -905,6 +908,102 @@ function(Ajax, Notification, Handout, PlanMemory) {
         });
     };
 
+    // ---- Infofeld je Seminarplan (Tiny-Editor #kg-pdf-info) ----
+    let pdfInfoGridId = 0;
+    let pdfInfoTimer = null;
+    let pdfInfoLoading = false;
+    const pdfInfoEditor = () => (window.tinyMCE && window.tinyMCE.get('kg-pdf-info')) || null;
+    const getPdfInfoHtml = () => {
+        const editor = pdfInfoEditor();
+        if (editor) {
+            return String(editor.getContent() || '').trim();
+        }
+        const el = bySel('#kg-pdf-info');
+        return el ? String(el.value || '').trim() : '';
+    };
+    const setPdfInfoHtml = (html) => {
+        const el = bySel('#kg-pdf-info');
+        if (el) {
+            el.value = html;
+        }
+        const editor = pdfInfoEditor();
+        if (editor && typeof editor.setContent === 'function') {
+            editor.setContent(html);
+        }
+    };
+    const setPdfInfoStatus = (text) => {
+        const el = bySel('#kg-pdf-info-status');
+        if (el) {
+            el.textContent = text;
+        }
+    };
+    // Sofort speichern (vor einem Planwechsel) oder verzögert beim Tippen.
+    const savePdfInfo = (cmid, immediate = false) => {
+        if (pdfInfoTimer) {
+            window.clearTimeout(pdfInfoTimer);
+            pdfInfoTimer = null;
+        }
+        if (pdfInfoLoading) {
+            return Promise.resolve();
+        }
+        if (!pdfInfoGridId) {
+            setPdfInfoStatus('Bitte zuerst oben einen Seminarplan wählen – das Feld wird je Plan gespeichert.');
+            return Promise.resolve();
+        }
+        const gridid = pdfInfoGridId;
+        const run = () => asCall('mod_seminarplaner_set_pdf_info', {cmid, gridid, infohtml: getPdfInfoHtml()})
+            .then(() => setPdfInfoStatus('Gespeichert.'))
+            .catch(() => setPdfInfoStatus('Speichern fehlgeschlagen.'));
+        if (immediate) {
+            return run();
+        }
+        setPdfInfoStatus('');
+        pdfInfoTimer = window.setTimeout(run, 800);
+        return Promise.resolve();
+    };
+    const loadPdfInfo = (cmid, gridid) => {
+        pdfInfoGridId = gridid;
+        if (!gridid) {
+            pdfInfoLoading = true;
+            setPdfInfoHtml('');
+            pdfInfoLoading = false;
+            return Promise.resolve();
+        }
+        pdfInfoLoading = true;
+        return asCall('mod_seminarplaner_get_pdf_info', {cmid, gridid}).then((res) => {
+            setPdfInfoHtml(String((res && res.infohtml) || ''));
+            setPdfInfoStatus('');
+        }).catch(() => {
+            setPdfInfoStatus('Das Infofeld konnte nicht geladen werden.');
+        }).then(() => {
+            pdfInfoLoading = false;
+        });
+    };
+    // Tiny entsteht erst nach dem Seitenaufbau - Änderungen dort abonnieren,
+    // sobald es da ist (sonst bleibt das Textfeld die Quelle).
+    const bindPdfInfo = (cmid) => {
+        const el = bySel('#kg-pdf-info');
+        if (!el) {
+            return;
+        }
+        el.addEventListener('input', () => savePdfInfo(cmid));
+        let tries = 0;
+        const attach = () => {
+            const editor = pdfInfoEditor();
+            if (editor && typeof editor.on === 'function') {
+                editor.on('input change undo redo', () => savePdfInfo(cmid));
+                if (pdfInfoGridId) {
+                    loadPdfInfo(cmid, pdfInfoGridId);
+                }
+                return;
+            }
+            if (tries++ < 50) {
+                window.setTimeout(attach, 200);
+            }
+        };
+        attach();
+    };
+
     const getPdfMeta = () => {
         const titleel = bySel('#kg-pdf-title');
         const dateel = bySel('#kg-pdf-date');
@@ -1122,43 +1221,58 @@ function(Ajax, Notification, Handout, PlanMemory) {
         return normalizePdfText(plain, true);
     };
 
+    // Rich-Text der Bibliothek (TinyMCE: h3-Überschriften, Absätze, Listen,
+    // fett/kursiv im Satz, Links, vereinzelt Tabellen) ins PDF - so, wie es im
+    // Editor aussieht. Zweistufig: erst das HTML in Blöcke mit Textläufen
+    // zerlegen, dann Wort für Wort umbrechen. Früher begann jeder Textknoten
+    // eine neue Zeile (ein fettes Wort riss den Satz auseinander), und
+    // Überschriften kamen als normaler Text heraus.
     const renderHtmlToPdf = (doc, html, x, y, maxWidth) => {
         if (!html) {
             return y;
         }
         const div = document.createElement('div');
-        div.innerHTML = String(html);
+        const source = String(html);
+        if (/<[a-z][^>]*>/i.test(source)) {
+            div.innerHTML = source;
+        } else {
+            // Reiner Text (z. B. Themen eines Bausteins): Zeilen bleiben Zeilen.
+            div.textContent = source;
+            div.innerHTML = div.innerHTML.replace(/\r?\n/g, '<br>');
+        }
 
-        let currentY = y;
-        const lineHeight = 4;
-        const paragraphGap = 1.2;
-        const listGap = 0.4;
-        const listItemGap = 0.15;
+        // Abschnittstitel („Ablauf:") stehen in 11 pt fett - Überschriften im
+        // Text liegen darunter, damit beides unterscheidbar bleibt.
+        const BODY_SIZE = 10;
+        const HEADING_SIZE = {h1: 11.5, h2: 11, h3: 10.5, h4: 10, h5: 10, h6: 10};
+        // Seitenende aus der echten Seitenhöhe (A4 hoch 297 mm, quer 210 mm).
+        const PAGE_BOTTOM = doc.internal.pageSize.getHeight() - 17;
         const listIndent = 6;
-        let isFirstElement = true;
+        const blocks = [];
+        let current = null;
 
-        const processNode = (node, indent = 0, linkUrl = '') => {
-            if (currentY > 280) {
-                doc.addPage();
-                currentY = 20;
+        // Ein Block sammelt Textläufe {text, bold, italic, link}.
+        const openBlock = (props) => {
+            current = Object.assign({runs: [], indent: 0, bullet: '', heading: ''}, props);
+            blocks.push(current);
+            return current;
+        };
+        const closeBlock = () => {
+            current = null;
+        };
+        const addText = (text, style) => {
+            if (!current) {
+                openBlock({indent: style.indent || 0});
             }
+            current.runs.push({text, bold: style.bold, italic: style.italic, link: style.link});
+        };
+
+        const BLOCK_TAGS = ['p', 'div', 'section', 'article', 'blockquote', 'pre', 'figure', 'header', 'footer'];
+        const walk = (node, style) => {
             if (node.nodeType === Node.TEXT_NODE) {
-                const text = normalizePdfText(node.textContent || '', false);
-                if (text.trim()) {
-                    const compactText = text.replace(/[ \t]+/g, ' ');
-                    const lines = doc.splitTextToSize(compactText, Math.max(20, maxWidth - indent));
-                    if (linkUrl && typeof doc.textWithLink === 'function') {
-                        const oldColor = doc.getTextColor();
-                        doc.setTextColor(25, 92, 179);
-                        lines.forEach((line) => {
-                            doc.textWithLink(String(line), x + indent, currentY, {url: linkUrl});
-                            currentY += lineHeight;
-                        });
-                        doc.setTextColor(oldColor);
-                    } else {
-                        doc.text(lines, x + indent, currentY);
-                        currentY += lines.length * lineHeight;
-                    }
+                const text = String(node.textContent || '').replace(/[\r\n\t]+/g, ' ');
+                if (text.trim() || (current && current.runs.length)) {
+                    addText(text, style);
                 }
                 return;
             }
@@ -1166,66 +1280,211 @@ function(Ajax, Notification, Handout, PlanMemory) {
                 return;
             }
             const tag = node.tagName.toLowerCase();
-            const saved = doc.getFont().fontStyle || 'normal';
+            const children = () => Array.from(node.childNodes).forEach((child) => walk(child, style));
+            const inline = (extra) => Array.from(node.childNodes)
+                .forEach((child) => walk(child, Object.assign({}, style, extra)));
 
             if (tag === 'strong' || tag === 'b') {
-                doc.setFont(undefined, 'bold');
-                Array.from(node.childNodes).forEach((child) => processNode(child, indent, linkUrl));
-                doc.setFont(undefined, saved);
+                inline({bold: true});
                 return;
             }
             if (tag === 'em' || tag === 'i') {
-                doc.setFont(undefined, 'italic');
-                Array.from(node.childNodes).forEach((child) => processNode(child, indent, linkUrl));
-                doc.setFont(undefined, saved);
+                inline({italic: true});
                 return;
             }
             if (tag === 'a') {
                 const hrefRaw = String(node.getAttribute('href') || '').trim();
                 const href = /^(https?:\/\/|mailto:)/i.test(hrefRaw) ? hrefRaw : '';
-                Array.from(node.childNodes).forEach((child) => processNode(child, indent, href || linkUrl));
+                inline({link: href || style.link});
                 return;
             }
             if (tag === 'br') {
-                currentY += 2;
+                // Harter Umbruch: neuer Block ohne Absatzabstand.
+                const indent = current ? current.indent : (style.indent || 0);
+                openBlock({indent, tight: true});
                 return;
             }
-            if (tag === 'p') {
-                if (!isFirstElement && currentY > y) {
-                    currentY += paragraphGap;
-                }
-                isFirstElement = false;
-                Array.from(node.childNodes).forEach((child) => processNode(child, indent, linkUrl));
-                currentY += paragraphGap;
+            if (/^h[1-6]$/.test(tag)) {
+                closeBlock();
+                openBlock({heading: tag, indent: style.indent || 0});
+                inline({bold: true});
+                closeBlock();
                 return;
             }
             if (tag === 'ul' || tag === 'ol') {
-                if (!isFirstElement) {
-                    currentY += listGap;
-                }
-                isFirstElement = false;
-                Array.from(node.childNodes).forEach((child) => {
-                    if (child.nodeType === Node.ELEMENT_NODE && child.tagName.toLowerCase() === 'li') {
-                        processNode(child, indent, linkUrl);
+                closeBlock();
+                let n = 0;
+                Array.from(node.children).forEach((li) => {
+                    if (li.tagName.toLowerCase() !== 'li') {
+                        return;
                     }
+                    n++;
+                    const indent = (style.indent || 0) + listIndent;
+                    openBlock({indent, bullet: tag === 'ol' ? `${n}.` : '•', listitem: true});
+                    Array.from(li.childNodes).forEach((child) => {
+                        const ctag = child.nodeType === Node.ELEMENT_NODE ? child.tagName.toLowerCase() : '';
+                        if (ctag === 'ul' || ctag === 'ol') {
+                            walk(child, Object.assign({}, style, {indent}));
+                        } else if (ctag === 'p') {
+                            // TinyMCE legt Absätze gern in <li> - ohne neuen Block.
+                            if (!current || current.indent !== indent) {
+                                openBlock({indent, listitem: true});
+                            }
+                            Array.from(child.childNodes).forEach((c) => walk(c, Object.assign({}, style, {indent})));
+                        } else {
+                            if (!current) {
+                                openBlock({indent, listitem: true});
+                            }
+                            walk(child, Object.assign({}, style, {indent}));
+                        }
+                    });
+                    closeBlock();
                 });
-                currentY += listGap;
                 return;
             }
-            if (tag === 'li') {
-                doc.text('• ', x + indent, currentY);
-                Array.from(node.childNodes).forEach((child) => processNode(child, indent + listIndent, linkUrl));
-                currentY += listItemGap;
+            if (tag === 'tr') {
+                // Tabellen: eine Zeile je Tabellenzeile, Zellen mit „ · ".
+                closeBlock();
+                openBlock({indent: style.indent || 0, listitem: true});
+                Array.from(node.children).forEach((cell, idx) => {
+                    if (idx > 0) {
+                        addText(' · ', style);
+                    }
+                    Array.from(cell.childNodes).forEach((c) => walk(c, Object.assign({}, style,
+                        cell.tagName.toLowerCase() === 'th' ? {bold: true} : {})));
+                });
+                closeBlock();
                 return;
             }
-            Array.from(node.childNodes).forEach((child) => processNode(child, indent, linkUrl));
+            if (BLOCK_TAGS.includes(tag)) {
+                closeBlock();
+                children();
+                closeBlock();
+                return;
+            }
+            // span, table/tbody, font … : Inhalt übernehmen, Zeilenfluss bleibt.
+            children();
         };
+        Array.from(div.childNodes).forEach((child) => walk(child, {bold: false, italic: false, link: '', indent: 0}));
 
-        Array.from(div.childNodes).forEach((child) => {
-            processNode(child);
-            isFirstElement = false;
+        // ---- Satz ----
+        let currentY = y;
+        const fontFor = (run) => (run.bold && run.italic ? 'bolditalic' : run.bold ? 'bold' : run.italic ? 'italic' : 'normal');
+        const ensureSpace = (needed) => {
+            if (currentY + needed > PAGE_BOTTOM) {
+                doc.addPage();
+                stampPdfLogo(doc);
+                currentY = 20;
+            }
+        };
+        const savedColor = doc.getTextColor();
+        let first = true;
+
+        blocks.forEach((block) => {
+            // Läufe säubern; ein Block ohne Text fällt weg.
+            const runs = block.runs
+                .map((run) => Object.assign({}, run, {text: normalizePdfText(run.text, false).replace(/\s+/g, ' ')}))
+                .filter((run) => run.text !== '');
+            if (runs.length && !runs.some((run) => run.text.trim())) {
+                return;
+            }
+            if (!runs.length) {
+                return;
+            }
+            runs[0].text = runs[0].text.replace(/^\s+/, '');
+            runs[runs.length - 1].text = runs[runs.length - 1].text.replace(/\s+$/, '');
+
+            const size = block.heading ? HEADING_SIZE[block.heading] : BODY_SIZE;
+            const lineHeight = size * 0.42;
+            if (!first) {
+                if (block.heading) {
+                    currentY += 3;
+                } else if (!block.tight && !block.listitem) {
+                    currentY += 1.6;
+                } else if (block.listitem) {
+                    currentY += 0.4;
+                }
+            }
+            first = false;
+            // Eine Überschrift nie allein unten auf der Seite.
+            ensureSpace(block.heading ? lineHeight * 3 : lineHeight);
+            doc.setFontSize(size);
+
+            const left = x + block.indent;
+            const width = Math.max(20, maxWidth - block.indent);
+            if (block.bullet) {
+                doc.setFont(undefined, 'normal');
+                doc.text(block.bullet, left - (block.bullet === '•' ? 4 : 5), currentY);
+            }
+
+            // Wort für Wort setzen; Leerzeichen hängen am Wort davor.
+            const tokens = [];
+            runs.forEach((run) => {
+                run.text.split(/(\s+)/).forEach((part) => {
+                    if (part === '') {
+                        return;
+                    }
+                    if (/^\s+$/.test(part)) {
+                        if (tokens.length) {
+                            tokens[tokens.length - 1].space = true;
+                        }
+                        return;
+                    }
+                    tokens.push({text: part, run, space: false});
+                });
+            });
+            // Wörter gleicher Schrift gehen als EIN String ins PDF: jsPDF
+            // bettet für Standardschriften keine Zeichenbreiten ein, der
+            // Betrachter setzt mit seiner eigenen Helvetica. Einzeln platzierte
+            // Wörter ergäben dadurch ungleiche Wortabstände; so setzt der
+            // Betrachter die Leerzeichen selbst. Nur an Schriftwechseln wird
+            // neu positioniert.
+            let cursor = 0;
+            let segment = null;
+            const flush = () => {
+                if (!segment) {
+                    return;
+                }
+                doc.setFont(undefined, fontFor(segment.run));
+                if (segment.run.link && typeof doc.textWithLink === 'function') {
+                    doc.setTextColor(25, 92, 179);
+                    doc.textWithLink(segment.text, segment.x, currentY, {url: segment.run.link});
+                    doc.setTextColor(savedColor);
+                } else {
+                    doc.text(segment.text, segment.x, currentY);
+                }
+                segment = null;
+            };
+            const sameStyle = (a, b) => fontFor(a) === fontFor(b) && (a.link || '') === (b.link || '');
+            tokens.forEach((token, idx) => {
+                doc.setFont(undefined, fontFor(token.run));
+                const w = doc.getTextWidth(token.text);
+                const prev = idx > 0 ? tokens[idx - 1] : null;
+                const gap = prev && prev.space ? doc.getTextWidth(' ') : 0;
+                if (cursor > 0 && cursor + gap + w > width) {
+                    flush();
+                    currentY += lineHeight;
+                    ensureSpace(lineHeight);
+                    cursor = 0;
+                } else {
+                    cursor += gap;
+                }
+                if (segment && sameStyle(segment.run, token.run)) {
+                    segment.text += (gap ? ' ' : '') + token.text;
+                } else {
+                    flush();
+                    segment = {run: token.run, text: token.text, x: left + cursor};
+                }
+                cursor += w;
+            });
+            flush();
+            currentY += lineHeight;
         });
 
+        // Aufrufer erwarten Grundschrift.
+        doc.setFontSize(BODY_SIZE);
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(savedColor);
         return currentY;
     };
 
@@ -1401,6 +1660,10 @@ function(Ajax, Notification, Handout, PlanMemory) {
                 options.appendChild(row);
             }
         });
+        const orientation = pdfColumnsSetting.orientation === 'portrait' ? 'portrait' : 'landscape';
+        document.querySelectorAll('input[name="kg-pdf-orientation"]').forEach((radio) => {
+            radio.checked = radio.value === orientation;
+        });
         const useAll = !!pdfColumnsSetting.all;
         all.checked = useAll;
         const selected = Array.isArray(pdfColumnsSetting.selected) ? pdfColumnsSetting.selected : [];
@@ -1428,7 +1691,13 @@ function(Ajax, Notification, Handout, PlanMemory) {
                 }
             });
         }
-        return {all: !!(all && all.checked), order, selected};
+        return {all: !!(all && all.checked), order, selected, orientation: getPdfOrientation()};
+    };
+
+    // Format des ZIM-Papiers (Querformat ist der Standard).
+    const getPdfOrientation = () => {
+        const checked = document.querySelector('input[name="kg-pdf-orientation"]:checked');
+        return checked && checked.value === 'portrait' ? 'portrait' : 'landscape';
     };
 
     const savePdfColumns = (cmid) => {
@@ -1652,7 +1921,15 @@ function(Ajax, Notification, Handout, PlanMemory) {
         }
     };
 
-    const drawPdfTitlePage = (doc, title, meta, subtitle = '') => {
+    // Seminarziele des geladenen Plans (Sequenz, D-Seminarziele): nur Ziele mit Text.
+    const getSeminarGoalsForPdf = () => {
+        const seq = (currentGridState && currentGridState.sequenz) || {};
+        return (Array.isArray(seq.seminarziele) ? seq.seminarziele : [])
+            .map((ziel) => String((ziel && ziel.text) || '').trim())
+            .filter(Boolean);
+    };
+
+    const drawPdfTitlePage = (doc, title, meta, subtitle = '', options = {}) => {
         stampPdfLogo(doc);
         const pageHeight = doc.internal.pageSize.getHeight();
         let y = 48;
@@ -1691,9 +1968,29 @@ function(Ajax, Notification, Handout, PlanMemory) {
             y += 9;
         });
 
+        // Seminarziele auf dem Deckblatt (ZIM-Papier, Konzeptsammlung) - nur,
+        // wenn der Plan welche hat.
+        const goals = options.goals ? getSeminarGoalsForPdf() : [];
+        if (goals.length) {
+            y += 6;
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(13);
+            doc.text('Seminarziele', 14, y);
+            y += 7;
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(10);
+            const escape = (text) => text.replace(/[&<>]/g, (ch) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;'}[ch]));
+            renderHtmlToPdf(doc, `<ul>${goals.map((goal) => `<li>${escape(goal)}</li>`).join('')}</ul>`,
+                14, y, doc.internal.pageSize.getWidth() - 28);
+        }
+
         doc.setFont(undefined, 'normal');
         doc.setFontSize(9);
+        // Fußzeile auf der ersten Seite (bei sehr vielen Zielen kann das
+        // Deckblatt umbrechen).
+        doc.setPage(1);
         doc.text('Seminarplaner', 14, pageHeight - 14);
+        doc.setPage(doc.getNumberOfPages());
     };
 
     const addBausteinCoverPage = (doc, day, unit, methodCount) => {
@@ -1870,19 +2167,46 @@ function(Ajax, Notification, Handout, PlanMemory) {
         return window.jspdf.jsPDF;
     };
 
+    // Infofeld je Seminarplan (Seminarzeiten, allgemeine Infos,
+    // Vorbereitungstreffen …) als eigene Seite nach dem Deckblatt - nur, wenn
+    // etwas drinsteht.
+    const drawPdfInfoPage = (doc) => {
+        const html = getPdfInfoHtml();
+        if (!escapeTextForPdf(html)) {
+            return;
+        }
+        doc.addPage();
+        stampPdfLogo(doc);
+        const right = doc.internal.pageSize.getWidth() - 14;
+        let y = 26;
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(16);
+        doc.text('Allgemeine Informationen', 14, y);
+        y += 4;
+        doc.setDrawColor(220, 224, 233);
+        doc.setLineWidth(0.3);
+        doc.line(14, y, right, y);
+        y += 10;
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+        renderHtmlToPdf(doc, html, 14, y, right - 14);
+    };
+
     const exportPdfZim = () => {
         const jsPDF = ensurePdfReady();
         const meta = getPdfMeta();
         const days = getOrderedDays();
         const plan = getPlanByDay();
         const selectedcols = getSelectedPdfColumns();
-        // ZIM-Papier im Querformat: mehr Platz für die nebeneinander stehenden ZIM-Spalten.
-        const doc = new jsPDF({orientation: 'landscape'});
+        // Querformat bietet mehr Platz für die nebeneinander stehenden Spalten,
+        // Hochformat passt besser zu wenigen Spalten oder zum Abheften.
+        const doc = new jsPDF({orientation: getPdfOrientation()});
         if (typeof doc.autoTable !== 'function') {
             throw new Error('PDF-Tabellenbibliothek nicht geladen');
         }
 
-        drawPdfTitlePage(doc, 'ZIM', meta, 'Deckblatt');
+        drawPdfTitlePage(doc, 'ZIM', meta, 'Deckblatt', {goals: true});
+        drawPdfInfoPage(doc);
         doc.addPage();
         let header = 'ZIM-Papier';
         if (meta.title) {
@@ -1965,7 +2289,8 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const plan = getPlanByDay();
         const doc = new jsPDF();
 
-        drawPdfTitlePage(doc, 'ZIM', meta, 'Konzeptsammlung');
+        drawPdfTitlePage(doc, 'ZIM', meta, 'Konzeptsammlung', {goals: true});
+        drawPdfInfoPage(doc);
 
         days.forEach((day) => {
             const allItems = (plan[day] || []).filter((item) => !!item);
@@ -2035,6 +2360,7 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const pageHeight = doc.internal.pageSize.getHeight();
 
         drawPdfTitlePage(doc, 'Materialliste', meta, 'Abgabeliste');
+        drawPdfInfoPage(doc);
 
         let anyMaterial = false;
         days.forEach((day) => {
@@ -2467,6 +2793,10 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const globalSetImportBtn = bySel('#kg-global-set-import');
         const globalSetApplyBtn = bySel('#kg-global-set-apply');
         bindPdfColumnsDropdown(cmid);
+        bindPdfInfo(cmid);
+        document.querySelectorAll('input[name="kg-pdf-orientation"]').forEach((radio) => {
+            radio.addEventListener('change', () => savePdfColumns(cmid));
+        });
 
         if (parsebtn && fileinput) {
             fileinput.addEventListener('change', () => {
@@ -2676,6 +3006,8 @@ function(Ajax, Notification, Handout, PlanMemory) {
             pdfGrid.addEventListener('change', () => {
                 const gridid = Number.parseInt(pdfGrid.value || '0', 10) || 0;
                 PlanMemory.remember(cmid, gridid);
+                // Offenes Infofeld des bisherigen Plans erst sichern, dann umschalten.
+                (pdfInfoTimer ? savePdfInfo(cmid, true) : Promise.resolve()).then(() => loadPdfInfo(cmid, gridid));
                 loadGridState(cmid, gridid).then(() => {
                     if (currentGridState && currentGridState.meta) {
                         if (bySel('#kg-pdf-title') && !bySel('#kg-pdf-title').value) {
