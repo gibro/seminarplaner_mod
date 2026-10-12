@@ -908,6 +908,102 @@ function(Ajax, Notification, Handout, PlanMemory) {
         });
     };
 
+    // ---- Infofeld je Seminarplan (Tiny-Editor #kg-pdf-info) ----
+    let pdfInfoGridId = 0;
+    let pdfInfoTimer = null;
+    let pdfInfoLoading = false;
+    const pdfInfoEditor = () => (window.tinyMCE && window.tinyMCE.get('kg-pdf-info')) || null;
+    const getPdfInfoHtml = () => {
+        const editor = pdfInfoEditor();
+        if (editor) {
+            return String(editor.getContent() || '').trim();
+        }
+        const el = bySel('#kg-pdf-info');
+        return el ? String(el.value || '').trim() : '';
+    };
+    const setPdfInfoHtml = (html) => {
+        const el = bySel('#kg-pdf-info');
+        if (el) {
+            el.value = html;
+        }
+        const editor = pdfInfoEditor();
+        if (editor && typeof editor.setContent === 'function') {
+            editor.setContent(html);
+        }
+    };
+    const setPdfInfoStatus = (text) => {
+        const el = bySel('#kg-pdf-info-status');
+        if (el) {
+            el.textContent = text;
+        }
+    };
+    // Sofort speichern (vor einem Planwechsel) oder verzögert beim Tippen.
+    const savePdfInfo = (cmid, immediate = false) => {
+        if (pdfInfoTimer) {
+            window.clearTimeout(pdfInfoTimer);
+            pdfInfoTimer = null;
+        }
+        if (pdfInfoLoading) {
+            return Promise.resolve();
+        }
+        if (!pdfInfoGridId) {
+            setPdfInfoStatus('Bitte zuerst oben einen Seminarplan wählen – das Feld wird je Plan gespeichert.');
+            return Promise.resolve();
+        }
+        const gridid = pdfInfoGridId;
+        const run = () => asCall('mod_seminarplaner_set_pdf_info', {cmid, gridid, infohtml: getPdfInfoHtml()})
+            .then(() => setPdfInfoStatus('Gespeichert.'))
+            .catch(() => setPdfInfoStatus('Speichern fehlgeschlagen.'));
+        if (immediate) {
+            return run();
+        }
+        setPdfInfoStatus('');
+        pdfInfoTimer = window.setTimeout(run, 800);
+        return Promise.resolve();
+    };
+    const loadPdfInfo = (cmid, gridid) => {
+        pdfInfoGridId = gridid;
+        if (!gridid) {
+            pdfInfoLoading = true;
+            setPdfInfoHtml('');
+            pdfInfoLoading = false;
+            return Promise.resolve();
+        }
+        pdfInfoLoading = true;
+        return asCall('mod_seminarplaner_get_pdf_info', {cmid, gridid}).then((res) => {
+            setPdfInfoHtml(String((res && res.infohtml) || ''));
+            setPdfInfoStatus('');
+        }).catch(() => {
+            setPdfInfoStatus('Das Infofeld konnte nicht geladen werden.');
+        }).then(() => {
+            pdfInfoLoading = false;
+        });
+    };
+    // Tiny entsteht erst nach dem Seitenaufbau - Änderungen dort abonnieren,
+    // sobald es da ist (sonst bleibt das Textfeld die Quelle).
+    const bindPdfInfo = (cmid) => {
+        const el = bySel('#kg-pdf-info');
+        if (!el) {
+            return;
+        }
+        el.addEventListener('input', () => savePdfInfo(cmid));
+        let tries = 0;
+        const attach = () => {
+            const editor = pdfInfoEditor();
+            if (editor && typeof editor.on === 'function') {
+                editor.on('input change undo redo', () => savePdfInfo(cmid));
+                if (pdfInfoGridId) {
+                    loadPdfInfo(cmid, pdfInfoGridId);
+                }
+                return;
+            }
+            if (tries++ < 50) {
+                window.setTimeout(attach, 200);
+            }
+        };
+        attach();
+    };
+
     const getPdfMeta = () => {
         const titleel = bySel('#kg-pdf-title');
         const dateel = bySel('#kg-pdf-date');
@@ -1149,7 +1245,8 @@ function(Ajax, Notification, Handout, PlanMemory) {
         // Text liegen darunter, damit beides unterscheidbar bleibt.
         const BODY_SIZE = 10;
         const HEADING_SIZE = {h1: 11.5, h2: 11, h3: 10.5, h4: 10, h5: 10, h6: 10};
-        const PAGE_BOTTOM = 280;
+        // Seitenende aus der echten Seitenhöhe (A4 hoch 297 mm, quer 210 mm).
+        const PAGE_BOTTOM = doc.internal.pageSize.getHeight() - 17;
         const listIndent = 6;
         const blocks = [];
         let current = null;
@@ -2042,6 +2139,31 @@ function(Ajax, Notification, Handout, PlanMemory) {
         return window.jspdf.jsPDF;
     };
 
+    // Infofeld je Seminarplan (Seminarzeiten, allgemeine Infos,
+    // Vorbereitungstreffen …) als eigene Seite nach dem Deckblatt - nur, wenn
+    // etwas drinsteht.
+    const drawPdfInfoPage = (doc) => {
+        const html = getPdfInfoHtml();
+        if (!escapeTextForPdf(html)) {
+            return;
+        }
+        doc.addPage();
+        stampPdfLogo(doc);
+        const right = doc.internal.pageSize.getWidth() - 14;
+        let y = 26;
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(16);
+        doc.text('Allgemeine Informationen', 14, y);
+        y += 4;
+        doc.setDrawColor(220, 224, 233);
+        doc.setLineWidth(0.3);
+        doc.line(14, y, right, y);
+        y += 10;
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+        renderHtmlToPdf(doc, html, 14, y, right - 14);
+    };
+
     const exportPdfZim = () => {
         const jsPDF = ensurePdfReady();
         const meta = getPdfMeta();
@@ -2056,6 +2178,7 @@ function(Ajax, Notification, Handout, PlanMemory) {
         }
 
         drawPdfTitlePage(doc, 'ZIM', meta, 'Deckblatt');
+        drawPdfInfoPage(doc);
         doc.addPage();
         let header = 'ZIM-Papier';
         if (meta.title) {
@@ -2139,6 +2262,7 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const doc = new jsPDF();
 
         drawPdfTitlePage(doc, 'ZIM', meta, 'Konzeptsammlung');
+        drawPdfInfoPage(doc);
 
         days.forEach((day) => {
             const allItems = (plan[day] || []).filter((item) => !!item);
@@ -2208,6 +2332,7 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const pageHeight = doc.internal.pageSize.getHeight();
 
         drawPdfTitlePage(doc, 'Materialliste', meta, 'Abgabeliste');
+        drawPdfInfoPage(doc);
 
         let anyMaterial = false;
         days.forEach((day) => {
@@ -2640,6 +2765,7 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const globalSetImportBtn = bySel('#kg-global-set-import');
         const globalSetApplyBtn = bySel('#kg-global-set-apply');
         bindPdfColumnsDropdown(cmid);
+        bindPdfInfo(cmid);
         document.querySelectorAll('input[name="kg-pdf-orientation"]').forEach((radio) => {
             radio.addEventListener('change', () => savePdfColumns(cmid));
         });
@@ -2852,6 +2978,8 @@ function(Ajax, Notification, Handout, PlanMemory) {
             pdfGrid.addEventListener('change', () => {
                 const gridid = Number.parseInt(pdfGrid.value || '0', 10) || 0;
                 PlanMemory.remember(cmid, gridid);
+                // Offenes Infofeld des bisherigen Plans erst sichern, dann umschalten.
+                (pdfInfoTimer ? savePdfInfo(cmid, true) : Promise.resolve()).then(() => loadPdfInfo(cmid, gridid));
                 loadGridState(cmid, gridid).then(() => {
                     if (currentGridState && currentGridState.meta) {
                         if (bySel('#kg-pdf-title') && !bySel('#kg-pdf-title').value) {

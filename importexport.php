@@ -24,6 +24,7 @@
 
 require_once(__DIR__ . '/bootstrap.php');
 require_once(__DIR__ . '/locallib.php');
+require_once($CFG->libdir . '/editorlib.php');
 
 $id = required_param('id', PARAM_INT);
 $activity = seminarplaner_require_activity_context($id, 'mod/seminarplaner:view');
@@ -278,6 +279,19 @@ foreach (
 }
 echo '</div>';
 
+// Infofeld je Seminarplan: Seminarzeiten, allgemeine Infos,
+// Vorbereitungstreffen … Erscheint in den PDFs nur, wenn etwas drinsteht.
+echo '<div class="kg-ie-info">';
+echo '<label class="kg-ie-fieldlabel" for="kg-pdf-info">Allgemeine Informationen</label>';
+echo '<div class="kg-ie-info__hint sp-filter-status">Seminarzeiten, allgemeine Infos, Vorbereitungstreffen … '
+    . 'Erscheint als eigene Seite nach dem Deckblatt – nur, wenn hier etwas steht. '
+    . 'Wird je Seminarplan gespeichert.</div>';
+echo html_writer::tag('textarea', '', [
+    'id' => 'kg-pdf-info', 'class' => 'kg-input', 'rows' => 8,
+]);
+echo html_writer::tag('div', '', ['id' => 'kg-pdf-info-status', 'class' => 'kg-ie-info__status', 'aria-live' => 'polite']);
+echo '</div>';
+
 echo '<div class="field-card kg-ie-columns">';
 echo '<label class="kg-ie-fieldlabel">Spalten für PDF-Export</label>';
 echo '<div class="kg-tag-dropdown" id="kg-pdf-columns-dropdown">';
@@ -352,5 +366,15 @@ echo html_writer::tag('div', '', [
 ]);
 
 echo html_writer::end_div(); // Ende kg-shell.
+
+// Moodle-Editor (Tiny) für das Infofeld - Verdrahtung wie in sequenz.php.
+$editor = editors_get_preferred_editor(FORMAT_HTML);
+$editor->use_editor('kg-pdf-info', [
+    'context' => $context,
+    'maxfiles' => 0,
+    'maxbytes' => 0,
+    'trusttext' => false,
+    'subdirs' => 0,
+], null);
 
 echo $OUTPUT->footer();

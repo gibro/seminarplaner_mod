@@ -721,6 +721,20 @@ select.kg-input:-moz-focusring {
   background: transparent;
 }
 
+/* Infofeld je Seminarplan (Seminarzeiten, allgemeine Infos …). */
+.kg-ie-info {
+  margin: 0 0 15px;
+}
+.kg-ie-info__hint {
+  margin: 0 0 6px;
+}
+.kg-ie-info__status {
+  min-height: 1.2em;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ig-gray, #646464);
+}
+
 /* Format ZIM-Papier: zwei Optionen nebeneinander. */
 .kg-ie-orientation {
   display: flex;

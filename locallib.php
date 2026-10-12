@@ -201,6 +201,39 @@ function seminarplaner_get_pdf_columns(int $cmid): ?array {
 }
 
 /**
+ * Infofeld eines Seminarplans für die PDF-Exporte (Seminarzeiten, allgemeine
+ * Infos, Vorbereitungstreffen …). Gespeichert je Seminarplan als Plugin-Config
+ * `pdfinfo_cmid_<cmid>_grid_<gridid>`, analog zur Spaltenwahl (D63).
+ *
+ * @param int $cmid Course module id.
+ * @param int $gridid Seminar plan id.
+ * @return string HTML, leer wenn nichts gespeichert ist.
+ */
+function seminarplaner_get_pdf_info(int $cmid, int $gridid): string {
+    $raw = get_config('mod_seminarplaner', 'pdfinfo_cmid_' . $cmid . '_grid_' . $gridid);
+    return is_string($raw) ? $raw : '';
+}
+
+/**
+ * Infofeld speichern. Das HTML wird bereinigt; ohne sichtbaren Text wird der
+ * Eintrag gelöscht, damit die PDFs den Abschnitt auslassen.
+ *
+ * @param int $cmid Course module id.
+ * @param int $gridid Seminar plan id.
+ * @param string $html Inhalt aus dem Editor.
+ */
+function seminarplaner_set_pdf_info(int $cmid, int $gridid, string $html): void {
+    $name = 'pdfinfo_cmid_' . $cmid . '_grid_' . $gridid;
+    $clean = trim(clean_text($html, FORMAT_HTML));
+    $visible = trim(str_replace("\u{00A0}", ' ', html_entity_decode(strip_tags($clean), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
+    if ($visible === '') {
+        unset_config($name, 'mod_seminarplaner');
+        return;
+    }
+    set_config($name, $clean, 'mod_seminarplaner');
+}
+
+/**
  * Format des ZIM-Papiers: Querformat (Standard) oder Hochformat.
  *
  * @param mixed $value Gespeicherter oder übermittelter Wert.
