@@ -4714,6 +4714,11 @@ select.kg-input.rf-select {
     --sq-phase-analyse: #EAB500;
     --sq-phase-handlung: #882A30;
     --sq-phase-transfer: #646464;
+    /* Pausen in Petrol: kommt weder unter den Phasenfarben noch im roten
+       Akzent vor, damit sie in der Sequenz sofort ins Auge fallen. */
+    --sq-pause: #1F7A6E;
+    --sq-pause-text: #155E54;
+    --sq-pause-bg: #E3F2EF;
 }
 /* ---- Klapp-Indikator: EIN Muster fuer alle Aufklapp-Elemente ----
    Vorher gab es drei: den nativen <details>-Marker (Seminarziele, Ziel-
@@ -5030,11 +5035,12 @@ details[open] > summary .sq-tri,
     display: flex;
     align-items: center;
     gap: 8px;
-    border: 1px dashed var(--sq-border-strong);
+    border: 1px solid var(--sq-pause);
+    border-left-width: 6px;
     border-radius: 0;
-    background: #fafbfc;
+    background: var(--sq-pause-bg);
     padding: 6px 10px;
-    color: var(--sq-text-muted);
+    color: var(--sq-pause-text);
     font-size: 12px;
 }
 .sq-row > .sq-pause { flex: 1; min-width: 0; }
