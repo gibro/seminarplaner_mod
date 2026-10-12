@@ -162,7 +162,7 @@ function seminarplaner_allowed_referent_ids(int $cmid): ?array {
  * client falls back to "all columns in default order".
  *
  * @param int $cmid Course module id.
- * @return array|null {all: bool, order: string[]} or null.
+ * @return array|null {all: bool, order: string[], selected: string[], orientation: string} or null.
  */
 function seminarplaner_get_pdf_columns(int $cmid): ?array {
     $raw = get_config('mod_seminarplaner', 'pdfcolumns_cmid_' . $cmid);
@@ -196,7 +196,18 @@ function seminarplaner_get_pdf_columns(int $cmid): ?array {
             (array)($decoded['selected'] ?? []),
             static fn($key) => in_array((string)$key, $allowed, true)
         )),
+        'orientation' => seminarplaner_pdf_orientation($decoded['orientation'] ?? ''),
     ];
+}
+
+/**
+ * Format des ZIM-Papiers: Querformat (Standard) oder Hochformat.
+ *
+ * @param mixed $value Gespeicherter oder übermittelter Wert.
+ * @return string 'landscape' oder 'portrait'.
+ */
+function seminarplaner_pdf_orientation($value): string {
+    return (string)$value === 'portrait' ? 'portrait' : 'landscape';
 }
 
 /**

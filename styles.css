@@ -721,6 +721,30 @@ select.kg-input:-moz-focusring {
   background: transparent;
 }
 
+/* Format ZIM-Papier: zwei Optionen nebeneinander. */
+.kg-ie-orientation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  margin: 0 0 15px;
+  padding: 0;
+  border: 0;
+}
+.kg-ie-orientation legend {
+  float: left;
+  width: 100%;
+  margin: 0 0 4px;
+  padding: 0;
+}
+.kg-ie-orientation__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  cursor: pointer;
+}
+
 .kg-ie-pdfactions {
   display: flex;
   gap: 10px;

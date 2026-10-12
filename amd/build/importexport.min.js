@@ -1563,6 +1563,10 @@ function(Ajax, Notification, Handout, PlanMemory) {
                 options.appendChild(row);
             }
         });
+        const orientation = pdfColumnsSetting.orientation === 'portrait' ? 'portrait' : 'landscape';
+        document.querySelectorAll('input[name="kg-pdf-orientation"]').forEach((radio) => {
+            radio.checked = radio.value === orientation;
+        });
         const useAll = !!pdfColumnsSetting.all;
         all.checked = useAll;
         const selected = Array.isArray(pdfColumnsSetting.selected) ? pdfColumnsSetting.selected : [];
@@ -1590,7 +1594,13 @@ function(Ajax, Notification, Handout, PlanMemory) {
                 }
             });
         }
-        return {all: !!(all && all.checked), order, selected};
+        return {all: !!(all && all.checked), order, selected, orientation: getPdfOrientation()};
+    };
+
+    // Format des ZIM-Papiers (Querformat ist der Standard).
+    const getPdfOrientation = () => {
+        const checked = document.querySelector('input[name="kg-pdf-orientation"]:checked');
+        return checked && checked.value === 'portrait' ? 'portrait' : 'landscape';
     };
 
     const savePdfColumns = (cmid) => {
@@ -2038,8 +2048,9 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const days = getOrderedDays();
         const plan = getPlanByDay();
         const selectedcols = getSelectedPdfColumns();
-        // ZIM-Papier im Querformat: mehr Platz für die nebeneinander stehenden ZIM-Spalten.
-        const doc = new jsPDF({orientation: 'landscape'});
+        // Querformat bietet mehr Platz für die nebeneinander stehenden Spalten,
+        // Hochformat passt besser zu wenigen Spalten oder zum Abheften.
+        const doc = new jsPDF({orientation: getPdfOrientation()});
         if (typeof doc.autoTable !== 'function') {
             throw new Error('PDF-Tabellenbibliothek nicht geladen');
         }
@@ -2629,6 +2640,9 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const globalSetImportBtn = bySel('#kg-global-set-import');
         const globalSetApplyBtn = bySel('#kg-global-set-apply');
         bindPdfColumnsDropdown(cmid);
+        document.querySelectorAll('input[name="kg-pdf-orientation"]').forEach((radio) => {
+            radio.addEventListener('change', () => savePdfColumns(cmid));
+        });
 
         if (parsebtn && fileinput) {
             fileinput.addEventListener('change', () => {

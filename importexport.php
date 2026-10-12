@@ -316,6 +316,15 @@ foreach (
 echo '</div></div></div>';
 echo '</div>'; // Ende .field-card.
 
+// Format des ZIM-Papiers; wird mit der Spaltenwahl pro Aktivität gespeichert.
+echo '<fieldset class="kg-ie-orientation">';
+echo '<legend class="kg-ie-fieldlabel">Format ZIM-Papier</legend>';
+foreach (['landscape' => 'Querformat', 'portrait' => 'Hochformat'] as $value => $label) {
+    echo '<label class="kg-ie-orientation__option"><input type="radio" name="kg-pdf-orientation" value="'
+        . s($value) . '"' . ($value === 'landscape' ? ' checked' : '') . '><span>' . s($label) . '</span></label>';
+}
+echo '</fieldset>';
+
 echo '<div class="kg-ie-pdfactions">';
 echo html_writer::tag('button', 'ZIM-PDF erstellen', [
     'type' => 'button', 'id' => 'kg-pdf-zim', 'class' => 'kg-btn kg-btn-primary',
