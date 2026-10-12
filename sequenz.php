@@ -345,6 +345,8 @@ echo html_writer::tag('h3', 'Seminareinheit bearbeiten', ['id' => 'sq-unit-modal
 echo html_writer::tag('button', '✕', ['type' => 'button', 'class' => 'sq-modal__close', 'id' => 'sq-unit-close']);
 echo html_writer::end_div();
 echo html_writer::start_div('sq-modal__body');
+// Hinweis, wenn dieselbe Einheit mehrfach im Plan steht (füllt sequenz.js).
+echo html_writer::div('', 'sq-unit-shared', ['id' => 'sq-unit-shared', 'hidden' => 'hidden', 'role' => 'note']);
 // Datei-Anhänge wie im Bibliotheks-Editor: das Filemanager-Formular wird beim
 // Öffnen des Modals je Einheit über die Fragment-API nachgeladen (der
 // Entwurfsbereich muss serverseitig vorbereitet werden).

@@ -496,7 +496,26 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         unlink: menuIcon('<path d="M9 17H7a5 5 0 010-10h2M15 7h2a5 5 0 014 8"/><path d="M3 3l18 18"/>'),
         link: menuIcon('<path d="M9 17H7a5 5 0 010-10h2M15 7h2a5 5 0 010 10h-2M8 12h8"/>'),
         heading: menuIcon('<path d="M6 4v16M18 4v16M6 12h12"/>'),
+        // Zwei Pfeile im Kreis = dieselbe Einheit noch einmal; zwei Blätter =
+        // eigenständiges Duplikat (dasselbe Symbol wie in der Bibliothek).
+        again: menuIcon('<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 013-3h15"/>'
+            + '<path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 01-3 3H3"/>'),
+        duplicate: menuIcon('<rect x="9" y="9" width="12" height="12" rx="1"/>'
+            + '<path d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"/>'),
         remove: menuIcon('<path d="M6 6l12 12M18 6L6 18"/>'),
+    };
+
+    // Titel für ein Duplikat: „Titel (2)", bei Bedarf (3), (4) … - eine schon
+    // vorhandene Nummer am Ende wird ersetzt, nicht angehängt. Dieselbe Regel
+    // gilt in der Bibliothek (methodlibrary.js, numberedTitleFor).
+    const numberedTitleFor = (title, cards) => {
+        const base = String(title || '(ohne Titel)').trim().replace(/\s*\((?:Kopie(?: \d+)?|\d+)\)$/, '');
+        const taken = new Set((cards || []).map((c) => String((c && c.titel) || '').trim().toLowerCase()));
+        let n = 2;
+        while (taken.has(`${base} (${n})`.toLowerCase())) {
+            n++;
+        }
+        return `${base} (${n})`;
     };
 
     // Obergrenze der direkt editierbaren Dauer (Handoff: clamp 0–600). 600 Min.
@@ -3909,6 +3928,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             if (save) {
                 save.textContent = mode === 'create' ? 'Anlegen und einplanen' : 'Übernehmen';
             }
+            this.renderSharedHint(mode === 'edit' ? this.placement(this.editorPid) : null);
             const overlay = bySel('#sq-unit-modal');
             if (overlay) {
                 overlay.classList.add('open');
@@ -4863,6 +4883,270 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }
             this.idCounter = counter;
             return prefix + counter;
+        }
+
+        // ---- Noch einmal einplanen / Als neue Einheit duplizieren ----------
+
+        // Platzierungen dieses Plans, die dieselbe aktive Karte zeigen. Die
+        // Teile einer geteilten Einheit zählen zusammen als EINE Stelle.
+        placementsShowingCard(cardid) {
+            const ziel = String(cardid || '');
+            const pids = [];
+            const seen = {};
+            if (!ziel) {
+                return pids;
+            }
+            this.anchorList().forEach((anchor) => anchor.seq.forEach((pid) => {
+                const placement = this.placement(pid);
+                const auswahl = placement && placement.typ === 'einheit' ? this.auswahl(placement) : null;
+                if (!auswahl || String(auswahl.aktiv || '') !== ziel) {
+                    return;
+                }
+                if (placement.splitgroup) {
+                    if (seen[placement.splitgroup]) {
+                        return;
+                    }
+                    seen[placement.splitgroup] = true;
+                }
+                pids.push(pid);
+            }));
+            return pids;
+        }
+
+        sharedCount(placement) {
+            const auswahl = placement && placement.typ === 'einheit' ? this.auswahl(placement) : null;
+            return auswahl && auswahl.aktiv ? this.placementsShowingCard(auswahl.aktiv).length : 0;
+        }
+
+        // Eine neue Platzierung direkt hinter `pid` (hinter dem letzten Teil,
+        // falls `pid` geteilt ist), im selben Baustein.
+        insertPlacementAfter(pid, placement) {
+            const found = this.locate(pid);
+            if (!found) {
+                return '';
+            }
+            const seq = found.anchors[found.anchorIdx].seq;
+            let pos = found.pos;
+            const origin = this.placement(pid);
+            if (origin && origin.splitgroup) {
+                while (pos + 1 < seq.length
+                        && String((this.placement(seq[pos + 1]) || {}).splitgroup || '') === String(origin.splitgroup)) {
+                    pos++;
+                }
+            }
+            const newpid = this.uniqueId('px', this.sequenz.platzierungen);
+            this.sequenz.platzierungen[newpid] = placement;
+            seq.splice(pos + 1, 0, newpid);
+            return newpid;
+        }
+
+        // Dieselbe Bibliothekskarte ein weiteres Mal einplanen: eigene Dauer,
+        // gemeinsamer Inhalt. Die Auswahl (Alternativen) wird mitgenommen.
+        placeAgain(pid) {
+            const placement = this.placement(pid);
+            const auswahl = this.auswahl(placement);
+            const card = placement ? this.activeCardForPlacement(placement) : null;
+            if (!placement || !auswahl || !card) {
+                return;
+            }
+            const eaid = this.uniqueId('eax', this.sequenz.einheitenauswahlen);
+            this.sequenz.einheitenauswahlen[eaid] = {
+                kandidaten: Array.isArray(auswahl.kandidaten) ? auswahl.kandidaten.slice() : [],
+                aktiv: auswahl.aktiv,
+            };
+            const total = placement.splitgroup
+                ? Object.values(this.sequenz.platzierungen)
+                    .filter((q) => q && String(q.splitgroup || '') === String(placement.splitgroup))
+                    .reduce((sum, q) => sum + Math.max(0, Number(q.dauer) || 0), 0)
+                : Math.max(0, Number(placement.dauer) || 0);
+            this.insertPlacementAfter(pid, {
+                typ: 'einheit',
+                bausteinid: placement.bausteinid || null,
+                einheitenauswahl: eaid,
+                titel: placement.titel || cardTitle(card),
+                dauer: total || 15,
+            });
+            this.openMenuPid = '';
+            this.setDirty(true);
+            this.render();
+            this.toast(`„${cardTitle(card)}" noch einmal eingeplant – Änderungen am Inhalt gelten an beiden Stellen.`);
+        }
+
+        // Eigenständiges Duplikat der aktiven Karte in der Bibliothek anlegen
+        // (wie „Als neue Einheit duplizieren" dort: lokale Einheit, ohne
+        // Alternativen und ohne Verknüpfung zur globalen Sammlung; die Anhänge
+        // kopiert der Server über _copyfrom). Rückgabe: Promise mit der neuen
+        // Karte (nach dem Neuladen der Bibliothek, damit die Anhänge stimmen).
+        createDuplicateCard(card) {
+            const copy = JSON.parse(JSON.stringify(card));
+            copy.id = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+            copy.titel = numberedTitleFor(cardTitle(card), this.methodCardList);
+            copy.alternativen = [];
+            copy._copyfrom = String(card.id);
+            copy.timemodified = Date.now();
+            delete copy._kgsync;
+            delete copy._kgkonzept;
+            delete copy._isglobal;
+            delete copy.materialiendraftitemid;
+            delete copy.h5pdraftitemid;
+            const list = this.methodCardList.slice();
+            const idx = list.findIndex((c) => String(c.id) === String(card.id));
+            list.splice(idx >= 0 ? idx + 1 : list.length, 0, copy);
+            return asCall('mod_seminarplaner_save_method_cards', {
+                cmid: this.cmid,
+                methodsjson: JSON.stringify(list),
+            }).then(() => this.reloadMethodCards()).then(() => this.methodCardForRef(copy.id) || copy);
+        }
+
+        reloadMethodCards() {
+            return asCall('mod_seminarplaner_get_method_cards', {cmid: this.cmid}).then((res) => {
+                let decoded = [];
+                try {
+                    decoded = res.methodsjson ? JSON.parse(res.methodsjson) : [];
+                } catch (e) {
+                    decoded = [];
+                }
+                this.methodCardList = Array.isArray(decoded) ? decoded : [];
+                MultiExtend.addLibraryValues(this.methodCardList, splitMultiValue);
+                this.methodCards = {};
+                this.methodCardList.forEach((c) => {
+                    if (c && c.id !== undefined) {
+                        this.methodCards[String(c.id)] = c;
+                    }
+                });
+            });
+        }
+
+        // ⋮ „Als neue Einheit duplizieren": Duplikat in der Bibliothek, direkt
+        // hinter dem Original eingeplant, und gleich zum Bearbeiten geöffnet -
+        // so ist sichtbar, dass hier etwas Eigenes entstanden ist.
+        duplicateUnit(pid) {
+            const placement = this.placement(pid);
+            const card = placement ? this.activeCardForPlacement(placement) : null;
+            if (!placement || !card) {
+                return;
+            }
+            this.openMenuPid = '';
+            this.setStatus('Neue Seminareinheit wird angelegt …');
+            this.createDuplicateCard(card).then((copy) => {
+                const eaid = this.uniqueId('eax', this.sequenz.einheitenauswahlen);
+                this.sequenz.einheitenauswahlen[eaid] = {kandidaten: [String(copy.id)], aktiv: String(copy.id)};
+                const duration = parseMinutes(copy.zeitbedarf);
+                const newpid = this.insertPlacementAfter(pid, {
+                    typ: 'einheit',
+                    bausteinid: placement.bausteinid || null,
+                    einheitenauswahl: eaid,
+                    titel: cardTitle(copy),
+                    dauer: Number.isFinite(duration) && duration > 0 ? duration : (Number(placement.dauer) || 15),
+                });
+                this.setDirty(true);
+                this.render();
+                this.setStatus(`Neue Seminareinheit „${cardTitle(copy)}" in der Bibliothek angelegt und eingeplant.`);
+                if (newpid) {
+                    this.openEditor(newpid);
+                    this.selectUnitTitle();
+                }
+                return null;
+            }).catch(() => {
+                this.setStatus('Die neue Seminareinheit konnte nicht angelegt werden.', true);
+            });
+        }
+
+        selectUnitTitle() {
+            const titlefield = bySel('#sq-e-titel');
+            if (titlefield && titlefield.select) {
+                titlefield.focus();
+                titlefield.select();
+            }
+        }
+
+        // Hinweis im Bearbeiten-Fenster: steht dieselbe Einheit mehrfach im
+        // Plan, gelten Änderungen überall - und genau dort entsteht das
+        // Missverständnis. Deshalb hier der Ausweg „nur hier ändern".
+        renderSharedHint(placement) {
+            const host = bySel('#sq-unit-shared');
+            if (!host) {
+                return;
+            }
+            host.classList.remove('sq-unit-shared--done');
+            const count = placement ? this.sharedCount(placement) : 0;
+            if (count < 2) {
+                host.hidden = true;
+                host.innerHTML = '';
+                return;
+            }
+            host.hidden = false;
+            host.innerHTML = `
+                <span class="sq-unit-shared__text">Diese Einheit steht <strong>${count}× in diesem Plan</strong>.
+                  Änderungen am Inhalt gelten an allen Stellen.</span>
+                <button type="button" class="kg-btn" id="sq-unit-splitoff">Stattdessen nur hier ändern</button>`;
+            const btn = host.querySelector('#sq-unit-splitoff');
+            btn.addEventListener('click', () => this.splitOffEditedPlacement(btn));
+        }
+
+        // „Stattdessen nur hier ändern": die gerade bearbeitete Stelle bekommt
+        // ein eigenes Duplikat der Karte; das Fenster bleibt offen und
+        // speichert ab jetzt in das Duplikat. Schon getippte Änderungen bleiben
+        // stehen; nur ein unveränderter Titel wird auf den neuen gesetzt, damit
+        // die Bibliothek nicht zwei gleichnamige Einheiten bekommt.
+        splitOffEditedPlacement(btn) {
+            const pid = this.editorPid;
+            const placement = this.placement(pid);
+            const auswahl = this.auswahl(placement);
+            const card = placement ? this.activeCardForPlacement(placement) : null;
+            if (!placement || !auswahl || !card) {
+                return;
+            }
+            const token = this.unitModalToken;
+            const oldtitle = cardTitle(card);
+            btn.disabled = true;
+            btn.textContent = 'Wird angelegt …';
+            this.createDuplicateCard(card).then((copy) => {
+                const newid = String(copy.id);
+                // Nur diese Stelle (samt ihren geteilten Teilen) zeigt jetzt auf
+                // das Duplikat; ihre Alternativen bleiben, das Original darin
+                // wird durch das Duplikat ersetzt.
+                const parts = placement.splitgroup
+                    ? Object.values(this.sequenz.platzierungen)
+                        .filter((q) => q && String(q.splitgroup || '') === String(placement.splitgroup))
+                    : [placement];
+                parts.forEach((part) => {
+                    const a = this.auswahl(part);
+                    if (!a) {
+                        return;
+                    }
+                    a.kandidaten = (Array.isArray(a.kandidaten) ? a.kandidaten : [])
+                        .map((ref) => (String(ref) === String(card.id) ? newid : String(ref)));
+                    a.aktiv = newid;
+                    if (String(part.titel || '') === oldtitle) {
+                        part.titel = cardTitle(copy);
+                    }
+                });
+                this.setDirty(true);
+                this.render();
+                if (token !== this.unitModalToken) {
+                    // Fenster inzwischen geschlossen - das Duplikat steht trotzdem.
+                    this.toast(`Neue Seminareinheit „${cardTitle(copy)}" angelegt – nur diese Stelle zeigt sie.`);
+                    return null;
+                }
+                const titlefield = bySel('#sq-e-titel');
+                if (titlefield && String(titlefield.value || '').trim() === oldtitle) {
+                    titlefield.value = cardTitle(copy);
+                }
+                const host = bySel('#sq-unit-shared');
+                if (host) {
+                    host.innerHTML = `<span class="sq-unit-shared__text">Du bearbeitest jetzt die neue Einheit
+                        <strong>„${escapeHtml(cardTitle(copy))}"</strong> – nur diese Stelle ändert sich.
+                        Das Original bleibt unverändert.</span>`;
+                    host.classList.add('sq-unit-shared--done');
+                }
+                this.selectUnitTitle();
+                return null;
+            }).catch(() => {
+                btn.disabled = false;
+                btn.textContent = 'Stattdessen nur hier ändern';
+                this.setUnitFormError('Die neue Seminareinheit konnte nicht angelegt werden.');
+            });
         }
 
         addUnitFromCard(cardid) {
@@ -5911,6 +6195,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 this.createHeading(pid, input ? input.value : '');
             } else if (type === 'edit') {
                 this.openEditor(pid);
+            } else if (type === 'place-again') {
+                this.placeAgain(pid);
+            } else if (type === 'duplicate-unit') {
+                this.duplicateUnit(pid);
             } else if (type === 'add-unit') {
                 this.openPicker(action.getAttribute('data-anker') || 'vormittag');
             } else if (type === 'add-baustein') {
@@ -6418,9 +6706,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const pid = p.pid;
             const isunit = p.data.typ === 'einheit';
             const open = this.openMenuPid === pid;
-            const item = (action, glyph, label) => `
+            const item = (action, glyph, label, hint = '') => `
                 <button type="button" role="menuitem" class="sq-menu__item${action === 'remove' ? ' sq-menu__item--danger' : ''}"
-                  data-sq-action="${action}" data-pid="${escapeHtml(pid)}">${MENU_ICONS[glyph]}<span>${label}</span></button>`;
+                  data-sq-action="${action}" data-pid="${escapeHtml(pid)}">${MENU_ICONS[glyph]}<span>${label}${hint
+                    ? `<span class="sq-menu__hint">${hint}</span>` : ''}</span></button>`;
 
             const items = [];
             items.push(item('move-up', 'up', 'Nach vorne schieben'));
@@ -6443,6 +6732,17 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 if (!p.data.bausteinid) {
                     items.push(item('heading-open', 'heading', 'Überschrift geben'));
                 }
+            }
+
+            // Zwei Wege zu „noch so eine": dieselbe Einheit ein weiteres Mal
+            // (geteilter Inhalt) oder ein eigenständiges Duplikat in der
+            // Bibliothek. Bewusst zwei Verben, nie „kopieren" - das Wort steht
+            // für ganze Seminarpläne.
+            if (isunit && !placeholder && this.activeCardForPlacement(p.data)) {
+                items.push(item('place-again', 'again', 'Noch einmal einplanen',
+                    'Dieselbe Einheit – Änderungen gelten überall'));
+                items.push(item('duplicate-unit', 'duplicate', 'Als neue Einheit duplizieren',
+                    'Eigene Einheit in der Bibliothek, unabhängig bearbeitbar'));
             }
 
             if (!placeholder) {
@@ -6850,8 +7150,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             // Dauer und Startzeit stehen jetzt in der Zeit-Spalte links, nicht
             // mehr als Badges hinter dem Titel. Zurueck bleibt in der Meta-Zeile
             // nur, was die Einheit inhaltlich beschreibt.
+            const shared = this.sharedCount(data);
             const meta = [
                 (!inBaustein && data.fortsetzung) ? '<span class="sq-badge sq-badge--variant">Fortsetzung</span>' : '',
+                shared > 1
+                    ? `<span class="sq-badge sq-badge--shared" title="Dieselbe Einheit steht ${shared}× in diesem Plan`
+                        + ` – Änderungen am Inhalt gelten an allen Stellen.">${shared}× im Plan</span>`
+                    : '',
                 groupsize ? `<span class="sq-badge">${escapeHtml(groupsize)}</span>` : '',
             ].filter((m) => m).join('');
 

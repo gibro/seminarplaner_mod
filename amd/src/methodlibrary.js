@@ -1109,7 +1109,8 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                       <button type="button" class="sq-menu__item"
                         data-act="edit">${ML_MENU_ICONS.edit}<span>Bearbeiten</span></button>
                       <button type="button" class="sq-menu__item"
-                        data-act="copy">${ML_MENU_ICONS.copy}<span>Kopieren</span></button>
+                        data-act="copy">${ML_MENU_ICONS.copy}<span>Als neue Einheit duplizieren<span
+                        class="sq-menu__hint">Eigene Einheit, unabhängig bearbeitbar</span></span></button>
                       <button type="button" class="sq-menu__item"
                         data-act="overwrite-import">${ML_MENU_ICONS.replace}<span>Aus Datei ersetzen…</span></button>
                       ${freezeaction}
@@ -1255,7 +1256,7 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                     closeMenu(copybtn);
                     copyMethod(m.id).catch((e) => {
                         Notification.exception(e);
-                        setStatus('Kopieren fehlgeschlagen.', true);
+                        setStatus('Duplizieren fehlgeschlagen.', true);
                     });
                 });
             }
@@ -2075,16 +2076,19 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
         }
     };
 
-    // Titel für eine Kopie, der in der Bibliothek noch nicht vorkommt - der Import
-    // gleicht Einheiten über den Titel ab, zwei gleichnamige würden zusammenfallen.
+    // Titel für ein Duplikat, der in der Bibliothek noch nicht vorkommt - der
+    // Import gleicht Einheiten über den Titel ab, zwei gleichnamige würden
+    // zusammenfallen. „Titel (2)", bei Bedarf (3) …; eine vorhandene Nummer
+    // (oder ein altes „(Kopie)") wird ersetzt, nicht angehängt. Dieselbe Regel
+    // gilt in der Sequenz (sequenz.js, numberedTitleFor).
     const copyTitleFor = (title) => {
-        const base = String(title || '(ohne Titel)').trim().replace(/\s*\(Kopie(?: \d+)?\)$/, '');
+        const base = String(title || '(ohne Titel)').trim().replace(/\s*\((?:Kopie(?: \d+)?|\d+)\)$/, '');
         const taken = new Set(methods.map((m) => String(m.titel || '').trim().toLowerCase()));
-        let candidate = `${base} (Kopie)`;
-        for (let n = 2; taken.has(candidate.toLowerCase()); n++) {
-            candidate = `${base} (Kopie ${n})`;
+        let n = 2;
+        while (taken.has(`${base} (${n})`.toLowerCase())) {
+            n++;
         }
-        return candidate;
+        return `${base} (${n})`;
     };
 
     // Legt eine eigenständige Kopie direkt hinter dem Original an. Die Kopie ist
@@ -2119,8 +2123,8 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
         }
         await loadMethods(runtimeCmid);
         setStatus(isKonzeptCard(source)
-            ? `Kopie "${copy.titel}" unter „Lokale Seminareinheiten" angelegt.`
-            : `Kopie "${copy.titel}" angelegt und gespeichert.`, false);
+            ? `Neue Seminareinheit „${copy.titel}" unter „Lokale Seminareinheiten" angelegt.`
+            : `Neue Seminareinheit „${copy.titel}" angelegt und gespeichert.`, false);
     };
 
     const toggleMethodFreeze = async (id) => {
