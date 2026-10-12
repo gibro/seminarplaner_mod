@@ -2687,7 +2687,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                         dy = Math.ceil((lastY - bottom + edge) / 5);
                     }
                     if (dy) {
-                        scroller.scrollBy(0, dy);
+                        // „instant": Moodle setzt scroll-behavior: smooth - dann
+                        // bräche jeder Aufruf die Animation des vorigen ab und die
+                        // Seite käme kaum vom Fleck.
+                        scroller.scrollBy({top: dy, behavior: 'instant'});
                     }
                     frame = window.requestAnimationFrame(autoscroll);
                 };
