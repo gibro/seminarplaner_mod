@@ -6433,7 +6433,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             if (placeholder) {
                 items.push(item('remove', 'remove', inBaustein ? 'Reservierung entfernen' : 'Baustein entfernen'));
             } else if (isunit && inBaustein) {
-                items.push(item('leave-baustein', 'unlink', 'Aus der Überschrift lösen'));
+                items.push(item('leave-baustein', 'unlink', 'Aus dem Baustein lösen'));
             } else if (isunit) {
                 const bid = this.adjacentBausteinId(pid);
                 if (bid) {
