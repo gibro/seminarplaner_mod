@@ -57,7 +57,8 @@ class roterfaden_model {
      */
     public static function phase_key($phase): string {
         $phasekeys = [
-            'orientierung' => ['orientierung', 'warm-up', 'einstieg'],
+            'warmup' => ['warmup', 'warm-up', 'warm up', 'aktivierung'],
+            'orientierung' => ['orientierung', 'einstieg'],
             'erfahrung' => ['erfahrung', 'erwartungsabfrage', 'vorwissen'],
             'analyse' => ['analyse'],
             'handlung' => ['handlung', 'aktion', 'praxis'],

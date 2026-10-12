@@ -209,7 +209,10 @@ function(Ajax, Notification, LernzielEditor, TagSuggest, MultiExtend) {
     const normalizePhase = (phase) => {
         const clean = String(phase || '').trim();
         const aliases = {
-            'warm-up': 'Orientierung',
+            'warm-up': 'Warmup/Aktivierung',
+            'warmup': 'Warmup/Aktivierung',
+            'warm up': 'Warmup/Aktivierung',
+            'aktivierung': 'Warmup/Aktivierung',
             'einstieg': 'Orientierung',
             'erwartungsabfrage': 'Erfahrungserhebung',
             'vorwissen aktivieren': 'Erfahrungserhebung',
@@ -243,7 +246,8 @@ function(Ajax, Notification, LernzielEditor, TagSuggest, MultiExtend) {
     // CD-Handoff: Karten tragen eine 3px-Top-Rule in der Farbe ihrer ersten
     // Seminarphase (Palette wie in der Sequenzansicht).
     const PHASE_CLASS_KEYS = [
-        {key: 'orientierung', match: ['orientierung', 'warm-up', 'einstieg']},
+        {key: 'warmup', match: ['warmup', 'warm-up', 'warm up', 'aktivierung']},
+        {key: 'orientierung', match: ['orientierung', 'einstieg']},
         {key: 'erfahrung', match: ['erfahrung', 'erwartungsabfrage', 'vorwissen']},
         {key: 'analyse', match: ['analyse']},
         {key: 'handlung', match: ['handlung', 'aktion', 'praxis']},
@@ -376,6 +380,7 @@ function(Ajax, Notification, LernzielEditor, TagSuggest, MultiExtend) {
     // Bloom-Gruppe des Verbs). Sie wird im Editor-Formular vorbelegt, ohne
     // bereits Gewähltes zu entfernen.
     const LZ_PHASE_LABELS = {
+        warmup: 'Warmup/Aktivierung',
         orientierung: 'Orientierung',
         erfahrung: 'Erfahrungserhebung',
         analyse: 'Analyse',

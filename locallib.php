@@ -363,6 +363,7 @@ function seminarplaner_sozialform_options(): array {
  */
 function seminarplaner_phase_options(): array {
     return [
+        'Warmup/Aktivierung' => 'Warmup/Aktivierung',
         'Orientierung' => 'Orientierung',
         'Erfahrungserhebung' => 'Erfahrungserhebung',
         'Analyse' => 'Analyse',
@@ -400,7 +401,10 @@ function seminarplaner_normalize_phase(string $phase): string {
     }
 
     $aliases = [
-        'warm-up' => 'Orientierung',
+        'warm-up' => 'Warmup/Aktivierung',
+        'warmup' => 'Warmup/Aktivierung',
+        'warm up' => 'Warmup/Aktivierung',
+        'aktivierung' => 'Warmup/Aktivierung',
         'einstieg' => 'Orientierung',
         'erwartungsabfrage' => 'Erfahrungserhebung',
         'vorwissen aktivieren' => 'Erfahrungserhebung',

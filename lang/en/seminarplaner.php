@@ -119,6 +119,7 @@ $string['mobile_item'] = '1 item';
 $string['mobile_items'] = '{$a} items';
 $string['mobile_continuation'] = 'Continued';
 $string['phase_orientierung'] = 'Orientation';
+$string['phase_warmup'] = 'Warm-up/Activation';
 $string['phase_erfahrung'] = 'Gathering experience';
 $string['phase_analyse'] = 'Analysis';
 $string['phase_handlung'] = 'Action';

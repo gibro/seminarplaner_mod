@@ -305,6 +305,7 @@ echo html_writer::tag('div', '', ['id' => 'sq-drama', 'class' => 'sq-drama']);
 
 // Phase legend.
 $phases = [
+    'warmup' => 'Warmup/Aktivierung',
     'orientierung' => 'Orientierung',
     'erfahrung' => 'Erfahrungserhebung',
     'analyse' => 'Analyse',

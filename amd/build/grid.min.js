@@ -32,7 +32,8 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     // die Überblick-Projektion färbt Einträge nach der Phasenpalette des
     // Design-Handoffs statt nach Bloom-Levels.
     const PHASE_KEYS = [
-        {key: 'orientierung', match: ['orientierung', 'warm-up', 'einstieg']},
+        {key: 'warmup', match: ['warmup', 'warm-up', 'warm up', 'aktivierung']},
+        {key: 'orientierung', match: ['orientierung', 'einstieg']},
         {key: 'erfahrung', match: ['erfahrung', 'erwartungsabfrage', 'vorwissen']},
         {key: 'analyse', match: ['analyse']},
         {key: 'handlung', match: ['handlung', 'aktion', 'praxis']},
@@ -249,7 +250,10 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
     const normalizePhase = (phase) => {
         const clean = String(phase || '').trim();
         const aliases = {
-            'warm-up': 'Orientierung',
+            'warm-up': 'Warmup/Aktivierung',
+            'warmup': 'Warmup/Aktivierung',
+            'warm up': 'Warmup/Aktivierung',
+            'aktivierung': 'Warmup/Aktivierung',
             'einstieg': 'Orientierung',
             'erwartungsabfrage': 'Erfahrungserhebung',
             'vorwissen aktivieren': 'Erfahrungserhebung',

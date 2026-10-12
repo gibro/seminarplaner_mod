@@ -214,7 +214,10 @@ function(Ajax, Notification, Handout, PlanMemory) {
     const normalizePhase = (phase) => {
         const clean = stripHtml(phase);
         const aliases = {
-            'warm-up': 'Orientierung',
+            'warm-up': 'Warmup/Aktivierung',
+            'warmup': 'Warmup/Aktivierung',
+            'warm up': 'Warmup/Aktivierung',
+            'aktivierung': 'Warmup/Aktivierung',
             'einstieg': 'Orientierung',
             'erwartungsabfrage': 'Erfahrungserhebung',
             'vorwissen aktivieren': 'Erfahrungserhebung',

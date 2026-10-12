@@ -341,6 +341,7 @@ echo html_writer::tag(
         // Überblick aus der Sequenz projiziert (Phasenfarben) - grid.js
         // blendet sie dann ein.
         $phases = [
+            'warmup' => 'Warmup/Aktivierung',
             'orientierung' => 'Orientierung',
             'erfahrung' => 'Erfahrungserhebung',
             'analyse' => 'Analyse',

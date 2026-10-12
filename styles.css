@@ -1205,6 +1205,7 @@ select.kg-input:-moz-focusring {
      gelten - auch im Ueberblick ohne .sq-shell. .sq-shell setzt sie zusaetzlich
      lokal mit identischen Werten (Refactoring: zweiter :root-Block Z.~6555
      hierher zusammengefuehrt, gleiche Werte -> optikneutral). */
+  --sq-phase-warmup: #7B4FA0;
   --sq-phase-orientierung: #2F80AB;
   --sq-phase-erfahrung: #5B9945;
   --sq-phase-analyse: #EAB500;
@@ -4318,6 +4319,12 @@ select.kg-input.rf-select {
 }
 
 /* ---- Seminarphasen: Volltonfarbe, heller Grund, dunkle Schrift ---- */
+.rf-phase--warmup {
+  --rf-color: #7B4FA0;
+  --rf-tint: #EFE8F5;
+  --rf-text: #5B3780;
+}
+
 .rf-phase--orientierung {
   --rf-color: var(--ig-blue);
   --rf-tint: #e7f0f5;
@@ -4699,6 +4706,7 @@ select.kg-input.rf-select {
     --sq-warn-bg: #FBF1D0;
     --sq-radius: 0;
     --sq-shadow: none;
+    --sq-phase-warmup: #7B4FA0;
     --sq-phase-orientierung: #2F80AB;
     --sq-phase-erfahrung: #5B9945;
     --sq-phase-analyse: #EAB500;
@@ -5080,6 +5088,7 @@ button:focus-visible .sq-tri {
 }
 .sq-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .sq-legend__dot { width: 9px; height: 9px; border-radius: 0; display: inline-block; background: #cfd6dd; }
+.sq-phase-bg--warmup { background: var(--sq-phase-warmup, #7B4FA0); }
 .sq-phase-bg--orientierung { background: var(--sq-phase-orientierung, #5b8fb0); }
 .sq-phase-bg--erfahrung { background: var(--sq-phase-erfahrung, #6f9e6c); }
 .sq-phase-bg--analyse { background: var(--sq-phase-analyse, #c99a3e); }
@@ -5526,6 +5535,7 @@ button:focus-visible .sq-tri {
     line-height: 1.2;
 }
 /* Volle Phasenfarbe wie die Bloecke im Ueberblick. */
+.sq-intro__block--warmup { background: var(--sq-phase-warmup, #7B4FA0); }
 .sq-intro__block--orientierung { background: var(--sq-phase-orientierung, #2F80AB); }
 .sq-intro__block--erfahrung { background: var(--sq-phase-erfahrung, #5B9945); }
 .sq-intro__block--analyse { background: var(--sq-phase-analyse, #EAB500); color: var(--ig-anthracite); }
@@ -6043,6 +6053,7 @@ body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
     font-size: 11px;
 }
 
+.sq-badge--phase-warmup { background: #EFE8F5; color: #5B3780; border-color: var(--sq-phase-warmup); }
 .sq-badge--phase-orientierung { background: #E7F0F5; color: #215d7e; border-color: var(--sq-phase-orientierung); }
 .sq-badge--phase-erfahrung { background: #E7F1E3; color: #3f6e2f; border-color: var(--sq-phase-erfahrung); }
 .sq-badge--phase-analyse { background: #FBF1D0; color: #8a6d00; border-color: var(--sq-phase-analyse); }
@@ -6179,6 +6190,7 @@ body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
     padding: 10px;
 }
 
+.sq-suggest__card--warmup { border-top-color: var(--sq-phase-warmup); }
 .sq-suggest__card--orientierung { border-top-color: var(--sq-phase-orientierung); }
 .sq-suggest__card--erfahrung { border-top-color: var(--sq-phase-erfahrung); }
 .sq-suggest__card--analyse { border-top-color: var(--sq-phase-analyse); }
@@ -6935,6 +6947,7 @@ a.kg-btn-primary:focus {
     display: none;
 }
 
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--warmup,
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--orientierung,
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--erfahrung,
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--handlung,
@@ -6943,6 +6956,7 @@ a.kg-btn-primary:focus {
     border: none;
 }
 
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--warmup { background: var(--sq-phase-warmup); }
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--orientierung { background: var(--sq-phase-orientierung); }
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--erfahrung { background: var(--sq-phase-erfahrung); }
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--handlung { background: var(--sq-phase-handlung); }
@@ -6954,6 +6968,7 @@ a.kg-btn-primary:focus {
     border: none;
 }
 
+.kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--warmup .sp-meta,
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--orientierung .sp-meta,
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--erfahrung .sp-meta,
 .kg-grid-readonly .sp-wrapper .sp-item.sp-item--sqnav.sp-phase--handlung .sp-meta,
@@ -7066,6 +7081,7 @@ a.kg-btn-primary:focus {
     border-top: 3px solid var(--ig-lightgray);
 }
 
+.kg-library-card.sp-card.ml-phase--warmup { border-top-color: var(--sq-phase-warmup); }
 .kg-library-card.sp-card.ml-phase--orientierung { border-top-color: var(--sq-phase-orientierung); }
 .kg-library-card.sp-card.ml-phase--erfahrung { border-top-color: var(--sq-phase-erfahrung); }
 .kg-library-card.sp-card.ml-phase--analyse { border-top-color: var(--sq-phase-analyse); }
@@ -7996,6 +8012,11 @@ details.sq-menu[open] > summary.sq-menu__btn {
    Badge-Regel ein !important und machte jede Toenung wirkungslos (die alten
    .ml-phase--*-Regeln waren deshalb toter Code); seit dem Abbau reicht die
    Spezifitaet. */
+.kg-library-card.sp-card .sp-card-meta .sp-badge--phase-warmup {
+  background: #EFE8F5;
+  border-color: #7B4FA0;
+  color: #5B3780;
+}
 .kg-library-card.sp-card .sp-card-meta .sp-badge--phase-orientierung {
   background: #E7F0F5;
   border-color: var(--ig-blue);

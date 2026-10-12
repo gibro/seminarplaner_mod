@@ -457,9 +457,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
     // `label` ist der kanonische Wert, der in die Karte geschrieben wird — er
     // muss mit seminarplaner_phase_options() (locallib.php) uebereinstimmen,
     // aus der Legende und das Editor-Dropdown gespeist werden. `match` bleibt
-    // die lose Erkennung fuer Alt-Bestand („Warm-up" -> Orientierung).
+    // die lose Erkennung fuer Alt-Bestand („Warm-up" -> Warmup/Aktivierung,
+    // „Einstieg" -> Orientierung).
     const PHASE_KEYS = [
-        {key: 'orientierung', label: 'Orientierung', match: ['orientierung', 'warm-up', 'einstieg']},
+        {key: 'warmup', label: 'Warmup/Aktivierung', match: ['warmup', 'warm-up', 'warm up', 'aktivierung']},
+        {key: 'orientierung', label: 'Orientierung', match: ['orientierung', 'einstieg']},
         {key: 'erfahrung', label: 'Erfahrungserhebung', match: ['erfahrung', 'erwartungsabfrage', 'vorwissen']},
         {key: 'analyse', label: 'Analyse', match: ['analyse']},
         {key: 'handlung', label: 'Handlungsteil', match: ['handlung', 'aktion', 'praxis']},
@@ -476,6 +478,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
     };
 
     const PHASE_LABELS = {
+        warmup: 'Warmup/Aktivierung',
         orientierung: 'Orientierung',
         erfahrung: 'Erfahrungserhebung',
         analyse: 'Analyse',
@@ -5368,7 +5371,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const afternoonfirst = units.find((item) => item.ankername === 'nachmittag');
             if (afternoonfirst) {
                 const sozialform = this.placementSozialform(afternoonfirst.data).toLowerCase();
-                if (sozialform) {
+                if (phaseKey(this.placementRawPhase(afternoonfirst.data)) === 'warmup') {
+                    findings.push({ok: true, text: 'Nach der Mittagspause geht es mit einem Warmup weiter.'});
+                } else if (sozialform) {
                     const inputlike = /vortrag|input|präsentation/.test(sozialform);
                     findings.push(inputlike
                         ? {ok: false, text: 'Nach der Mittagspause könnte etwas Aktivierendes guttun'
