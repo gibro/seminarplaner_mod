@@ -715,9 +715,11 @@ select.kg-input:-moz-focusring {
    hier aber ohne dessen Rahmen/Linksbalken/Fuellung wie ein normales Feld
    wirken. */
 .kg-ie-columns.field-card {
-  margin: 0 0 15px;
-  padding: 0;
+  margin: 18px 0 15px;
+  padding: 15px 0 0;
   border: 0;
+  /* Trennstrich zwischen Infofeld und den ZIM-Einstellungen darunter. */
+  border-top: 1px solid var(--ig-lightgray, #DADADA);
   background: transparent;
 }
 

@@ -287,13 +287,13 @@ echo '<div class="kg-ie-info__hint sp-filter-status">Seminarzeiten, allgemeine I
     . 'Erscheint als eigene Seite nach dem Deckblatt – nur, wenn hier etwas steht. '
     . 'Wird je Seminarplan gespeichert.</div>';
 echo html_writer::tag('textarea', '', [
-    'id' => 'kg-pdf-info', 'class' => 'kg-input', 'rows' => 8,
+    'id' => 'kg-pdf-info', 'class' => 'kg-input', 'rows' => 20,
 ]);
 echo html_writer::tag('div', '', ['id' => 'kg-pdf-info-status', 'class' => 'kg-ie-info__status', 'aria-live' => 'polite']);
 echo '</div>';
 
 echo '<div class="field-card kg-ie-columns">';
-echo '<label class="kg-ie-fieldlabel">Spalten für PDF-Export</label>';
+echo '<label class="kg-ie-fieldlabel">Spalten für den ZIM-Export</label>';
 echo '<div class="kg-tag-dropdown" id="kg-pdf-columns-dropdown">';
 echo '<button type="button" class="kg-input kg-tag-dropdown-toggle" id="kg-pdf-columns-toggle">Spalten wählen</button>';
 echo '<div class="kg-tag-dropdown-panel kg-hidden" id="kg-pdf-columns-panel">';
