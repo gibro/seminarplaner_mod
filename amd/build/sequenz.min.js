@@ -2430,6 +2430,12 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             return null;
         }
 
+        // ⋮ „Nach vorne/hinten schieben". Ein Baustein ist ein Kasten: was
+        // nicht zu ihm gehört (eigenständige Einheit, Pause, leerer Baustein),
+        // springt über den ganzen Nachbar-Baustein hinweg statt mitten hinein
+        // zu rutschen. Eine Einheit im Baustein rückt Schritt für Schritt
+        // innerhalb ihres Kastens; am Rand verlässt sie ihn - wie beim Ziehen
+        // aus dem Kasten - und wird mit Hinweis gelöst.
         movePlacement(pid, delta) {
             const found = this.locate(pid);
             if (!found) {
@@ -2437,35 +2443,87 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }
             const {anchorIdx, pos, anchors} = found;
             const seq = anchors[anchorIdx].seq;
-            const target = pos + delta;
-            if (target >= 0 && target < seq.length) {
-                seq.splice(pos, 1);
-                seq.splice(target, 0, pid);
-            } else {
-                const nextAnchorIdx = this.openAnchorIdx(anchors, anchorIdx, delta);
-                if (nextAnchorIdx < 0) {
-                    this.setStatus(delta < 0
-                        ? 'Davor gibt es keinen Abschnitt, der stattfindet.'
-                        : 'Danach gibt es keinen Abschnitt, der stattfindet.');
+            const placement = this.placement(pid);
+            const bid = placement && placement.typ === 'einheit' ? String(placement.bausteinid || '') : '';
+            let block = [pid];
+            if (bid) {
+                const run = this.findRunAt(seq, pos, bid);
+                if (run.every((rpid) => this.isUnfilled(this.placement(rpid)))) {
+                    // Leerer Baustein: er wandert als Ganzes.
+                    block = run;
+                } else {
+                    const runStart = seq.indexOf(run[0]);
+                    const atEdge = delta < 0 ? pos === runStart : pos === runStart + run.length - 1;
+                    if (!atEdge) {
+                        seq.splice(pos, 1);
+                        seq.splice(pos + delta, 0, pid);
+                        this.finishMove([pid]);
+                        return;
+                    }
+                    if (this.isUnfilled(placement)) {
+                        this.setStatus('Die Reservierung bleibt im Baustein. „Reservierung entfernen" nimmt sie heraus.');
+                        return;
+                    }
+                    this.leaveBausteinAtEdge(pid, delta, seq, pos);
                     return;
                 }
-                seq.splice(pos, 1);
-                const nextSeq = anchors[nextAnchorIdx].seq;
-                if (delta > 0) {
-                    nextSeq.unshift(pid);
-                } else {
-                    nextSeq.push(pid);
-                }
-                const targetDay = this.sequenz.tage[anchors[nextAnchorIdx].dayIdx];
-                const targetAnkerName = anchors[nextAnchorIdx].ankername === 'vormittag'
-                    ? 'Vormittag'
-                    : 'Nachmittag';
-                this.setStatus(`Verschoben: jetzt am ${targetAnkerName} von Tag ${targetDay.tag}.`);
             }
-            const rejoined = this.rejoinSplitParts([pid]);
+
+            const start = seq.indexOf(block[0]);
+            const end = start + block.length - 1;
+            const neighborIdx = delta > 0 ? end + 1 : start - 1;
+            if (neighborIdx >= 0 && neighborIdx < seq.length) {
+                const neighbor = this.placement(seq[neighborIdx]);
+                const hop = neighbor && neighbor.typ === 'einheit' && neighbor.bausteinid
+                    ? this.findRunAt(seq, neighborIdx, neighbor.bausteinid).length
+                    : 1;
+                seq.splice(start, block.length);
+                seq.splice(delta > 0 ? start + hop : start - hop, 0, ...block);
+                this.finishMove(block);
+                return;
+            }
+            const nextAnchorIdx = this.openAnchorIdx(anchors, anchorIdx, delta);
+            if (nextAnchorIdx < 0) {
+                this.setStatus(delta < 0
+                    ? 'Davor gibt es keinen Abschnitt, der stattfindet.'
+                    : 'Danach gibt es keinen Abschnitt, der stattfindet.');
+                return;
+            }
+            seq.splice(start, block.length);
+            const nextSeq = anchors[nextAnchorIdx].seq;
+            if (delta > 0) {
+                nextSeq.unshift(...block);
+            } else {
+                nextSeq.push(...block);
+            }
+            const targetDay = this.sequenz.tage[anchors[nextAnchorIdx].dayIdx];
+            const targetAnkerName = anchors[nextAnchorIdx].ankername === 'vormittag'
+                ? 'Vormittag'
+                : 'Nachmittag';
+            this.setStatus(`Verschoben: jetzt am ${targetAnkerName} von Tag ${targetDay.tag}.`);
+            this.finishMove(block);
+        }
+
+        finishMove(pids) {
+            const rejoined = this.rejoinSplitParts(pids);
             this.setDirty(true);
             this.render();
             this.toastRejoined(rejoined);
+        }
+
+        // Die Einheit steht am Rand ihres Bausteins und soll weiter: sie bleibt
+        // an ihrer Stelle, gehört aber nicht mehr zum Kasten - steht also direkt
+        // vor bzw. hinter ihm. Der nächste Pfeil bewegt sie als eigenständige
+        // Einheit weiter. War sie die letzte, behält der Baustein seinen
+        // Platzhalter an der alten Stelle.
+        leaveBausteinAtEdge(pid, delta, seq, pos) {
+            const placement = this.placement(pid);
+            const oldbid = placement.bausteinid;
+            placement.bausteinid = null;
+            this.keepBausteinVisible(oldbid, seq, delta > 0 ? pid : (seq[pos + 1] || ''));
+            this.setDirty(true);
+            this.render();
+            this.toast(`Aus „${this.bausteinTitle(oldbid)}" gelöst.`);
         }
 
         // Eine geteilte Einheit (resolveOverflow/splitPlacement), von der ein
