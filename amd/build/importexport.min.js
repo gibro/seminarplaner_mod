@@ -1125,43 +1125,57 @@ function(Ajax, Notification, Handout, PlanMemory) {
         return normalizePdfText(plain, true);
     };
 
+    // Rich-Text der Bibliothek (TinyMCE: h3-Überschriften, Absätze, Listen,
+    // fett/kursiv im Satz, Links, vereinzelt Tabellen) ins PDF - so, wie es im
+    // Editor aussieht. Zweistufig: erst das HTML in Blöcke mit Textläufen
+    // zerlegen, dann Wort für Wort umbrechen. Früher begann jeder Textknoten
+    // eine neue Zeile (ein fettes Wort riss den Satz auseinander), und
+    // Überschriften kamen als normaler Text heraus.
     const renderHtmlToPdf = (doc, html, x, y, maxWidth) => {
         if (!html) {
             return y;
         }
         const div = document.createElement('div');
-        div.innerHTML = String(html);
+        const source = String(html);
+        if (/<[a-z][^>]*>/i.test(source)) {
+            div.innerHTML = source;
+        } else {
+            // Reiner Text (z. B. Themen eines Bausteins): Zeilen bleiben Zeilen.
+            div.textContent = source;
+            div.innerHTML = div.innerHTML.replace(/\r?\n/g, '<br>');
+        }
 
-        let currentY = y;
-        const lineHeight = 4;
-        const paragraphGap = 1.2;
-        const listGap = 0.4;
-        const listItemGap = 0.15;
+        // Abschnittstitel („Ablauf:") stehen in 11 pt fett - Überschriften im
+        // Text liegen darunter, damit beides unterscheidbar bleibt.
+        const BODY_SIZE = 10;
+        const HEADING_SIZE = {h1: 11.5, h2: 11, h3: 10.5, h4: 10, h5: 10, h6: 10};
+        const PAGE_BOTTOM = 280;
         const listIndent = 6;
-        let isFirstElement = true;
+        const blocks = [];
+        let current = null;
 
-        const processNode = (node, indent = 0, linkUrl = '') => {
-            if (currentY > 280) {
-                doc.addPage();
-                currentY = 20;
+        // Ein Block sammelt Textläufe {text, bold, italic, link}.
+        const openBlock = (props) => {
+            current = Object.assign({runs: [], indent: 0, bullet: '', heading: ''}, props);
+            blocks.push(current);
+            return current;
+        };
+        const closeBlock = () => {
+            current = null;
+        };
+        const addText = (text, style) => {
+            if (!current) {
+                openBlock({indent: style.indent || 0});
             }
+            current.runs.push({text, bold: style.bold, italic: style.italic, link: style.link});
+        };
+
+        const BLOCK_TAGS = ['p', 'div', 'section', 'article', 'blockquote', 'pre', 'figure', 'header', 'footer'];
+        const walk = (node, style) => {
             if (node.nodeType === Node.TEXT_NODE) {
-                const text = normalizePdfText(node.textContent || '', false);
-                if (text.trim()) {
-                    const compactText = text.replace(/[ \t]+/g, ' ');
-                    const lines = doc.splitTextToSize(compactText, Math.max(20, maxWidth - indent));
-                    if (linkUrl && typeof doc.textWithLink === 'function') {
-                        const oldColor = doc.getTextColor();
-                        doc.setTextColor(25, 92, 179);
-                        lines.forEach((line) => {
-                            doc.textWithLink(String(line), x + indent, currentY, {url: linkUrl});
-                            currentY += lineHeight;
-                        });
-                        doc.setTextColor(oldColor);
-                    } else {
-                        doc.text(lines, x + indent, currentY);
-                        currentY += lines.length * lineHeight;
-                    }
+                const text = String(node.textContent || '').replace(/[\r\n\t]+/g, ' ');
+                if (text.trim() || (current && current.runs.length)) {
+                    addText(text, style);
                 }
                 return;
             }
@@ -1169,66 +1183,190 @@ function(Ajax, Notification, Handout, PlanMemory) {
                 return;
             }
             const tag = node.tagName.toLowerCase();
-            const saved = doc.getFont().fontStyle || 'normal';
+            const children = () => Array.from(node.childNodes).forEach((child) => walk(child, style));
+            const inline = (extra) => Array.from(node.childNodes)
+                .forEach((child) => walk(child, Object.assign({}, style, extra)));
 
             if (tag === 'strong' || tag === 'b') {
-                doc.setFont(undefined, 'bold');
-                Array.from(node.childNodes).forEach((child) => processNode(child, indent, linkUrl));
-                doc.setFont(undefined, saved);
+                inline({bold: true});
                 return;
             }
             if (tag === 'em' || tag === 'i') {
-                doc.setFont(undefined, 'italic');
-                Array.from(node.childNodes).forEach((child) => processNode(child, indent, linkUrl));
-                doc.setFont(undefined, saved);
+                inline({italic: true});
                 return;
             }
             if (tag === 'a') {
                 const hrefRaw = String(node.getAttribute('href') || '').trim();
                 const href = /^(https?:\/\/|mailto:)/i.test(hrefRaw) ? hrefRaw : '';
-                Array.from(node.childNodes).forEach((child) => processNode(child, indent, href || linkUrl));
+                inline({link: href || style.link});
                 return;
             }
             if (tag === 'br') {
-                currentY += 2;
+                // Harter Umbruch: neuer Block ohne Absatzabstand.
+                const indent = current ? current.indent : (style.indent || 0);
+                openBlock({indent, tight: true});
                 return;
             }
-            if (tag === 'p') {
-                if (!isFirstElement && currentY > y) {
-                    currentY += paragraphGap;
-                }
-                isFirstElement = false;
-                Array.from(node.childNodes).forEach((child) => processNode(child, indent, linkUrl));
-                currentY += paragraphGap;
+            if (/^h[1-6]$/.test(tag)) {
+                closeBlock();
+                openBlock({heading: tag, indent: style.indent || 0});
+                inline({bold: true});
+                closeBlock();
                 return;
             }
             if (tag === 'ul' || tag === 'ol') {
-                if (!isFirstElement) {
-                    currentY += listGap;
-                }
-                isFirstElement = false;
-                Array.from(node.childNodes).forEach((child) => {
-                    if (child.nodeType === Node.ELEMENT_NODE && child.tagName.toLowerCase() === 'li') {
-                        processNode(child, indent, linkUrl);
+                closeBlock();
+                let n = 0;
+                Array.from(node.children).forEach((li) => {
+                    if (li.tagName.toLowerCase() !== 'li') {
+                        return;
                     }
+                    n++;
+                    const indent = (style.indent || 0) + listIndent;
+                    openBlock({indent, bullet: tag === 'ol' ? `${n}.` : '•', listitem: true});
+                    Array.from(li.childNodes).forEach((child) => {
+                        const ctag = child.nodeType === Node.ELEMENT_NODE ? child.tagName.toLowerCase() : '';
+                        if (ctag === 'ul' || ctag === 'ol') {
+                            walk(child, Object.assign({}, style, {indent}));
+                        } else if (ctag === 'p') {
+                            // TinyMCE legt Absätze gern in <li> - ohne neuen Block.
+                            if (!current || current.indent !== indent) {
+                                openBlock({indent, listitem: true});
+                            }
+                            Array.from(child.childNodes).forEach((c) => walk(c, Object.assign({}, style, {indent})));
+                        } else {
+                            if (!current) {
+                                openBlock({indent, listitem: true});
+                            }
+                            walk(child, Object.assign({}, style, {indent}));
+                        }
+                    });
+                    closeBlock();
                 });
-                currentY += listGap;
                 return;
             }
-            if (tag === 'li') {
-                doc.text('• ', x + indent, currentY);
-                Array.from(node.childNodes).forEach((child) => processNode(child, indent + listIndent, linkUrl));
-                currentY += listItemGap;
+            if (tag === 'tr') {
+                // Tabellen: eine Zeile je Tabellenzeile, Zellen mit „ · ".
+                closeBlock();
+                openBlock({indent: style.indent || 0, listitem: true});
+                Array.from(node.children).forEach((cell, idx) => {
+                    if (idx > 0) {
+                        addText(' · ', style);
+                    }
+                    Array.from(cell.childNodes).forEach((c) => walk(c, Object.assign({}, style,
+                        cell.tagName.toLowerCase() === 'th' ? {bold: true} : {})));
+                });
+                closeBlock();
                 return;
             }
-            Array.from(node.childNodes).forEach((child) => processNode(child, indent, linkUrl));
+            if (BLOCK_TAGS.includes(tag)) {
+                closeBlock();
+                children();
+                closeBlock();
+                return;
+            }
+            // span, table/tbody, font … : Inhalt übernehmen, Zeilenfluss bleibt.
+            children();
         };
+        Array.from(div.childNodes).forEach((child) => walk(child, {bold: false, italic: false, link: '', indent: 0}));
 
-        Array.from(div.childNodes).forEach((child) => {
-            processNode(child);
-            isFirstElement = false;
+        // ---- Satz ----
+        let currentY = y;
+        const fontFor = (run) => (run.bold && run.italic ? 'bolditalic' : run.bold ? 'bold' : run.italic ? 'italic' : 'normal');
+        const ensureSpace = (needed) => {
+            if (currentY + needed > PAGE_BOTTOM) {
+                doc.addPage();
+                stampPdfLogo(doc);
+                currentY = 20;
+            }
+        };
+        const savedColor = doc.getTextColor();
+        let first = true;
+
+        blocks.forEach((block) => {
+            // Läufe säubern; ein Block ohne Text fällt weg.
+            const runs = block.runs
+                .map((run) => Object.assign({}, run, {text: normalizePdfText(run.text, false).replace(/\s+/g, ' ')}))
+                .filter((run) => run.text !== '');
+            if (runs.length && !runs.some((run) => run.text.trim())) {
+                return;
+            }
+            if (!runs.length) {
+                return;
+            }
+            runs[0].text = runs[0].text.replace(/^\s+/, '');
+            runs[runs.length - 1].text = runs[runs.length - 1].text.replace(/\s+$/, '');
+
+            const size = block.heading ? HEADING_SIZE[block.heading] : BODY_SIZE;
+            const lineHeight = size * 0.42;
+            if (!first) {
+                if (block.heading) {
+                    currentY += 3;
+                } else if (!block.tight && !block.listitem) {
+                    currentY += 1.6;
+                } else if (block.listitem) {
+                    currentY += 0.4;
+                }
+            }
+            first = false;
+            // Eine Überschrift nie allein unten auf der Seite.
+            ensureSpace(block.heading ? lineHeight * 3 : lineHeight);
+            doc.setFontSize(size);
+
+            const left = x + block.indent;
+            const width = Math.max(20, maxWidth - block.indent);
+            if (block.bullet) {
+                doc.setFont(undefined, 'normal');
+                doc.text(block.bullet, left - (block.bullet === '•' ? 4 : 5), currentY);
+            }
+
+            // Wort für Wort setzen; Leerzeichen hängen am Wort davor.
+            const tokens = [];
+            runs.forEach((run) => {
+                run.text.split(/(\s+)/).forEach((part) => {
+                    if (part === '') {
+                        return;
+                    }
+                    if (/^\s+$/.test(part)) {
+                        if (tokens.length) {
+                            tokens[tokens.length - 1].space = true;
+                        }
+                        return;
+                    }
+                    tokens.push({text: part, run, space: false});
+                });
+            });
+            let cursor = 0;
+            const spaceWidth = () => doc.getTextWidth(' ');
+            tokens.forEach((token, idx) => {
+                doc.setFont(undefined, fontFor(token.run));
+                const w = doc.getTextWidth(token.text);
+                const prev = idx > 0 ? tokens[idx - 1] : null;
+                const gap = prev && prev.space ? spaceWidth() : 0;
+                if (cursor > 0 && cursor + gap + w > width) {
+                    currentY += lineHeight;
+                    ensureSpace(lineHeight);
+                    doc.setFont(undefined, fontFor(token.run));
+                    cursor = 0;
+                } else {
+                    cursor += gap;
+                }
+                if (token.run.link && typeof doc.textWithLink === 'function') {
+                    doc.setTextColor(25, 92, 179);
+                    doc.textWithLink(token.text, left + cursor, currentY, {url: token.run.link});
+                    doc.setTextColor(savedColor);
+                } else {
+                    doc.text(token.text, left + cursor, currentY);
+                }
+                cursor += w;
+            });
+            currentY += lineHeight;
         });
 
+        // Aufrufer erwarten Grundschrift.
+        doc.setFontSize(BODY_SIZE);
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(savedColor);
         return currentY;
     };
 
