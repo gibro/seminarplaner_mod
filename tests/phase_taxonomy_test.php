@@ -67,6 +67,8 @@ final class phase_taxonomy_test extends advanced_testcase {
         $this->assertSame('orientierung', roterfaden_model::phase_key('Einstieg'));
         // „Vorwissen aktivieren" ist Erfahrungserhebung, nicht Aktivierung.
         $this->assertSame('erfahrung', roterfaden_model::phase_key('Vorwissen aktivieren'));
-        $this->assertSame(get_string('phase_warmup', 'mod_seminarplaner'), 'Warmup/Aktivierung');
+        // Die Testumgebung läuft auf Englisch - die deutsche Fassung ausdrücklich.
+        $this->assertSame('Warmup/Aktivierung',
+            get_string_manager()->get_string('phase_warmup', 'mod_seminarplaner', null, 'de'));
     }
 }
