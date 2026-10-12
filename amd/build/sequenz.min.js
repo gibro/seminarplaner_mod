@@ -5359,7 +5359,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 });
             });
             if (anyphase) {
-                const missing = Object.keys(PHASE_LABELS).filter((key) => !allphases[key]);
+                // Warmup/Aktivierung ist kein Schritt des Fünf-Phasen-Bogens
+                // (Orientierung bis Transfer), sondern eine Methode für
+                // zwischendurch - sie zählt hier nicht mit.
+                const missing = Object.keys(PHASE_LABELS).filter((key) => key !== 'warmup' && !allphases[key]);
                 if (!missing.length) {
                     findings.push({ok: true, text: 'Alle fünf Phasen sind im Seminar vertreten.'});
                 } else {
@@ -5375,7 +5378,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             if (first) {
                 const key = phaseKey(this.placementRawPhase(first.data));
                 const title = String(first.data.titel || '').toLowerCase();
-                const opener = ['orientierung', 'erfahrung'].includes(key)
+                const opener = ['warmup', 'orientierung', 'erfahrung'].includes(key)
                     || /ankomm|begrüß|einstieg|warm|kennenlern|orientier/.test(title);
                 if (key || opener) {
                     findings.push(opener
