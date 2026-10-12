@@ -3579,11 +3579,17 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             if (!window.confirm(question)) {
                 return;
             }
-            found.anchors[found.anchorIdx].seq.splice(found.pos, 1);
+            const seq = found.anchors[found.anchorIdx].seq;
+            seq.splice(found.pos, 1);
             const auswahlid = placement.einheitenauswahl;
             delete this.sequenz.platzierungen[pid];
             if (auswahlid && !this.auswahlInUse(auswahlid)) {
                 delete this.sequenz.einheitenauswahlen[auswahlid];
+            }
+            // War es die letzte Einheit ihres Bausteins, bleibt der Baustein als
+            // leerer Kasten an derselben Stelle stehen (wie beim Lösen/Ziehen).
+            if (placement.typ === 'einheit' && placement.bausteinid) {
+                this.keepBausteinVisible(placement.bausteinid, seq, seq[found.pos] || '');
             }
             // If this was one half of a split unit, drop the split marker from
             // the lone survivor so it becomes an ordinary unit again (no stray
