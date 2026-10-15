@@ -2,3 +2,6 @@
 openwiki/
 .mcp.json
 .claude/
+.DS_Store
+AGENTS.md
+.github/workflows/openwiki-update.yml
