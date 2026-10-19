@@ -2606,11 +2606,21 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
                     const naturalTopPx = Math.max(0, ((Number(it.startMin || 0) - start) / slotMinutes) * slotPx);
                     const naturalHeightPx = Math.max(1, (durationMin / slotMinutes) * slotPx);
                     const isShort = durationMin < slotMinutes;
-                    const heightPx = Math.max(naturalHeightPx, isShort ? minItemPx : Math.min(minItemPx, naturalHeightPx));
+                    const minHeightPx = isShort ? minItemPx : Math.min(minItemPx, naturalHeightPx);
+                    let heightPx = Math.max(naturalHeightPx, minHeightPx);
                     let topPx = naturalTopPx;
                     if (packShortItems) {
+                        // Ein aufgeblähter kurzer Eintrag darf den nächsten nach
+                        // unten schieben, der holt den Versatz aber sofort wieder
+                        // auf, indem er schrumpft (bis auf seine Mindesthöhe) —
+                        // sonst summiert sich die Verschiebung über den Tag und
+                        // feste Zeiten wie die Mittagspause rutschen sichtbar weg.
+                        // Der Abstand zwischen Einträgen geht von der eigenen
+                        // Höhe ab, statt den Nachfolger zu verschieben.
                         topPx = Math.max(topPx, packedBottomPx);
-                        packedBottomPx = topPx + heightPx + packGapPx;
+                        heightPx = Math.max(naturalTopPx + naturalHeightPx - topPx, minHeightPx + packGapPx);
+                        packedBottomPx = topPx + heightPx;
+                        heightPx = Math.max(1, heightPx - packGapPx);
                     }
 
                     const div = document.createElement('div');
