@@ -300,6 +300,16 @@ class grid_service {
     }
 
     /**
+     * Current version hash of the shared plan state (cheap, for polling).
+     *
+     * @param int $gridid Grid id.
+     * @return string Empty if the plan has no stored state yet.
+     */
+    public function get_version_hash(int $gridid): string {
+        return $this->repository->get_state_versionhash($gridid, self::SHARED_STATE_USERID);
+    }
+
+    /**
      * Save shared grid state and return new version hash.
      *
      * @param int $gridid Grid id.

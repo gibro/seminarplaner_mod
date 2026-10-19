@@ -284,6 +284,10 @@ echo html_writer::tag('button',
 // Saving happens automatically in the background; this passive indicator
 // replaces the former Speichern button (it only confused once nothing
 // had to be saved manually anymore).
+// Live-Mitbearbeiten: wer sonst gerade in diesem Plan arbeitet (füllt sequenz.js).
+echo html_writer::tag('div', '', [
+    'id' => 'sq-presence', 'class' => 'sq-presence kg-hidden', 'aria-live' => 'polite',
+]);
 echo html_writer::tag('span', '', [
     'id' => 'sq-save-state', 'class' => 'sq-savestate', 'aria-live' => 'polite',
 ]);

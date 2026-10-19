@@ -172,6 +172,15 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
     ],
+    'mod_seminarplaner_ping_plan' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'ping_plan',
+        'description' => 'Live co-editing: report presence in a plan, get its version hash and who else is working in it.',
+        'type' => 'write',
+        'ajax' => true,
+        // Polling aus mehreren Tabs soll nicht an der Session-Sperre warten.
+        'readonlysession' => true,
+    ],
     'mod_seminarplaner_get_live_state' => [
         'classname' => 'mod_seminarplaner\\external\\api',
         'methodname' => 'get_live_state',

@@ -6436,6 +6436,67 @@ body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
     font-weight: 600;
 }
 
+/* Live-Mitbearbeiten: wer sonst gerade im Plan arbeitet. */
+.sq-presence {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    font-size: 12.5px;
+    color: var(--ig-gray);
+}
+
+.sq-presence + .sq-savestate {
+    margin-left: 12px;
+}
+
+.sq-presence__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px 2px 2px;
+    border: 1px solid var(--sq-border, #d9d9d9);
+    border-radius: 999px;
+    background: var(--sq-surface, #fff);
+    color: var(--sq-text, inherit);
+}
+
+.sq-presence__chip.is-here {
+    border-color: var(--ig-green);
+}
+
+.sq-presence__avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.sq-presence__where {
+    color: var(--ig-gray);
+}
+
+.sq-unit.is-edited-elsewhere {
+    position: relative;
+    outline: 2px dashed var(--ig-green);
+    outline-offset: 2px;
+}
+
+.sq-presence-badge {
+    position: absolute;
+    top: -9px;
+    right: 10px;
+    z-index: 2;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: var(--ig-green);
+    color: #fff;
+    font-size: 11px;
+    line-height: 18px;
+    pointer-events: none;
+}
+
 /* ==========================================================================
    D47: Drag & Drop in der Sequenz (zweiter Bedienweg neben den ↑/↓-Pfeilen)
    ========================================================================== */

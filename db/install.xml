@@ -160,6 +160,24 @@
       </INDEXES>
     </TABLE>
 
+    <TABLE NAME="kgen_grid_presence" COMMENT="Who currently has a seminar plan open and where (short-lived, for live co-editing)">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="gridid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="tag" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" COMMENT="One-based day number currently shown"/>
+        <FIELD NAME="pid" TYPE="char" LENGTH="64" NOTNULL="false" COMMENT="Placement currently being edited, if any"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="grid_user_uix" UNIQUE="true" FIELDS="gridid, userid"/>
+        <INDEX NAME="time_idx" UNIQUE="false" FIELDS="timemodified"/>
+      </INDEXES>
+    </TABLE>
+
     <TABLE NAME="kgen_import_export_log" COMMENT="Audit log for manual import/export operations">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>

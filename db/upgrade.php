@@ -380,5 +380,23 @@ function xmldb_seminarplaner_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072101, 'seminarplaner');
     }
 
+    if ($oldversion < 2026101906) {
+        // Live-Mitbearbeiten: wer hat den Plan gerade offen und wo.
+        $table = new xmldb_table('kgen_grid_presence');
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('gridid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('tag', XMLDB_TYPE_INTEGER, '4', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('pid', XMLDB_TYPE_CHAR, '64', null, null, null, null);
+        $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_index('grid_user_uix', XMLDB_INDEX_UNIQUE, ['gridid', 'userid']);
+        $table->add_index('time_idx', XMLDB_INDEX_NOTUNIQUE, ['timemodified']);
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+        upgrade_mod_savepoint(true, 2026101906, 'seminarplaner');
+    }
+
     return true;
 }

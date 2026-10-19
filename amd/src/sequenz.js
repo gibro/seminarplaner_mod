@@ -175,6 +175,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
     // gleichzeitig offenen Tabs dieselbe naechste ID ("px12") - beim
     // Zusammenfuehren auf dem Server waeren das zwei verschiedene Einheiten
     // unter einer ID, und eine ginge verloren.
+    // Takt des Live-Abgleichs (ping_plan) in Millisekunden.
+    const LIVE_PING_MS = 5000;
+
     const TAB_ID_TOKEN = Math.random().toString(36).slice(2, 6).replace(/[^a-z0-9]/g, '') || 'x';
 
     // Die Teile des Plans, die der Server bei gleichzeitigem Speichern
@@ -607,6 +610,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             this.versionhash = '';
             // Stand der zusammengefuehrten Teile, zu dem versionhash gehoert.
             this.baseJson = '';
+            // Live-Mitbearbeiten: laufender Speichervorgang, laufender Ping,
+            // Intervall und wer sonst gerade im Plan arbeitet.
+            this.saving = false;
+            this.pinging = false;
+            this.pullingRemote = false;
+            this.liveTimer = null;
+            this.presence = [];
             this.dirty = false;
             this.dayIndex = 0;
             this.legacyByUid = {};
@@ -1785,8 +1795,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 this.setSaveState('');
                 this.indexLegacyEntries();
                 this.syncPublishControl();
+                this.presence = [];
                 this.render();
                 this.maybeShowIntro();
+                this.startLiveSync();
             }).catch(() => {
                 this.setStatus('Der Seminarplan konnte nicht geladen werden.', true);
             });
@@ -2262,6 +2274,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             window.clearTimeout(this.autosaveTimer);
             this.setSaveState('Speichert …');
             const payload = JSON.stringify(this.state);
+            this.saving = true;
             return asCall('mod_seminarplaner_save_user_state', {
                 cmid: this.cmid,
                 gridid: this.gridid,
@@ -2269,6 +2282,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 expectedhash: this.versionhash,
                 basejson: this.baseJson,
             }).then((res) => {
+                this.saving = false;
                 // Was waehrend der Anfrage noch geaendert wurde, ist nicht
                 // gespeichert und braucht einen weiteren Durchgang.
                 const unchanged = JSON.stringify(this.state) === payload;
@@ -2309,6 +2323,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 }
                 return true;
             }).catch((error) => {
+                this.saving = false;
                 // Keep the changes and retry automatically; the indicator
                 // says what is happening instead of asking for a click.
                 this.setSaveState('Speichern hat nicht geklappt – neuer Versuch gleich …', 'error');
@@ -2319,6 +2334,160 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                     }
                 }, 8000);
                 throw error;
+            });
+        }
+
+        // ---- Live-Mitbearbeiten ---------------------------------------------
+        // Jeder offene Tab meldet sich alle LIVE_PING_MS beim Server
+        // (ping_plan): an welchem Tag er steht und an welcher Einheit gerade
+        // getippt wird. Zurueck kommen der aktuelle Versionsstand und die
+        // anderen Anwesenden. Weicht der Stand ab, hat jemand anderes
+        // gespeichert - dann wird nachgeladen, sobald hier nichts in Arbeit
+        // ist (bei eigenen ungespeicherten Aenderungen: erst speichern, der
+        // Server fuehrt zusammen). Kein Push-Kanal noetig, laeuft auf jedem
+        // Moodle.
+        startLiveSync() {
+            if (this.liveTimer) {
+                this.livePing();
+                return;
+            }
+            this.liveTimer = window.setInterval(() => this.livePing(), LIVE_PING_MS);
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    this.livePing();
+                }
+            });
+            this.livePing();
+        }
+
+        // Die Platzierung, an der hier gerade gearbeitet wird (Fokus in ihrem
+        // Titel, Dauerfeld, Menue ...), sonst leer.
+        focusedPid() {
+            const el = document.activeElement;
+            if (!el || el === document.body || !el.closest) {
+                return '';
+            }
+            const host = el.closest('[data-sq-unit], [data-sq-drag]');
+            const pid = host ? (host.getAttribute('data-sq-unit') || host.getAttribute('data-sq-drag') || '') : '';
+            return /^[A-Za-z0-9_-]{1,64}$/.test(pid) ? pid : '';
+        }
+
+        livePing() {
+            if (document.hidden || !this.gridid || this.pinging) {
+                return;
+            }
+            const gridid = this.gridid;
+            this.pinging = true;
+            asCall('mod_seminarplaner_ping_plan', {
+                cmid: this.cmid,
+                gridid,
+                tag: this.dayIndex + 1,
+                pid: this.focusedPid(),
+            }).then((res) => {
+                if (gridid !== this.gridid) {
+                    return;
+                }
+                this.presence = Array.isArray(res.editors) ? res.editors : [];
+                this.renderPresence();
+                const remote = String(res.versionhash || '');
+                if (remote && remote !== this.versionhash && !this.saving) {
+                    this.pullRemoteChanges(gridid);
+                }
+            }).catch(() => null).then(() => {
+                this.pinging = false;
+                return null;
+            });
+        }
+
+        // Hier wird gerade etwas bearbeitet, das ein Neu-Rendern zerstoeren
+        // wuerde: Eingabe, Ziehen, offener Dialog.
+        isBusyLocally() {
+            if (this.isEditingInline() || this.drag) {
+                return true;
+            }
+            return !!document.querySelector('#sq-modal.open, #sq-modal-detail.open, #sq-unit-modal.open, '
+                + '#sq-setup-panel:not(.kg-hidden)');
+        }
+
+        pullRemoteChanges(gridid) {
+            if (this.pullingRemote) {
+                return;
+            }
+            if (this.dirty) {
+                // Eigene Aenderungen zuerst speichern - der Server fuehrt
+                // zusammen und liefert den gemeinsamen Stand zurueck.
+                window.clearTimeout(this.autosaveTimer);
+                this.save().catch(() => null);
+                return;
+            }
+            if (this.isBusyLocally()) {
+                return;
+            }
+            this.pullingRemote = true;
+            asCall('mod_seminarplaner_get_user_state', {cmid: this.cmid, gridid}).then((res) => {
+                if (gridid !== this.gridid || this.dirty || this.saving || this.isBusyLocally()) {
+                    return;
+                }
+                this.adoptState(res.statejson, res.versionhash);
+                this.forgetMissingPids();
+                if (this.dayIndex >= this.dayCount()) {
+                    this.dayIndex = 0;
+                }
+                this.indexLegacyEntries();
+                this.render();
+                const now = new Date();
+                const pad = (n) => String(n).padStart(2, '0');
+                // Bewusst ohne Namen: wer gespeichert hat, weiss der Client nicht
+                // (es kann auch ein zweiter eigener Tab gewesen sein).
+                this.setSaveState(`↻ Neuer Stand übernommen ${pad(now.getHours())}:${pad(now.getMinutes())} Uhr`, 'ok');
+            }).catch(() => null).then(() => {
+                this.pullingRemote = false;
+                return null;
+            });
+        }
+
+        // Wer arbeitet gerade wo: Leiste in der Werkzeugzeile (alle Anwesenden
+        // mit ihrem Tag) und ein Namensschild an der Einheit, die jemand
+        // gerade bearbeitet. Wird nach jedem Rendern und jedem Ping erneuert,
+        // ohne den Tag neu zu zeichnen.
+        renderPresence() {
+            const bar = bySel('#sq-presence');
+            if (bar) {
+                if (!this.presence.length) {
+                    bar.innerHTML = '';
+                    bar.classList.add('kg-hidden');
+                } else {
+                    const chips = this.presence.map((p) => {
+                        const tag = Number(p.tag) || 0;
+                        const here = tag === this.dayIndex + 1;
+                        const where = tag > 0 ? (here ? 'hier' : `Tag ${tag}`) : '';
+                        const title = `${p.fullname}${where ? ' – ' + (here ? 'an diesem Tag' : 'an Tag ' + tag) : ''}`;
+                        return `<span class="sq-presence__chip${here ? ' is-here' : ''}" title="${escapeHtml(title)}">`
+                            + `<img class="sq-presence__avatar" src="${escapeHtml(p.avatarurl)}" alt="">`
+                            + `<span class="sq-presence__name">${escapeHtml(String(p.fullname || '').split(' ')[0])}</span>`
+                            + (where ? `<span class="sq-presence__where">${escapeHtml(where)}</span>` : '')
+                            + '</span>';
+                    }).join('');
+                    bar.innerHTML = `<span class="sq-presence__label">Auch im Plan:</span>${chips}`;
+                    bar.classList.remove('kg-hidden');
+                }
+            }
+            document.querySelectorAll('.sq-presence-badge').forEach((el) => el.remove());
+            document.querySelectorAll('.sq-unit.is-edited-elsewhere').forEach((el) => el.classList.remove('is-edited-elsewhere'));
+            this.presence.forEach((p) => {
+                if (!p.pid || (Number(p.tag) || 0) !== this.dayIndex + 1) {
+                    return;
+                }
+                const unit = document.querySelector(`.sq-unit[data-sq-unit="${String(p.pid).replace(/"/g, '')}"]`);
+                if (!unit) {
+                    return;
+                }
+                unit.classList.add('is-edited-elsewhere');
+                const badge = document.createElement('span');
+                badge.className = 'sq-presence-badge';
+                badge.textContent = `✎ ${String(p.fullname || '').split(' ')[0]}`;
+                badge.title = `${p.fullname} bearbeitet diese Einheit gerade`;
+                unit.appendChild(badge);
             });
         }
 
@@ -6590,6 +6759,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const afternoon = this.renderAnchor(day, 'nachmittag', frame, seenBausteine);
             container.innerHTML = morning + divider + afternoon;
             this.renderDrama();
+            this.renderPresence();
         }
 
         bausteineSeenBeforeCurrentDay() {
