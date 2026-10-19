@@ -1663,15 +1663,18 @@ select.kg-input:-moz-focusring {
   color: transparent;
 }
 
+/* Halbstunden-Strich absolut statt per margin-top: Beginnt der Tag zur halben
+   Stunde, ist der erste Slot ein minor-Slot ohne border-top — dessen margin-top
+   kollabierte dann durch bis #sp-times und schob die ganze Zeitachse um einen
+   halben Slot nach unten (Pausen wirkten gegen die Beschriftung verschoben). */
 .sp-timecol .sp-timeslot--minor::after {
   content: "";
-  display: block;
+  position: absolute;
+  top: calc(var(--slot-height) / 2);
+  right: var(--spacing-xs);
   width: 8px;
   height: 1px;
   background: var(--ig-lightgray);
-  margin-left: auto;
-  margin-right: var(--spacing-xs);
-  margin-top: calc(var(--slot-height) / 2);
 }
 
 .sp-timeslot--quiet {
