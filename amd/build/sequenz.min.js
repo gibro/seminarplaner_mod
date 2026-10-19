@@ -3859,6 +3859,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                         } else {
                             this.applySuggestTarget(action.getAttribute('data-cardid') || '', target);
                         }
+                    } else if (type === 'picker-details') {
+                        this.openCardDetail(action.getAttribute('data-cardid') || '',
+                            Number.parseInt(action.getAttribute('data-global-methodid') || '0', 10));
                     } else if (type === 'intro-done') {
                         this.finishIntro();
                     } else if (type === 'baustein-save') {
@@ -4962,10 +4965,16 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                           ${used ? '<span class="sq-badge sq-badge--used">bereits verwendet</span>' : ''}
                         </div>
                       </div>
-                      <button type="button" class="kg-btn kg-btn-primary" data-sq-action="picker-add"
-                        data-cardid="${escapeHtml(String(card.id))}"${globalid
-                            ? ` data-global-methodid="${globalid}"`
-                            : ''}>Übernehmen</button>
+                      <div class="sq-picker__actions">
+                        <button type="button" class="sq-picker__details" data-sq-action="picker-details"
+                          data-cardid="${escapeHtml(String(card.id))}"${globalid
+                              ? ` data-global-methodid="${globalid}"`
+                              : ''}>Details</button>
+                        <button type="button" class="kg-btn kg-btn-primary" data-sq-action="picker-add"
+                          data-cardid="${escapeHtml(String(card.id))}"${globalid
+                              ? ` data-global-methodid="${globalid}"`
+                              : ''}>Übernehmen</button>
+                      </div>
                     </div>`;
             };
 
@@ -7089,41 +7098,157 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                   draggable="false">${open ? ICON_COLLAPSE : ICON_EXPAND}</button>`;
         }
 
+        // Inhalte einer Bibliothekskarte als <dt>/<dd>-Paare - geteilt vom
+        // Aufklappbereich einer Platzierung und der Detailansicht im Dialog
+        // „Einheit einplanen". Globale Methoden (get_global_method_details)
+        // bringen statt Dateien nur Dateinamen mit (attachments).
+        cardDetailRows(card) {
+            const rows = [];
+            UNIT_DETAIL_FIELDS.forEach(([key, label, kind]) => {
+                let html = '';
+                if (kind === 'rich') {
+                    html = LiveModel.richText(card[key]);
+                    if (String(html).replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim() === '') {
+                        html = '';
+                    }
+                } else if (kind === 'list') {
+                    html = escapeHtml(splitMultiValue(card[key]).join(', '));
+                } else {
+                    html = escapeHtml(this.fieldValue(card, key).trim());
+                }
+                if (html) {
+                    rows.push(`<dt>${escapeHtml(label)}</dt><dd>${html}</dd>`);
+                }
+            });
+            const files = (Array.isArray(card.materialien) ? card.materialien : [])
+                .filter((file) => file && file.fileurl);
+            if (files.length) {
+                rows.push(`<dt>Materialien (Dateien)</dt><dd><ul class="sq-details__files">${files.map((file) => {
+                    const size = formatFileSize(file.filesize);
+                    return `<li><a href="${escapeHtml(file.fileurl)}" target="_blank" rel="noopener noreferrer"
+                        >${escapeHtml(file.name || 'Datei')}</a>${size
+                        ? ` <span class="sq-details__size">${escapeHtml(size)}</span>` : ''}</li>`;
+                }).join('')}</ul></dd>`);
+            }
+            const names = (Array.isArray(card.attachments) ? card.attachments : []).filter(Boolean);
+            if (names.length) {
+                rows.push('<dt>Materialien (Dateien)</dt><dd><ul class="sq-details__files">'
+                    + names.map((name) => `<li>${escapeHtml(name)}</li>`).join('')
+                    + '</ul><span class="sq-details__size">Die Dateien kommen beim Übernehmen mit.</span></dd>');
+            }
+            return rows;
+        }
+
+        // Detailansicht einer Karte aus dem Dialog „Einheit einplanen": ein
+        // zweites Overlay ueber dem Picker, damit dessen Suche, Tab und
+        // Scrollstand beim Schliessen erhalten bleiben. Globale Methoden
+        // liefert browse_global_library nur als Kurzfassung - der Rest kommt
+        // hier per get_global_method_details nach.
+        detailModalRoot() {
+            let root = bySel('#sq-modal-detail');
+            if (!root) {
+                root = document.createElement('div');
+                root.id = 'sq-modal-detail';
+                root.className = 'sq-modal-overlay sq-modal-overlay--stacked moodle-has-zindex';
+                document.body.appendChild(root);
+                root.addEventListener('click', (event) => {
+                    if (event.target === root || event.target.closest('[data-sq-action="detail-close"]')) {
+                        this.closeCardDetail();
+                    }
+                });
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && root.classList.contains('open')) {
+                        event.stopPropagation();
+                        this.closeCardDetail();
+                    }
+                }, true);
+            }
+            return root;
+        }
+
+        openCardDetail(cardid, globalid) {
+            const root = this.detailModalRoot();
+            const show = (card, loading) => {
+                const duration = parseMinutes(card.zeitbedarf);
+                const setname = String(card._setname || card.setname || '');
+                const badges = [
+                    Number.isFinite(duration) && duration > 0 ? `${duration} Min.` : '',
+                    this.fieldValue(card, 'gruppengroesse') ? `Gruppe: ${this.fieldValue(card, 'gruppengroesse')}` : '',
+                    setname,
+                ].filter(Boolean);
+                let body;
+                if (loading) {
+                    body = '<p class="sq-details__empty">Beschreibung wird geladen …</p>';
+                } else {
+                    const rows = this.cardDetailRows(card);
+                    body = rows.length
+                        ? `<dl class="sq-details__list">${rows.join('')}</dl>`
+                        : '<p class="sq-details__empty">Für diese Seminareinheit sind noch keine Inhalte hinterlegt.</p>';
+                }
+                root.innerHTML = `
+                    <div class="sq-modal sq-modal--detail" role="dialog" aria-modal="true"
+                      aria-labelledby="sq-detail-title">
+                      <div class="sq-modal__head">
+                        <h3 id="sq-detail-title">${escapeHtml(cardTitle(card) || 'Seminareinheit')}</h3>
+                        <button type="button" class="sq-modal__close" data-sq-action="detail-close"
+                          aria-label="Detailansicht schließen">✕</button>
+                      </div>
+                      <div class="sq-modal__body">
+                        ${badges.length ? `<div class="sq-unit__meta sq-detail__meta">${badges
+                            .map((b) => `<span class="sq-badge">${escapeHtml(b)}</span>`).join('')}</div>` : ''}
+                        ${body}
+                      </div>
+                      <div class="sq-modal__footer">
+                        <button type="button" class="kg-btn" data-sq-action="detail-close">Zurück zur Auswahl</button>
+                      </div>
+                    </div>`;
+                root.classList.add('open');
+                const close = root.querySelector('.sq-modal__close');
+                if (close) {
+                    close.focus();
+                }
+            };
+
+            if (globalid > 0) {
+                const summary = (this.globalMethods || []).find((m) => Number(m._globalid) === globalid) || {};
+                show(summary, true);
+                asCall('mod_seminarplaner_get_global_method_details', {cmid: this.cmid, methodid: globalid})
+                    .then((details) => {
+                        if (root.classList.contains('open')) {
+                            show(Object.assign({}, details, {_setname: details.setname || summary._setname}), false);
+                        }
+                    })
+                    .catch(() => {
+                        // Rueckfall: wenigstens die Kurzfassung aus der Liste zeigen.
+                        if (root.classList.contains('open')) {
+                            show(summary, false);
+                        }
+                        this.toast('Die volle Beschreibung konnte nicht geladen werden – gezeigt wird die Kurzfassung.');
+                    });
+                return;
+            }
+            const card = this.methodCardForRef(cardid)
+                || this.methodCardList.find((c) => String(c.id) === String(cardid));
+            if (card) {
+                show(card, false);
+            }
+        }
+
+        closeCardDetail() {
+            const root = bySel('#sq-modal-detail');
+            if (root) {
+                root.classList.remove('open');
+                root.innerHTML = '';
+            }
+        }
+
         // Inhalte der aktiven Karte hinter einer Platzierung. note steht als
         // Hinweiszeile obenan (z. B. welche Alternative gezeigt wird).
         renderUnitDetails(pid, card, note) {
             if (!this.openDetails.has(pid)) {
                 return '';
             }
-            const rows = [];
-            if (card) {
-                UNIT_DETAIL_FIELDS.forEach(([key, label, kind]) => {
-                    let html = '';
-                    if (kind === 'rich') {
-                        html = LiveModel.richText(card[key]);
-                        if (String(html).replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim() === '') {
-                            html = '';
-                        }
-                    } else if (kind === 'list') {
-                        html = escapeHtml(splitMultiValue(card[key]).join(', '));
-                    } else {
-                        html = escapeHtml(this.fieldValue(card, key).trim());
-                    }
-                    if (html) {
-                        rows.push(`<dt>${escapeHtml(label)}</dt><dd>${html}</dd>`);
-                    }
-                });
-                const files = (Array.isArray(card.materialien) ? card.materialien : [])
-                    .filter((file) => file && file.fileurl);
-                if (files.length) {
-                    rows.push(`<dt>Materialien (Dateien)</dt><dd><ul class="sq-details__files">${files.map((file) => {
-                        const size = formatFileSize(file.filesize);
-                        return `<li><a href="${escapeHtml(file.fileurl)}" target="_blank" rel="noopener noreferrer"
-                            >${escapeHtml(file.name || 'Datei')}</a>${size
-                            ? ` <span class="sq-details__size">${escapeHtml(size)}</span>` : ''}</li>`;
-                    }).join('')}</ul></dd>`);
-                }
-            }
+            const rows = card ? this.cardDetailRows(card) : [];
             let body;
             if (!card) {
                 body = '<p class="sq-details__empty">Diese Einheit hat keinen Bibliothekseintrag – '
