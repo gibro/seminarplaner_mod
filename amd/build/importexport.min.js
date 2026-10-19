@@ -24,6 +24,8 @@ function(Ajax, Notification, Handout, PlanMemory) {
     let pdfLogoRaw = null;
     // D63: pro Aktivität gespeicherte Spaltenauswahl/-reihenfolge des ZIM-Exports.
     let pdfColumnsSetting = null;
+    // Exporte mit eigener Hoch/Quer-Wahl neben dem ZIM-Papier.
+    const PDF_ORIENTATION_EXPORTS = ['flow', 'materials', 'handout'];
     let pdfColumnsSaveTimer = null;
     // D84: Referent*innen der Aktivität als Nutzer-Id -> {id, fullname, avatarurl}.
     const referentenById = new Map();
@@ -1664,6 +1666,13 @@ function(Ajax, Notification, Handout, PlanMemory) {
         document.querySelectorAll('input[name="kg-pdf-orientation"]').forEach((radio) => {
             radio.checked = radio.value === orientation;
         });
+        const orientations = pdfColumnsSetting.orientations || {};
+        PDF_ORIENTATION_EXPORTS.forEach((kind) => {
+            const value = orientations[kind] === 'landscape' ? 'landscape' : 'portrait';
+            document.querySelectorAll(`input[name="kg-pdf-orientation-${kind}"]`).forEach((radio) => {
+                radio.checked = radio.value === value;
+            });
+        });
         const useAll = !!pdfColumnsSetting.all;
         all.checked = useAll;
         const selected = Array.isArray(pdfColumnsSetting.selected) ? pdfColumnsSetting.selected : [];
@@ -1691,13 +1700,22 @@ function(Ajax, Notification, Handout, PlanMemory) {
                 }
             });
         }
-        return {all: !!(all && all.checked), order, selected, orientation: getPdfOrientation()};
+        const orientations = {};
+        PDF_ORIENTATION_EXPORTS.forEach((kind) => {
+            orientations[kind] = getPdfOrientation(kind);
+        });
+        return {all: !!(all && all.checked), order, selected, orientation: getPdfOrientation(), orientations};
     };
 
-    // Format des ZIM-Papiers (Querformat ist der Standard).
-    const getPdfOrientation = () => {
-        const checked = document.querySelector('input[name="kg-pdf-orientation"]:checked');
-        return checked && checked.value === 'portrait' ? 'portrait' : 'landscape';
+    // Papierformat je Export: ZIM-Papier startet im Querformat, Konzeptsammlung,
+    // Materialliste und Handout im Hochformat (so sahen sie vor der Wahl aus).
+    const getPdfOrientation = (kind = 'zim') => {
+        const name = kind === 'zim' ? 'kg-pdf-orientation' : `kg-pdf-orientation-${kind}`;
+        const checked = document.querySelector(`input[name="${name}"]:checked`);
+        if (!checked) {
+            return kind === 'zim' ? 'landscape' : 'portrait';
+        }
+        return checked.value === 'portrait' ? 'portrait' : 'landscape';
     };
 
     const savePdfColumns = (cmid) => {
@@ -2016,7 +2034,8 @@ function(Ajax, Notification, Handout, PlanMemory) {
         doc.text('Bausteininhalt:', 14, y);
         y += 6;
         doc.setFont(undefined, 'normal');
-        y = renderHtmlToPdf(doc, unit.topics || '', 14, y, 180);
+        const textWidth = doc.internal.pageSize.getWidth() - 30;
+        y = renderHtmlToPdf(doc, unit.topics || '', 14, y, textWidth);
         if (y === 24 + 10 + 10 + 12 + 6) {
             doc.text('Keine Angaben.', 14, y);
             y += 6;
@@ -2028,7 +2047,7 @@ function(Ajax, Notification, Handout, PlanMemory) {
         y += 6;
         doc.setFont(undefined, 'normal');
         const beforeObjectives = y;
-        y = renderHtmlToPdf(doc, unit.objectives || '', 14, y, 180);
+        y = renderHtmlToPdf(doc, unit.objectives || '', 14, y, textWidth);
         if (y === beforeObjectives) {
             doc.text('Keine Angaben.', 14, y);
         }
@@ -2076,7 +2095,7 @@ function(Ajax, Notification, Handout, PlanMemory) {
             if (!escapeTextForPdf(section.content)) {
                 return;
             }
-            if (y > 252) {
+            if (y > doc.internal.pageSize.getHeight() - 45) {
                 doc.addPage();
                 stampPdfLogo(doc);
                 y = 20;
@@ -2087,7 +2106,7 @@ function(Ajax, Notification, Handout, PlanMemory) {
             y += 6;
             doc.setFontSize(10);
             doc.setFont(undefined, 'normal');
-            y = renderHtmlToPdf(doc, section.content, 14, y, 180);
+            y = renderHtmlToPdf(doc, section.content, 14, y, doc.internal.pageSize.getWidth() - 30);
             y += 5;
         });
     };
@@ -2287,7 +2306,7 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const meta = getPdfMeta();
         const days = getOrderedDays();
         const plan = getPlanByDay();
-        const doc = new jsPDF();
+        const doc = new jsPDF({orientation: getPdfOrientation('flow')});
 
         drawPdfTitlePage(doc, 'ZIM', meta, 'Konzeptsammlung', {goals: true});
         drawPdfInfoPage(doc);
@@ -2356,8 +2375,9 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const meta = getPdfMeta();
         const days = getOrderedDays();
         const plan = getPlanByDay();
-        const doc = new jsPDF();
+        const doc = new jsPDF({orientation: getPdfOrientation('materials')});
         const pageHeight = doc.internal.pageSize.getHeight();
+        const pageWidth = doc.internal.pageSize.getWidth();
 
         drawPdfTitlePage(doc, 'Materialliste', meta, 'Abgabeliste');
         drawPdfInfoPage(doc);
@@ -2390,13 +2410,13 @@ function(Ajax, Notification, Handout, PlanMemory) {
             y += 4;
             doc.setDrawColor(220, 224, 233);
             doc.setLineWidth(0.3);
-            doc.line(14, y, 196, y);
+            doc.line(14, y, pageWidth - 14, y);
             y += 10;
 
             doc.setFont(undefined, 'normal');
             doc.setFontSize(11);
             materials.forEach((material) => {
-                const lines = doc.splitTextToSize(escapeTextForPdf(material), 168);
+                const lines = doc.splitTextToSize(escapeTextForPdf(material), pageWidth - 42);
                 const blockHeight = Math.max(8, lines.length * 6);
                 if (y + blockHeight > pageHeight - 16) {
                     doc.addPage();
@@ -2428,7 +2448,7 @@ function(Ajax, Notification, Handout, PlanMemory) {
     // derselbe Generator, den der Roter-Faden-Tab benutzt (Teilnehmende erzeugen es
     // dort selbst). Hier bleibt nur der Aufruf, damit beide Wege dasselbe Dokument
     // liefern.
-    const exportPdfHandout = (cmid) => Handout.exportPdf(cmid, pdfLogoRaw);
+    const exportPdfHandout = (cmid) => Handout.exportPdf(cmid, pdfLogoRaw, getPdfOrientation('handout'));
 
     const saveMethods = (cmid, newMethods) => {
         return asCall('mod_seminarplaner_save_method_cards', {
@@ -2794,7 +2814,7 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const globalSetApplyBtn = bySel('#kg-global-set-apply');
         bindPdfColumnsDropdown(cmid);
         bindPdfInfo(cmid);
-        document.querySelectorAll('input[name="kg-pdf-orientation"]').forEach((radio) => {
+        document.querySelectorAll('input[name^="kg-pdf-orientation"]').forEach((radio) => {
             radio.addEventListener('change', () => savePdfColumns(cmid));
         });
 

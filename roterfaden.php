@@ -39,7 +39,9 @@ $context = $activity['context'];
 // sofort wieder auf. Gleiche Bauart wie importexport.php.
 seminarplaner_prepare_page('/mod/seminarplaner/roterfaden.php', $cm, $course, $seminarplaner, null);
 $pdflogo = seminarplaner_get_pdf_logo($context, $seminarplaner);
-$PAGE->requires->js_call_amd('mod_seminarplaner/roterfaden', 'init', [(int)$cm->id, $pdflogo]);
+// Format des Handouts wählt die Lehrperson im Import/Export-Tab; hier gilt dieselbe Wahl.
+$handoutorientation = seminarplaner_get_pdf_export_orientation((int)$cm->id, 'handout');
+$PAGE->requires->js_call_amd('mod_seminarplaner/roterfaden', 'init', [(int)$cm->id, $pdflogo, $handoutorientation]);
 
 echo $OUTPUT->header();
 

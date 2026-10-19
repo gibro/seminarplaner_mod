@@ -4447,7 +4447,7 @@ class api extends external_api {
     public static function set_pdf_columns_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
-            'columnsjson' => new external_value(PARAM_RAW, 'PDF column setting as JSON {all, order, selected, orientation}'),
+            'columnsjson' => new external_value(PARAM_RAW, 'PDF column setting as JSON {all, order, selected, orientation, orientations}'),
         ]);
     }
 
@@ -4492,6 +4492,7 @@ class api extends external_api {
             'order' => $order,
             'selected' => $selected,
             'orientation' => seminarplaner_pdf_orientation($decoded['orientation'] ?? ''),
+            'orientations' => seminarplaner_pdf_orientations($decoded['orientations'] ?? []),
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         set_config('pdfcolumns_cmid_' . (int)$resolved['cm']->id, $payload, 'mod_seminarplaner');

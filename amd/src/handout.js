@@ -119,7 +119,7 @@ define(['core/ajax', 'mod_seminarplaner/roterfadenmodel'], function(Ajax, Model)
 
         doc.setDrawColor(220, 224, 233);
         doc.setLineWidth(0.3);
-        doc.line(14, y, 196, y);
+        doc.line(14, y, doc.internal.pageSize.getWidth() - 14, y);
         y += 10;
 
         doc.setFontSize(11);
@@ -145,6 +145,8 @@ define(['core/ajax', 'mod_seminarplaner/roterfadenmodel'], function(Ajax, Model)
     // Programmpunkt (Uhrzeit + Titel) -> Themen als Aufzaehlung.
     const drawDays = (doc, logo, days) => {
         const pageHeight = doc.internal.pageSize.getHeight();
+        // Breiten aus dem Papierformat (Hoch- oder Querformat), Ränder 14 mm.
+        const right = doc.internal.pageSize.getWidth() - 14;
         let y = 24;
         const ensureSpace = (needed) => {
             if (y + needed > pageHeight - 16) {
@@ -163,7 +165,7 @@ define(['core/ajax', 'mod_seminarplaner/roterfadenmodel'], function(Ajax, Model)
             y += 3;
             doc.setDrawColor(220, 224, 233);
             doc.setLineWidth(0.3);
-            doc.line(14, y, 196, y);
+            doc.line(14, y, right, y);
             y += 9;
 
             day.anchors.forEach((anchor) => {
@@ -178,7 +180,7 @@ define(['core/ajax', 'mod_seminarplaner/roterfadenmodel'], function(Ajax, Model)
                 anchor.blocks.forEach((block) => {
                     const heading = `${Model.clockLabel(block.startMin)} Uhr · ${block.title}`
                         + (block.continuation ? ' (Fortsetzung)' : '');
-                    const titleLines = doc.splitTextToSize(escapeTextForPdf(heading), 176);
+                    const titleLines = doc.splitTextToSize(escapeTextForPdf(heading), right - 18);
                     ensureSpace(Math.max(8, titleLines.length * 6) + 2);
                     doc.setFont(undefined, 'bold');
                     doc.setFontSize(11);
@@ -192,7 +194,7 @@ define(['core/ajax', 'mod_seminarplaner/roterfadenmodel'], function(Ajax, Model)
                     const themen = (block.themen.length === 1 && block.themen[0].title === block.title)
                         ? [] : block.themen;
                     themen.forEach((theme) => {
-                        const lines = doc.splitTextToSize(escapeTextForPdf(theme.title), 168);
+                        const lines = doc.splitTextToSize(escapeTextForPdf(theme.title), right - 27);
                         ensureSpace(Math.max(6, lines.length * 5.5));
                         doc.text('•', 22, y);
                         doc.text(lines, 27, y);
@@ -212,9 +214,10 @@ define(['core/ajax', 'mod_seminarplaner/roterfadenmodel'], function(Ajax, Model)
          *
          * @param {Number} cmid Kursmodul-ID.
          * @param {Object|null} logo Logo-Daten (dataurl/position) aus seminarplaner_get_pdf_logo.
+         * @param {String} orientation 'portrait' (Standard) oder 'landscape' - Wahl im Import/Export-Tab.
          * @return {Promise} Erfuellt, sobald der Download angestossen wurde.
          */
-        exportPdf: function(cmid, logo) {
+        exportPdf: function(cmid, logo, orientation) {
             if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function') {
                 return Promise.reject(new Error('PDF-Library ist nicht geladen'));
             }
@@ -235,7 +238,7 @@ define(['core/ajax', 'mod_seminarplaner/roterfadenmodel'], function(Ajax, Model)
                 const days = Model.buildDays(state);
                 const meta = (state && state.meta) ? state.meta : {};
 
-                const doc = new jsPDF();
+                const doc = new jsPDF({orientation: orientation === 'landscape' ? 'landscape' : 'portrait'});
                 drawTitlePage(doc, preparedlogo, {
                     title: meta.title || '',
                     date: meta.date || '',

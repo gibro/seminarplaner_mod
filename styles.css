@@ -737,15 +737,25 @@ select.kg-input:-moz-focusring {
   color: var(--ig-gray, #646464);
 }
 
-/* Format ZIM-Papier: zwei Optionen nebeneinander. */
+/* Papierformat je PDF-Export: eine Zeile je Export, Hoch/Quer daneben. */
 .kg-ie-orientation {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 18px;
+  flex-direction: column;
+  gap: 6px;
   margin: 0 0 15px;
   padding: 0;
   border: 0;
+}
+.kg-ie-orientation__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+}
+.kg-ie-orientation__label {
+  flex: 0 0 190px;
+  font-size: 13px;
+  color: var(--ig-anthracite, #3C3C3C);
 }
 .kg-ie-orientation legend {
   float: left;

@@ -162,7 +162,8 @@ function seminarplaner_allowed_referent_ids(int $cmid): ?array {
  * client falls back to "all columns in default order".
  *
  * @param int $cmid Course module id.
- * @return array|null {all: bool, order: string[], selected: string[], orientation: string} or null.
+ * @return array|null {all: bool, order: string[], selected: string[], orientation: string,
+ *     orientations: array<string, string>} or null.
  */
 function seminarplaner_get_pdf_columns(int $cmid): ?array {
     $raw = get_config('mod_seminarplaner', 'pdfcolumns_cmid_' . $cmid);
@@ -197,6 +198,7 @@ function seminarplaner_get_pdf_columns(int $cmid): ?array {
             static fn($key) => in_array((string)$key, $allowed, true)
         )),
         'orientation' => seminarplaner_pdf_orientation($decoded['orientation'] ?? ''),
+        'orientations' => seminarplaner_pdf_orientations($decoded['orientations'] ?? []),
     ];
 }
 
@@ -241,6 +243,40 @@ function seminarplaner_set_pdf_info(int $cmid, int $gridid, string $html): void 
  */
 function seminarplaner_pdf_orientation($value): string {
     return (string)$value === 'portrait' ? 'portrait' : 'landscape';
+}
+
+/**
+ * Hoch-/Querformat der übrigen PDF-Exporte (Konzeptsammlung, Materialliste,
+ * Handout). Anders als das ZIM-Papier ist hier Hochformat der Standard - so
+ * sahen diese Exporte aus, bevor es die Wahl gab.
+ *
+ * @param mixed $value Gespeicherte oder übermittelte Map {flow, materials, handout}.
+ * @return array<string, string> Je Export 'portrait' oder 'landscape'.
+ */
+function seminarplaner_pdf_orientations($value): array {
+    $value = is_array($value) ? $value : [];
+    $out = [];
+    foreach (['flow', 'materials', 'handout'] as $key) {
+        $out[$key] = (string)($value[$key] ?? '') === 'landscape' ? 'landscape' : 'portrait';
+    }
+    return $out;
+}
+
+/**
+ * Gespeichertes Format eines PDF-Exports einer Aktivität (ohne Spaltenwahl).
+ *
+ * @param int $cmid Course module id.
+ * @param string $export 'zim', 'flow', 'materials' oder 'handout'.
+ * @return string 'landscape' oder 'portrait'.
+ */
+function seminarplaner_get_pdf_export_orientation(int $cmid, string $export): string {
+    $raw = get_config('mod_seminarplaner', 'pdfcolumns_cmid_' . $cmid);
+    $decoded = is_string($raw) && $raw !== '' ? json_decode($raw, true) : null;
+    $decoded = is_array($decoded) ? $decoded : [];
+    if ($export === 'zim') {
+        return seminarplaner_pdf_orientation($decoded['orientation'] ?? '');
+    }
+    return seminarplaner_pdf_orientations($decoded['orientations'] ?? [])[$export] ?? 'portrait';
 }
 
 /**

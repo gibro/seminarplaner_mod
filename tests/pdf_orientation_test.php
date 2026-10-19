@@ -57,4 +57,39 @@ final class pdf_orientation_test extends advanced_testcase {
         $this->assertSame('landscape', seminarplaner_get_pdf_columns(9)['orientation']);
         $this->assertSame('landscape', seminarplaner_pdf_orientation(null));
     }
+    /**
+     * Konzeptsammlung, Materialliste und Handout starten im Hochformat -
+     * auch bei Einstellungen von vorher, die nur das ZIM-Format kannten.
+     */
+    public function test_other_exports_default_to_portrait(): void {
+        $this->resetAfterTest();
+        set_config('pdfcolumns_cmid_10', json_encode(['all' => true, 'orientation' => 'landscape']), 'mod_seminarplaner');
+        $this->assertSame(
+            ['flow' => 'portrait', 'materials' => 'portrait', 'handout' => 'portrait'],
+            seminarplaner_get_pdf_columns(10)['orientations']
+        );
+        $this->assertSame('portrait', seminarplaner_get_pdf_export_orientation(10, 'handout'));
+        $this->assertSame('landscape', seminarplaner_get_pdf_export_orientation(10, 'zim'));
+        // Ohne gespeicherte Einstellung: dieselben Standards.
+        $this->assertSame('portrait', seminarplaner_get_pdf_export_orientation(11, 'flow'));
+        $this->assertSame('landscape', seminarplaner_get_pdf_export_orientation(11, 'zim'));
+    }
+
+    /**
+     * Gespeichertes Querformat je Export kommt zurück, Unsinn wird Hochformat.
+     */
+    public function test_other_exports_keep_landscape(): void {
+        $this->resetAfterTest();
+        set_config('pdfcolumns_cmid_12', json_encode([
+            'all' => true,
+            'orientation' => 'portrait',
+            'orientations' => ['flow' => 'landscape', 'materials' => 'quer', 'handout' => 'landscape'],
+        ]), 'mod_seminarplaner');
+        $this->assertSame(
+            ['flow' => 'landscape', 'materials' => 'portrait', 'handout' => 'landscape'],
+            seminarplaner_get_pdf_columns(12)['orientations']
+        );
+        $this->assertSame('landscape', seminarplaner_get_pdf_export_orientation(12, 'handout'));
+        $this->assertSame('portrait', seminarplaner_get_pdf_export_orientation(12, 'zim'));
+    }
 }
