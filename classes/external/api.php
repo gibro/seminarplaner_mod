@@ -3924,6 +3924,12 @@ class api extends external_api {
             'gridid' => new external_value(PARAM_INT, 'Seminarplan id'),
             'statejson' => new external_value(PARAM_RAW, 'State JSON payload'),
             'expectedhash' => new external_value(PARAM_RAW, 'Expected version hash', VALUE_DEFAULT, ''),
+            'basejson' => new external_value(
+                PARAM_RAW,
+                'Tracked sections (sequenz, config, meta) as loaded by the client, for three-way merging',
+                VALUE_DEFAULT,
+                ''
+            ),
         ]);
     }
 
@@ -3934,15 +3940,23 @@ class api extends external_api {
      * @param int $gridid ID des Seminarplans (Grid).
      * @param string $statejson Zu speichernder Planzustand als JSON.
      * @param string $expectedhash Erwarteter Versions-Hash zur Erkennung paralleler Änderungen.
+     * @param string $basejson Stand, auf dem der Client aufgebaut hat (für das Zusammenführen).
      *
-     * @return array Array mit dem Schlüssel versionhash.
+     * @return array Neuer Versions-Hash, ob zusammengeführt wurde, ggf. der Ergebnis-Stand und Konflikte.
      */
-    public static function save_user_state(int $cmid, int $gridid, string $statejson, string $expectedhash = ''): array {
+    public static function save_user_state(
+        int $cmid,
+        int $gridid,
+        string $statejson,
+        string $expectedhash = '',
+        string $basejson = ''
+    ): array {
         $params = self::validate_parameters(self::save_user_state_parameters(), [
             'cmid' => $cmid,
             'gridid' => $gridid,
             'statejson' => $statejson,
             'expectedhash' => $expectedhash,
+            'basejson' => $basejson,
         ]);
 
         $resolved = self::resolve_cm_context((int)$params['cmid']);
@@ -3956,16 +3970,21 @@ class api extends external_api {
         if (!is_array($decoded)) {
             throw new invalid_parameter_exception('statejson must decode to an object/array');
         }
+        if (strlen((string)$params['basejson']) > self::MAX_STATE_JSON_BYTES) {
+            throw new invalid_parameter_exception('basejson exceeds allowed size');
+        }
+        $base = json_decode((string)$params['basejson'], true);
 
         $service = new grid_service();
-        $newhash = $service->save_user_state(
+        $result = $service->save_user_state_merging(
             (int)$params['gridid'],
             (int)$GLOBALS['USER']->id,
             $decoded,
-            (string)$params['expectedhash']
+            (string)$params['expectedhash'],
+            is_array($base) ? $base : null
         );
 
-        return ['versionhash' => $newhash];
+        return $result;
     }
 
     /**
@@ -3976,6 +3995,16 @@ class api extends external_api {
     public static function save_user_state_returns(): external_single_structure {
         return new external_single_structure([
             'versionhash' => new external_value(PARAM_RAW, 'New version hash'),
+            'merged' => new external_value(PARAM_BOOL, 'Whether a concurrent save was merged in'),
+            'statejson' => new external_value(PARAM_RAW, 'Stored state after merging, empty when not merged'),
+            'conflicts' => new external_multiple_structure(
+                new external_single_structure([
+                    'bereich' => new external_value(PARAM_RAW, 'Section of the conflicting entry'),
+                    'id' => new external_value(PARAM_RAW, 'Entry id'),
+                    'titel' => new external_value(PARAM_RAW, 'Entry title, may be empty'),
+                ]),
+                'Entries edited on both sides; the first saved version was kept'
+            ),
         ]);
     }
 

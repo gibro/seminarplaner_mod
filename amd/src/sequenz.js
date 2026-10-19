@@ -171,6 +171,21 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
     };
     const cardTitle = (card) => String((card && (card.titel || card.title)) || '');
 
+    // Kuerzel dieses Tabs fuer neue IDs. Der Zaehler allein vergibt in zwei
+    // gleichzeitig offenen Tabs dieselbe naechste ID ("px12") - beim
+    // Zusammenfuehren auf dem Server waeren das zwei verschiedene Einheiten
+    // unter einer ID, und eine ginge verloren.
+    const TAB_ID_TOKEN = Math.random().toString(36).slice(2, 6).replace(/[^a-z0-9]/g, '') || 'x';
+
+    // Die Teile des Plans, die der Server bei gleichzeitigem Speichern
+    // dreifach zusammenfuehrt (sequence_merger). Der Client merkt sich, auf
+    // welchem Stand dieser Teile er aufbaut, und schickt ihn beim Speichern mit.
+    const trackedSnapshot = (state) => JSON.stringify({
+        sequenz: state ? state.sequenz : undefined,
+        config: state ? state.config : undefined,
+        meta: state ? state.meta : undefined,
+    });
+
     // Eine Einheit stammt aus einem globalen Seminarkonzept, wenn sie dessen
     // Herkunft trägt. Fallback aufs konzept--Präfix: Karten, die vor der
     // Herkunfts-Ergänzung importiert wurden, haben nur das Präfix.
@@ -590,6 +605,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             this.state = null;
             this.sequenz = null;
             this.versionhash = '';
+            // Stand der zusammengefuehrten Teile, zu dem versionhash gehoert.
+            this.baseJson = '';
             this.dirty = false;
             this.dayIndex = 0;
             this.legacyByUid = {};
@@ -1462,7 +1479,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }
         }
 
-        toast(text) {
+        toast(text, duration = 2600) {
             const el = bySel('#sq-toast');
             if (!el) {
                 return;
@@ -1470,7 +1487,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             el.textContent = text;
             el.classList.add('show');
             window.clearTimeout(this.toastTimer);
-            this.toastTimer = window.setTimeout(() => el.classList.remove('show'), 2600);
+            this.toastTimer = window.setTimeout(() => el.classList.remove('show'), duration);
         }
 
         // Passive save indicator - replaces the former Speichern button.
@@ -1751,19 +1768,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
 
         loadState(gridid) {
             asCall('mod_seminarplaner_get_user_state', {cmid: this.cmid, gridid}).then((res) => {
-                let state = {};
-                try {
-                    state = JSON.parse(String(res.statejson || '{}')) || {};
-                } catch (e) {
-                    state = {};
-                }
                 this.gridid = gridid;
                 PlanMemory.remember(this.cmid, gridid);
-                this.state = state;
-                this.sequenz = (state && typeof state.sequenz === 'object' && state.sequenz) ? state.sequenz : null;
-                this.normalizeSequenz();
-                this.ensureSequenzScaffold();
-                this.versionhash = String(res.versionhash || '');
+                this.adoptState(res.statejson, res.versionhash);
                 this.dayIndex = 0;
                 // D49: Klick-Navigation aus dem Ueberblick - ?tag=N oeffnet
                 // direkt den passenden Tag (einmalig, nur fuers erste Laden).
@@ -1783,6 +1790,24 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }).catch(() => {
                 this.setStatus('Der Seminarplan konnte nicht geladen werden.', true);
             });
+        }
+
+        // Uebernimmt einen Stand vom Server (Laden oder zusammengefuehrtes
+        // Speichern). Die Basis fuer das naechste Zusammenfuehren ist der
+        // Stand, wie ihn der Server liefert - vor jeder Normalisierung hier.
+        adoptState(statejson, versionhash) {
+            let state = {};
+            try {
+                state = JSON.parse(String(statejson || '{}')) || {};
+            } catch (e) {
+                state = {};
+            }
+            this.baseJson = trackedSnapshot(state);
+            this.state = state;
+            this.sequenz = (state && typeof state.sequenz === 'object' && state.sequenz) ? state.sequenz : null;
+            this.normalizeSequenz();
+            this.ensureSequenzScaffold();
+            this.versionhash = String(versionhash || '');
         }
 
         // The PHP round trip turns empty JSON objects into arrays. If the
@@ -2242,12 +2267,46 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 gridid: this.gridid,
                 statejson: payload,
                 expectedhash: this.versionhash,
+                basejson: this.baseJson,
             }).then((res) => {
-                this.versionhash = String(res.versionhash || res.newhash || this.versionhash);
-                this.setDirty(false);
-                const now = new Date();
-                const pad = (n) => String(n).padStart(2, '0');
-                this.setSaveState(`✓ Gespeichert ${pad(now.getHours())}:${pad(now.getMinutes())} Uhr`, 'ok');
+                // Was waehrend der Anfrage noch geaendert wurde, ist nicht
+                // gespeichert und braucht einen weiteren Durchgang.
+                const unchanged = JSON.stringify(this.state) === payload;
+                let merged = false;
+                if (res.merged) {
+                    // Jemand anderes hat zwischendurch gespeichert; der Server
+                    // hat beide Fassungen zusammengefuehrt. Den Ergebnisstand
+                    // nur uebernehmen, wenn hier gerade nichts in Arbeit ist -
+                    // sonst ginge die laufende Eingabe beim Neu-Rendern verloren.
+                    // Bleiben Hash und Basis stehen, fuehrt der naechste
+                    // Speichervorgang einfach erneut zusammen.
+                    if (unchanged && !this.isEditingInline() && res.statejson) {
+                        this.adoptState(res.statejson, res.versionhash);
+                        this.forgetMissingPids();
+                        if (this.dayIndex >= this.dayCount()) {
+                            this.dayIndex = 0;
+                        }
+                        this.indexLegacyEntries();
+                        this.render();
+                        merged = true;
+                    }
+                    this.reportMergeConflicts(res.conflicts || []);
+                } else {
+                    this.versionhash = String(res.versionhash || res.newhash || this.versionhash);
+                    try {
+                        this.baseJson = trackedSnapshot(JSON.parse(payload));
+                    } catch (e) {
+                        this.baseJson = '';
+                    }
+                }
+                const pending = !unchanged || (res.merged && !merged);
+                this.setDirty(pending);
+                if (!pending) {
+                    const now = new Date();
+                    const pad = (n) => String(n).padStart(2, '0');
+                    const suffix = merged ? ' – mit gleichzeitigen Änderungen zusammengeführt' : '';
+                    this.setSaveState(`✓ Gespeichert ${pad(now.getHours())}:${pad(now.getMinutes())} Uhr${suffix}`, 'ok');
+                }
                 return true;
             }).catch((error) => {
                 // Keep the changes and retry automatically; the indicator
@@ -2261,6 +2320,48 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 }, 8000);
                 throw error;
             });
+        }
+
+        // Steht der Fokus in einem Eingabefeld oder einem bearbeitbaren Titel,
+        // darf der Plan nicht neu gerendert werden.
+        isEditingInline() {
+            const el = document.activeElement;
+            if (!el || el === document.body) {
+                return false;
+            }
+            return !!(el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+        }
+
+        // Offene Menues und Dropdowns, deren Platzierung es nach dem
+        // Zusammenfuehren nicht mehr gibt, schliessen.
+        forgetMissingPids() {
+            const placements = (this.sequenz && this.sequenz.platzierungen) || {};
+            ['openSwapPid', 'openPhasePid', 'openRefPid', 'openMenuPid', 'headingPid'].forEach((key) => {
+                if (this[key] && !placements[this[key]]) {
+                    this[key] = '';
+                }
+            });
+        }
+
+        // Echte Konflikte: beide haben dieselbe Stelle unterschiedlich
+        // geaendert. Es gilt die zuerst gespeicherte Fassung - das muss die
+        // Person erfahren, deren Aenderung nicht uebernommen wurde.
+        reportMergeConflicts(conflicts) {
+            if (!conflicts.length) {
+                return;
+            }
+            const titles = [];
+            conflicts.forEach((c) => {
+                const title = String((c && c.titel) || '').trim();
+                if (title && titles.indexOf(title) === -1) {
+                    titles.push(title);
+                }
+            });
+            const what = titles.length
+                ? titles.slice(0, 3).map((t) => `„${t}“`).join(', ') + (titles.length > 3 ? ' …' : '')
+                : 'dieselbe Stelle des Plans';
+            this.toast(`Gleichzeitig bearbeitet: ${what}. Dort gilt die Fassung, die zuerst gespeichert wurde – `
+                + 'bitte kurz prüfen.', 9000);
         }
 
         indexLegacyEntries() {
@@ -5009,11 +5110,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
 
         uniqueId(prefix, collection) {
             let counter = this.idCounter + 1;
-            while (collection[prefix + counter]) {
+            while (collection[prefix + counter + TAB_ID_TOKEN]) {
                 counter++;
             }
             this.idCounter = counter;
-            return prefix + counter;
+            return prefix + counter + TAB_ID_TOKEN;
         }
 
         // ---- Noch einmal einplanen / Als neue Einheit duplizieren ----------
