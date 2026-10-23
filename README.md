@@ -1,208 +1,108 @@
-# Seminarplaner Plugins (Moodle)
+# mod_seminarplaner – Seminarplaner für Moodle
 
-Dieses Repository enthält zwei zusammenarbeitende Moodle-Plugins:
+Kursaktivität, mit der Referent*innen ein Seminar planen, durchführen und an Teilnehmende weitergeben: von der Seminareinheiten-Bibliothek über den Ablaufplan je Tag bis zum „Roten Faden“ für die Teilnehmenden und den PDF-Unterlagen.
 
-- `mod_seminarplaner` (Aktivitätsmodul für Kurskontext)
-- `local_seminarplaner` (globale Methodenset-Verwaltung, Review-Workflow)
+Das Plugin arbeitet im Paar mit [`local_seminarplaner`](https://github.com/gibro/seminarplaner_local), das die globale Bibliothek (Methodensammlungen und Seminarkonzepte) und den Prüf-Workflow bereitstellt. `local_seminarplaner` ist eine **Pflicht-Abhängigkeit** und muss zuerst installiert sein.
 
-Plugin Status:
-
-<!-- README_SYNC:START -->
-- `mod_seminarplaner`: `0.6.8-beta` (`2026070102`)
-- `local_seminarplaner`: `0.2.3-beta` (`2026070600`)
-- Mindestversion Moodle: `4.5` (`$plugin->requires = 2024042200`)
-- Letzte Synchronisierung: `2026-07-06`
-<!-- README_SYNC:END -->
+| | |
+| --- | --- |
+| Version | `1.1.0` (`2026101907`), Reife `STABLE` |
+| Moodle | ab 4.5 (`$plugin->requires = 2024042200`) |
+| Abhängigkeit | `local_seminarplaner` ab `2026072000` |
+| Datenbanken | MySQL/MariaDB und PostgreSQL |
+| Lizenz | GNU GPL v3 oder später (siehe `LICENSE`) |
 
 ## Funktionen
 
-### 1) `mod_seminarplaner` (Kursaktivität)
+### Ansichten (Tabs)
 
-UI-Bereiche:
+Welche Tabs eine Aktivität zeigt, hängt von der Einstellung **„Wozu brauchst du den Seminarplaner?“** in den Aktivitätseinstellungen und von den Rechten der Person ab:
 
-- Seminarplan
-- Roter Faden
-- Methodenbibliothek
-- Seminareinheiten
-- Review
-- Import/Export
+| Tab | Was man dort tut | Sichtbar bei Nutzungszweck |
+| --- | --- | --- |
+| **Überblick** | Alle Seminartage nebeneinander als Wochenansicht (nur lesen); Plan wählen, löschen, veröffentlichen; Überblick als PDF (A4 quer) | immer |
+| **Sequenz** | Der eigentliche Planungsort: je Tag ein Vormittag und ein Nachmittag mit einer geordneten Abfolge von Seminareinheiten und Bausteinen. Uhrzeiten ergeben sich aus der Reihenfolge | immer |
+| **Bibliothek** | Seminareinheiten der Aktivität anlegen, suchen, filtern und stapelweise bearbeiten | immer |
+| **Live** | Ablauf-Souffleur während der Durchführung: was läuft jetzt, was kommt als Nächstes | „durchführen“ |
+| **Roter Faden** | Veröffentlichte Fassung des Plans für Teilnehmende, inkl. Handout-PDF | „durchführen“ |
+| **Import/Export** | Seminarplaner-JSON, globale Konzepte übernehmen, PDF-Exporte | immer |
+| **Einreichen** | Seminareinheiten, Methodensammlungen oder Seminarkonzepte zur Prüfung in die globale Bibliothek einreichen | „verwalten“ |
 
-Kernfunktionen:
+Teilnehmende ohne Bearbeitungsrechte sehen nur den Roten Faden (und, mit `viewlive`, die Live-Ansicht).
 
-- Anlegen und Verwalten von Seminareinheiten in einer Aktivität
-- Seminarplaner mit der Möglichkeit verschiedene Pläne in einem Seminarplaner abzuspeichern
-- Roter-Faden-Ansicht für Teilnehmende mit veröffentlichbarem Snapshot aus dem Seminarplan
-- Roter-Faden-Struktur nach Tag und der Differenzierung in Vormittag (08:00-12:30) und Nachmittag (12:30-18:00) in Boxen mit Header- und Contentbereich
-- Responsive Umschaltung für Mobilgeräte
-- Import globaler Methodensets aus dem Moodle-Datenbank-Plugin (https://github.com/gibro/Konzeptgenerator_git)
-- Review-Einreichung von neuen/geänderten Methoden aus der Aktivität
-- Import/Export von Methoden (JSON, CSV/ZIP kompatible Flows)
-- PDF-Export-Flows (ZIM / Seminarverlauf)
-- Datei-Uploads für Methodenmaterialien
+### Planen in der Sequenz
 
-### 2) `local_seminarplaner` (globale Verwaltung von Seminareinheiten)
+- Mehrere Pläne pro Aktivität, Plan innerhalb der Aktivität kopieren
+- Einheiten per Ziehen umsortieren (auch per Touch), duplizieren, erneut einplanen
+- **Bausteine** fassen Einheiten unter einer Überschrift zusammen; ein Baustein kann über die Mittagspause fortgesetzt werden
+- **Alternativen** auf Einheiten- und auf Baustein-Ebene, umschaltbar ohne Neuplanung
+- Geführte Überlauf-Aktion: Was nicht mehr in den Vormittag passt, wird verschoben oder geteilt – nie stillschweigend ausgedehnt
+- „Einheit hinzufügen“ mit Vorschlägen passend zur Lücke, Quellen-Tabs (eigene Bibliothek / globale Methodensammlung) und Schnellanlage
+- Seminarziele mit Verknüpfung zu den platzierten Einheiten
+- Didaktische Empfehlungen (Dramaturgie-Check) als reine Hinweise, pro Person abschaltbar
+- Lernziel-Editor „Der Differenzierer“
+- Referent*innen einer platzierten Einheit zuordnen
+- **Gleichzeitiges Arbeiten** mehrerer Personen im selben Plan: Änderungen werden pro Platzierung zusammengeführt statt überschrieben und erscheinen bei den anderen nach wenigen Sekunden
 
-Kernfunktionen:
+### Exporte
 
-- Verwaltung globaler Methodensets
-- Workflow-Status:
-  - `draft`
-  - `review`
-  - `published`
-  - `archived`
-- Reviewer-Zuweisung pro Methodenset
-- Differenzansicht (Review-Diff) zwischen Versionen
-- Speichern von Review-Entscheidungen (accepted/rejected/pending)
-- Import von mod_data-kompatiblen CSV/ZIP in neue oder bestehende Sets
-- Export globaler Sets als mod_data-kompatible CSV/ZIP
-- Benachrichtigungslogik im Review-Prozess
+Alle PDFs werden im Browser erzeugt (jsPDF, lokal eingebunden – kein CDN):
 
-## Aktuelle Änderungen (Juli 2026)
+- **ZIM-Plan** mit frei wählbarer und je Aktivität gespeicherter Spaltenreihenfolge
+- **Konzeptsammlung**, **Materialliste** (je Tag, dedupliziert, zum Abhaken), **Handout** für Teilnehmende, **Überblick**
+- Hoch- oder Querformat wählbar, optional mit Logo und Seminarzielen auf dem Deckblatt
+- Seminarplaner-JSON bzw. ZIP (mit Anhängen) zum Austausch zwischen Aktivitäten
 
-- Bugfix Review-Einreichung (`mod/classes/external/api.php`): Material-Anhänge von Seminareinheiten gehen beim Einreichen zur Review nicht mehr verloren. Die Dateien werden jetzt beim Einreichen (in ein bestehendes wie in ein neues Konzept) in den globalen Dateibereich von `local_seminarplaner` kopiert und mit der Konzept-Version verknüpft – auch für unverändert übernommene Seminareinheiten des bestehenden Konzepts. Damit bleiben Anhänge nach Annahme/Veröffentlichung erhalten.
-- `local/reviewrequests.php`: Review-Diff-Modal überarbeitet – die Diff-Liste liegt in einem gerahmten, eigenen Scrollbereich; „Alle Änderungen annehmen“, „Entscheidungen speichern“ und „Schließen“ sind von Beginn an ohne Scrollen sichtbar.
-- `local/lib.php` (neu): Link „Reviewanfragen für globale Konzepte“ auf der eigenen Profilseite unter `Profil -> Berichte` für alle Nutzer mit Review-/Verwaltungsrechten. Reviewer erreichen die Review-Seite damit auch ohne Benachrichtigungsmail.
-- `mod/methodlibrary.php`: Stapel-Bearbeitung für mehrere Seminareinheiten gleichzeitig – Auswahlmodus mit Checkboxen auf den Karten, schwebende Toolbar mit „Alle auswählen“/„Auswahl aufheben“/„Bearbeiten“, und ein Bulk-Formular zum Hinzufügen/Entfernen/Ersetzen von Tags, kognitiven Dimensionen und allen weiteren Nicht-Freitextfeldern.
+### Moodle App
 
-### Ältere Änderungen (März 2026)
-
-- `mod/importexport.php`: komponentenbasierter Import/Export mit Mehrfachauswahl pro Dateiinhalt (Methoden, Bausteine, Seminarpläne) inkl. Vorschau-Auswahl je Eintrag.
-- `mod/importexport.php`: Review/Local-Exportbox entfernt; Seminarplaner-JSON ist der zentrale Austauschpfad.
-- `mod/methods.php`: Alternativmethoden als reine Mehrfachauswahl (ohne Suche) plus dynamischer Hinweistext bei fehlenden Optionen.
-- `mod/methodlibrary.php`: Edit-Formular zeigt gespeicherte kognitive Dimensionen wieder korrekt in der Mehrfachauswahl; TinyMCE-Felder auf 10 sichtbare Zeilen erhöht.
-- `mod/planningmode.php`: Feld „Alternativgruppe“ ersetzt durch „Baustein-Alternative überschreiben“ mit Mehrfach-Dropdown auf vorhandene Bausteine.
-- `local/manage.php` und `local/reviewrequests.php`: Layout/Buttons/Tabellenreihenfolge vereinheitlicht und an das Plugin-Design angepasst.
-
-## Rechte/Capabilities
-
-### `mod_seminarplaner`
-
-- `mod/seminarplaner:view`
-- `mod/seminarplaner:managemethods`
-- `mod/seminarplaner:managegrids`
-- `mod/seminarplaner:overrideglobalset`
-- `mod/seminarplaner:importfrommoddata`
-- `mod/seminarplaner:exporttomoddata`
-- `mod/seminarplaner:breaklock`
-
-### `local_seminarplaner`
-
-- `local/seminarplaner:viewglobalsets`
-- `local/seminarplaner:createdraftset`
-- `local/seminarplaner:editdraftset`
-- `local/seminarplaner:submitforreview`
-- `local/seminarplaner:reviewset`
-- `local/seminarplaner:publishset`
-- `local/seminarplaner:archiveglobalset`
-- `local/seminarplaner:manageareascopes`
-- `local/seminarplaner:importglobalset`
-- `local/seminarplaner:exportglobalset`
+Der Rote Faden ist in der offiziellen Moodle App verfügbar (inkl. Offline-Download). Voraussetzung ist, dass auf der Site der Webservice für Mobilgeräte (`enablemobilewebservice`) aktiv ist.
 
 ## Installation
 
-### 1) Dateien ablegen
+1. Zuerst `local_seminarplaner` nach `moodle/local/seminarplaner` legen, dann dieses Plugin nach `moodle/mod/seminarplaner`.
+   (Bei Moodle-Installationen mit `public/`-Verzeichnis entsprechend unter `public/local/…` und `public/mod/…`.)
+2. Upgrade ausführen: `Website-Administration -> Mitteilungen` oder per CLI:
 
-In deiner Moodle-Installation:
+   ```bash
+   php admin/cli/upgrade.php
+   ```
 
-- `mod/seminarplaner` nach: `moodle/mod/seminarplaner`
-- `local/seminarplaner` nach: `moodle/local/seminarplaner`
+3. Nach jedem Update die Caches leeren (`Website-Administration -> Entwicklung -> Caches leeren`), sonst lädt der Browser veraltetes JavaScript.
+4. Im Kurs die Aktivität **Seminarplaner** hinzufügen und den Nutzungszweck wählen.
 
-### 2) Upgrade ausführen
+Für den Import von ZIP-Dateien muss PHP `ZipArchive` bereitstellen. Uploadgröße, CSV-Zeilen und ZIP-Einträge sind aus Performance- und Sicherheitsgründen begrenzt.
 
-- Als Admin anmelden
-- `Website-Administration -> Mitteilungen` öffnen
-- Upgrade/DB-Migration vollständig durchlaufen lassen
+Bestandsdaten aus Versionen vor 1.0 (freies Zeitraster) werden beim Upgrade automatisch in die Sequenz-Struktur übernommen; beim ersten Öffnen eines umgestellten Plans zeigt eine einmalige Gegenüberstellung „So war es / So ist es jetzt“.
 
-Alternativ CLI:
+## Rechte
 
-```bash
-php admin/cli/upgrade.php
-```
-
-### 3) Berechtigungen prüfen
-
-- Rollen/Capabilities für Lehrende, Reviewer, Manager prüfen
-- Für Review/Publishing sicherstellen, dass die passenden `local/*` Capabilities auf System-/Kategoriekontext vergeben sind
-
-### 4) Aktivität im Kurs anlegen
-
-- Kurs öffnen
-- Aktivität `Seminarplaner` hinzufügen
-
-## Konzeptverantwortliche (Reviewer) in Moodle einrichten
-
-Konzeptverantwortliche prüfen eingereichte Konzepte auf `local/seminarplaner/reviewrequests.php`. Damit eine Person dort als Konzeptverantwortliche*r auswählbar ist und arbeiten kann, braucht sie eine Rolle mit den passenden Berechtigungen.
-
-### Was macht welche Berechtigung?
-
-| Berechtigung | Einfach erklärt | Kontext |
+| Capability | Wofür | Standardrollen |
 | --- | --- | --- |
-| `local/seminarplaner:viewglobalsets` | Globale Konzepte ansehen (Katalog und Übersichten). Grundlage für fast alle weiteren Funktionen. | System oder Kursbereich |
-| `local/seminarplaner:createdraftset` | Neues globales Konzept als Entwurf anlegen. | System oder Kursbereich |
-| `local/seminarplaner:editdraftset` | Entwürfe bearbeiten und Konzeptverantwortliche zuordnen. | System oder Kursbereich |
-| `local/seminarplaner:submitforreview` | Entwurf zur Review einreichen (Status `draft` -> `review`). Einreich-Recht, kein Reviewer-Recht. | System oder Kursbereich |
-| `local/seminarplaner:reviewset` | Das eigentliche Reviewer-Recht: zugewiesene Reviews unter „Meine Reviews“ sehen, Review-Diff öffnen, Änderungen annehmen/ablehnen und ein Konzept zur Überarbeitung zurück auf `draft` setzen. Nur wer dieses Recht hat, ist am Konzept als Konzeptverantwortliche*r auswählbar. | System oder Kursbereich |
-| `local/seminarplaner:publishset` | Konzept nach der Review veröffentlichen (Status `review` -> `published`). Erst mit diesem Recht erscheint der Button „Veröffentlichen“. **Wird immer auf Systemebene geprüft.** | Nur System |
-| `local/seminarplaner:archiveglobalset` | Veröffentlichte Konzepte archivieren bzw. archivierte zurückholen. | Nur System |
-| `local/seminarplaner:manageareascopes` | Geltungsbereiche (Scopes) für Konzepte verwalten. | Nur System |
-| `local/seminarplaner:importglobalset` | Konzepte aus Dateien importieren (ZIP/CSV/JSON). | System oder Kursbereich |
-| `local/seminarplaner:exportglobalset` | Konzepte exportieren. | System oder Kursbereich |
+| `mod/seminarplaner:addinstance` | Aktivität im Kurs anlegen | Trainer/in, Manager |
+| `mod/seminarplaner:view` | Aktivität öffnen | Teilnehmer/in, Trainer/in (beide), Manager |
+| `mod/seminarplaner:viewroterfaden` | Roten Faden sehen und Handout erzeugen | Teilnehmer/in, Trainer/in (beide), Manager |
+| `mod/seminarplaner:viewlive` | Live-Ansicht während der Durchführung | Trainer/in (beide), Manager |
+| `mod/seminarplaner:managemethods` | Seminareinheiten anlegen und bearbeiten, globale Konzepte importieren | Trainer/in (beide), Manager |
+| `mod/seminarplaner:managegrids` | Pläne bearbeiten und veröffentlichen | Trainer/in (beide), Manager |
+| `mod/seminarplaner:overrideglobalset` | Globale Konzepte lokal anpassen | Trainer/in (beide), Manager |
+| `mod/seminarplaner:importfrommoddata` | Import aus dem Datenbank-Format | Trainer/in (beide), Manager |
+| `mod/seminarplaner:exporttomoddata` | Export in das Datenbank-Format | Trainer/in (beide), Manager |
+| `mod/seminarplaner:breaklock` | Bearbeitungssperre eines Plans aufheben | Manager |
 
-Standardrollen nach der Installation: Trainer/innen erhalten automatisch nur `viewglobalsets`; die Rolle `Manager` erhält alle Rechte **außer** `publishset` und `archiveglobalset`. Diese beiden hat **keine einzige Standardrolle** – ohne manuelle Vergabe kann also niemand außer Admins veröffentlichen oder archivieren.
+### Globale Konzepte für Trainer/innen sichtbar machen
 
-### Schritt für Schritt: Reviewer-Rolle anlegen
+Damit Referent*innen unter **Import/Export** die veröffentlichten globalen Konzepte sehen, braucht es zwei Rechte:
 
-1. `Website-Administration -> Nutzer/innen -> Rechte ändern -> Rollen verwalten`
-2. `Neue Rolle hinzufügen` (oder bestehende Rolle duplizieren), Name z. B. `Reviewer` oder `Konzeptverantwortliche`
-3. Als Kontexttypen für die Zuweisung `System` und `Kursbereich` erlauben
-4. Folgende Berechtigungen auf `Erlauben` setzen:
-   - `local/seminarplaner:reviewset` (Pflicht – das eigentliche Review-Recht)
-   - `local/seminarplaner:viewglobalsets` (empfohlen – Konzepte ansehen)
-   - `local/seminarplaner:publishset` (nur wenn Reviewer nach angenommener Review selbst veröffentlichen sollen)
-5. Rolle zuweisen:
-   - global: `Website-Administration -> Nutzer/innen -> Rechte ändern -> Globale Rollen zuweisen`
-   - oder auf Kursbereichsebene: `Kursbereich -> Rollen zuweisen`
-   - **Achtung:** Soll die Person veröffentlichen können, muss die Rolle **global (Systemebene)** zugewiesen werden. `publishset` wird im Systemkontext geprüft – eine Zuweisung nur im Kursbereich reicht dafür nicht aus.
-6. Person am Konzept zuordnen: auf `reviewrequests.php` beim Methodenset unter „Konzeptverantwortliche“ auswählen
-7. Prüfen:
-   - Bei Einreichungen erhält die Person eine Benachrichtigungsmail mit Link zur Review-Seite
-   - Dauerhaft erreichbar ist die Seite über das eigene Profil: `Profilbild -> Profil -> Berichte -> Reviewanfragen für globale Konzepte`
-   - Bei einem Set im Status `review` sieht die Person „Review-Diff anzeigen“ und „Zurück zu Entwurf“; mit `publishset` zusätzlich „Veröffentlichen“
+- `mod/seminarplaner:view` (Kurs- oder Aktivitätsebene)
+- `local/seminarplaner:viewglobalsets` (beliebige Ebene ab der Aktivität aufwärts)
 
-### Typische Symptome bei fehlenden Rechten
+Beide stecken bereits in der Standardrolle `Trainer/in`. Eine Einschreibung als Trainer/in im Kurs genügt, weil sich die Rechte nach unten vererben. Das bloße Ansehen braucht kein `managemethods`; das **Übernehmen** eines globalen Konzepts in die Aktivität dagegen schon.
 
-- Person ist nicht als Konzeptverantwortliche auswählbar -> `reviewset` fehlt im Scope (Kursbereich/System) des Konzepts.
-- „Meine Reviews“ ist leer, obwohl eingereicht wurde -> Person ist dem Konzept nicht als Konzeptverantwortliche zugeordnet.
-- Nach angenommener Review fehlt der Button „Veröffentlichen“ -> `publishset` fehlt in der Rolle, oder die Rolle ist nur im Kursbereich statt global zugewiesen.
-- Kein Eintrag im Profil unter „Berichte“ -> keine Review-/Verwaltungsrechte in einem Scope mit vorhandenen Konzepten, oder nach dem Plugin-Update wurden die Caches nicht geleert.
+Die Einrichtung von Konzeptverantwortlichen (Prüfer*innen) ist in der README von [`local_seminarplaner`](https://github.com/gibro/seminarplaner_local) beschrieben.
 
-## Globale Methodensets für `Trainer/in` sichtbar machen
+## Entwicklung
 
-Damit Trainer/innen (Referent/innen) in der Kursaktivität unter `Import / Export` die veröffentlichten globalen Methodensets sehen, sind **zwei** Capabilities nötig — und zwar in **unterschiedlichen Kontexten**:
-
-| Capability | Zweck | Wo zuweisen |
-| --- | --- | --- |
-| `mod/seminarplaner:view` | Aktivität (und globale Sets) ansehen | Kurs oder Aktivität (vererbt sich nach unten) |
-| `local/seminarplaner:viewglobalsets` | globale Methodensets auflisten | beliebige Ebene **ab Modul aufwärts** (System, Kategorie, Kurs oder Aktivität) |
-
-Beide Rechte sind in der Standardrolle `Trainer/in` bereits enthalten. In der Praxis genügt es daher, die Rolle `Trainer/in` so zuzuweisen, dass beide Rechte greifen:
-
-1. `Website-Administration -> Nutzer/innen -> Rechte ändern -> Rollen verwalten -> Trainer/in`
-   - sicherstellen, dass `mod/seminarplaner:view` und `local/seminarplaner:viewglobalsets` auf `Erlauben` stehen.
-2. Rolle der Person zuweisen — am einfachsten **auf Kursebene** (`Kurs -> Teilnehmer/innen -> Nutzer/in einschreiben` als `Trainer/in`).
-   - Da die Prüfung im Aktivitätskontext erfolgt, wirkt eine Kurszuweisung für **beide** Rechte (Abwärtsvererbung). Eine separate Zuweisung auf Kategorie- oder Systemebene ist nicht nötig.
-3. Prüfen:
-   - Aktivität `Seminarplaner` im Kurs öffnen -> Tab `Import / Export`
-   - im Block „Globale Konzepte“ sollte die Auswahlliste die veröffentlichten Sets anzeigen.
-
-Hinweise:
-
-- Reines **Auflisten/Ansehen** der globalen Sets benötigt **kein** `managemethods`. Das **Importieren** eines globalen Sets in die Aktivität (`Globales Konzept importieren`) ist dagegen ein Schreibvorgang und erfordert weiterhin `mod/seminarplaner:managemethods`.
-- Der Tab `Import / Export` erscheint nur für Rollen mit Verwaltungsrechten (`managemethods`/`managegrids`/`importfrommoddata`/`exporttomoddata`). Die Standardrolle `Trainer/in` besitzt diese, daher ist der Tab dort sichtbar.
-
-## Wichtige Hinweise
-
-- Beide Plugins sind als **Paar** gedacht. Viele Flows (globale Sets, Review) setzen `local_seminarplaner` voraus.
-- Import von ZIP benötigt `ZipArchive` in PHP.
-- Große Importdateien sind limitiert (z. B. Uploadgröße/CSV-Reihen/ZIP-Einträge), um Performance und Sicherheit zu schützen.
-- Bei paralleler Bearbeitung mit 2 oder mehr Lehrenden: immer zuerst den Button `Seminarplan laden` klicken, bevor weitergearbeitet oder gespeichert wird. So wird der aktuelle Stand geladen und unbeabsichtigtes Überschreiben/Nicht-Übernehmen von Änderungen vermieden.
+- Tests: `vendor/bin/phpunit --testsuite mod_seminarplaner_testsuite`
+- JavaScript liegt als AMD-Module in `amd/src`, gebaut nach `amd/build`.
+- Fremdbibliotheken (jsPDF, jsPDF-AutoTable, JSZip) liegen unter `thirdparty/`, Lizenzhinweise in `thirdparty/NOTICE.txt`.
+- Was wann gebaut wurde: [`docs/umsetzungsprotokoll.md`](docs/umsetzungsprotokoll.md). Das Datenmodell der Sequenz: [`docs/datenmodell-sequenz.md`](docs/datenmodell-sequenz.md).
