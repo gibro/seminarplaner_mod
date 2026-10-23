@@ -330,12 +330,25 @@ foreach (
 echo '</div></div></div>';
 echo '</div>'; // Ende .field-card.
 
-// Format des ZIM-Papiers; wird mit der Spaltenwahl pro Aktivität gespeichert.
+// Papierformat je PDF-Export; wird mit der Spaltenwahl pro Aktivität gespeichert.
+// ZIM-Papier startet im Querformat, die übrigen Exporte im Hochformat.
 echo '<fieldset class="kg-ie-orientation">';
-echo '<legend class="kg-ie-fieldlabel">Format ZIM-Papier</legend>';
-foreach (['landscape' => 'Querformat', 'portrait' => 'Hochformat'] as $value => $label) {
-    echo '<label class="kg-ie-orientation__option"><input type="radio" name="kg-pdf-orientation" value="'
-        . s($value) . '"' . ($value === 'landscape' ? ' checked' : '') . '><span>' . s($label) . '</span></label>';
+echo '<legend class="kg-ie-fieldlabel">Papierformat</legend>';
+foreach (
+    [
+        'kg-pdf-orientation' => ['ZIM-Papier', 'landscape'],
+        'kg-pdf-orientation-flow' => ['Konzeptsammlung', 'portrait'],
+        'kg-pdf-orientation-materials' => ['Materialliste', 'portrait'],
+        'kg-pdf-orientation-handout' => ['Handout für Teilnehmende', 'portrait'],
+    ] as $name => [$exportlabel, $default]
+) {
+    echo '<div class="kg-ie-orientation__row">';
+    echo '<span class="kg-ie-orientation__label">' . s($exportlabel) . '</span>';
+    foreach (['landscape' => 'Querformat', 'portrait' => 'Hochformat'] as $value => $label) {
+        echo '<label class="kg-ie-orientation__option"><input type="radio" name="' . s($name) . '" value="'
+            . s($value) . '"' . ($value === $default ? ' checked' : '') . '><span>' . s($label) . '</span></label>';
+    }
+    echo '</div>';
 }
 echo '</fieldset>';
 

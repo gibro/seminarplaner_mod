@@ -62,6 +62,14 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
             'expiresat' => 'privacy:metadata:kgen_grid_lock:expiresat',
         ], 'privacy:metadata:kgen_grid_lock');
 
+        $items->add_database_table('kgen_grid_presence', [
+            'gridid' => 'privacy:metadata:kgen_grid_presence:gridid',
+            'userid' => 'privacy:metadata:kgen_grid_presence:userid',
+            'tag' => 'privacy:metadata:kgen_grid_presence:tag',
+            'pid' => 'privacy:metadata:kgen_grid_presence:pid',
+            'timemodified' => 'privacy:metadata:kgen_grid_presence:timemodified',
+        ], 'privacy:metadata:kgen_grid_presence');
+
         $items->add_database_table('kgen_method_filemap', [
             'cmid' => 'privacy:metadata:kgen_method_filemap:cmid',
             'userid' => 'privacy:metadata:kgen_method_filemap:userid',
@@ -124,7 +132,11 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
         $contextids = [];
 
         $gridids = $DB->get_fieldset_select('kgen_grid_user_state', 'DISTINCT gridid', 'userid = ?', [$userid]);
-        $gridids = array_map('intval', $gridids);
+        $gridids = array_merge(
+            $gridids,
+            $DB->get_fieldset_select('kgen_grid_presence', 'DISTINCT gridid', 'userid = ?', [$userid])
+        );
+        $gridids = array_values(array_unique(array_map('intval', $gridids)));
         if (!empty($gridids)) {
             [$insql, $params] = $DB->get_in_or_equal($gridids, SQL_PARAMS_QM);
             $cmids = $DB->get_fieldset_select('kgen_grid', 'DISTINCT cmid', "id {$insql}", $params);
@@ -192,6 +204,7 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
             [$insql, $params] = $DB->get_in_or_equal($gridids, SQL_PARAMS_QM);
             $userlist->add_from_sql('userid', "SELECT userid FROM {kgen_grid_user_state} WHERE gridid {$insql}", $params);
             $userlist->add_from_sql('userid', "SELECT userid FROM {kgen_grid_lock} WHERE gridid {$insql}", $params);
+            $userlist->add_from_sql('userid', "SELECT userid FROM {kgen_grid_presence} WHERE gridid {$insql}", $params);
         }
 
         $userlist->add_from_sql('userid', "SELECT userid FROM {kgen_method_filemap} WHERE cmid = ?", [$cmid]);
@@ -335,6 +348,17 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
                     writer::with_context($context)->export_data(
                         ['grid_locks'],
                         (object)['locks' => array_values($locks)]
+                    );
+                }
+                $presence = $DB->get_records_select(
+                    'kgen_grid_presence',
+                    "gridid {$insql} AND userid = ?",
+                    array_merge($params, [$userid])
+                );
+                if (!empty($presence)) {
+                    writer::with_context($context)->export_data(
+                        ['grid_presence'],
+                        (object)['presence' => array_values($presence)]
                     );
                 }
             }
@@ -484,6 +508,7 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
             [$insql, $params] = $DB->get_in_or_equal($gridids, SQL_PARAMS_QM);
             $DB->delete_records_select('kgen_grid_user_state', "gridid {$insql}", $params);
             $DB->delete_records_select('kgen_grid_lock', "gridid {$insql}", $params);
+            $DB->delete_records_select('kgen_grid_presence', "gridid {$insql}", $params);
         }
 
         $DB->delete_records('kgen_method_filemap', ['cmid' => $cmid]);
@@ -550,6 +575,11 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
             );
             $DB->delete_records_select(
                 'kgen_grid_lock',
+                "gridid {$gridsql} AND userid {$usersql}",
+                array_merge($gridparams, $userparams)
+            );
+            $DB->delete_records_select(
+                'kgen_grid_presence',
                 "gridid {$gridsql} AND userid {$usersql}",
                 array_merge($gridparams, $userparams)
             );

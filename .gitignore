@@ -1,0 +1,7 @@
+# OpenWiki (generated evidence index + local agent tooling)
+openwiki/
+.mcp.json
+.claude/
+.DS_Store
+AGENTS.md
+.github/workflows/openwiki-update.yml

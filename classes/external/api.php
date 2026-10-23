@@ -37,6 +37,7 @@ use mod_seminarplaner\local\service\grid_service;
 use mod_seminarplaner\local\service\import_export_service;
 use mod_seminarplaner\local\service\method_card_service;
 use mod_seminarplaner\local\service\planning_state_service;
+use mod_seminarplaner\local\service\presence_service;
 use mod_seminarplaner\local\service\soft_lock_service;
 
 /**
@@ -3924,6 +3925,12 @@ class api extends external_api {
             'gridid' => new external_value(PARAM_INT, 'Seminarplan id'),
             'statejson' => new external_value(PARAM_RAW, 'State JSON payload'),
             'expectedhash' => new external_value(PARAM_RAW, 'Expected version hash', VALUE_DEFAULT, ''),
+            'basejson' => new external_value(
+                PARAM_RAW,
+                'Tracked sections (sequenz, config, meta) as loaded by the client, for three-way merging',
+                VALUE_DEFAULT,
+                ''
+            ),
         ]);
     }
 
@@ -3934,15 +3941,23 @@ class api extends external_api {
      * @param int $gridid ID des Seminarplans (Grid).
      * @param string $statejson Zu speichernder Planzustand als JSON.
      * @param string $expectedhash Erwarteter Versions-Hash zur Erkennung paralleler Änderungen.
+     * @param string $basejson Stand, auf dem der Client aufgebaut hat (für das Zusammenführen).
      *
-     * @return array Array mit dem Schlüssel versionhash.
+     * @return array Neuer Versions-Hash, ob zusammengeführt wurde, ggf. der Ergebnis-Stand und Konflikte.
      */
-    public static function save_user_state(int $cmid, int $gridid, string $statejson, string $expectedhash = ''): array {
+    public static function save_user_state(
+        int $cmid,
+        int $gridid,
+        string $statejson,
+        string $expectedhash = '',
+        string $basejson = ''
+    ): array {
         $params = self::validate_parameters(self::save_user_state_parameters(), [
             'cmid' => $cmid,
             'gridid' => $gridid,
             'statejson' => $statejson,
             'expectedhash' => $expectedhash,
+            'basejson' => $basejson,
         ]);
 
         $resolved = self::resolve_cm_context((int)$params['cmid']);
@@ -3956,16 +3971,21 @@ class api extends external_api {
         if (!is_array($decoded)) {
             throw new invalid_parameter_exception('statejson must decode to an object/array');
         }
+        if (strlen((string)$params['basejson']) > self::MAX_STATE_JSON_BYTES) {
+            throw new invalid_parameter_exception('basejson exceeds allowed size');
+        }
+        $base = json_decode((string)$params['basejson'], true);
 
         $service = new grid_service();
-        $newhash = $service->save_user_state(
+        $result = $service->save_user_state_merging(
             (int)$params['gridid'],
             (int)$GLOBALS['USER']->id,
             $decoded,
-            (string)$params['expectedhash']
+            (string)$params['expectedhash'],
+            is_array($base) ? $base : null
         );
 
-        return ['versionhash' => $newhash];
+        return $result;
     }
 
     /**
@@ -3976,6 +3996,16 @@ class api extends external_api {
     public static function save_user_state_returns(): external_single_structure {
         return new external_single_structure([
             'versionhash' => new external_value(PARAM_RAW, 'New version hash'),
+            'merged' => new external_value(PARAM_BOOL, 'Whether a concurrent save was merged in'),
+            'statejson' => new external_value(PARAM_RAW, 'Stored state after merging, empty when not merged'),
+            'conflicts' => new external_multiple_structure(
+                new external_single_structure([
+                    'bereich' => new external_value(PARAM_RAW, 'Section of the conflicting entry'),
+                    'id' => new external_value(PARAM_RAW, 'Entry id'),
+                    'titel' => new external_value(PARAM_RAW, 'Entry title, may be empty'),
+                ]),
+                'Entries edited on both sides; the first saved version was kept'
+            ),
         ]);
     }
 
@@ -4447,7 +4477,7 @@ class api extends external_api {
     public static function set_pdf_columns_parameters(): external_function_parameters {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
-            'columnsjson' => new external_value(PARAM_RAW, 'PDF column setting as JSON {all, order, selected, orientation}'),
+            'columnsjson' => new external_value(PARAM_RAW, 'PDF column setting as JSON {all, order, selected, orientation, orientations}'),
         ]);
     }
 
@@ -4492,6 +4522,7 @@ class api extends external_api {
             'order' => $order,
             'selected' => $selected,
             'orientation' => seminarplaner_pdf_orientation($decoded['orientation'] ?? ''),
+            'orientations' => seminarplaner_pdf_orientations($decoded['orientations'] ?? []),
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         set_config('pdfcolumns_cmid_' . (int)$resolved['cm']->id, $payload, 'mod_seminarplaner');
@@ -4654,6 +4685,107 @@ class api extends external_api {
                 'id' => new external_value(PARAM_INT, 'User id'),
                 'fullname' => new external_value(PARAM_RAW, 'Full name'),
                 'avatarurl' => new external_value(PARAM_URL, 'Profile picture url'),
+            ])),
+        ]);
+    }
+
+    /**
+     * Definiert die Eingabeparameter für das Lebenszeichen eines offenen Plans.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
+    public static function ping_plan_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'gridid' => new external_value(PARAM_INT, 'Seminarplan id'),
+            'tag' => new external_value(PARAM_INT, 'One-based day number shown', VALUE_DEFAULT, 0),
+            'pid' => new external_value(PARAM_ALPHANUMEXT, 'Placement being edited', VALUE_DEFAULT, ''),
+        ]);
+    }
+
+    /**
+     * Live-Mitbearbeiten: meldet, dass jemand im Plan arbeitet, und liefert
+     * den aktuellen Versionsstand samt der anderen Anwesenden.
+     *
+     * Der Client fragt alle paar Sekunden. Weicht der Versionsstand von
+     * seinem ab, hat jemand anderes gespeichert, und er lädt nach.
+     *
+     * @param int $cmid Kursmodul-ID der Seminarplaner-Aktivität.
+     * @param int $gridid ID des Seminarplans.
+     * @param int $tag Angezeigter Tag (ab 1), 0 wenn unbekannt.
+     * @param string $pid Gerade bearbeitete Platzierung, leer wenn keine.
+     *
+     * @return array Versions-Hash und Liste der anderen Anwesenden.
+     */
+    public static function ping_plan(int $cmid, int $gridid, int $tag = 0, string $pid = ''): array {
+        global $DB, $PAGE;
+
+        $params = self::validate_parameters(self::ping_plan_parameters(), [
+            'cmid' => $cmid,
+            'gridid' => $gridid,
+            'tag' => $tag,
+            'pid' => $pid,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        $PAGE->set_context($resolved['context']);
+
+        // Nur Plaene dieser Aktivitaet - sonst liessen sich ueber eine fremde
+        // gridid die Namen der Leute in einem anderen Kurs abfragen.
+        $gridid = (int)$params['gridid'];
+        if (!$DB->record_exists('kgen_grid', ['id' => $gridid, 'cmid' => (int)$resolved['cm']->id])) {
+            throw new invalid_parameter_exception('Seminarplan gehört nicht zu dieser Aktivität.');
+        }
+
+        $others = (new presence_service())->ping(
+            $gridid,
+            (int)$GLOBALS['USER']->id,
+            (int)$params['tag'],
+            (string)$params['pid']
+        );
+
+        $editors = [];
+        if ($others) {
+            $fields = \core_user\fields::for_name()->with_userpic()->get_sql('', false, '', '', false)->selects;
+            [$insql, $inparams] = $DB->get_in_or_equal(array_column($others, 'userid'));
+            $users = $DB->get_records_select('user', "id {$insql} AND deleted = 0", $inparams, '', $fields);
+            foreach ($others as $other) {
+                $user = $users[$other['userid']] ?? null;
+                if (!$user) {
+                    continue;
+                }
+                $picture = new \user_picture($user);
+                $picture->size = 100;
+                $editors[] = [
+                    'userid' => $other['userid'],
+                    'fullname' => fullname($user),
+                    'avatarurl' => $picture->get_url($PAGE)->out(false),
+                    'tag' => $other['tag'],
+                    'pid' => $other['pid'],
+                ];
+            }
+        }
+
+        return [
+            'versionhash' => (new grid_service())->get_version_hash($gridid),
+            'editors' => $editors,
+        ];
+    }
+
+    /**
+     * Beschreibt die Rückgabestruktur des Lebenszeichens.
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
+    public static function ping_plan_returns(): external_single_structure {
+        return new external_single_structure([
+            'versionhash' => new external_value(PARAM_RAW, 'Current version hash of the plan'),
+            'editors' => new external_multiple_structure(new external_single_structure([
+                'userid' => new external_value(PARAM_INT, 'User id'),
+                'fullname' => new external_value(PARAM_RAW, 'Full name'),
+                'avatarurl' => new external_value(PARAM_URL, 'Profile picture url'),
+                'tag' => new external_value(PARAM_INT, 'One-based day number shown, 0 if unknown'),
+                'pid' => new external_value(PARAM_RAW, 'Placement being edited, empty if none'),
             ])),
         ]);
     }

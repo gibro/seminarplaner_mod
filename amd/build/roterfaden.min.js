@@ -50,9 +50,11 @@ define([
     };
 
     class RoterFadenView {
-        constructor(cmid, logo) {
+        constructor(cmid, logo, orientation) {
             this.cmid = cmid;
             this.logo = logo || null;
+            // Papierformat des Handouts, gewählt im Import/Export-Tab.
+            this.orientation = orientation === 'landscape' ? 'landscape' : 'portrait';
             this.status = bySel('#kg-roterfaden-status');
             this.list = bySel('#kg-roterfaden-list');
             this.empty = bySel('#kg-roterfaden-empty');
@@ -277,7 +279,7 @@ define([
                 }
                 this.handoutBtn.disabled = true;
                 this.setStatus('Handout-PDF für Teilnehmende wird erstellt …', false);
-                Handout.exportPdf(this.cmid, this.logo)
+                Handout.exportPdf(this.cmid, this.logo, this.orientation)
                     .then(() => this.setStatus('Handout-PDF erstellt.', false))
                     .catch((error) => {
                         this.setStatus(`Handout konnte nicht erstellt werden: ${error.message || error}`, true);
@@ -328,8 +330,8 @@ define([
     }
 
     return {
-        init: function(cmid, logo) {
-            return new RoterFadenView(cmid, logo);
+        init: function(cmid, logo, orientation) {
+            return new RoterFadenView(cmid, logo, orientation);
         }
     };
 });

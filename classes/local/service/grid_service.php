@@ -28,6 +28,7 @@ use coding_exception;
 use mod_seminarplaner\local\repository\grid_repository;
 use mod_seminarplaner\local\sequence\grid_to_sequence_converter;
 use mod_seminarplaner\local\sequence\roterfaden_model;
+use mod_seminarplaner\local\sequence\sequence_merger;
 use mod_seminarplaner\local\sequence\sequence_state;
 
 /**
@@ -299,6 +300,16 @@ class grid_service {
     }
 
     /**
+     * Current version hash of the shared plan state (cheap, for polling).
+     *
+     * @param int $gridid Grid id.
+     * @return string Empty if the plan has no stored state yet.
+     */
+    public function get_version_hash(int $gridid): string {
+        return $this->repository->get_state_versionhash($gridid, self::SHARED_STATE_USERID);
+    }
+
+    /**
      * Save shared grid state and return new version hash.
      *
      * @param int $gridid Grid id.
@@ -308,10 +319,63 @@ class grid_service {
      * @return string New version hash.
      */
     public function save_user_state(int $gridid, int $userid, array $state, ?string $expectedhash = null): string {
+        return $this->save_user_state_merging($gridid, $userid, $state, $expectedhash, null)['versionhash'];
+    }
+
+    /**
+     * Save shared grid state, merging a concurrent save three-way.
+     *
+     * Hat seit dem Laden des Clients jemand anderes gespeichert (Hash passt
+     * nicht), wird mit der mitgeschickten Basis je Platzierung und Feld
+     * zusammengefuehrt (sequence_merger). Ohne Basis gilt das alte Verhalten
+     * (eingehende Sequenz ersetzt die gespeicherte) - fuer Alt-Clients.
+     *
+     * Lesen, Zusammenfuehren und Schreiben laufen unter einer Sperre je Plan,
+     * sonst koennten zwei gleichzeitige Saves beide die Hash-Pruefung
+     * bestehen und einander doch ueberschreiben.
+     *
+     * @param int $gridid Grid id.
+     * @param int $userid User id.
+     * @param array $state State payload as array.
+     * @param string|null $expectedhash Optional optimistic lock check hash.
+     * @param array|null $base Tracked sections as the client loaded them.
+     * @return array{versionhash: string, merged: bool, statejson: string, conflicts: array}
+     */
+    public function save_user_state_merging(
+        int $gridid,
+        int $userid,
+        array $state,
+        ?string $expectedhash,
+        ?array $base
+    ): array {
         if ($gridid <= 0 || $userid <= 0) {
             throw new coding_exception('Invalid input for save_user_state');
         }
 
+        $factory = \core\lock\lock_config::get_lock_factory('mod_seminarplaner_gridstate');
+        $lock = $factory->get_lock('grid' . $gridid, 10);
+        if (!$lock) {
+            throw new \moodle_exception('locktimeout');
+        }
+        try {
+            return $this->save_user_state_locked($gridid, $state, $expectedhash, $base);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * Body of {@see save_user_state_merging()}, called under the plan lock.
+     *
+     * @param int $gridid Grid id.
+     * @param array $state State payload as array.
+     * @param string|null $expectedhash Optional optimistic lock check hash.
+     * @param array|null $base Tracked sections as the client loaded them.
+     * @return array{versionhash: string, merged: bool, statejson: string, conflicts: array}
+     */
+    private function save_user_state_locked(int $gridid, array $state, ?string $expectedhash, ?array $base): array {
+        $merged = false;
+        $conflicts = [];
         $existing = $this->repository->get_user_state($gridid, self::SHARED_STATE_USERID);
         if (!$existing) {
             $legacy = $this->repository->get_latest_state_for_grid($gridid);
@@ -331,6 +395,12 @@ class grid_service {
                 $existingstate = [];
             }
             $state = $this->merge_collaborative_state($existingstate, $state);
+            if ($base !== null) {
+                $result = (new sequence_merger())->merge_state($base, $existingstate, $state);
+                $state = $result['state'];
+                $conflicts = $result['conflicts'];
+            }
+            $merged = true;
         }
 
         // Legacy grid clients do not know the sequence section (D20); keep
@@ -401,7 +471,12 @@ class grid_service {
 
         $newhash = sha1($json . '|' . microtime(true));
         $this->repository->upsert_user_state($gridid, self::SHARED_STATE_USERID, $json, $newhash);
-        return $newhash;
+        return [
+            'versionhash' => $newhash,
+            'merged' => $merged,
+            'statejson' => $merged ? $json : '',
+            'conflicts' => $conflicts,
+        ];
     }
 
     /**

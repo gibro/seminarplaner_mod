@@ -171,6 +171,24 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
     };
     const cardTitle = (card) => String((card && (card.titel || card.title)) || '');
 
+    // Kuerzel dieses Tabs fuer neue IDs. Der Zaehler allein vergibt in zwei
+    // gleichzeitig offenen Tabs dieselbe naechste ID ("px12") - beim
+    // Zusammenfuehren auf dem Server waeren das zwei verschiedene Einheiten
+    // unter einer ID, und eine ginge verloren.
+    // Takt des Live-Abgleichs (ping_plan) in Millisekunden.
+    const LIVE_PING_MS = 5000;
+
+    const TAB_ID_TOKEN = Math.random().toString(36).slice(2, 6).replace(/[^a-z0-9]/g, '') || 'x';
+
+    // Die Teile des Plans, die der Server bei gleichzeitigem Speichern
+    // dreifach zusammenfuehrt (sequence_merger). Der Client merkt sich, auf
+    // welchem Stand dieser Teile er aufbaut, und schickt ihn beim Speichern mit.
+    const trackedSnapshot = (state) => JSON.stringify({
+        sequenz: state ? state.sequenz : undefined,
+        config: state ? state.config : undefined,
+        meta: state ? state.meta : undefined,
+    });
+
     // Eine Einheit stammt aus einem globalen Seminarkonzept, wenn sie dessen
     // Herkunft trägt. Fallback aufs konzept--Präfix: Karten, die vor der
     // Herkunfts-Ergänzung importiert wurden, haben nur das Präfix.
@@ -590,6 +608,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             this.state = null;
             this.sequenz = null;
             this.versionhash = '';
+            // Stand der zusammengefuehrten Teile, zu dem versionhash gehoert.
+            this.baseJson = '';
+            // Live-Mitbearbeiten: laufender Speichervorgang, laufender Ping,
+            // Intervall und wer sonst gerade im Plan arbeitet.
+            this.saving = false;
+            this.pinging = false;
+            this.pullingRemote = false;
+            this.liveTimer = null;
+            this.presence = [];
             this.dirty = false;
             this.dayIndex = 0;
             this.legacyByUid = {};
@@ -1462,7 +1489,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }
         }
 
-        toast(text) {
+        toast(text, duration = 2600) {
             const el = bySel('#sq-toast');
             if (!el) {
                 return;
@@ -1470,7 +1497,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             el.textContent = text;
             el.classList.add('show');
             window.clearTimeout(this.toastTimer);
-            this.toastTimer = window.setTimeout(() => el.classList.remove('show'), 2600);
+            this.toastTimer = window.setTimeout(() => el.classList.remove('show'), duration);
         }
 
         // Passive save indicator - replaces the former Speichern button.
@@ -1751,19 +1778,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
 
         loadState(gridid) {
             asCall('mod_seminarplaner_get_user_state', {cmid: this.cmid, gridid}).then((res) => {
-                let state = {};
-                try {
-                    state = JSON.parse(String(res.statejson || '{}')) || {};
-                } catch (e) {
-                    state = {};
-                }
                 this.gridid = gridid;
                 PlanMemory.remember(this.cmid, gridid);
-                this.state = state;
-                this.sequenz = (state && typeof state.sequenz === 'object' && state.sequenz) ? state.sequenz : null;
-                this.normalizeSequenz();
-                this.ensureSequenzScaffold();
-                this.versionhash = String(res.versionhash || '');
+                this.adoptState(res.statejson, res.versionhash);
                 this.dayIndex = 0;
                 // D49: Klick-Navigation aus dem Ueberblick - ?tag=N oeffnet
                 // direkt den passenden Tag (einmalig, nur fuers erste Laden).
@@ -1778,11 +1795,31 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 this.setSaveState('');
                 this.indexLegacyEntries();
                 this.syncPublishControl();
+                this.presence = [];
                 this.render();
                 this.maybeShowIntro();
+                this.startLiveSync();
             }).catch(() => {
                 this.setStatus('Der Seminarplan konnte nicht geladen werden.', true);
             });
+        }
+
+        // Uebernimmt einen Stand vom Server (Laden oder zusammengefuehrtes
+        // Speichern). Die Basis fuer das naechste Zusammenfuehren ist der
+        // Stand, wie ihn der Server liefert - vor jeder Normalisierung hier.
+        adoptState(statejson, versionhash) {
+            let state = {};
+            try {
+                state = JSON.parse(String(statejson || '{}')) || {};
+            } catch (e) {
+                state = {};
+            }
+            this.baseJson = trackedSnapshot(state);
+            this.state = state;
+            this.sequenz = (state && typeof state.sequenz === 'object' && state.sequenz) ? state.sequenz : null;
+            this.normalizeSequenz();
+            this.ensureSequenzScaffold();
+            this.versionhash = String(versionhash || '');
         }
 
         // The PHP round trip turns empty JSON objects into arrays. If the
@@ -2237,19 +2274,56 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             window.clearTimeout(this.autosaveTimer);
             this.setSaveState('Speichert …');
             const payload = JSON.stringify(this.state);
+            this.saving = true;
             return asCall('mod_seminarplaner_save_user_state', {
                 cmid: this.cmid,
                 gridid: this.gridid,
                 statejson: payload,
                 expectedhash: this.versionhash,
+                basejson: this.baseJson,
             }).then((res) => {
-                this.versionhash = String(res.versionhash || res.newhash || this.versionhash);
-                this.setDirty(false);
-                const now = new Date();
-                const pad = (n) => String(n).padStart(2, '0');
-                this.setSaveState(`✓ Gespeichert ${pad(now.getHours())}:${pad(now.getMinutes())} Uhr`, 'ok');
+                this.saving = false;
+                // Was waehrend der Anfrage noch geaendert wurde, ist nicht
+                // gespeichert und braucht einen weiteren Durchgang.
+                const unchanged = JSON.stringify(this.state) === payload;
+                let merged = false;
+                if (res.merged) {
+                    // Jemand anderes hat zwischendurch gespeichert; der Server
+                    // hat beide Fassungen zusammengefuehrt. Den Ergebnisstand
+                    // nur uebernehmen, wenn hier gerade nichts in Arbeit ist -
+                    // sonst ginge die laufende Eingabe beim Neu-Rendern verloren.
+                    // Bleiben Hash und Basis stehen, fuehrt der naechste
+                    // Speichervorgang einfach erneut zusammen.
+                    if (unchanged && !this.isEditingInline() && res.statejson) {
+                        this.adoptState(res.statejson, res.versionhash);
+                        this.forgetMissingPids();
+                        if (this.dayIndex >= this.dayCount()) {
+                            this.dayIndex = 0;
+                        }
+                        this.indexLegacyEntries();
+                        this.render();
+                        merged = true;
+                    }
+                    this.reportMergeConflicts(res.conflicts || []);
+                } else {
+                    this.versionhash = String(res.versionhash || res.newhash || this.versionhash);
+                    try {
+                        this.baseJson = trackedSnapshot(JSON.parse(payload));
+                    } catch (e) {
+                        this.baseJson = '';
+                    }
+                }
+                const pending = !unchanged || (res.merged && !merged);
+                this.setDirty(pending);
+                if (!pending) {
+                    const now = new Date();
+                    const pad = (n) => String(n).padStart(2, '0');
+                    const suffix = merged ? ' – mit gleichzeitigen Änderungen zusammengeführt' : '';
+                    this.setSaveState(`✓ Gespeichert ${pad(now.getHours())}:${pad(now.getMinutes())} Uhr${suffix}`, 'ok');
+                }
                 return true;
             }).catch((error) => {
+                this.saving = false;
                 // Keep the changes and retry automatically; the indicator
                 // says what is happening instead of asking for a click.
                 this.setSaveState('Speichern hat nicht geklappt – neuer Versuch gleich …', 'error');
@@ -2261,6 +2335,202 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 }, 8000);
                 throw error;
             });
+        }
+
+        // ---- Live-Mitbearbeiten ---------------------------------------------
+        // Jeder offene Tab meldet sich alle LIVE_PING_MS beim Server
+        // (ping_plan): an welchem Tag er steht und an welcher Einheit gerade
+        // getippt wird. Zurueck kommen der aktuelle Versionsstand und die
+        // anderen Anwesenden. Weicht der Stand ab, hat jemand anderes
+        // gespeichert - dann wird nachgeladen, sobald hier nichts in Arbeit
+        // ist (bei eigenen ungespeicherten Aenderungen: erst speichern, der
+        // Server fuehrt zusammen). Kein Push-Kanal noetig, laeuft auf jedem
+        // Moodle.
+        startLiveSync() {
+            if (this.liveTimer) {
+                this.livePing();
+                return;
+            }
+            this.liveTimer = window.setInterval(() => this.livePing(), LIVE_PING_MS);
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    this.livePing();
+                }
+            });
+            this.livePing();
+        }
+
+        // Die Platzierung, an der hier gerade gearbeitet wird (Fokus in ihrem
+        // Titel, Dauerfeld, Menue ...), sonst leer.
+        focusedPid() {
+            const el = document.activeElement;
+            if (!el || el === document.body || !el.closest) {
+                return '';
+            }
+            const host = el.closest('[data-sq-unit], [data-sq-drag]');
+            const pid = host ? (host.getAttribute('data-sq-unit') || host.getAttribute('data-sq-drag') || '') : '';
+            return /^[A-Za-z0-9_-]{1,64}$/.test(pid) ? pid : '';
+        }
+
+        livePing() {
+            if (document.hidden || !this.gridid || this.pinging) {
+                return;
+            }
+            const gridid = this.gridid;
+            this.pinging = true;
+            asCall('mod_seminarplaner_ping_plan', {
+                cmid: this.cmid,
+                gridid,
+                tag: this.dayIndex + 1,
+                pid: this.focusedPid(),
+            }).then((res) => {
+                if (gridid !== this.gridid) {
+                    return;
+                }
+                this.presence = Array.isArray(res.editors) ? res.editors : [];
+                this.renderPresence();
+                const remote = String(res.versionhash || '');
+                if (remote && remote !== this.versionhash && !this.saving) {
+                    this.pullRemoteChanges(gridid);
+                }
+            }).catch(() => null).then(() => {
+                this.pinging = false;
+                return null;
+            });
+        }
+
+        // Hier wird gerade etwas bearbeitet, das ein Neu-Rendern zerstoeren
+        // wuerde: Eingabe, Ziehen, offener Dialog.
+        isBusyLocally() {
+            if (this.isEditingInline() || this.drag) {
+                return true;
+            }
+            return !!document.querySelector('#sq-modal.open, #sq-modal-detail.open, #sq-unit-modal.open, '
+                + '#sq-setup-panel:not(.kg-hidden)');
+        }
+
+        pullRemoteChanges(gridid) {
+            if (this.pullingRemote) {
+                return;
+            }
+            if (this.dirty) {
+                // Eigene Aenderungen zuerst speichern - der Server fuehrt
+                // zusammen und liefert den gemeinsamen Stand zurueck.
+                window.clearTimeout(this.autosaveTimer);
+                this.save().catch(() => null);
+                return;
+            }
+            if (this.isBusyLocally()) {
+                return;
+            }
+            this.pullingRemote = true;
+            asCall('mod_seminarplaner_get_user_state', {cmid: this.cmid, gridid}).then((res) => {
+                if (gridid !== this.gridid || this.dirty || this.saving || this.isBusyLocally()) {
+                    return;
+                }
+                this.adoptState(res.statejson, res.versionhash);
+                this.forgetMissingPids();
+                if (this.dayIndex >= this.dayCount()) {
+                    this.dayIndex = 0;
+                }
+                this.indexLegacyEntries();
+                this.render();
+                const now = new Date();
+                const pad = (n) => String(n).padStart(2, '0');
+                // Bewusst ohne Namen: wer gespeichert hat, weiss der Client nicht
+                // (es kann auch ein zweiter eigener Tab gewesen sein).
+                this.setSaveState(`↻ Neuer Stand übernommen ${pad(now.getHours())}:${pad(now.getMinutes())} Uhr`, 'ok');
+            }).catch(() => null).then(() => {
+                this.pullingRemote = false;
+                return null;
+            });
+        }
+
+        // Wer arbeitet gerade wo: Leiste in der Werkzeugzeile (alle Anwesenden
+        // mit ihrem Tag) und ein Namensschild an der Einheit, die jemand
+        // gerade bearbeitet. Wird nach jedem Rendern und jedem Ping erneuert,
+        // ohne den Tag neu zu zeichnen.
+        renderPresence() {
+            const bar = bySel('#sq-presence');
+            if (bar) {
+                if (!this.presence.length) {
+                    bar.innerHTML = '';
+                    bar.classList.add('kg-hidden');
+                } else {
+                    const chips = this.presence.map((p) => {
+                        const tag = Number(p.tag) || 0;
+                        const here = tag === this.dayIndex + 1;
+                        const where = tag > 0 ? (here ? 'hier' : `Tag ${tag}`) : '';
+                        const title = `${p.fullname}${where ? ' – ' + (here ? 'an diesem Tag' : 'an Tag ' + tag) : ''}`;
+                        return `<span class="sq-presence__chip${here ? ' is-here' : ''}" title="${escapeHtml(title)}">`
+                            + `<img class="sq-presence__avatar" src="${escapeHtml(p.avatarurl)}" alt="">`
+                            + `<span class="sq-presence__name">${escapeHtml(String(p.fullname || '').split(' ')[0])}</span>`
+                            + (where ? `<span class="sq-presence__where">${escapeHtml(where)}</span>` : '')
+                            + '</span>';
+                    }).join('');
+                    bar.innerHTML = `<span class="sq-presence__label">Auch im Plan:</span>${chips}`;
+                    bar.classList.remove('kg-hidden');
+                }
+            }
+            document.querySelectorAll('.sq-presence-badge').forEach((el) => el.remove());
+            document.querySelectorAll('.sq-unit.is-edited-elsewhere').forEach((el) => el.classList.remove('is-edited-elsewhere'));
+            this.presence.forEach((p) => {
+                if (!p.pid || (Number(p.tag) || 0) !== this.dayIndex + 1) {
+                    return;
+                }
+                const unit = document.querySelector(`.sq-unit[data-sq-unit="${String(p.pid).replace(/"/g, '')}"]`);
+                if (!unit) {
+                    return;
+                }
+                unit.classList.add('is-edited-elsewhere');
+                const badge = document.createElement('span');
+                badge.className = 'sq-presence-badge';
+                badge.textContent = `✎ ${String(p.fullname || '').split(' ')[0]}`;
+                badge.title = `${p.fullname} bearbeitet diese Einheit gerade`;
+                unit.appendChild(badge);
+            });
+        }
+
+        // Steht der Fokus in einem Eingabefeld oder einem bearbeitbaren Titel,
+        // darf der Plan nicht neu gerendert werden.
+        isEditingInline() {
+            const el = document.activeElement;
+            if (!el || el === document.body) {
+                return false;
+            }
+            return !!(el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+        }
+
+        // Offene Menues und Dropdowns, deren Platzierung es nach dem
+        // Zusammenfuehren nicht mehr gibt, schliessen.
+        forgetMissingPids() {
+            const placements = (this.sequenz && this.sequenz.platzierungen) || {};
+            ['openSwapPid', 'openPhasePid', 'openRefPid', 'openMenuPid', 'headingPid'].forEach((key) => {
+                if (this[key] && !placements[this[key]]) {
+                    this[key] = '';
+                }
+            });
+        }
+
+        // Echte Konflikte: beide haben dieselbe Stelle unterschiedlich
+        // geaendert. Es gilt die zuerst gespeicherte Fassung - das muss die
+        // Person erfahren, deren Aenderung nicht uebernommen wurde.
+        reportMergeConflicts(conflicts) {
+            if (!conflicts.length) {
+                return;
+            }
+            const titles = [];
+            conflicts.forEach((c) => {
+                const title = String((c && c.titel) || '').trim();
+                if (title && titles.indexOf(title) === -1) {
+                    titles.push(title);
+                }
+            });
+            const what = titles.length
+                ? titles.slice(0, 3).map((t) => `„${t}“`).join(', ') + (titles.length > 3 ? ' …' : '')
+                : 'dieselbe Stelle des Plans';
+            this.toast(`Gleichzeitig bearbeitet: ${what}. Dort gilt die Fassung, die zuerst gespeichert wurde – `
+                + 'bitte kurz prüfen.', 9000);
         }
 
         indexLegacyEntries() {
@@ -3859,6 +4129,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                         } else {
                             this.applySuggestTarget(action.getAttribute('data-cardid') || '', target);
                         }
+                    } else if (type === 'picker-details') {
+                        this.openCardDetail(action.getAttribute('data-cardid') || '',
+                            Number.parseInt(action.getAttribute('data-global-methodid') || '0', 10));
                     } else if (type === 'intro-done') {
                         this.finishIntro();
                     } else if (type === 'baustein-save') {
@@ -4962,10 +5235,16 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                           ${used ? '<span class="sq-badge sq-badge--used">bereits verwendet</span>' : ''}
                         </div>
                       </div>
-                      <button type="button" class="kg-btn kg-btn-primary" data-sq-action="picker-add"
-                        data-cardid="${escapeHtml(String(card.id))}"${globalid
-                            ? ` data-global-methodid="${globalid}"`
-                            : ''}>Übernehmen</button>
+                      <div class="sq-picker__actions">
+                        <button type="button" class="sq-picker__details" data-sq-action="picker-details"
+                          data-cardid="${escapeHtml(String(card.id))}"${globalid
+                              ? ` data-global-methodid="${globalid}"`
+                              : ''}>Details</button>
+                        <button type="button" class="kg-btn kg-btn-primary" data-sq-action="picker-add"
+                          data-cardid="${escapeHtml(String(card.id))}"${globalid
+                              ? ` data-global-methodid="${globalid}"`
+                              : ''}>Übernehmen</button>
+                      </div>
                     </div>`;
             };
 
@@ -5000,11 +5279,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
 
         uniqueId(prefix, collection) {
             let counter = this.idCounter + 1;
-            while (collection[prefix + counter]) {
+            while (collection[prefix + counter + TAB_ID_TOKEN]) {
                 counter++;
             }
             this.idCounter = counter;
-            return prefix + counter;
+            return prefix + counter + TAB_ID_TOKEN;
         }
 
         // ---- Noch einmal einplanen / Als neue Einheit duplizieren ----------
@@ -6480,6 +6759,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const afternoon = this.renderAnchor(day, 'nachmittag', frame, seenBausteine);
             container.innerHTML = morning + divider + afternoon;
             this.renderDrama();
+            this.renderPresence();
         }
 
         bausteineSeenBeforeCurrentDay() {
@@ -7089,41 +7369,157 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                   draggable="false">${open ? ICON_COLLAPSE : ICON_EXPAND}</button>`;
         }
 
+        // Inhalte einer Bibliothekskarte als <dt>/<dd>-Paare - geteilt vom
+        // Aufklappbereich einer Platzierung und der Detailansicht im Dialog
+        // „Einheit einplanen". Globale Methoden (get_global_method_details)
+        // bringen statt Dateien nur Dateinamen mit (attachments).
+        cardDetailRows(card) {
+            const rows = [];
+            UNIT_DETAIL_FIELDS.forEach(([key, label, kind]) => {
+                let html = '';
+                if (kind === 'rich') {
+                    html = LiveModel.richText(card[key]);
+                    if (String(html).replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim() === '') {
+                        html = '';
+                    }
+                } else if (kind === 'list') {
+                    html = escapeHtml(splitMultiValue(card[key]).join(', '));
+                } else {
+                    html = escapeHtml(this.fieldValue(card, key).trim());
+                }
+                if (html) {
+                    rows.push(`<dt>${escapeHtml(label)}</dt><dd>${html}</dd>`);
+                }
+            });
+            const files = (Array.isArray(card.materialien) ? card.materialien : [])
+                .filter((file) => file && file.fileurl);
+            if (files.length) {
+                rows.push(`<dt>Materialien (Dateien)</dt><dd><ul class="sq-details__files">${files.map((file) => {
+                    const size = formatFileSize(file.filesize);
+                    return `<li><a href="${escapeHtml(file.fileurl)}" target="_blank" rel="noopener noreferrer"
+                        >${escapeHtml(file.name || 'Datei')}</a>${size
+                        ? ` <span class="sq-details__size">${escapeHtml(size)}</span>` : ''}</li>`;
+                }).join('')}</ul></dd>`);
+            }
+            const names = (Array.isArray(card.attachments) ? card.attachments : []).filter(Boolean);
+            if (names.length) {
+                rows.push('<dt>Materialien (Dateien)</dt><dd><ul class="sq-details__files">'
+                    + names.map((name) => `<li>${escapeHtml(name)}</li>`).join('')
+                    + '</ul><span class="sq-details__size">Die Dateien kommen beim Übernehmen mit.</span></dd>');
+            }
+            return rows;
+        }
+
+        // Detailansicht einer Karte aus dem Dialog „Einheit einplanen": ein
+        // zweites Overlay ueber dem Picker, damit dessen Suche, Tab und
+        // Scrollstand beim Schliessen erhalten bleiben. Globale Methoden
+        // liefert browse_global_library nur als Kurzfassung - der Rest kommt
+        // hier per get_global_method_details nach.
+        detailModalRoot() {
+            let root = bySel('#sq-modal-detail');
+            if (!root) {
+                root = document.createElement('div');
+                root.id = 'sq-modal-detail';
+                root.className = 'sq-modal-overlay sq-modal-overlay--stacked moodle-has-zindex';
+                document.body.appendChild(root);
+                root.addEventListener('click', (event) => {
+                    if (event.target === root || event.target.closest('[data-sq-action="detail-close"]')) {
+                        this.closeCardDetail();
+                    }
+                });
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && root.classList.contains('open')) {
+                        event.stopPropagation();
+                        this.closeCardDetail();
+                    }
+                }, true);
+            }
+            return root;
+        }
+
+        openCardDetail(cardid, globalid) {
+            const root = this.detailModalRoot();
+            const show = (card, loading) => {
+                const duration = parseMinutes(card.zeitbedarf);
+                const setname = String(card._setname || card.setname || '');
+                const badges = [
+                    Number.isFinite(duration) && duration > 0 ? `${duration} Min.` : '',
+                    this.fieldValue(card, 'gruppengroesse') ? `Gruppe: ${this.fieldValue(card, 'gruppengroesse')}` : '',
+                    setname,
+                ].filter(Boolean);
+                let body;
+                if (loading) {
+                    body = '<p class="sq-details__empty">Beschreibung wird geladen …</p>';
+                } else {
+                    const rows = this.cardDetailRows(card);
+                    body = rows.length
+                        ? `<dl class="sq-details__list">${rows.join('')}</dl>`
+                        : '<p class="sq-details__empty">Für diese Seminareinheit sind noch keine Inhalte hinterlegt.</p>';
+                }
+                root.innerHTML = `
+                    <div class="sq-modal sq-modal--detail" role="dialog" aria-modal="true"
+                      aria-labelledby="sq-detail-title">
+                      <div class="sq-modal__head">
+                        <h3 id="sq-detail-title">${escapeHtml(cardTitle(card) || 'Seminareinheit')}</h3>
+                        <button type="button" class="sq-modal__close" data-sq-action="detail-close"
+                          aria-label="Detailansicht schließen">✕</button>
+                      </div>
+                      <div class="sq-modal__body">
+                        ${badges.length ? `<div class="sq-unit__meta sq-detail__meta">${badges
+                            .map((b) => `<span class="sq-badge">${escapeHtml(b)}</span>`).join('')}</div>` : ''}
+                        ${body}
+                      </div>
+                      <div class="sq-modal__footer">
+                        <button type="button" class="kg-btn" data-sq-action="detail-close">Zurück zur Auswahl</button>
+                      </div>
+                    </div>`;
+                root.classList.add('open');
+                const close = root.querySelector('.sq-modal__close');
+                if (close) {
+                    close.focus();
+                }
+            };
+
+            if (globalid > 0) {
+                const summary = (this.globalMethods || []).find((m) => Number(m._globalid) === globalid) || {};
+                show(summary, true);
+                asCall('mod_seminarplaner_get_global_method_details', {cmid: this.cmid, methodid: globalid})
+                    .then((details) => {
+                        if (root.classList.contains('open')) {
+                            show(Object.assign({}, details, {_setname: details.setname || summary._setname}), false);
+                        }
+                    })
+                    .catch(() => {
+                        // Rueckfall: wenigstens die Kurzfassung aus der Liste zeigen.
+                        if (root.classList.contains('open')) {
+                            show(summary, false);
+                        }
+                        this.toast('Die volle Beschreibung konnte nicht geladen werden – gezeigt wird die Kurzfassung.');
+                    });
+                return;
+            }
+            const card = this.methodCardForRef(cardid)
+                || this.methodCardList.find((c) => String(c.id) === String(cardid));
+            if (card) {
+                show(card, false);
+            }
+        }
+
+        closeCardDetail() {
+            const root = bySel('#sq-modal-detail');
+            if (root) {
+                root.classList.remove('open');
+                root.innerHTML = '';
+            }
+        }
+
         // Inhalte der aktiven Karte hinter einer Platzierung. note steht als
         // Hinweiszeile obenan (z. B. welche Alternative gezeigt wird).
         renderUnitDetails(pid, card, note) {
             if (!this.openDetails.has(pid)) {
                 return '';
             }
-            const rows = [];
-            if (card) {
-                UNIT_DETAIL_FIELDS.forEach(([key, label, kind]) => {
-                    let html = '';
-                    if (kind === 'rich') {
-                        html = LiveModel.richText(card[key]);
-                        if (String(html).replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim() === '') {
-                            html = '';
-                        }
-                    } else if (kind === 'list') {
-                        html = escapeHtml(splitMultiValue(card[key]).join(', '));
-                    } else {
-                        html = escapeHtml(this.fieldValue(card, key).trim());
-                    }
-                    if (html) {
-                        rows.push(`<dt>${escapeHtml(label)}</dt><dd>${html}</dd>`);
-                    }
-                });
-                const files = (Array.isArray(card.materialien) ? card.materialien : [])
-                    .filter((file) => file && file.fileurl);
-                if (files.length) {
-                    rows.push(`<dt>Materialien (Dateien)</dt><dd><ul class="sq-details__files">${files.map((file) => {
-                        const size = formatFileSize(file.filesize);
-                        return `<li><a href="${escapeHtml(file.fileurl)}" target="_blank" rel="noopener noreferrer"
-                            >${escapeHtml(file.name || 'Datei')}</a>${size
-                            ? ` <span class="sq-details__size">${escapeHtml(size)}</span>` : ''}</li>`;
-                    }).join('')}</ul></dd>`);
-                }
-            }
+            const rows = card ? this.cardDetailRows(card) : [];
             let body;
             if (!card) {
                 body = '<p class="sq-details__empty">Diese Einheit hat keinen Bibliothekseintrag – '

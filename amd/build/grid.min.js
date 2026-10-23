@@ -1,4 +1,4 @@
-define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
+define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], function(Ajax, Notification, OverviewPdf) {
     const DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
     const VIEW_MODE_WEEK = 'week';
     const VIEW_MODE_DAY = 'day';
@@ -1116,6 +1116,51 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
             this.renderMethods();
             this.applyConfigToModal();
             this.refreshLayout();
+        }
+
+        // Überblick als PDF (A4 quer): dieselben Daten wie die Wochenansicht,
+        // gezeichnet von overviewpdf.js. Überschrift ist der Titel des Plans.
+        exportOverviewPdf() {
+            if (!this.getGridId()) {
+                this.setStatus('Bitte zuerst einen Seminarplan auswählen.', true);
+                return;
+            }
+            const select = bySel('#kg-grid-select');
+            const optiontext = select && select.selectedOptions && select.selectedOptions[0]
+                ? select.selectedOptions[0].textContent : '';
+            const title = String(optiontext || '').replace(/\s*\(#\d+\)\s*$/, '').trim();
+            const planDays = this.overviewPlanDays();
+            const days = (this.state.config.days || []).map((day) => ({
+                name: day,
+                items: (planDays[day] || []).map((it) => {
+                    let color = '';
+                    if (!it.sqTag && it.kind === 'unit') {
+                        color = this.getUnitSlotColor(String(it.slotkey || it.unitid || ''));
+                    }
+                    return {
+                        kind: it.kind,
+                        title: it.title || '',
+                        startMin: Number(it.startMin) || 0,
+                        endMin: Number(it.endMin) || 0,
+                        phase: it.sqPhase || '',
+                        reserved: !!it.sqReserved,
+                        color,
+                        referenten: (it.sqReferenten || []).map((person) => person.fullname),
+                    };
+                }),
+            }));
+            const range = this.state.config.timeRange || {};
+            try {
+                OverviewPdf.exportPdf({
+                    title,
+                    days,
+                    startMin: parseTimeToMinutes(range.start),
+                    endMin: parseTimeToMinutes(range.end),
+                });
+                this.setStatus('Überblick-PDF erstellt.', false);
+            } catch (error) {
+                this.setStatus(`Überblick-PDF konnte nicht erstellt werden: ${error.message || error}`, true);
+            }
         }
 
         getGridId() {
@@ -2561,11 +2606,21 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     const naturalTopPx = Math.max(0, ((Number(it.startMin || 0) - start) / slotMinutes) * slotPx);
                     const naturalHeightPx = Math.max(1, (durationMin / slotMinutes) * slotPx);
                     const isShort = durationMin < slotMinutes;
-                    const heightPx = Math.max(naturalHeightPx, isShort ? minItemPx : Math.min(minItemPx, naturalHeightPx));
+                    const minHeightPx = isShort ? minItemPx : Math.min(minItemPx, naturalHeightPx);
+                    let heightPx = Math.max(naturalHeightPx, minHeightPx);
                     let topPx = naturalTopPx;
                     if (packShortItems) {
+                        // Ein aufgeblähter kurzer Eintrag darf den nächsten nach
+                        // unten schieben, der holt den Versatz aber sofort wieder
+                        // auf, indem er schrumpft (bis auf seine Mindesthöhe) —
+                        // sonst summiert sich die Verschiebung über den Tag und
+                        // feste Zeiten wie die Mittagspause rutschen sichtbar weg.
+                        // Der Abstand zwischen Einträgen geht von der eigenen
+                        // Höhe ab, statt den Nachfolger zu verschieben.
                         topPx = Math.max(topPx, packedBottomPx);
-                        packedBottomPx = topPx + heightPx + packGapPx;
+                        heightPx = Math.max(naturalTopPx + naturalHeightPx - topPx, minHeightPx + packGapPx);
+                        packedBottomPx = topPx + heightPx;
+                        heightPx = Math.max(1, heightPx - packGapPx);
                     }
 
                     const div = document.createElement('div');
@@ -4410,6 +4465,12 @@ define(['core/ajax', 'core/notification'], function(Ajax, Notification) {
                     btn.addEventListener('click', () => openPdfExport(action, needsGrid));
                 }
             });
+            // Überblick-PDF: entsteht direkt hier aus der Wochenansicht (kein
+            // Umweg über den Import/Export-Tab).
+            const overviewpdfbtn = bySel('#kg-ov-pdf-overview');
+            if (overviewpdfbtn) {
+                overviewpdfbtn.addEventListener('click', () => this.exportOverviewPdf());
+            }
             const publishcheckbox = bySel('#kg-publish-roterfaden');
             if (publishcheckbox) {
                 publishcheckbox.addEventListener('change', () => {

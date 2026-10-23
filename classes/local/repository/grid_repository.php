@@ -169,6 +169,18 @@ class grid_repository {
     }
 
     /**
+     * Version hash of a stored state, without loading the state itself.
+     *
+     * @param int $gridid Grid id.
+     * @param int $userid User id (0 = shared state).
+     * @return string Empty if there is no stored state.
+     */
+    public function get_state_versionhash(int $gridid, int $userid): string {
+        global $DB;
+        return (string)$DB->get_field('kgen_grid_user_state', 'versionhash', ['gridid' => $gridid, 'userid' => $userid]);
+    }
+
+    /**
      * Get the newest existing state for a grid (legacy per-user fallback).
      *
      * @param int $gridid Grid id.

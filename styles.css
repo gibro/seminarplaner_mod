@@ -737,15 +737,25 @@ select.kg-input:-moz-focusring {
   color: var(--ig-gray, #646464);
 }
 
-/* Format ZIM-Papier: zwei Optionen nebeneinander. */
+/* Papierformat je PDF-Export: eine Zeile je Export, Hoch/Quer daneben. */
 .kg-ie-orientation {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 18px;
+  flex-direction: column;
+  gap: 6px;
   margin: 0 0 15px;
   padding: 0;
   border: 0;
+}
+.kg-ie-orientation__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+}
+.kg-ie-orientation__label {
+  flex: 0 0 190px;
+  font-size: 13px;
+  color: var(--ig-anthracite, #3C3C3C);
 }
 .kg-ie-orientation legend {
   float: left;
@@ -1663,15 +1673,18 @@ select.kg-input:-moz-focusring {
   color: transparent;
 }
 
+/* Halbstunden-Strich absolut statt per margin-top: Beginnt der Tag zur halben
+   Stunde, ist der erste Slot ein minor-Slot ohne border-top — dessen margin-top
+   kollabierte dann durch bis #sp-times und schob die ganze Zeitachse um einen
+   halben Slot nach unten (Pausen wirkten gegen die Beschriftung verschoben). */
 .sp-timecol .sp-timeslot--minor::after {
   content: "";
-  display: block;
+  position: absolute;
+  top: calc(var(--slot-height) / 2);
+  right: var(--spacing-xs);
   width: 8px;
   height: 1px;
   background: var(--ig-lightgray);
-  margin-left: auto;
-  margin-right: var(--spacing-xs);
-  margin-top: calc(var(--slot-height) / 2);
 }
 
 .sp-timeslot--quiet {
@@ -6423,6 +6436,67 @@ body.path-mod-seminarplaner .moodle-dialogue-base .moodle-dialogue {
     font-weight: 600;
 }
 
+/* Live-Mitbearbeiten: wer sonst gerade im Plan arbeitet. */
+.sq-presence {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    font-size: 12.5px;
+    color: var(--ig-gray);
+}
+
+.sq-presence + .sq-savestate {
+    margin-left: 12px;
+}
+
+.sq-presence__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px 2px 2px;
+    border: 1px solid var(--sq-border, #d9d9d9);
+    border-radius: 999px;
+    background: var(--sq-surface, #fff);
+    color: var(--sq-text, inherit);
+}
+
+.sq-presence__chip.is-here {
+    border-color: var(--ig-green);
+}
+
+.sq-presence__avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.sq-presence__where {
+    color: var(--ig-gray);
+}
+
+.sq-unit.is-edited-elsewhere {
+    position: relative;
+    outline: 2px dashed var(--ig-green);
+    outline-offset: 2px;
+}
+
+.sq-presence-badge {
+    position: absolute;
+    top: -9px;
+    right: 10px;
+    z-index: 2;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: var(--ig-green);
+    color: #fff;
+    font-size: 11px;
+    line-height: 18px;
+    pointer-events: none;
+}
+
 /* ==========================================================================
    D47: Drag & Drop in der Sequenz (zweiter Bedienweg neben den ↑/↓-Pfeilen)
    ========================================================================== */
@@ -9041,7 +9115,13 @@ details.sq-menu[open] > summary.sq-menu__btn {
 .sq-unit__details h3,
 .sq-unit__details h4,
 .sq-unit__details h5,
-.sq-unit__details h6 {
+.sq-unit__details h6,
+.sq-modal--detail .sq-details__list h1,
+.sq-modal--detail .sq-details__list h2,
+.sq-modal--detail .sq-details__list h3,
+.sq-modal--detail .sq-details__list h4,
+.sq-modal--detail .sq-details__list h5,
+.sq-modal--detail .sq-details__list h6 {
     margin: 0.9em 0 0.3em;
     font-size: 15px;
     line-height: 1.3;
@@ -9300,4 +9380,39 @@ details.sq-menu[open] > summary.sq-menu__btn {
 .sq-unit-shared--done {
     border-left-color: var(--sq-pause, #1F7A6E);
     background: var(--sq-pause-bg, #E3F2EF);
+}
+
+/* Detailansicht im Dialog „Einheit einplanen": zweites Overlay über dem
+   Picker (Details-Link je Zeile). Liegt eine Ebene höher als #sq-modal (2010). */
+#sq-modal-detail.sq-modal-overlay--stacked {
+    z-index: 2020;
+}
+.sq-modal--detail {
+    max-width: 760px;
+}
+.sq-modal--detail .sq-modal__body {
+    padding: 16px 20px;
+}
+.sq-detail__meta {
+    margin-bottom: 12px;
+}
+.sq-picker__actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 0 0 auto;
+}
+.sq-picker__details {
+    border: 0;
+    background: none;
+    padding: 0;
+    color: var(--ig-darkred);
+    font-size: 13px;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+.sq-picker__details:hover,
+.sq-picker__details:focus-visible {
+    color: var(--ig-red);
 }

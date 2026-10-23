@@ -72,7 +72,8 @@ $icInfo = $icon('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>', 
 $icDownload = $icon('<path d="M12 3v12M8 11l4 4 4-4M5 21h14"/>', 14, 2.2);
 
 // PDF-Export-Buttons für den Überblick: lösen per Deep-Link denselben Export-Flow
-// im Import/Export-Tab aus (kein zweiter Mechanismus).
+// im Import/Export-Tab aus (kein zweiter Mechanismus) — außer „Überblick", der
+// direkt hier aus der Wochenansicht gezeichnet wird.
 $pdfbtn = static function (string $id, string $label) use ($icDownload): string {
     return html_writer::tag(
         'button',
@@ -85,6 +86,14 @@ echo $OUTPUT->header();
 
 echo $OUTPUT->heading(format_string($seminarplaner->name));
 echo seminarplaner_render_tabs((int)$cm->id, 'grid');
+
+// Überblick-PDF entsteht im Browser (jsPDF), wie das Handout im Roten Faden.
+$vendorbase = $CFG->wwwroot . '/mod/seminarplaner/thirdparty';
+echo '<script>window.__kg_prev_define = window.define; try { window.define = undefined; } catch (e) {}</script>';
+echo '<script src="' . s($vendorbase . '/jspdf/jspdf.umd.min.js') . '"></script>';
+echo '<script>try { if (window.__kg_prev_define !== undefined) { '
+    . 'window.define = window.__kg_prev_define; } else { delete window.define; } } '
+    . 'catch (e) {} delete window.__kg_prev_define;</script>';
 
 echo html_writer::start_div('kg-shell kg-grid-readonly');
 echo html_writer::tag('div', '', ['id' => 'kg-status', 'class' => 'kg-status', 'role' => 'status', 'aria-live' => 'polite']);
@@ -140,6 +149,7 @@ echo html_writer::tag('span', '', ['id' => 'kg-publish-roterfaden-status', 'clas
 echo html_writer::end_div();
 echo html_writer::start_div('kg-ov-pdfbar');
 echo html_writer::tag('span', 'PDF-Export', ['class' => 'kg-ov-pdfbar__label']);
+echo $pdfbtn('kg-ov-pdf-overview', 'Überblick');
 echo $pdfbtn('kg-ov-pdf-zim', 'ZIM');
 echo $pdfbtn('kg-ov-pdf-flow', 'Konzeptsammlung');
 echo $pdfbtn('kg-ov-pdf-handout', 'Teilnehmerplan');
