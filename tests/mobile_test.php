@@ -170,6 +170,33 @@ final class mobile_test extends advanced_testcase {
         $this->assertTrue($second['continuation']);
     }
 
+    public function test_build_days_honours_a_per_day_lunch_break(): void {
+        // D87: Am Dienstag liegt die Mittagspause anders (12:00-14:00).
+        $state = $this->build_state();
+        $state['config']['ankerzeiten']['mittagspausen'] = ['Dienstag' => ['start' => '12:00', 'end' => '14:00']];
+        $state['sequenz']['tage'][1]['anker'] = [
+            'vormittag' => ['sequenz' => []],
+            'nachmittag' => ['sequenz' => ['px5']],
+        ];
+        $state['sequenz']['tage'][0]['anker']['nachmittag']['sequenz'] = ['px4'];
+        $state['sequenz']['tage'][0]['anker']['vormittag']['sequenz'] = ['px1', 'px2', 'px3'];
+
+        $days = roterfaden_model::build_days($state);
+
+        // Montag behaelt die allgemeine Mittagspause ...
+        $this->assertSame('nachmittag', $days[0]['anchors'][1]['key']);
+        $this->assertSame((13 * 60) + 30, $days[0]['anchors'][1]['start']);
+        // ... der Dienstag-Nachmittag beginnt erst um 14:00.
+        $this->assertSame('nachmittag', $days[1]['anchors'][0]['key']);
+        $this->assertSame(14 * 60, $days[1]['anchors'][0]['start']);
+        $this->assertSame(14 * 60, $days[1]['anchors'][0]['blocks'][0]['startMin']);
+
+        $az = roterfaden_model::ankerzeiten_fuer_tag(roterfaden_model::derive_ankerzeiten($state['config']), 'Dienstag');
+        $this->assertSame('12:00', $az['vormittag']['end']);
+        $this->assertSame('09:00', $az['vormittag']['start']);
+        $this->assertSame('17:00', $az['nachmittag']['end']);
+    }
+
     public function test_build_days_falls_back_to_legacy_plan(): void {
         $days = roterfaden_model::build_days([
             'config' => [

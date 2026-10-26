@@ -192,6 +192,13 @@ $days = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', '
         <input type="checkbox" name="lastDayMorningOnly" id="sp-config-last-departure">
         <span>Letzter Tag endet mit dem Vormittag (Abreise)</span>
       </label>
+      <div>
+        <label class="kg-label kg-inline-checkbox">
+          <input type="checkbox" name="lunchPerDay" id="sp-config-lunch-perday">
+          <span>Mittagspause ist nicht an jedem Tag gleich</span>
+        </label>
+      </div>
+      <div class="sp-lunch-days kg-hidden" id="sp-config-lunch-days"></div>
       <p class="sp-filter-status">Die Zeiten sind eine Vorbelegung aus der Vorlage und lassen sich frei anpassen.
         Zwischen Vormittag und Nachmittag liegt die Mittagspause. Kurze Zwischenpausen musst du nicht
         vorausplanen – die Sequenzansicht erinnert daran, wenn lange ohne Pause gearbeitet wird.</p>

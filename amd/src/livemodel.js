@@ -195,10 +195,6 @@ define(['mod_seminarplaner/roterfadenmodel'], function(Model) {
         const cardmap = new Map((Array.isArray(cards) ? cards : []).map((card) => [String(card.id), card]));
 
         const az = Model.deriveAnkerzeiten(config);
-        const frames = {
-            vormittag: {start: Model.parseClock(az.vormittag.start), end: Model.parseClock(az.vormittag.end)},
-            nachmittag: {start: Model.parseClock(az.nachmittag.start), end: Model.parseClock(az.nachmittag.end)},
-        };
         const tage = Array.isArray(seq.tage) ? seq.tage : [];
         const seenBausteine = {};
         const units = [];
@@ -208,6 +204,11 @@ define(['mod_seminarplaner/roterfadenmodel'], function(Model) {
             const dayname = (tag && tag.bezeichnung && daynames.includes(tag.bezeichnung))
                 ? tag.bezeichnung
                 : (daynames[dayindex] || `Tag ${dayindex + 1}`);
+            const dayaz = Model.ankerzeitenFuerTag(az, dayname);
+            const frames = {
+                vormittag: {start: Model.parseClock(dayaz.vormittag.start), end: Model.parseClock(dayaz.vormittag.end)},
+                nachmittag: {start: Model.parseClock(dayaz.nachmittag.start), end: Model.parseClock(dayaz.nachmittag.end)},
+            };
             // D45: An Anreise-/Abreisetagen entfaellt ein Anker vollstaendig.
             const off = {
                 vormittag: dayindex === 0 && !!az.ersterTagNurNachmittag,

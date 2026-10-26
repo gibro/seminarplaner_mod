@@ -152,12 +152,19 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
         'half-week-mi-fr': {days: ['Mittwoch', 'Donnerstag', 'Freitag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN},
         'compact-day': {days: ['Montag'], granularity: 15, ankerzeiten: DEFAULT_ANKERZEITEN}
     };
-    const cloneAnkerzeiten = (az) => ({
-        vormittag: Object.assign({}, az.vormittag),
-        nachmittag: Object.assign({}, az.nachmittag),
-        ersterTagNurNachmittag: !!az.ersterTagNurNachmittag,
-        letzterTagNurVormittag: !!az.letzterTagNurVormittag
-    });
+    const cloneAnkerzeiten = (az) => {
+        const clone = {
+            vormittag: Object.assign({}, az.vormittag),
+            nachmittag: Object.assign({}, az.nachmittag),
+            ersterTagNurNachmittag: !!az.ersterTagNurNachmittag,
+            letzterTagNurVormittag: !!az.letzterTagNurVormittag
+        };
+        // D87: tageweise abweichende Mittagspausen mitnehmen.
+        if (az.mittagspausen && typeof az.mittagspausen === 'object') {
+            clone.mittagspausen = JSON.parse(JSON.stringify(az.mittagspausen));
+        }
+        return clone;
+    };
     const DEFAULT_COLUMNS = {
         uhrzeit: true,
         title: true,
@@ -2414,8 +2421,6 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
 
             const config = this.state.config || {};
             const az = config.ankerzeiten || deriveAnkerzeiten(config);
-            const vmStart = parseTimeToMinutes(az && az.vormittag ? az.vormittag.start : '') ?? 510;
-            const nmStart = parseTimeToMinutes(az && az.nachmittag ? az.nachmittag.start : '') ?? 795;
 
             const days = {};
             seq.tage.forEach((tag, idx) => {
@@ -2425,6 +2430,15 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
                 if (!dayname) {
                     return;
                 }
+                // D87: abweichende Mittagspause dieses Tages (wie roterfadenmodel.js).
+                const lunch = az && az.mittagspausen ? az.mittagspausen[dayname] : null;
+                const hasLunch = !!lunch && parseTimeToMinutes(lunch.start) !== null
+                    && parseTimeToMinutes(lunch.end) !== null;
+                const vmStart = parseTimeToMinutes(az && az.vormittag ? az.vormittag.start : '') ?? 510;
+                const nmStart = hasLunch ? parseTimeToMinutes(lunch.end)
+                    : (parseTimeToMinutes(az && az.nachmittag ? az.nachmittag.start : '') ?? 795);
+                const vmEndCfg = hasLunch ? parseTimeToMinutes(lunch.start)
+                    : parseTimeToMinutes(az && az.vormittag ? az.vormittag.end : '');
                 const isFirst = idx === 0;
                 const isLast = idx === seq.tage.length - 1;
                 const anchorStarts = {
@@ -2439,7 +2453,6 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
                         // Einheit/der Baustein hat Vorrang - läuft der Vormittag in
                         // die Pause hinein, beginnt sie erst am Ende der Einheit
                         // (Pause verkürzt sich), statt überlagert zu werden.
-                        const vmEndCfg = parseTimeToMinutes(az && az.vormittag ? az.vormittag.end : '');
                         const pauseStart = Math.max(Number.isFinite(vmEndCfg) ? vmEndCfg : vmContentEnd, vmContentEnd);
                         const pauseEnd = anchorStarts.nachmittag;
                         if (Number.isFinite(pauseStart) && pauseEnd > pauseStart) {

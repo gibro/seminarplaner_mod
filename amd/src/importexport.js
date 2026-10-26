@@ -1073,8 +1073,6 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const auswahlen = (seq.einheitenauswahlen && typeof seq.einheitenauswahlen === 'object') ? seq.einheitenauswahlen : {};
         const methodById = new Map(methods.map((m) => [String(m.id), m]));
         const az = pdfDeriveAnkerzeiten(config);
-        const vmStart = pdfParseClock(az.vormittag.start);
-        const nmStart = pdfParseClock(az.nachmittag.start);
         const days = {};
         const tage = Array.isArray(seq.tage) ? seq.tage : [];
         tage.forEach((tag, idx) => {
@@ -1084,6 +1082,11 @@ function(Ajax, Notification, Handout, PlanMemory) {
             if (!dayname) {
                 return;
             }
+            // D87: abweichende Mittagspause dieses Tages (wie roterfadenmodel.js).
+            const lunch = az.mittagspausen && az.mittagspausen[dayname];
+            const vmStart = pdfParseClock(az.vormittag.start);
+            const nmStart = (lunch && pdfParseClock(lunch.end) !== null)
+                ? pdfParseClock(lunch.end) : pdfParseClock(az.nachmittag.start);
             const isFirst = idx === 0;
             const isLast = idx === (tage.length - 1);
             const anchorStarts = {

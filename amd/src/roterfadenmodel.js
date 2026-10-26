@@ -98,6 +98,20 @@ define([], function() {
         };
     };
 
+    // D87: Die Mittagspause darf je Wochentag abweichen. ankerzeiten.mittagspausen
+    // haelt nur die abweichenden Tage ({Dienstag: {start, end}}); sie verschieben
+    // das Ende des Vormittags und den Beginn des Nachmittags dieses einen Tages.
+    const ankerzeitenFuerTag = (az, dayname) => {
+        const lunch = az && az.mittagspausen && az.mittagspausen[dayname];
+        if (!lunch || parseClock(lunch.start) === null || parseClock(lunch.end) === null) {
+            return az;
+        }
+        return Object.assign({}, az, {
+            vormittag: Object.assign({}, az.vormittag, {end: lunch.start}),
+            nachmittag: Object.assign({}, az.nachmittag, {start: lunch.end}),
+        });
+    };
+
     // Rich-Text-Unterthemen (Legacy-Bausteine) in einzelne Themen-Zeilen zerlegen —
     // bewusst NICHT an Kommas trennen: ein Unterthema pro Zeile.
     const splitTopics = (html) => {
@@ -126,10 +140,6 @@ define([], function() {
             .map((card) => [String(card.id), card]));
 
         const az = deriveAnkerzeiten(config);
-        const anchorFrame = {
-            vormittag: {start: parseClock(az.vormittag.start), end: parseClock(az.vormittag.end)},
-            nachmittag: {start: parseClock(az.nachmittag.start), end: parseClock(az.nachmittag.end)},
-        };
         const tage = Array.isArray(seq.tage) ? seq.tage : [];
         const seenBausteine = {};
         const days = [];
@@ -142,6 +152,11 @@ define([], function() {
             if (!dayname) {
                 return;
             }
+            const dayaz = ankerzeitenFuerTag(az, dayname);
+            const anchorFrame = {
+                vormittag: {start: parseClock(dayaz.vormittag.start), end: parseClock(dayaz.vormittag.end)},
+                nachmittag: {start: parseClock(dayaz.nachmittag.start), end: parseClock(dayaz.nachmittag.end)},
+            };
             // D45: An Anreise-/Abreisetagen entfaellt ein Anker vollstaendig.
             const off = {
                 vormittag: idx === 0 && !!az.ersterTagNurNachmittag,
@@ -338,6 +353,7 @@ define([], function() {
         parseClock: parseClock,
         phaseKey: phaseKey,
         deriveAnkerzeiten: deriveAnkerzeiten,
+        ankerzeitenFuerTag: ankerzeitenFuerTag,
 
         /**
          * Tage/Anker/Bloecke aus einem veroeffentlichten Roter-Faden-Snapshot ableiten.

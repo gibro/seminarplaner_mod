@@ -73,12 +73,32 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         materials: true,
         sonstiges: false
     };
-    const cloneAnkerzeiten = (az) => ({
-        vormittag: Object.assign({}, az.vormittag),
-        nachmittag: Object.assign({}, az.nachmittag),
-        ersterTagNurNachmittag: !!az.ersterTagNurNachmittag,
-        letzterTagNurVormittag: !!az.letzterTagNurVormittag
-    });
+    const cloneAnkerzeiten = (az) => {
+        const clone = {
+            vormittag: Object.assign({}, az.vormittag),
+            nachmittag: Object.assign({}, az.nachmittag),
+            ersterTagNurNachmittag: !!az.ersterTagNurNachmittag,
+            letzterTagNurVormittag: !!az.letzterTagNurVormittag
+        };
+        // D87: tageweise abweichende Mittagspausen mitnehmen.
+        if (az.mittagspausen && typeof az.mittagspausen === 'object') {
+            clone.mittagspausen = JSON.parse(JSON.stringify(az.mittagspausen));
+        }
+        return clone;
+    };
+    // D87: Die Mittagspause darf je Wochentag abweichen; ankerzeiten.mittagspausen
+    // haelt nur die abweichenden Tage ({Dienstag: {start, end}}) und verschiebt
+    // Vormittagsende und Nachmittagsbeginn dieses Tages (wie roterfadenmodel.js).
+    const ankerzeitenFuerTag = (az, dayname) => {
+        const lunch = az && az.mittagspausen && az.mittagspausen[dayname];
+        if (!lunch || parseTimeToMinutes(lunch.start) === null || parseTimeToMinutes(lunch.end) === null) {
+            return az;
+        }
+        return Object.assign({}, az, {
+            vormittag: Object.assign({}, az.vormittag, {end: lunch.start}),
+            nachmittag: Object.assign({}, az.nachmittag, {start: lunch.end}),
+        });
+    };
     const validAnkerzeiten = (az) => !!(az && az.vormittag && az.nachmittag
         && parseTimeToMinutes(az.vormittag.start) !== null && parseTimeToMinutes(az.vormittag.end) !== null
         && parseTimeToMinutes(az.nachmittag.start) !== null && parseTimeToMinutes(az.nachmittag.end) !== null);
@@ -121,13 +141,24 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
 
     // Legacy fields stay as derived values so the read-only overview and
     // old clients keep rendering (D34).
-    const legacyFieldsFromAnkerzeiten = (az) => {
-        const vmEnd = parseTimeToMinutes(az.vormittag.end);
-        const nmStart = parseTimeToMinutes(az.nachmittag.start);
-        const gap = (vmEnd !== null && nmStart !== null) ? nmStart - vmEnd : 0;
+    // D87: abweichende Mittagspausen werden zu eigenen Pausen nur fuer ihren Tag.
+    const legacyFieldsFromAnkerzeiten = (az, days) => {
+        const overrides = az.mittagspausen || {};
+        const breaks = [];
+        const addBreak = (start, end, daylist) => {
+            const startmin = parseTimeToMinutes(start);
+            const endmin = parseTimeToMinutes(end);
+            if (daylist.length && startmin !== null && endmin !== null && endmin > startmin) {
+                breaks.push({days: daylist, start, duration: endmin - startmin});
+            }
+        };
+        const special = Object.keys(overrides);
+        const regular = special.length ? (days || []).filter((day) => !overrides[day]) : ['all'];
+        addBreak(az.vormittag.end, az.nachmittag.start, regular);
+        special.forEach((day) => addBreak(overrides[day].start, overrides[day].end, [day]));
         return {
             timeRange: {start: az.vormittag.start, end: az.nachmittag.end},
-            breaks: gap > 0 ? [{days: ['all'], start: az.vormittag.end, duration: gap}] : []
+            breaks
         };
     };
 
@@ -1007,7 +1038,26 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }
             if (form) {
                 form.querySelectorAll('input[name="days"]').forEach((cb) => {
-                    cb.addEventListener('change', () => this.syncFirstDayOptions());
+                    cb.addEventListener('change', () => {
+                        this.syncFirstDayOptions();
+                        this.renderLunchDays();
+                    });
+                });
+                const firstday = bySel('#sp-config-first-day');
+                if (firstday) {
+                    firstday.addEventListener('change', () => this.renderLunchDays());
+                }
+                const lunchtoggle = bySel('#sp-config-lunch-perday');
+                if (lunchtoggle) {
+                    lunchtoggle.addEventListener('change', () => this.renderLunchDays());
+                }
+                // Tageszeilen, die niemand angefasst hat, folgen der
+                // allgemeinen Mittagspause.
+                ['#sp-config-vm-end', '#sp-config-nm-start'].forEach((sel) => {
+                    const input = bySel(sel);
+                    if (input) {
+                        input.addEventListener('change', () => this.renderLunchDays());
+                    }
                 });
                 form.addEventListener('submit', (event) => {
                     event.preventDefault();
@@ -1088,6 +1138,60 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             form.querySelector('#sp-config-nm-end').value = az.nachmittag.end;
             form.querySelector('#sp-config-first-arrival').checked = !!az.ersterTagNurNachmittag;
             form.querySelector('#sp-config-last-departure').checked = !!az.letzterTagNurVormittag;
+            const overrides = (az.mittagspausen && typeof az.mittagspausen === 'object') ? az.mittagspausen : {};
+            const lunchtoggle = form.querySelector('#sp-config-lunch-perday');
+            if (lunchtoggle) {
+                lunchtoggle.checked = Object.keys(overrides).length > 0;
+            }
+            this.renderLunchDays(overrides);
+        }
+
+        // D87: je ausgewaehltem Tag eine Zeile fuer die Mittagspause. Werte,
+        // die schon in der Maske stehen, bleiben beim Neuzeichnen erhalten;
+        // unberuehrte Zeilen zeigen die allgemeine Mittagspause.
+        renderLunchDays(overrides) {
+            const form = bySel('#sq-setup-form');
+            const box = bySel('#sp-config-lunch-days');
+            const toggle = bySel('#sp-config-lunch-perday');
+            if (!form || !box || !toggle) {
+                return;
+            }
+            const current = {};
+            if (!overrides) {
+                box.querySelectorAll('.sp-lunch-day[data-custom="1"]').forEach((row) => {
+                    current[row.dataset.day] = {
+                        start: row.querySelector('[data-lunch="start"]').value,
+                        end: row.querySelector('[data-lunch="end"]').value,
+                    };
+                });
+            }
+            const custom = overrides || current;
+            const selected = Array.from(form.querySelectorAll('input[name="days"]:checked')).map((el) => el.value);
+            const firstdayel = bySel('#sp-config-first-day');
+            const days = orderDaysFromStart(selected, (firstdayel && firstdayel.value) || selected[0] || 'Montag');
+            const defstart = form.querySelector('#sp-config-vm-end').value;
+            const defend = form.querySelector('#sp-config-nm-start').value;
+            box.innerHTML = days.map((day) => {
+                const own = custom[day];
+                const start = own ? own.start : defstart;
+                const end = own ? own.end : defend;
+                return `<div class="sp-time-range sp-anchor-times sp-lunch-day" data-day="${escapeHtml(day)}"`
+                    + ` data-custom="${own ? '1' : '0'}">`
+                    + `<span class="sp-anchor-label">${escapeHtml(day)}</span>`
+                    + '<label class="sp-modal__field"><span class="sp-modal__label">von</span>'
+                    + `<input type="time" class="kg-input" data-lunch="start" value="${escapeHtml(start)}"></label>`
+                    + '<label class="sp-modal__field"><span class="sp-modal__label">bis</span>'
+                    + `<input type="time" class="kg-input" data-lunch="end" value="${escapeHtml(end)}"></label>`
+                    + '</div>';
+            }).join('');
+            box.querySelectorAll('.sp-lunch-day').forEach((row) => {
+                row.querySelectorAll('input').forEach((input) => {
+                    input.addEventListener('change', () => {
+                        row.dataset.custom = '1';
+                    });
+                });
+            });
+            box.classList.toggle('kg-hidden', !toggle.checked || !days.length);
         }
 
         applyPresetToForm(key) {
@@ -1150,9 +1254,41 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 this.setStatus('Der Nachmittag darf nicht vor dem Ende des Vormittags beginnen.', true);
                 return null;
             }
+            // D87: nur Tage speichern, deren Mittagspause wirklich abweicht.
+            const toggle = form.querySelector('#sp-config-lunch-perday');
+            if (toggle && toggle.checked) {
+                const mittagspausen = {};
+                let lunchError = '';
+                form.querySelectorAll('#sp-config-lunch-days .sp-lunch-day').forEach((row) => {
+                    const start = row.querySelector('[data-lunch="start"]').value;
+                    const end = row.querySelector('[data-lunch="end"]').value;
+                    const startmin = parseTimeToMinutes(start);
+                    const endmin = parseTimeToMinutes(end);
+                    if (startmin === null || endmin === null) {
+                        lunchError = lunchError || `Mittagspause am ${row.dataset.day}: bitte beide Zeiten angeben.`;
+                        return;
+                    }
+                    if (endmin < startmin || startmin <= vmstart || endmin >= nmend) {
+                        lunchError = lunchError || `Mittagspause am ${row.dataset.day} muss zwischen `
+                            + `${ankerzeiten.vormittag.start} und ${ankerzeiten.nachmittag.end} liegen `
+                            + 'und darf nicht vor ihrem Beginn enden.';
+                        return;
+                    }
+                    if (startmin !== vmend || endmin !== nmstart) {
+                        mittagspausen[row.dataset.day] = {start, end};
+                    }
+                });
+                if (lunchError) {
+                    this.setStatus(lunchError, true);
+                    return null;
+                }
+                if (Object.keys(mittagspausen).length) {
+                    ankerzeiten.mittagspausen = mittagspausen;
+                }
+            }
             const presetel = bySel('#sp-config-preset');
             const previous = (this.setupMode === 'edit' && this.state && this.state.config) ? this.state.config : {};
-            const legacyfields = legacyFieldsFromAnkerzeiten(ankerzeiten);
+            const legacyfields = legacyFieldsFromAnkerzeiten(ankerzeiten, days);
             return {
                 preset: (presetel && presetel.value) || 'custom',
                 days,
@@ -1197,9 +1333,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
 
         createPlan(name, config) {
             const plandays = {};
-            const middaybreak = (config.breaks || [])[0] || null;
             config.days.forEach((day) => {
                 plandays[day] = [];
+                const middaybreak = (config.breaks || []).find((brk) => Array.isArray(brk.days)
+                    && (brk.days.includes('all') || brk.days.includes(day))) || null;
                 if (middaybreak) {
                     const startmin = parseTimeToMinutes(middaybreak.start);
                     plandays[day].push({
@@ -2597,7 +2734,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const config = (this.state && this.state.config) || {};
             const tage = (this.sequenz && this.sequenz.tage) || [];
             const day = tage[dayIdx] || {};
-            const az = config.ankerzeiten;
+            const daynames = Array.isArray(config.days) ? config.days : [];
+            const dayname = (day.bezeichnung && daynames.includes(day.bezeichnung))
+                ? day.bezeichnung : daynames[dayIdx];
+            const az = ankerzeitenFuerTag(config.ankerzeiten, dayname);
             const valid = az && az.vormittag && az.nachmittag
                 && parseTimeToMinutes(az.vormittag.start) !== null && parseTimeToMinutes(az.vormittag.end) !== null
                 && parseTimeToMinutes(az.nachmittag.start) !== null && parseTimeToMinutes(az.nachmittag.end) !== null;
@@ -6679,6 +6819,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }
             if (az.letzterTagNurVormittag) {
                 parts.push('letzter Seminartag endet nach dem Vormittag');
+            }
+            const lunchdays = Object.keys(az.mittagspausen || {});
+            if (lunchdays.length) {
+                parts.push(`abweichende Mittagspause: ${lunchdays.map((day) =>
+                    `${day} ${az.mittagspausen[day].start}–${az.mittagspausen[day].end}`).join(', ')}`);
             }
             el.textContent = parts.join(' · ');
         }

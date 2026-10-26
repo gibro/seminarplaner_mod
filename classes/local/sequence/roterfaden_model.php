@@ -165,6 +165,30 @@ class roterfaden_model {
     }
 
     /**
+     * Ankerzeiten eines einzelnen Tages (D87).
+     *
+     * ankerzeiten.mittagspausen haelt nur die Wochentage, deren Mittagspause
+     * abweicht ({Dienstag: {start, end}}); sie verschieben das Ende des
+     * Vormittags und den Beginn des Nachmittags dieses einen Tages.
+     *
+     * @param array $az Ankerzeiten aus derive_ankerzeiten().
+     * @param string $dayname Wochentag, z. B. "Dienstag".
+     * @return array Ankerzeiten mit den Werten dieses Tages.
+     */
+    public static function ankerzeiten_fuer_tag(array $az, string $dayname): array {
+        $lunch = $az['mittagspausen'][$dayname] ?? null;
+        if (
+            !is_array($lunch) || self::parse_clock($lunch['start'] ?? null) === null
+                || self::parse_clock($lunch['end'] ?? null) === null
+        ) {
+            return $az;
+        }
+        $az['vormittag']['end'] = $lunch['start'];
+        $az['nachmittag']['start'] = $lunch['end'];
+        return $az;
+    }
+
+    /**
      * Tage/Anker/Bloecke aus einem veroeffentlichten Snapshot ableiten.
      *
      * @param array $state Entschluesselter Snapshot (statejson).
@@ -199,16 +223,6 @@ class roterfaden_model {
         $configdays = is_array($config['days'] ?? null) ? array_values($config['days']) : [];
 
         $az = self::derive_ankerzeiten($config);
-        $anchorframe = [
-            'vormittag' => [
-                'start' => self::parse_clock($az['vormittag']['start'] ?? null),
-                'end' => self::parse_clock($az['vormittag']['end'] ?? null),
-            ],
-            'nachmittag' => [
-                'start' => self::parse_clock($az['nachmittag']['start'] ?? null),
-                'end' => self::parse_clock($az['nachmittag']['end'] ?? null),
-            ],
-        ];
         $tage = array_values((array)($seq['tage'] ?? []));
         $tagecount = count($tage);
         $seenbausteine = [];
@@ -221,6 +235,17 @@ class roterfaden_model {
             if ($dayname === '') {
                 continue;
             }
+            $dayaz = self::ankerzeiten_fuer_tag($az, $dayname);
+            $anchorframe = [
+                'vormittag' => [
+                    'start' => self::parse_clock($dayaz['vormittag']['start'] ?? null),
+                    'end' => self::parse_clock($dayaz['vormittag']['end'] ?? null),
+                ],
+                'nachmittag' => [
+                    'start' => self::parse_clock($dayaz['nachmittag']['start'] ?? null),
+                    'end' => self::parse_clock($dayaz['nachmittag']['end'] ?? null),
+                ],
+            ];
             // D45: An Anreise-/Abreisetagen entfaellt ein Anker vollstaendig.
             $off = [
                 'vormittag' => $idx === 0 && !empty($az['ersterTagNurNachmittag']),
