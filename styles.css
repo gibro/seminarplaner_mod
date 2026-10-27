@@ -745,25 +745,54 @@ select.kg-input:-moz-focusring {
   margin: 0 0 15px;
   padding: 0;
   border: 0;
+  /* Die Zeilen richten sich nach der Breite der Karte, nicht des Fensters -
+     die Karte steht je nach Layout neben einer zweiten oder allein. */
+  container: kg-ie-orientation / inline-size;
 }
+/* Breit: Name | Regler | Erstellen in einer Zeile. Schmal (siehe unten):
+   Name ueber dem Regler, der Knopf rechts daneben ueber beide Zeilen -
+   so umbricht nichts mehr unkontrolliert. */
 .kg-ie-orientation__row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: "label switch create";
   align-items: center;
-  gap: 8px 18px;
-  padding: 6px 0;
+  gap: 6px 18px;
+  padding: 8px 0;
   border-bottom: 1px solid var(--ig-lightgray, #E1E1E1);
 }
 .kg-ie-orientation__row:last-of-type {
   border-bottom: 0;
 }
-/* Erstellen-Knopf rechts aussen in der Zeile. */
+@container kg-ie-orientation (max-width: 560px) {
+  .kg-ie-orientation__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "label create"
+      "switch create";
+    column-gap: 12px;
+  }
+}
+/* Handybreite: Regler und Knopf passen nicht mehr nebeneinander. */
+@container kg-ie-orientation (max-width: 380px) {
+  .kg-ie-orientation__row {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "label"
+      "switch"
+      "create";
+  }
+  .kg-ie-orientation__create.kg-btn {
+    justify-self: end;
+  }
+}
 .kg-ie-orientation__create.kg-btn {
-  margin: 0 0 0 auto;
-  min-width: 120px;
+  grid-area: create;
+  margin: 0;
+  white-space: nowrap;
 }
 .kg-ie-orientation__label {
-  flex: 0 0 190px;
+  grid-area: label;
   font-size: 13px;
   color: var(--ig-anthracite, #3C3C3C);
 }
@@ -777,6 +806,8 @@ select.kg-input:-moz-focusring {
    deshalb bleibt die Bahn in beiden Stellungen anthrazit; die gewaehlte Seite
    ist am fetten, dunklen Wort zu erkennen. */
 .kg-ie-orientation__switch {
+  grid-area: switch;
+  justify-self: start;
   display: inline-flex;
   align-items: center;
   gap: 8px;
