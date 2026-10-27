@@ -189,9 +189,14 @@ define([], function() {
                 let clock = Number.isFinite(frame.start) ? frame.start : 0;
                 const blocks = [];
                 groups.forEach((group) => {
+                    // D88: eine eingeschlossene Pause verlaengert die Einheit; die
+                    // Gruppe legt sie selbst, sie bleibt deshalb ein Vermerk.
+                    const includedPause = (data) => (data.typ === 'einheit')
+                        ? Math.max(0, Number(data.inklpause) || 0) : 0;
+                    const grouppause = group.items.reduce((sum, entry) => sum + includedPause(entry.data), 0);
                     const groupminutes = group.items.reduce((sum, entry) => {
                         return sum + Math.max(0, Number(entry.data.dauer) || 0);
-                    }, 0);
+                    }, 0) + grouppause;
                     // Pausen sind keine Programmpunkte — sie ruecken die Uhr weiter,
                     // erscheinen aber nicht als Block.
                     if (group.items[0].data.typ === 'pause') {
@@ -215,7 +220,8 @@ define([], function() {
                         return {
                             title: title,
                             phase: phaseKey(card ? card.seminarphase : ''),
-                            minutes: Math.max(0, Number(placement.dauer) || 0),
+                            minutes: Math.max(0, Number(placement.dauer) || 0) + includedPause(placement),
+                            pause: includedPause(placement),
                         };
                     });
 
@@ -231,6 +237,7 @@ define([], function() {
                         continuation: continuation,
                         startMin: clock,
                         minutes: groupminutes,
+                        pause: grouppause,
                         phase: themen.find((theme) => theme.phase) ? themen[0].phase : '',
                         themen: themen,
                     });

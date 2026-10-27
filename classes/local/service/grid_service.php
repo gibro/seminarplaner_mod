@@ -883,7 +883,8 @@ class grid_service {
                     if (!is_array($p)) {
                         continue;
                     }
-                    $duration = max(0, (int)($p['dauer'] ?? 0));
+                    // D88: eine eingeschlossene Pause verlaengert die Einheit.
+                    $duration = max(0, (int)($p['dauer'] ?? 0)) + sequence_state::included_pause($p);
                     if (($p['typ'] ?? '') === 'pause') {
                         $clock += $duration;
                         $currentbaustein = null;

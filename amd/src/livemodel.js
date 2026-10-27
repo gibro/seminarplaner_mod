@@ -228,8 +228,11 @@ define(['mod_seminarplaner/roterfadenmodel'], function(Model) {
                     if (!placement) {
                         return;
                     }
-                    const minutes = Math.max(0, Number(placement.dauer) || 0);
                     const ispause = placement.typ === 'pause';
+                    // D88: eine eingeschlossene Pause verlaengert die Einheit;
+                    // wann sie faellt, entscheidet die Gruppe.
+                    const inklpause = ispause ? 0 : Math.max(0, Number(placement.inklpause) || 0);
+                    const minutes = Math.max(0, Number(placement.dauer) || 0) + inklpause;
                     const baustein = (!ispause && placement.bausteinid)
                         ? (bausteine[placement.bausteinid] || null) : null;
                     const auswahl = placement.einheitenauswahl
@@ -265,6 +268,7 @@ define(['mod_seminarplaner/roterfadenmodel'], function(Model) {
                         startMin: clock,
                         endMin: clock + minutes,
                         minutes: minutes,
+                        inklpause: inklpause,
                         cardId: card ? String(card.id) : '',
                         sections: ispause ? [] : splitAblauf(card ? card.ablauf : ''),
                         checklist: ispause ? {items: [], html: ''} : checklist(card ? card.materialtechnik : ''),

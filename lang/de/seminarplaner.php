@@ -118,6 +118,7 @@ $string['mobile_days'] = '{$a} Tage';
 $string['mobile_item'] = '1 Programmpunkt';
 $string['mobile_items'] = '{$a} Programmpunkte';
 $string['mobile_continuation'] = 'Fortsetzung';
+$string['mobile_includedpause'] = 'inkl. {$a} Min. Pause (Lage frei)';
 $string['phase_orientierung'] = 'Orientierung';
 $string['phase_warmup'] = 'Warmup/Aktivierung';
 $string['phase_erfahrung'] = 'Erfahrungserhebung';

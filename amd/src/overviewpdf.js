@@ -185,6 +185,10 @@ define([], function() {
         }
 
         const extras = [timeLabel];
+        // D88: die Lage der Pause bestimmt die Gruppe - nur ein Vermerk.
+        if (item.inklpause) {
+            extras.push(`inkl. ${item.inklpause} Min. Pause (Lage frei)`);
+        }
         if (item.referenten && item.referenten.length) {
             extras.push(item.referenten.join(', '));
         }
@@ -224,7 +228,7 @@ define([], function() {
          *
          * @param {Object} data
          * @param {String} data.title Titel des Seminarplans (Überschrift).
-         * @param {Array} data.days [{name, items: [{kind, title, startMin, endMin, phase, reserved, color, referenten}]}]
+         * @param {Array} data.days [{name, items: [{kind, title, startMin, endMin, phase, reserved, color, referenten, inklpause}]}]
          * @param {Number} data.startMin Beginn laut Einrichtung (Minuten).
          * @param {Number} data.endMin Ende laut Einrichtung (Minuten).
          */

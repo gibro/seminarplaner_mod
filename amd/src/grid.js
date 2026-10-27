@@ -1153,6 +1153,7 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
                         reserved: !!it.sqReserved,
                         color,
                         referenten: (it.sqReferenten || []).map((person) => person.fullname),
+                        inklpause: Number(it.sqInklPause) || 0,
                     };
                 }),
             }));
@@ -2474,7 +2475,9 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
                         if (!p) {
                             return;
                         }
-                        const duration = Math.max(0, Number(p.dauer) || 0);
+                        // D88: eine eingeschlossene Pause verlaengert die Einheit.
+                        const inklpause = p.typ === 'einheit' ? Math.max(0, Number(p.inklpause) || 0) : 0;
+                        const duration = Math.max(0, Number(p.dauer) || 0) + inklpause;
                         const baustein = p.bausteinid ? bausteine[p.bausteinid] : null;
                         let title = String(p.titel || '').trim();
                         let reserved = false;
@@ -2499,6 +2502,9 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
                             .filter((person) => !!person);
                         if (referenten.length) {
                             item.sqReferenten = referenten;
+                        }
+                        if (inklpause) {
+                            item.sqInklPause = inklpause;
                         }
                         // Phasenfarbe (Handoff-Palette): aktive Einheiten-Karte
                         // -> deren Seminarphase; sonst Phase des Alt-Eintrags.
@@ -2851,6 +2857,8 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
                             ${unitLabelHtml}
                             <div class="sp-title" data-full-title="${escapeHtml(titleWithTime)}">${escapeHtml(titleWithTime)}</div>
                             ${isDayView ? '' : `<div class="sp-meta">${escapeHtml(timeLabel)}</div>`}
+                            ${it.sqInklPause ? `<div class="sp-meta sp-meta--inklpause">`
+                                + `inkl. ${Number(it.sqInklPause)} Min. Pause (Lage frei)</div>` : ''}
                             ${unitmethodshtml}
                         </div>
                         ${avatars}

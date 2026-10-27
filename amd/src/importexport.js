@@ -1102,7 +1102,9 @@ function(Ajax, Notification, Handout, PlanMemory) {
                     if (!p) {
                         return;
                     }
-                    const duration = Math.max(0, Number(p.dauer) || 0);
+                    // D88: eine eingeschlossene Pause verlaengert die Einheit.
+                    const inklpause = p.typ === 'einheit' ? Math.max(0, Number(p.inklpause) || 0) : 0;
+                    const duration = Math.max(0, Number(p.dauer) || 0) + inklpause;
                     if (p.typ === 'pause') {
                         items.push({
                             kind: 'break',
@@ -1130,7 +1132,8 @@ function(Ajax, Notification, Handout, PlanMemory) {
                             title: String(p.titel || '').trim() || normalized.title,
                             startMin: clock,
                             endMin: clock + duration,
-                            referenten
+                            referenten,
+                            inklpause
                         }));
                     } else {
                         const baustein = p.bausteinid ? bausteine[p.bausteinid] : null;
@@ -1138,7 +1141,7 @@ function(Ajax, Notification, Handout, PlanMemory) {
                             || (baustein && baustein.titel ? String(baustein.titel) : 'Seminareinheit');
                         items.push({
                             kind: 'method', title, phase: '', startMin: clock, endMin: clock + duration,
-                            details: {}, referenten
+                            details: {}, referenten, inklpause
                         });
                     }
                     clock += duration;
@@ -1851,8 +1854,11 @@ function(Ajax, Notification, Handout, PlanMemory) {
             }
         }
         switch (key) {
-            case 'uhrzeit':
-                return `${formatTimeForPdf(item.startMin)} – ${formatTimeForPdf(item.endMin)}`;
+            case 'uhrzeit': {
+                const span = `${formatTimeForPdf(item.startMin)} – ${formatTimeForPdf(item.endMin)}`;
+                // D88: Lage der Pause bestimmt die Gruppe - nur ein Vermerk.
+                return item.inklpause ? `${span}\ninkl. ${item.inklpause} Min. Pause (Lage frei)` : span;
+            }
             case 'titel':
                 return escapeTextForPdf(item.title || '');
             case 'referent':
@@ -2073,7 +2079,9 @@ function(Ajax, Notification, Handout, PlanMemory) {
 
         doc.setFontSize(10);
         doc.setFont(undefined, 'normal');
-        doc.text(`${formatTimeForPdf(item.startMin)}–${formatTimeForPdf(item.endMin)} · ${duration} Min`, 14, y);
+        // D88: eine eingeschlossene Pause steckt in der Spanne, ihre Lage ist frei.
+        const pausenote = item.inklpause ? ` · inkl. ${item.inklpause} Min. Pause (Lage frei)` : '';
+        doc.text(`${formatTimeForPdf(item.startMin)}–${formatTimeForPdf(item.endMin)} · ${duration} Min${pausenote}`, 14, y);
         y += 8;
 
         const sections = [

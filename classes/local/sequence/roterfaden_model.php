@@ -283,9 +283,14 @@ class roterfaden_model {
                 $clock = $frame['start'] === null ? 0 : $frame['start'];
                 $blocks = [];
                 foreach ($groups as $group) {
+                    // D88: eine eingeschlossene Pause verlaengert die Einheit; die
+                    // Gruppe legt sie selbst, sie bleibt deshalb ein Vermerk.
                     $groupminutes = 0;
+                    $grouppause = 0;
                     foreach ($group['items'] as $entry) {
-                        $groupminutes += max(0, (int)($entry['data']['dauer'] ?? 0));
+                        $pause = sequence_state::included_pause($entry['data']);
+                        $groupminutes += max(0, (int)($entry['data']['dauer'] ?? 0)) + $pause;
+                        $grouppause += $pause;
                     }
                     // Pausen sind keine Programmpunkte — sie ruecken die Uhr weiter,
                     // erscheinen aber nicht als Block.
@@ -311,10 +316,12 @@ class roterfaden_model {
                         if ($title === '') {
                             $title = trim((string)(is_array($baustein) ? ($baustein['titel'] ?? '') : ''));
                         }
+                        $pause = sequence_state::included_pause($placement);
                         $themen[] = [
                             'title' => $title !== '' ? $title : 'Seminareinheit',
                             'phase' => self::phase_key(is_array($card) ? ($card['seminarphase'] ?? '') : ''),
-                            'minutes' => max(0, (int)($placement['dauer'] ?? 0)),
+                            'minutes' => max(0, (int)($placement['dauer'] ?? 0)) + $pause,
+                            'pause' => $pause,
                         ];
                     }
 
@@ -340,6 +347,7 @@ class roterfaden_model {
                         'continuation' => $continuation,
                         'startMin' => $clock,
                         'minutes' => $groupminutes,
+                        'pause' => $grouppause,
                         'phase' => $hasphase ? $themen[0]['phase'] : '',
                         'themen' => $themen,
                     ];

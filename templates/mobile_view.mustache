@@ -125,6 +125,7 @@
                                 <div class="sp-block__meta">
                                     <span class="sp-block__time">{{starttime}}</span>
                                     <span class="sp-block__dur">{{duration}}</span>
+                                    {{#haspause}}<span class="sp-block__pause">{{pauselabel}}</span>{{/haspause}}
                                     {{#hasphase}}<span class="sp-badge">{{phaselabel}}</span>{{/hasphase}}
                                     {{#continuation}}<span class="sp-cont">{{continuationlabel}}</span>{{/continuation}}
                                 </div>
