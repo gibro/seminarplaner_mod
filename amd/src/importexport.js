@@ -1669,14 +1669,14 @@ function(Ajax, Notification, Handout, PlanMemory) {
             }
         });
         const orientation = pdfColumnsSetting.orientation === 'portrait' ? 'portrait' : 'landscape';
-        document.querySelectorAll('input[name="kg-pdf-orientation"]').forEach((radio) => {
-            radio.checked = radio.value === orientation;
+        document.querySelectorAll('input[name="kg-pdf-orientation"]').forEach((toggle) => {
+            toggle.checked = orientation === 'landscape';
         });
         const orientations = pdfColumnsSetting.orientations || {};
         PDF_ORIENTATION_EXPORTS.forEach((kind) => {
             const value = orientations[kind] === 'landscape' ? 'landscape' : 'portrait';
-            document.querySelectorAll(`input[name="kg-pdf-orientation-${kind}"]`).forEach((radio) => {
-                radio.checked = radio.value === value;
+            document.querySelectorAll(`input[name="kg-pdf-orientation-${kind}"]`).forEach((toggle) => {
+                toggle.checked = value === 'landscape';
             });
         });
         const useAll = !!pdfColumnsSetting.all;
@@ -1717,11 +1717,12 @@ function(Ajax, Notification, Handout, PlanMemory) {
     // Materialliste und Handout im Hochformat (so sahen sie vor der Wahl aus).
     const getPdfOrientation = (kind = 'zim') => {
         const name = kind === 'zim' ? 'kg-pdf-orientation' : `kg-pdf-orientation-${kind}`;
-        const checked = document.querySelector(`input[name="${name}"]:checked`);
-        if (!checked) {
+        // Schieberegler: eingeschaltet = Querformat.
+        const toggle = document.querySelector(`input[name="${name}"]`);
+        if (!toggle) {
             return kind === 'zim' ? 'landscape' : 'portrait';
         }
-        return checked.value === 'portrait' ? 'portrait' : 'landscape';
+        return toggle.checked ? 'landscape' : 'portrait';
     };
 
     const savePdfColumns = (cmid) => {
@@ -2825,8 +2826,8 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const globalSetApplyBtn = bySel('#kg-global-set-apply');
         bindPdfColumnsDropdown(cmid);
         bindPdfInfo(cmid);
-        document.querySelectorAll('input[name^="kg-pdf-orientation"]').forEach((radio) => {
-            radio.addEventListener('change', () => savePdfColumns(cmid));
+        document.querySelectorAll('input[name^="kg-pdf-orientation"]').forEach((toggle) => {
+            toggle.addEventListener('change', () => savePdfColumns(cmid));
         });
 
         if (parsebtn && fileinput) {

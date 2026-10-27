@@ -342,12 +342,18 @@ foreach (
         'kg-pdf-orientation-handout' => ['Handout für Teilnehmende', 'portrait'],
     ] as $name => [$exportlabel, $default]
 ) {
+    // Schieberegler statt zweier Optionspunkte: links Hochformat, rechts
+    // Querformat; eingeschaltet heisst Querformat.
     echo '<div class="kg-ie-orientation__row">';
-    echo '<span class="kg-ie-orientation__label">' . s($exportlabel) . '</span>';
-    foreach (['landscape' => 'Querformat', 'portrait' => 'Hochformat'] as $value => $label) {
-        echo '<label class="kg-ie-orientation__option"><input type="radio" name="' . s($name) . '" value="'
-            . s($value) . '"' . ($value === $default ? ' checked' : '') . '><span>' . s($label) . '</span></label>';
-    }
+    echo '<span class="kg-ie-orientation__label" id="' . s($name) . '-label">' . s($exportlabel) . '</span>';
+    echo '<label class="kg-ie-orientation__switch">'
+        . '<span class="kg-ie-orientation__side kg-ie-orientation__side--portrait">Hochformat</span>'
+        . '<input type="checkbox" role="switch" name="' . s($name) . '" value="landscape"'
+        . ' aria-labelledby="' . s($name) . '-label" aria-describedby="' . s($name) . '-state"'
+        . ($default === 'landscape' ? ' checked' : '') . '>'
+        . '<span class="kg-ie-orientation__side kg-ie-orientation__side--landscape">Querformat</span>'
+        . '<span class="visually-hidden" id="' . s($name) . '-state">Eingeschaltet: Querformat, ausgeschaltet: Hochformat</span>'
+        . '</label>';
     echo '</div>';
 }
 echo '</fieldset>';
