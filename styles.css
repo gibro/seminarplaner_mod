@@ -750,7 +750,17 @@ select.kg-input:-moz-focusring {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 18px;
+  gap: 8px 18px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--ig-lightgray, #E1E1E1);
+}
+.kg-ie-orientation__row:last-of-type {
+  border-bottom: 0;
+}
+/* Erstellen-Knopf rechts aussen in der Zeile. */
+.kg-ie-orientation__create.kg-btn {
+  margin: 0 0 0 auto;
+  min-width: 120px;
 }
 .kg-ie-orientation__label {
   flex: 0 0 190px;
@@ -815,20 +825,6 @@ select.kg-input:-moz-focusring {
   outline-offset: 2px;
 }
 
-.kg-ie-pdfactions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.kg-ie-pdfactions .kg-btn {
-  flex: 1;
-  min-width: 150px;
-  margin: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
 
 .kg-library-layout {
   display: grid;

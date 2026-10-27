@@ -330,17 +330,21 @@ foreach (
 echo '</div></div></div>';
 echo '</div>'; // Ende .field-card.
 
-// Papierformat je PDF-Export; wird mit der Spaltenwahl pro Aktivität gespeichert.
-// ZIM-Papier startet im Querformat, die übrigen Exporte im Hochformat.
+// Eine Zeile je PDF-Ausgabe: Name, Papierformat, Erstellen. Das Papierformat
+// wird mit der Spaltenwahl pro Aktivität gespeichert; ZIM-Papier startet im
+// Querformat, die übrigen Exporte im Hochformat. Der Knopf heisst nur
+// „Erstellen" - was erstellt wird, steht vorn in der Zeile (fuer
+// Screenreader traegt er den vollen Namen).
 echo '<fieldset class="kg-ie-orientation">';
-echo '<legend class="kg-ie-fieldlabel">Papierformat</legend>';
+echo '<legend class="kg-ie-fieldlabel">Ausgabe und Papierformat</legend>';
 foreach (
     [
-        'kg-pdf-orientation' => ['ZIM-Papier', 'landscape'],
-        'kg-pdf-orientation-flow' => ['Konzeptsammlung', 'portrait'],
-        'kg-pdf-orientation-materials' => ['Materialliste', 'portrait'],
-        'kg-pdf-orientation-handout' => ['Handout für Teilnehmende', 'portrait'],
-    ] as $name => [$exportlabel, $default]
+        // D52: Materialliste; D64: Handout (PDF des veröffentlichten Roten Fadens).
+        'kg-pdf-orientation' => ['ZIM-Papier', 'landscape', 'kg-pdf-zim'],
+        'kg-pdf-orientation-flow' => ['Konzeptsammlung', 'portrait', 'kg-pdf-flow'],
+        'kg-pdf-orientation-materials' => ['Materialliste', 'portrait', 'kg-pdf-materials'],
+        'kg-pdf-orientation-handout' => ['Handout für Teilnehmende', 'portrait', 'kg-pdf-handout'],
+    ] as $name => [$exportlabel, $default, $buttonid]
 ) {
     // Schieberegler statt zweier Optionspunkte: links Hochformat, rechts
     // Querformat; eingeschaltet heisst Querformat.
@@ -354,26 +358,13 @@ foreach (
         . '<span class="kg-ie-orientation__side kg-ie-orientation__side--landscape">Querformat</span>'
         . '<span class="visually-hidden" id="' . s($name) . '-state">Eingeschaltet: Querformat, ausgeschaltet: Hochformat</span>'
         . '</label>';
+    echo html_writer::tag('button', 'Erstellen', [
+        'type' => 'button', 'id' => $buttonid, 'class' => 'kg-btn kg-btn-primary kg-ie-orientation__create',
+        'aria-label' => $exportlabel . ' als PDF erstellen',
+    ]);
     echo '</div>';
 }
 echo '</fieldset>';
-
-echo '<div class="kg-ie-pdfactions">';
-echo html_writer::tag('button', 'ZIM-PDF erstellen', [
-    'type' => 'button', 'id' => 'kg-pdf-zim', 'class' => 'kg-btn kg-btn-primary',
-]);
-echo html_writer::tag('button', 'Konzeptsammlung-PDF erstellen', [
-    'type' => 'button', 'id' => 'kg-pdf-flow', 'class' => 'kg-btn kg-btn-primary',
-]);
-// D52: dritte PDF-Variante (Materialliste).
-echo html_writer::tag('button', 'Materialliste-PDF erstellen', [
-    'type' => 'button', 'id' => 'kg-pdf-materials', 'class' => 'kg-btn kg-btn-primary',
-]);
-// D64: Handout für Teilnehmende (PDF-Export des veröffentlichten Roten Fadens).
-echo html_writer::tag('button', 'Handout-PDF für Teilnehmende', [
-    'type' => 'button', 'id' => 'kg-pdf-handout', 'class' => 'kg-btn kg-btn-primary',
-]);
-echo '</div>';
 echo '</div>'; // Ende kg-ie-card (PDF).
 
 echo '</div>'; // Ende kg-ie-zone (Export).
