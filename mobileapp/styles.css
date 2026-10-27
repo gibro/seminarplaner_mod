@@ -161,6 +161,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* D88: eingeschlossene Pause, Lage bestimmt die Gruppe. */
+.sp-block__pause {
+  font-size: 12px;
+  color: var(--sp-gray);
+}
+
 .sp-badge {
   padding: 2px 8px;
   border-radius: 999px;

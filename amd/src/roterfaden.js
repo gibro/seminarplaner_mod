@@ -144,6 +144,8 @@ define([
                             <span class="rf-pill">${ICONS.clock()}\
 <span>Uhrzeit: ${escapeHtml(Model.clockLabel(block.startMin))}</span></span>
                             <span class="rf-dur">${escapeHtml(Model.durationLabel(block.minutes))}</span>
+                            ${block.pause ? `<span class="rf-dur rf-dur--pause">inkl. ${Number(block.pause)} Min. Pause`
+                                + ` (Lage frei)</span>` : ''}
                             <button type="button" class="rf-toggle" data-rf-toggle="${escapeHtml(block.id)}"
                                 aria-expanded="${open ? 'true' : 'false'}" aria-controls="rf-themen-${escapeHtml(block.id)}">
                                 <span class="sq-tri" aria-hidden="true">▸</span>${ICONS.list()}<span>Themen (${block.themen.length})</span>

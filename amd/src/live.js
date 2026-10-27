@@ -366,6 +366,14 @@ define([
                 </div>`;
         }
 
+        // D88: Pause in der Einheit, deren Lage die Gruppe bestimmt.
+        renderIncludedPause(unit) {
+            return unit.inklpause
+                ? `<span class="live-card__dur live-card__pause">inkl. ${Number(unit.inklpause)} Min. Pause`
+                    + ` (Lage frei)</span>`
+                : '';
+        }
+
         renderNow(unit, step) {
             if (unit.kind === 'pause') {
                 this.nowBox.innerHTML = `
@@ -394,6 +402,7 @@ define([
                         <span class="live-card__time live-time">${esc(Model.clockLabel(unit.startMin))}–${
                             esc(Model.clockLabel(unit.endMin))}</span>
                         <span class="live-card__dur">${esc(Model.durationLabel(unit.minutes))}</span>
+                        ${this.renderIncludedPause(unit)}
                     </div>
                     <h2 class="live-card__title">${esc(unit.title)}</h2>
                     ${crumbs.length ? `<div class="live-card__crumb">${crumbs.join(' · ')}</div>` : ''}
@@ -423,6 +432,7 @@ define([
                         ${unit.phaseLabel ? `<span class="live-badge">${esc(unit.phaseLabel)}</span>` : ''}
                         <span class="live-card__time live-time">${esc(Model.clockLabel(unit.startMin))}</span>
                         <span class="live-card__dur">${esc(Model.durationLabel(unit.minutes))}</span>
+                        ${this.renderIncludedPause(unit)}
                     </div>
                     <h3 class="live-card__title">${esc(unit.title)}</h3>
                     <div class="live-panels">

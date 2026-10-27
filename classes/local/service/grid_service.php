@@ -854,8 +854,6 @@ class grid_service {
         $bausteine = is_array($seq['bausteine'] ?? null) ? $seq['bausteine'] : [];
         $configdays = is_array($config['days'] ?? null) ? array_values($config['days']) : [];
         $az = self::derive_ankerzeiten($config);
-        $vmstart = self::parse_clock($az['vormittag']['start']);
-        $nmstart = self::parse_clock($az['nachmittag']['start']);
 
         $days = [];
         $tage = array_values($seq['tage']);
@@ -866,6 +864,10 @@ class grid_service {
             if ($dayname === '') {
                 continue;
             }
+            // D87: abweichende Mittagspause dieses Tages.
+            $dayaz = roterfaden_model::ankerzeiten_fuer_tag($az, $dayname);
+            $vmstart = self::parse_clock($dayaz['vormittag']['start']);
+            $nmstart = self::parse_clock($dayaz['nachmittag']['start']);
             $anchorstarts = [
                 'vormittag' => ($idx === 0 && !empty($az['ersterTagNurNachmittag'])) ? $nmstart : $vmstart,
                 'nachmittag' => ($idx === $count - 1 && !empty($az['letzterTagNurVormittag'])) ? $vmstart : $nmstart,
@@ -881,7 +883,8 @@ class grid_service {
                     if (!is_array($p)) {
                         continue;
                     }
-                    $duration = max(0, (int)($p['dauer'] ?? 0));
+                    // D88: eine eingeschlossene Pause verlaengert die Einheit.
+                    $duration = max(0, (int)($p['dauer'] ?? 0)) + sequence_state::included_pause($p);
                     if (($p['typ'] ?? '') === 'pause') {
                         $clock += $duration;
                         $currentbaustein = null;

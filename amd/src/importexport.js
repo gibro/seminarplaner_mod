@@ -1073,8 +1073,6 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const auswahlen = (seq.einheitenauswahlen && typeof seq.einheitenauswahlen === 'object') ? seq.einheitenauswahlen : {};
         const methodById = new Map(methods.map((m) => [String(m.id), m]));
         const az = pdfDeriveAnkerzeiten(config);
-        const vmStart = pdfParseClock(az.vormittag.start);
-        const nmStart = pdfParseClock(az.nachmittag.start);
         const days = {};
         const tage = Array.isArray(seq.tage) ? seq.tage : [];
         tage.forEach((tag, idx) => {
@@ -1084,6 +1082,11 @@ function(Ajax, Notification, Handout, PlanMemory) {
             if (!dayname) {
                 return;
             }
+            // D87: abweichende Mittagspause dieses Tages (wie roterfadenmodel.js).
+            const lunch = az.mittagspausen && az.mittagspausen[dayname];
+            const vmStart = pdfParseClock(az.vormittag.start);
+            const nmStart = (lunch && pdfParseClock(lunch.end) !== null)
+                ? pdfParseClock(lunch.end) : pdfParseClock(az.nachmittag.start);
             const isFirst = idx === 0;
             const isLast = idx === (tage.length - 1);
             const anchorStarts = {
@@ -1099,7 +1102,9 @@ function(Ajax, Notification, Handout, PlanMemory) {
                     if (!p) {
                         return;
                     }
-                    const duration = Math.max(0, Number(p.dauer) || 0);
+                    // D88: eine eingeschlossene Pause verlaengert die Einheit.
+                    const inklpause = p.typ === 'einheit' ? Math.max(0, Number(p.inklpause) || 0) : 0;
+                    const duration = Math.max(0, Number(p.dauer) || 0) + inklpause;
                     if (p.typ === 'pause') {
                         items.push({
                             kind: 'break',
@@ -1127,7 +1132,8 @@ function(Ajax, Notification, Handout, PlanMemory) {
                             title: String(p.titel || '').trim() || normalized.title,
                             startMin: clock,
                             endMin: clock + duration,
-                            referenten
+                            referenten,
+                            inklpause
                         }));
                     } else {
                         const baustein = p.bausteinid ? bausteine[p.bausteinid] : null;
@@ -1135,7 +1141,7 @@ function(Ajax, Notification, Handout, PlanMemory) {
                             || (baustein && baustein.titel ? String(baustein.titel) : 'Seminareinheit');
                         items.push({
                             kind: 'method', title, phase: '', startMin: clock, endMin: clock + duration,
-                            details: {}, referenten
+                            details: {}, referenten, inklpause
                         });
                     }
                     clock += duration;
@@ -1663,14 +1669,14 @@ function(Ajax, Notification, Handout, PlanMemory) {
             }
         });
         const orientation = pdfColumnsSetting.orientation === 'portrait' ? 'portrait' : 'landscape';
-        document.querySelectorAll('input[name="kg-pdf-orientation"]').forEach((radio) => {
-            radio.checked = radio.value === orientation;
+        document.querySelectorAll('input[name="kg-pdf-orientation"]').forEach((toggle) => {
+            toggle.checked = orientation === 'landscape';
         });
         const orientations = pdfColumnsSetting.orientations || {};
         PDF_ORIENTATION_EXPORTS.forEach((kind) => {
             const value = orientations[kind] === 'landscape' ? 'landscape' : 'portrait';
-            document.querySelectorAll(`input[name="kg-pdf-orientation-${kind}"]`).forEach((radio) => {
-                radio.checked = radio.value === value;
+            document.querySelectorAll(`input[name="kg-pdf-orientation-${kind}"]`).forEach((toggle) => {
+                toggle.checked = value === 'landscape';
             });
         });
         const useAll = !!pdfColumnsSetting.all;
@@ -1711,11 +1717,12 @@ function(Ajax, Notification, Handout, PlanMemory) {
     // Materialliste und Handout im Hochformat (so sahen sie vor der Wahl aus).
     const getPdfOrientation = (kind = 'zim') => {
         const name = kind === 'zim' ? 'kg-pdf-orientation' : `kg-pdf-orientation-${kind}`;
-        const checked = document.querySelector(`input[name="${name}"]:checked`);
-        if (!checked) {
+        // Schieberegler: eingeschaltet = Querformat.
+        const toggle = document.querySelector(`input[name="${name}"]`);
+        if (!toggle) {
             return kind === 'zim' ? 'landscape' : 'portrait';
         }
-        return checked.value === 'portrait' ? 'portrait' : 'landscape';
+        return toggle.checked ? 'landscape' : 'portrait';
     };
 
     const savePdfColumns = (cmid) => {
@@ -1848,8 +1855,11 @@ function(Ajax, Notification, Handout, PlanMemory) {
             }
         }
         switch (key) {
-            case 'uhrzeit':
-                return `${formatTimeForPdf(item.startMin)} – ${formatTimeForPdf(item.endMin)}`;
+            case 'uhrzeit': {
+                const span = `${formatTimeForPdf(item.startMin)} – ${formatTimeForPdf(item.endMin)}`;
+                // D88: Lage der Pause bestimmt die Gruppe - nur ein Vermerk.
+                return item.inklpause ? `${span}\ninkl. ${item.inklpause} Min. Pause (Lage frei)` : span;
+            }
             case 'titel':
                 return escapeTextForPdf(item.title || '');
             case 'referent':
@@ -2070,7 +2080,9 @@ function(Ajax, Notification, Handout, PlanMemory) {
 
         doc.setFontSize(10);
         doc.setFont(undefined, 'normal');
-        doc.text(`${formatTimeForPdf(item.startMin)}–${formatTimeForPdf(item.endMin)} · ${duration} Min`, 14, y);
+        // D88: eine eingeschlossene Pause steckt in der Spanne, ihre Lage ist frei.
+        const pausenote = item.inklpause ? ` · inkl. ${item.inklpause} Min. Pause (Lage frei)` : '';
+        doc.text(`${formatTimeForPdf(item.startMin)}–${formatTimeForPdf(item.endMin)} · ${duration} Min${pausenote}`, 14, y);
         y += 8;
 
         const sections = [
@@ -2814,8 +2826,8 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const globalSetApplyBtn = bySel('#kg-global-set-apply');
         bindPdfColumnsDropdown(cmid);
         bindPdfInfo(cmid);
-        document.querySelectorAll('input[name^="kg-pdf-orientation"]').forEach((radio) => {
-            radio.addEventListener('change', () => savePdfColumns(cmid));
+        document.querySelectorAll('input[name^="kg-pdf-orientation"]').forEach((toggle) => {
+            toggle.addEventListener('change', () => savePdfColumns(cmid));
         });
 
         if (parsebtn && fileinput) {

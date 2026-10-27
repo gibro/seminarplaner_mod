@@ -189,6 +189,14 @@ define(['core/ajax', 'mod_seminarplaner/roterfadenmodel'], function(Ajax, Model)
 
                     doc.setFont(undefined, 'normal');
                     doc.setFontSize(10);
+                    // D88: die Gruppe legt die Pause selbst - deshalb steht sie hier.
+                    if (block.pause) {
+                        ensureSpace(6);
+                        doc.setTextColor(100, 100, 100);
+                        doc.text(escapeTextForPdf(`inkl. ${block.pause} Min. Pause – die Lage bestimmt ihr selbst`), 18, y);
+                        doc.setTextColor(0, 0, 0);
+                        y += 6;
+                    }
                     // Ein einzelnes Thema wiederholt nur die Ueberschrift — dann keine
                     // Aufzaehlung (so wie am Bildschirm der Block seinen Titel traegt).
                     const themen = (block.themen.length === 1 && block.themen[0].title === block.title)

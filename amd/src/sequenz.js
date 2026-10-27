@@ -73,12 +73,32 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         materials: true,
         sonstiges: false
     };
-    const cloneAnkerzeiten = (az) => ({
-        vormittag: Object.assign({}, az.vormittag),
-        nachmittag: Object.assign({}, az.nachmittag),
-        ersterTagNurNachmittag: !!az.ersterTagNurNachmittag,
-        letzterTagNurVormittag: !!az.letzterTagNurVormittag
-    });
+    const cloneAnkerzeiten = (az) => {
+        const clone = {
+            vormittag: Object.assign({}, az.vormittag),
+            nachmittag: Object.assign({}, az.nachmittag),
+            ersterTagNurNachmittag: !!az.ersterTagNurNachmittag,
+            letzterTagNurVormittag: !!az.letzterTagNurVormittag
+        };
+        // D87: tageweise abweichende Mittagspausen mitnehmen.
+        if (az.mittagspausen && typeof az.mittagspausen === 'object') {
+            clone.mittagspausen = JSON.parse(JSON.stringify(az.mittagspausen));
+        }
+        return clone;
+    };
+    // D87: Die Mittagspause darf je Wochentag abweichen; ankerzeiten.mittagspausen
+    // haelt nur die abweichenden Tage ({Dienstag: {start, end}}) und verschiebt
+    // Vormittagsende und Nachmittagsbeginn dieses Tages (wie roterfadenmodel.js).
+    const ankerzeitenFuerTag = (az, dayname) => {
+        const lunch = az && az.mittagspausen && az.mittagspausen[dayname];
+        if (!lunch || parseTimeToMinutes(lunch.start) === null || parseTimeToMinutes(lunch.end) === null) {
+            return az;
+        }
+        return Object.assign({}, az, {
+            vormittag: Object.assign({}, az.vormittag, {end: lunch.start}),
+            nachmittag: Object.assign({}, az.nachmittag, {start: lunch.end}),
+        });
+    };
     const validAnkerzeiten = (az) => !!(az && az.vormittag && az.nachmittag
         && parseTimeToMinutes(az.vormittag.start) !== null && parseTimeToMinutes(az.vormittag.end) !== null
         && parseTimeToMinutes(az.nachmittag.start) !== null && parseTimeToMinutes(az.nachmittag.end) !== null);
@@ -121,13 +141,24 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
 
     // Legacy fields stay as derived values so the read-only overview and
     // old clients keep rendering (D34).
-    const legacyFieldsFromAnkerzeiten = (az) => {
-        const vmEnd = parseTimeToMinutes(az.vormittag.end);
-        const nmStart = parseTimeToMinutes(az.nachmittag.start);
-        const gap = (vmEnd !== null && nmStart !== null) ? nmStart - vmEnd : 0;
+    // D87: abweichende Mittagspausen werden zu eigenen Pausen nur fuer ihren Tag.
+    const legacyFieldsFromAnkerzeiten = (az, days) => {
+        const overrides = az.mittagspausen || {};
+        const breaks = [];
+        const addBreak = (start, end, daylist) => {
+            const startmin = parseTimeToMinutes(start);
+            const endmin = parseTimeToMinutes(end);
+            if (daylist.length && startmin !== null && endmin !== null && endmin > startmin) {
+                breaks.push({days: daylist, start, duration: endmin - startmin});
+            }
+        };
+        const special = Object.keys(overrides);
+        const regular = special.length ? (days || []).filter((day) => !overrides[day]) : ['all'];
+        addBreak(az.vormittag.end, az.nachmittag.start, regular);
+        special.forEach((day) => addBreak(overrides[day].start, overrides[day].end, [day]));
         return {
             timeRange: {start: az.vormittag.start, end: az.nachmittag.end},
-            breaks: gap > 0 ? [{days: ['all'], start: az.vormittag.end, duration: gap}] : []
+            breaks
         };
     };
 
@@ -170,6 +201,28 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         return match ? Number.parseInt(match[0], 10) : Number.NaN;
     };
     const cardTitle = (card) => String((card && (card.titel || card.title)) || '');
+
+    // D88: eine Pause, die die Gruppe innerhalb der Einheit frei legt. Sie
+    // haengt an der Platzierung (nie an der Bibliothekskarte) und verlaengert
+    // die Einheit: `dauer` bleibt die Arbeitszeit, belegt werden
+    // dauer + inklpause Minuten. Getrennt gehalten, weil `dauer` beim
+    // Speichern der Karte oder beim Wechsel der Alternative ueberschrieben wird.
+    const includedPause = (placement) => (placement && placement.typ === 'einheit')
+        ? Math.max(0, Number(placement.inklpause) || 0) : 0;
+    const placementMinutes = (placement) => placement
+        ? Math.max(0, Number(placement.dauer) || 0) + includedPause(placement) : 0;
+    const DEFAULT_INCLUDED_PAUSE = 15;
+
+    // D88, Dramaturgie-Hinweise: Wo die Pause liegt, bestimmt die Gruppe. Die
+    // Hinweise rechnen mit der guenstigsten Lage - die Pause so spaet, dass der
+    // laufende Block gerade noch unter der Grenze bleibt. Ein Hinweis faellt
+    // nur, wenn selbst dann ein Stueck ueber `limit` bleibt.
+    // -> {over: bool, rest: Minuten nach der Pause (neuer Laufwert)}.
+    const runAcrossIncludedPause = (run, work, limit) => {
+        const before = Math.min(work, Math.max(0, limit - run));
+        const rest = work - before;
+        return {over: run > limit || rest > limit, rest};
+    };
 
     // Kuerzel dieses Tabs fuer neue IDs. Der Zaehler allein vergibt in zwei
     // gleichzeitig offenen Tabs dieselbe naechste ID ("px12") - beim
@@ -522,6 +575,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         duplicate: menuIcon('<rect x="9" y="9" width="12" height="12" rx="1"/>'
             + '<path d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"/>'),
         remove: menuIcon('<path d="M6 6l12 12M18 6L6 18"/>'),
+        // Kaffeetasse = eingeschlossene Pause (D88).
+        pause: menuIcon('<path d="M4 9h13v5a5 5 0 01-5 5H9a5 5 0 01-5-5z"/><path d="M17 11h1.5a2.5 2.5 0 010 5H17"/>'
+            + '<path d="M8 3v3M12 3v3"/>'),
     };
 
     // Titel für ein Duplikat: „Titel (2)", bei Bedarf (3), (4) … - eine schon
@@ -1007,7 +1063,26 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }
             if (form) {
                 form.querySelectorAll('input[name="days"]').forEach((cb) => {
-                    cb.addEventListener('change', () => this.syncFirstDayOptions());
+                    cb.addEventListener('change', () => {
+                        this.syncFirstDayOptions();
+                        this.renderLunchDays();
+                    });
+                });
+                const firstday = bySel('#sp-config-first-day');
+                if (firstday) {
+                    firstday.addEventListener('change', () => this.renderLunchDays());
+                }
+                const lunchtoggle = bySel('#sp-config-lunch-perday');
+                if (lunchtoggle) {
+                    lunchtoggle.addEventListener('change', () => this.renderLunchDays());
+                }
+                // Tageszeilen, die niemand angefasst hat, folgen der
+                // allgemeinen Mittagspause.
+                ['#sp-config-vm-end', '#sp-config-nm-start'].forEach((sel) => {
+                    const input = bySel(sel);
+                    if (input) {
+                        input.addEventListener('change', () => this.renderLunchDays());
+                    }
                 });
                 form.addEventListener('submit', (event) => {
                     event.preventDefault();
@@ -1088,6 +1163,60 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             form.querySelector('#sp-config-nm-end').value = az.nachmittag.end;
             form.querySelector('#sp-config-first-arrival').checked = !!az.ersterTagNurNachmittag;
             form.querySelector('#sp-config-last-departure').checked = !!az.letzterTagNurVormittag;
+            const overrides = (az.mittagspausen && typeof az.mittagspausen === 'object') ? az.mittagspausen : {};
+            const lunchtoggle = form.querySelector('#sp-config-lunch-perday');
+            if (lunchtoggle) {
+                lunchtoggle.checked = Object.keys(overrides).length > 0;
+            }
+            this.renderLunchDays(overrides);
+        }
+
+        // D87: je ausgewaehltem Tag eine Zeile fuer die Mittagspause. Werte,
+        // die schon in der Maske stehen, bleiben beim Neuzeichnen erhalten;
+        // unberuehrte Zeilen zeigen die allgemeine Mittagspause.
+        renderLunchDays(overrides) {
+            const form = bySel('#sq-setup-form');
+            const box = bySel('#sp-config-lunch-days');
+            const toggle = bySel('#sp-config-lunch-perday');
+            if (!form || !box || !toggle) {
+                return;
+            }
+            const current = {};
+            if (!overrides) {
+                box.querySelectorAll('.sp-lunch-day[data-custom="1"]').forEach((row) => {
+                    current[row.dataset.day] = {
+                        start: row.querySelector('[data-lunch="start"]').value,
+                        end: row.querySelector('[data-lunch="end"]').value,
+                    };
+                });
+            }
+            const custom = overrides || current;
+            const selected = Array.from(form.querySelectorAll('input[name="days"]:checked')).map((el) => el.value);
+            const firstdayel = bySel('#sp-config-first-day');
+            const days = orderDaysFromStart(selected, (firstdayel && firstdayel.value) || selected[0] || 'Montag');
+            const defstart = form.querySelector('#sp-config-vm-end').value;
+            const defend = form.querySelector('#sp-config-nm-start').value;
+            box.innerHTML = days.map((day) => {
+                const own = custom[day];
+                const start = own ? own.start : defstart;
+                const end = own ? own.end : defend;
+                return `<div class="sp-time-range sp-anchor-times sp-lunch-day" data-day="${escapeHtml(day)}"`
+                    + ` data-custom="${own ? '1' : '0'}">`
+                    + `<span class="sp-anchor-label">${escapeHtml(day)}</span>`
+                    + '<label class="sp-modal__field"><span class="sp-modal__label">von</span>'
+                    + `<input type="time" class="kg-input" data-lunch="start" value="${escapeHtml(start)}"></label>`
+                    + '<label class="sp-modal__field"><span class="sp-modal__label">bis</span>'
+                    + `<input type="time" class="kg-input" data-lunch="end" value="${escapeHtml(end)}"></label>`
+                    + '</div>';
+            }).join('');
+            box.querySelectorAll('.sp-lunch-day').forEach((row) => {
+                row.querySelectorAll('input').forEach((input) => {
+                    input.addEventListener('change', () => {
+                        row.dataset.custom = '1';
+                    });
+                });
+            });
+            box.classList.toggle('kg-hidden', !toggle.checked || !days.length);
         }
 
         applyPresetToForm(key) {
@@ -1150,9 +1279,41 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 this.setStatus('Der Nachmittag darf nicht vor dem Ende des Vormittags beginnen.', true);
                 return null;
             }
+            // D87: nur Tage speichern, deren Mittagspause wirklich abweicht.
+            const toggle = form.querySelector('#sp-config-lunch-perday');
+            if (toggle && toggle.checked) {
+                const mittagspausen = {};
+                let lunchError = '';
+                form.querySelectorAll('#sp-config-lunch-days .sp-lunch-day').forEach((row) => {
+                    const start = row.querySelector('[data-lunch="start"]').value;
+                    const end = row.querySelector('[data-lunch="end"]').value;
+                    const startmin = parseTimeToMinutes(start);
+                    const endmin = parseTimeToMinutes(end);
+                    if (startmin === null || endmin === null) {
+                        lunchError = lunchError || `Mittagspause am ${row.dataset.day}: bitte beide Zeiten angeben.`;
+                        return;
+                    }
+                    if (endmin < startmin || startmin <= vmstart || endmin >= nmend) {
+                        lunchError = lunchError || `Mittagspause am ${row.dataset.day} muss zwischen `
+                            + `${ankerzeiten.vormittag.start} und ${ankerzeiten.nachmittag.end} liegen `
+                            + 'und darf nicht vor ihrem Beginn enden.';
+                        return;
+                    }
+                    if (startmin !== vmend || endmin !== nmstart) {
+                        mittagspausen[row.dataset.day] = {start, end};
+                    }
+                });
+                if (lunchError) {
+                    this.setStatus(lunchError, true);
+                    return null;
+                }
+                if (Object.keys(mittagspausen).length) {
+                    ankerzeiten.mittagspausen = mittagspausen;
+                }
+            }
             const presetel = bySel('#sp-config-preset');
             const previous = (this.setupMode === 'edit' && this.state && this.state.config) ? this.state.config : {};
-            const legacyfields = legacyFieldsFromAnkerzeiten(ankerzeiten);
+            const legacyfields = legacyFieldsFromAnkerzeiten(ankerzeiten, days);
             return {
                 preset: (presetel && presetel.value) || 'custom',
                 days,
@@ -1197,9 +1358,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
 
         createPlan(name, config) {
             const plandays = {};
-            const middaybreak = (config.breaks || [])[0] || null;
             config.days.forEach((day) => {
                 plandays[day] = [];
+                const middaybreak = (config.breaks || []).find((brk) => Array.isArray(brk.days)
+                    && (brk.days.includes('all') || brk.days.includes(day))) || null;
                 if (middaybreak) {
                     const startmin = parseTimeToMinutes(middaybreak.start);
                     plandays[day].push({
@@ -2112,7 +2274,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 const placements = (day.anker[ankername].sequenz || [])
                     .map((pid) => ({pid, data: this.placement(pid)}))
                     .filter((p) => p.data);
-                const used = placements.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
+                const used = placements.reduce((sum, p) => sum + placementMinutes(p.data), 0);
                 const over = used - budget;
                 const fillpct = budget > 0 ? Math.min(100, Math.round((used / budget) * 100)) : (used > 0 ? 100 : 0);
                 const body = this.renderIntroPlacements(placements, anchorStart)
@@ -2168,11 +2330,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             let clock = anchorStart;
             return groups.map((group) => {
                 const start = clock;
-                const duration = group.items.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
+                const duration = group.items.reduce((sum, p) => sum + placementMinutes(p.data), 0);
                 clock += duration;
                 const rows = group.items.map((p, index) => {
                     const itemstart = start + group.items.slice(0, index)
-                        .reduce((sum, prev) => sum + Math.max(0, Number(prev.data.dauer) || 0), 0);
+                        .reduce((sum, prev) => sum + placementMinutes(prev.data), 0);
                     return this.renderIntroRow(p, itemstart);
                 }).join('');
 
@@ -2597,7 +2759,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const config = (this.state && this.state.config) || {};
             const tage = (this.sequenz && this.sequenz.tage) || [];
             const day = tage[dayIdx] || {};
-            const az = config.ankerzeiten;
+            const daynames = Array.isArray(config.days) ? config.days : [];
+            const dayname = (day.bezeichnung && daynames.includes(day.bezeichnung))
+                ? day.bezeichnung : daynames[dayIdx];
+            const az = ankerzeitenFuerTag(config.ankerzeiten, dayname);
             const valid = az && az.vormittag && az.nachmittag
                 && parseTimeToMinutes(az.vormittag.start) !== null && parseTimeToMinutes(az.vormittag.end) !== null
                 && parseTimeToMinutes(az.nachmittag.start) !== null && parseTimeToMinutes(az.nachmittag.end) !== null;
@@ -2802,12 +2967,16 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 }
                 done[sg] = true;
                 let total = Math.max(0, Number(survivor.dauer) || 0);
+                // D88: die eingeschlossene Pause sitzt nur an einem Teil - sie
+                // geht in die wieder ganze Einheit mit.
+                let pause = includedPause(survivor);
                 Object.keys(this.sequenz.platzierungen).forEach((other) => {
                     const part = this.sequenz.platzierungen[other];
                     if (other === pid || !part || String(part.splitgroup || '') !== sg) {
                         return;
                     }
                     total += Math.max(0, Number(part.dauer) || 0);
+                    pause += includedPause(part);
                     this.anchorList().forEach((anchor) => {
                         const pos = anchor.seq.indexOf(other);
                         if (pos >= 0) {
@@ -2821,6 +2990,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                     }
                 });
                 survivor.dauer = total;
+                if (pause > 0) {
+                    survivor.inklpause = pause;
+                }
                 delete survivor.splitgroup;
                 delete survivor.fortsetzung;
                 titles.push(String(survivor.titel || 'Einheit'));
@@ -3367,6 +3539,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             while (seq.length && this.usedMinutes(seq) > budget && safety-- > 0) {
                 const lastpid = seq[seq.length - 1];
                 const last = this.placement(lastpid);
+                // Geteilt wird die Arbeitszeit; eine eingeschlossene Pause (D88)
+                // bleibt beim ersten Teil, so endet er genau an der Grenze.
                 const dur = last ? Math.max(0, Number(last.dauer) || 0) : 0;
                 const over = this.usedMinutes(seq) - budget;
                 // A filled unit sitting across the boundary: split it when both
@@ -3468,7 +3642,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         usedMinutes(seq) {
             return seq.reduce((sum, pid) => {
                 const placement = this.placement(pid);
-                return sum + (placement ? Math.max(0, Number(placement.dauer) || 0) : 0);
+                return sum + placementMinutes(placement);
             }, 0);
         }
 
@@ -3982,6 +4156,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                     if (a && b && a.typ === 'einheit' && b.typ === 'einheit'
                             && a.splitgroup && String(a.splitgroup) === String(b.splitgroup)) {
                         a.dauer = (Number(a.dauer) || 0) + (Number(b.dauer) || 0);
+                        // D88: eine eingeschlossene Pause wandert mit.
+                        const pause = includedPause(a) + includedPause(b);
+                        if (pause > 0) {
+                            a.inklpause = pause;
+                        }
                         const bpid = seq[i + 1];
                         const bauswahl = b.einheitenauswahl;
                         seq.splice(i + 1, 1);
@@ -4112,6 +4291,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                         this.closeModal();
                     } else if (type === 'editor-save') {
                         this.saveEditor();
+                    } else if (type === 'inklpause-save') {
+                        this.saveIncludedPause(false);
+                    } else if (type === 'inklpause-remove') {
+                        this.saveIncludedPause(true);
                     } else if (type === 'picker-tab') {
                         this.pickerTab = action.getAttribute('data-tab') || 'lokal';
                         root.querySelectorAll('.sq-picker__tab').forEach((t) => {
@@ -4578,6 +4761,82 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             this.setDirty(true);
             this.render();
             this.toast('Einheit angepasst – Zeiten sind aktualisiert.');
+        }
+
+        // D88: Pause in die Einheit einschliessen. Sie haengt an DIESER
+        // Platzierung, nicht an der Bibliothekskarte, und hat nur eine Dauer:
+        // wann sie innerhalb der Einheit liegt, bestimmt die Gruppe.
+        openIncludedPauseEditor(pid) {
+            const placement = this.placement(pid);
+            if (!placement || placement.typ !== 'einheit') {
+                return;
+            }
+            this.editorPid = pid;
+            const current = includedPause(placement);
+            const root = this.modalRoot();
+            root.innerHTML = `
+                <div class="sq-modal">
+                  <div class="sq-modal__head">
+                    <h3>${current ? 'Eingeschlossene Pause ändern' : 'Pause einschließen'}</h3>
+                    <button type="button" class="sq-modal__close" data-sq-action="modal-close">✕</button>
+                  </div>
+                  <div class="sq-modal__body">
+                    <p>„${escapeHtml(placement.titel || 'Seminareinheit')}" bekommt eine Pause, deren Lage die
+                      Gruppe innerhalb der Einheit selbst bestimmt. Die Einheit wird um die Pause länger,
+                      die Arbeitszeit bleibt ${Math.max(0, Number(placement.dauer) || 0)} Min.</p>
+                    <div class="sq-field">
+                      <label class="kg-label" for="sq-inklpause">Dauer der Pause (Minuten)</label>
+                      <input type="number" class="kg-input" id="sq-inklpause" min="5" max="${MAX_UNIT_MINUTES}"
+                        step="5" value="${current || DEFAULT_INCLUDED_PAUSE}">
+                      <div class="sq-field__hint">Gilt nur in diesem Seminarplan – die Einheit in der
+                        Bibliothek bleibt ohne Pause.</div>
+                    </div>
+                  </div>
+                  <div class="sq-modal__footer">
+                    ${current ? '<button type="button" class="kg-btn" data-sq-action="inklpause-remove">'
+                        + 'Pause herausnehmen</button>' : ''}
+                    <button type="button" class="kg-btn" data-sq-action="modal-close">Abbrechen</button>
+                    <button type="button" class="kg-btn kg-btn-primary" data-sq-action="inklpause-save">Übernehmen</button>
+                  </div>
+                </div>`;
+            root.classList.add('open');
+            const input = root.querySelector('#sq-inklpause');
+            if (input) {
+                input.focus();
+                input.select();
+            }
+        }
+
+        saveIncludedPause(remove) {
+            const placement = this.placement(this.editorPid);
+            if (!placement) {
+                this.closeModal();
+                return;
+            }
+            const input = bySel('#sq-inklpause');
+            const parsed = remove ? 0 : parseMinutes(input ? input.value : '');
+            if (!remove && !(Number.isFinite(parsed) && parsed > 0)) {
+                // Leer oder 0 ist kein Wert - dafuer gibt es „Pause herausnehmen".
+                if (input) {
+                    input.focus();
+                }
+                return;
+            }
+            const minutes = Math.min(MAX_UNIT_MINUTES, parsed);
+            const before = includedPause(placement);
+            if (minutes > 0) {
+                placement.inklpause = minutes;
+            } else {
+                delete placement.inklpause;
+            }
+            this.closeModal();
+            if (minutes !== before) {
+                this.setDirty(true);
+            }
+            this.render();
+            this.toast(minutes > 0
+                ? `Pause eingeschlossen (${minutes} Min.) – die Gruppe legt sie selbst, die Zeiten sind angepasst.`
+                : 'Eingeschlossene Pause herausgenommen – die Zeiten sind angepasst.');
         }
 
         // Titel direkt in der Sequenz aendern (17. Juli 2026).
@@ -5712,13 +5971,22 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                     runminutes = 0;
                     return;
                 }
-                if (sozialform === runform) {
-                    runminutes += Math.max(0, Number(item.data.dauer) || 0);
-                } else {
+                if (sozialform !== runform) {
                     runform = sozialform;
-                    runminutes = Math.max(0, Number(item.data.dauer) || 0);
+                    runminutes = 0;
                 }
-                if (runminutes > 120 && !monotonie) {
+                const work = Math.max(0, Number(item.data.dauer) || 0);
+                let over;
+                if (includedPause(item.data) > 0) {
+                    // D88: die eingeschlossene Pause unterbricht den Lauf.
+                    const run = runAcrossIncludedPause(runminutes, work, 120);
+                    over = run.over;
+                    runminutes = run.rest;
+                } else {
+                    runminutes += work;
+                    over = runminutes > 120;
+                }
+                if (over && !monotonie) {
                     monotonie = this.placementSozialform(item.data);
                 }
             });
@@ -5743,8 +6011,19 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                         streak = 0;
                         return;
                     }
-                    streak += Math.max(0, Number(placement.dauer) || 0);
-                    if (streak > 90) {
+                    const work = Math.max(0, Number(placement.dauer) || 0);
+                    let over;
+                    if (includedPause(placement) > 0) {
+                        // D88: Pause in der Einheit, Lage frei - gerechnet wird
+                        // mit der guenstigsten Lage.
+                        const run = runAcrossIncludedPause(streak, work, 90);
+                        over = run.over;
+                        streak = run.rest;
+                    } else {
+                        streak += work;
+                        over = streak > 90;
+                    }
+                    if (over) {
                         findings.push({
                             ok: false,
                             text: `Am ${ankername === 'vormittag' ? 'Vormittag' : 'Nachmittag'} läuft es`
@@ -6601,6 +6880,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 this.placeAgain(pid);
             } else if (type === 'duplicate-unit') {
                 this.duplicateUnit(pid);
+            } else if (type === 'inklpause') {
+                this.openIncludedPauseEditor(pid);
             } else if (type === 'add-unit') {
                 this.openPicker(action.getAttribute('data-anker') || 'vormittag');
             } else if (type === 'add-baustein') {
@@ -6679,6 +6960,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }
             if (az.letzterTagNurVormittag) {
                 parts.push('letzter Seminartag endet nach dem Vormittag');
+            }
+            const lunchdays = Object.keys(az.mittagspausen || {});
+            if (lunchdays.length) {
+                parts.push(`abweichende Mittagspause: ${lunchdays.map((day) =>
+                    `${day} ${az.mittagspausen[day].start}–${az.mittagspausen[day].end}`).join(', ')}`);
             }
             el.textContent = parts.join(' · ');
         }
@@ -6787,7 +7073,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const budget = Math.max(0, anchorEnd - anchorStart);
 
             const placements = seq.map((pid) => ({pid, data: this.placement(pid)})).filter((p) => p.data);
-            const used = placements.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
+            const used = placements.reduce((sum, p) => sum + placementMinutes(p.data), 0);
             const over = used - budget;
             const fillpct = budget > 0 ? Math.min(100, Math.round((used / budget) * 100)) : (used > 0 ? 100 : 0);
 
@@ -6911,13 +7197,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             let clock = anchorStart;
             return groups.map((group) => {
                 const start = clock;
-                const duration = group.items.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
+                const duration = group.items.reduce((sum, p) => sum + placementMinutes(p.data), 0);
                 clock += duration;
 
                 if (!group.bausteinid) {
                     return group.items.map((p, index) => {
                         const itemstart = start + group.items.slice(0, index)
-                            .reduce((sum, prev) => sum + Math.max(0, Number(prev.data.dauer) || 0), 0);
+                            .reduce((sum, prev) => sum + placementMinutes(prev.data), 0);
                         return this.renderPlacement(p, itemstart, false) + this.renderHeadingAffordance(p);
                     }).join('');
                 }
@@ -6928,7 +7214,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 const unfilled = group.items.every((p) => this.isUnfilled(p.data));
                 const units = group.items.map((p, index) => {
                     const itemstart = start + group.items.slice(0, index)
-                        .reduce((sum, prev) => sum + Math.max(0, Number(prev.data.dauer) || 0), 0);
+                        .reduce((sum, prev) => sum + placementMinutes(prev.data), 0);
                     return this.renderPlacement(p, itemstart, true);
                 }).join('');
 
@@ -7019,7 +7305,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
 
         renderBausteinContent(group, units, unfilled, baustein) {
             const residual = group.items.filter((p) => this.isUnfilled(p.data));
-            const restminutes = residual.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
+            const restminutes = residual.reduce((sum, p) => sum + placementMinutes(p.data), 0);
             const placeholderpid = residual.length ? residual[0].pid : '';
             const plannedrows = this.renderPlannedRows(baustein, group, placeholderpid);
 
@@ -7034,7 +7320,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }
             // D14: the reserved duration is the classic suggestion gap - with
             // keywords and Bloom mapping from the module master data.
-            const gapminutes = group.items.reduce((sum, p) => sum + Math.max(0, Number(p.data.dauer) || 0), 0);
+            const gapminutes = group.items.reduce((sum, p) => sum + placementMinutes(p.data), 0);
             // Frisch angelegter leerer Baustein (keine reservierte Zeit, kein
             // Pool/Themen): direkte Einladung, die erste Einheit hinzuzufügen.
             if (gapminutes <= 0) {
@@ -7144,6 +7430,14 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                     'Dieselbe Einheit – Änderungen gelten überall'));
                 items.push(item('duplicate-unit', 'duplicate', 'Als neue Einheit duplizieren',
                     'Eigene Einheit in der Bibliothek, unabhängig bearbeitbar'));
+            }
+
+            // D88: Pause in die Einheit einschliessen - Lage bestimmt die Gruppe.
+            if (isunit && !placeholder) {
+                items.push(includedPause(p.data)
+                    ? item('inklpause', 'pause', 'Eingeschlossene Pause ändern')
+                    : item('inklpause', 'pause', 'Pause einschließen',
+                        'Die Gruppe legt sie innerhalb der Einheit selbst'));
             }
 
             if (!placeholder) {
@@ -7593,6 +7887,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                   ${this.renderDetailsToggle(p.pid)}
                   <div class="sq-alt__options">${options}</div>
                   <div class="sq-unit__actions">
+                    ${this.renderIncludedPauseBadge(p)}
                     ${this.renderReferentChip(p)}
                     <button type="button" class="kg-btn" data-sq-action="edit"
                       data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
@@ -7602,12 +7897,27 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 </div>`;
         }
 
+        // D88: Vermerk einer eingeschlossenen Pause an der Zeile. Zugleich der
+        // Weg, sie zu aendern oder wieder herauszunehmen.
+        renderIncludedPauseBadge(p) {
+            const pause = includedPause(p.data);
+            if (!pause) {
+                return '';
+            }
+            return `<button type="button" class="sq-badge sq-badge--inklpause" data-sq-action="inklpause"
+                data-pid="${escapeHtml(p.pid)}"
+                title="Die Gruppe legt diese Pause innerhalb der Einheit selbst – klicken zum Ändern"
+                >inkl. ${pause} Min. Pause</button>`;
+        }
+
         renderPlacement(p, startMin, inBaustein) {
             const data = p.data;
+            // Die Zeit-Spalte zeigt die Arbeitszeit (editierbar); die Zeitspanne
+            // umfasst auch eine eingeschlossene Pause (D88).
             const duration = Math.max(0, Number(data.dauer) || 0);
             const timelabel = this.timesOff
                 ? 'Abschnitt entfällt an diesem Tag'
-                : `${minutesToLabel(startMin)}–${minutesToLabel(startMin + duration)}`;
+                : `${minutesToLabel(startMin)}–${minutesToLabel(startMin + placementMinutes(data))}`;
 
             if (data.typ === 'pause') {
                 return `
@@ -7675,6 +7985,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                         + ` – Änderungen am Inhalt gelten an allen Stellen.">${shared}× im Plan</span>`
                     : '',
                 groupsize ? `<span class="sq-badge">${escapeHtml(groupsize)}</span>` : '',
+                this.renderIncludedPauseBadge(p),
             ].filter((m) => m).join('');
 
             return `

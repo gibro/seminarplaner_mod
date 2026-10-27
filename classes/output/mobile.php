@@ -140,6 +140,10 @@ class mobile {
                         'phaselabel' => self::phase_label($block['phase']),
                         'starttime' => roterfaden_model::clock_label((int)$block['startMin']),
                         'duration' => roterfaden_model::duration_label((int)$block['minutes']),
+                        // D88: Vermerk einer eingeschlossenen Pause (Lage frei).
+                        'haspause' => !empty($block['pause']),
+                        'pauselabel' => !empty($block['pause'])
+                            ? get_string('mobile_includedpause', 'mod_seminarplaner', (int)$block['pause']) : '',
                         'themen' => $themen,
                         'themencount' => count($themen),
                         // Eine einzelne Themenzeile, die den Blocktitel nur wiederholt,

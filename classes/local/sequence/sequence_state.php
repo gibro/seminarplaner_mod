@@ -119,6 +119,28 @@ class sequence_state {
         return $sequenz;
     }
 
+    /** @var string Placement key holding a break included in a unit (D88). */
+    public const KEY_INKLPAUSE = 'inklpause';
+
+    /**
+     * Minutes of a break included in a unit placement (D88).
+     *
+     * The break belongs to the placement, never to the library card, and has
+     * no fixed position: the group decides when to take it. It lengthens the
+     * unit - `dauer` stays the working time, the placement occupies
+     * dauer + inklpause minutes.
+     *
+     * @param mixed $placement Placement entry.
+     * @return int Minutes, 0 without an included break.
+     */
+    public static function included_pause($placement): int {
+        if (!is_array($placement) || ($placement['typ'] ?? '') !== self::TYP_EINHEIT) {
+            return 0;
+        }
+        $value = $placement[self::KEY_INKLPAUSE] ?? 0;
+        return is_numeric($value) ? max(0, (int)$value) : 0;
+    }
+
     /** @var string Placement key holding the assigned Referent*innen (D84). */
     public const KEY_REFERENTEN = 'referenten';
 
@@ -283,6 +305,14 @@ class sequence_state {
             $dauer = $platzierung['dauer'] ?? null;
             if (!is_int($dauer) || $dauer < 0) {
                 $problems[] = "Platzierung {$pid}: ungültige Dauer";
+            }
+            if (array_key_exists(self::KEY_INKLPAUSE, $platzierung)) {
+                $inklpause = $platzierung[self::KEY_INKLPAUSE];
+                if ($typ !== self::TYP_EINHEIT) {
+                    $problems[] = "Platzierung {$pid}: eingeschlossene Pause nur an Einheiten";
+                } else if (!is_int($inklpause) || $inklpause < 0) {
+                    $problems[] = "Platzierung {$pid}: ungültige eingeschlossene Pause";
+                }
             }
             if ($typ !== self::TYP_EINHEIT) {
                 continue;
