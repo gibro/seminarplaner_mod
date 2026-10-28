@@ -134,17 +134,17 @@ echo '</div>';
 // Panel 1 – Datei wählen.
 echo '<div id="kg-ie-panel-1">';
 // D48: Themenpläne werden nicht im Plugin geparst, sondern in der externen
-// Seminarschmiede in eine Import-Datei umgewandelt. Bewusst neutraler Info-
+// Konzeptschmiede in eine Import-Datei umgewandelt. Bewusst neutraler Info-
 // Kasten (kein Fehler-/Warnton).
 echo '<div class="kg-ie-hint">';
 echo '<span class="kg-ie-hint__icon">' . $icInfo . '</span>';
 echo '<div class="kg-ie-hint__body">'
     . '<p class="kg-ie-hint__text">Du startest mit einem <strong>Themenplan</strong> (Word-Datei)? '
-    . 'Die <strong>Seminarschmiede</strong> wandelt ihn in eine Import-Datei für den Seminarplaner um. '
+    . 'Die <strong>Konzeptschmiede</strong> wandelt ihn in eine Import-Datei für den Seminarplaner um. '
     . 'Lade den Themenplan dort hoch und importiere die erzeugte Datei anschließend hier.</p>';
 echo html_writer::link(
-    'https://igmetall-seminarschmiede.de',
-    'Zur Seminarschmiede ' . $icExternal,
+    'https://igmetall-konzeptschmiede.de',
+    'Zur Konzeptschmiede ' . $icExternal,
     [
         'class' => 'kg-btn kg-ie-hint__btn',
         'target' => '_blank',
