@@ -88,9 +88,10 @@ $icCheck      = $icon('<path d="M20 6L9 17l-5-5"/>', 10, 3.6, 'stroke="#fff"');
 // Scope-Chip (wiederverwendbares Toggle statt nackter Checkbox). Enthaelt eine
 // echte Checkbox mit der bestehenden ID, damit das AMD-Modul unveraendert den
 // Zustand liest; die Optik uebernimmt CSS ueber :has(input:checked).
-$scopechip = function (string $inputid, string $label, bool $checked) use ($icCheck): string {
+$scopechip = function (string $inputid, string $label, bool $checked, bool $disabled = false) use ($icCheck): string {
     return '<label class="kg-scope-chip">'
-        . '<input type="checkbox" id="' . s($inputid) . '"' . ($checked ? ' checked' : '') . '>'
+        . '<input type="checkbox" id="' . s($inputid) . '"' . ($checked ? ' checked' : '')
+        . ($disabled ? ' disabled' : '') . '>'
         . '<span class="kg-scope-chip__box">' . $icCheck . '</span>'
         . '<span class="kg-scope-chip__label">' . s($label) . '</span>'
         . '</label>';
@@ -156,7 +157,8 @@ echo '</div></div>';
 // Was soll importiert werden? – In diesem Plugin wird der Umfang pro Eintrag in
 // der Vorschau (Schritt 2) entschieden; hier nur der erläuternde Einzeiler.
 echo '<p class="kg-ie-note">Wähle in der Vorschau per Mehrfachauswahl, welche Inhalte importiert '
-    . 'werden: Seminareinheiten, Bausteine und/oder Seminarpläne.</p>';
+    . 'werden: Seminareinheiten und/oder Seminarpläne. Bausteine kommen nur zusammen mit einem '
+    . 'Seminarplan an.</p>';
 
 // Datei-Auswahl (Label-Button + verstecktes File-Input + Dateiname).
 echo '<div class="kg-ie-filepick">'
@@ -242,10 +244,13 @@ echo '<div class="kg-ie-card__head">'
     . '</div>';
 echo '<div class="kg-ie-fieldlabel">Was soll exportiert werden?</div>';
 echo '<div class="kg-scope-chips">';
+// Bausteine sind nur innerhalb eines Seminarplans repräsentiert – deshalb gibt
+// es sie nur zusammen mit Seminarplänen (das AMD-Modul schaltet den Chip frei).
 echo $scopechip('kg-ie-export-methods', 'Seminareinheiten', true);
-echo $scopechip('kg-ie-export-units', 'Bausteine', true);
 echo $scopechip('kg-ie-export-grids', 'Seminarpläne', false);
+echo $scopechip('kg-ie-export-units', 'Bausteine', false, true);
 echo '</div>';
+echo '<p class="kg-ie-note">Bausteine werden nur zusammen mit Seminarplänen exportiert und importiert.</p>';
 echo '<button type="button" id="kg-ie-export-json-full" class="kg-btn kg-btn-primary kg-ie-fullbtn kg-ie-btn--green">'
     . '<span class="kg-btn-content">' . $icDownload . 'Seminarplaner-JSON exportieren</span></button>';
 echo '</div>'; // Ende kg-ie-card (Austausch).

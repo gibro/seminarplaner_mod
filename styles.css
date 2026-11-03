@@ -697,6 +697,12 @@ select.kg-input:-moz-focusring {
   outline-offset: 1px;
 }
 
+/* Gesperrter Chip (Bausteine ohne gewählte Seminarpläne). */
+.kg-scope-chip:has(input:disabled) {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
 /* Dropdowns in den Karten brauchen Abstand nach unten (sonst klebt z. B. das
    Sammlungs-Dropdown direkt am „Seminarkonzept importieren"-Button). */
 .kg-ie-card select.kg-input {
