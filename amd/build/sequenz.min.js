@@ -16,8 +16,9 @@
  */
 define(['core/ajax', 'core_user/repository', 'core/fragment', 'core/templates', 'mod_seminarplaner/lernzieleditor',
     'mod_seminarplaner/livemodel', 'mod_seminarplaner/planmemory', 'mod_seminarplaner/tagsuggest',
-    'mod_seminarplaner/multiextend'],
-function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, PlanMemory, TagSuggest, MultiExtend) {
+    'mod_seminarplaner/multiextend', 'mod_seminarplaner/favorites'],
+function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, PlanMemory, TagSuggest, MultiExtend,
+    Favorites) {
     const DEFAULT_BOUNDARY_MIN = 750; // 12:30 fallback, same rule as the PHP converter.
     const ANCHORS = ['vormittag', 'nachmittag'];
     const DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
@@ -962,6 +963,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             this.loadGrids(this.requestedGrid || PlanMemory.read(this.cmid) || undefined);
             this.loadEnrichment();
             this.loadReferenten();
+            // D89: persönliche Favoriten für den Dialog „Einheit einplanen".
+            Favorites.load(this.cmid);
         }
 
         // ---- Referent*innen (D84) -------------------------------------------
@@ -4282,6 +4285,18 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                         this.closeModal();
                         return;
                     }
+                    // D89: Herz im Dialog „Einheit einplanen". Im Favoriten-
+                    // Reiter verschwindet eine entherzte Einheit sofort.
+                    const fav = event.target.closest('.sp-fav[data-fav-id]');
+                    if (fav) {
+                        Favorites.toggle(this.cmid, fav.getAttribute('data-fav-id')).then(() => {
+                            if (this.pickerTab === 'favoriten') {
+                                const s = bySel('#sq-picker-search');
+                                this.renderPickerList(s ? s.value : '');
+                            }
+                        });
+                        return;
+                    }
                     const action = event.target.closest('[data-sq-action]');
                     if (!action) {
                         return;
@@ -5410,6 +5425,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                   <div class="sq-modal__body">
                     <div class="sq-picker__tabs" role="tablist">
                       ${tab('lokal', 'Lokale Bibliothek')}
+                      ${tab('favoriten', 'Favoriten')}
                       ${tab('global', 'Methodensammlung')}
                       ${hasKonzept ? tab('konzept', 'Globale Seminarkonzepte') : ''}
                     </div>
@@ -5456,6 +5472,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 source = this.globalMethods || [];
             } else if (tab === 'konzept') {
                 source = this.methodCardList.filter(isKonzeptCard);
+            } else if (tab === 'favoriten') {
+                // D89: alle eigenen Karten mit Herz, lokale wie aus Konzepten.
+                source = this.methodCardList.filter((c) => Favorites.has(c.id));
             } else {
                 // Lokale Bibliothek ohne die Konzept-Import-Karten (eigener Tab).
                 source = this.methodCardList.filter((c) => !isKonzeptCard(c));
@@ -5469,11 +5488,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 return !needle || cardTitle(card).toLowerCase().includes(needle);
             }).slice(0, 60);
             if (!cards.length) {
-                const empty = unusedOnly
+                let empty = unusedOnly
                     ? 'Keine noch nicht verwendete Einheit gefunden.'
                     : (tab === 'global'
                         ? 'Keine globale Methode gefunden (oder Methodensammlung nicht verfügbar).'
                         : 'Keine passende Einheit gefunden.') + ' Unten kannst du eine neue schreiben.';
+                if (tab === 'favoriten' && !source.length) {
+                    empty = 'Noch keine Favoriten. Ein Klick auf das Herz an einer Einheit – hier oder in der'
+                        + ' Bibliothek – legt sie hier ab.';
+                }
                 list.innerHTML = `<div class="sq-empty">${empty}</div>`;
                 return;
             }
@@ -5495,6 +5518,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                         </div>
                       </div>
                       <div class="sq-picker__actions">
+                        ${card._isglobal ? '' : Favorites.button(card.id, 'sq-picker__fav')}
                         <button type="button" class="sq-picker__details" data-sq-action="picker-details"
                           data-cardid="${escapeHtml(String(card.id))}"${globalid
                               ? ` data-global-methodid="${globalid}"`

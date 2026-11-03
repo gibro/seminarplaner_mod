@@ -38,7 +38,11 @@ use core_privacy\local\request\writer;
 /**
  * Privacy provider implementation for mod_seminarplaner.
  */
-final class provider implements \core_privacy\local\metadata\provider, core_userlist_provider, request_provider {
+final class provider implements
+    \core_privacy\local\metadata\provider,
+    core_userlist_provider,
+    request_provider,
+    \core_privacy\local\request\user_preference_provider {
     /**
      * Meldet, welche Daten dieses Plugin zu einer Person speichert.
      *
@@ -116,7 +120,36 @@ final class provider implements \core_privacy\local\metadata\provider, core_user
         ], 'privacy:metadata:kgen_activity_methodovr');
 
         $items->add_subsystem_link('core_files', [], 'privacy:metadata:core_files');
+        // D89: persönliche Favoriten, eine Einstellung je Aktivität.
+        $items->add_user_preference('mod_seminarplaner_favorites', 'privacy:metadata:preference:favorites');
         return $items;
+    }
+
+    /**
+     * Exportiert die persönlichen Favoriten (D89) aller Aktivitäten.
+     *
+     * @param int $userid Id der Person.
+     * @return void
+     */
+    public static function export_user_preferences(int $userid): void {
+        global $DB;
+
+        $prefix = 'mod_seminarplaner_favorites_';
+        $prefs = $DB->get_records_select(
+            'user_preferences',
+            'userid = ? AND ' . $DB->sql_like('name', '?'),
+            [$userid, $DB->sql_like_escape($prefix) . '%']
+        );
+        foreach ($prefs as $pref) {
+            $ids = json_decode((string)$pref->value, true);
+            writer::export_user_preference(
+                'mod_seminarplaner',
+                $pref->name,
+                $pref->value,
+                get_string('privacy:metadata:preference:favorites', 'mod_seminarplaner')
+                    . ' (cmid ' . substr($pref->name, strlen($prefix)) . ', ' . (is_array($ids) ? count($ids) : 0) . ')'
+            );
+        }
     }
 
     /**

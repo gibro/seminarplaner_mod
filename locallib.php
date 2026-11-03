@@ -923,3 +923,56 @@ function seminarplaner_render_unit_form_fields(string $prefix, array $options = 
 
     return $out;
 }
+
+/**
+ * Name of the user preference holding someone's favourite seminar units in one activity (D89).
+ *
+ * Favourites are personal: they live in the user preferences, not in the
+ * shared method cards, so marking one never touches the team's saved state.
+ *
+ * @param int $cmid Course module id.
+ * @return string Preference name.
+ */
+function seminarplaner_favorites_preference(int $cmid): string {
+    return 'mod_seminarplaner_favorites_' . $cmid;
+}
+
+/**
+ * The ids of the seminar units a user marked as favourites in one activity (D89).
+ *
+ * @param int $cmid Course module id.
+ * @param int $userid User id.
+ * @return string[] Method card ids, in the order they were marked.
+ */
+function seminarplaner_get_favorites(int $cmid, int $userid): array {
+    $raw = get_user_preferences(seminarplaner_favorites_preference($cmid), '', $userid);
+    $ids = $raw !== '' ? json_decode((string)$raw, true) : [];
+    if (!is_array($ids)) {
+        return [];
+    }
+    $ids = array_filter(array_map('strval', array_filter($ids, 'is_scalar')), static fn($id) => $id !== '');
+    return array_values(array_unique($ids));
+}
+
+/**
+ * Marks or unmarks one seminar unit as a favourite of a user (D89).
+ *
+ * @param int $cmid Course module id.
+ * @param int $userid User id.
+ * @param string $methodid Method card id.
+ * @param bool $favorite True to mark, false to unmark.
+ * @return string[] The favourites after the change.
+ */
+function seminarplaner_set_favorite(int $cmid, int $userid, string $methodid, bool $favorite): array {
+    $ids = array_values(array_diff(seminarplaner_get_favorites($cmid, $userid), [$methodid]));
+    if ($favorite) {
+        $ids[] = $methodid;
+    }
+    $name = seminarplaner_favorites_preference($cmid);
+    if ($ids) {
+        set_user_preference($name, json_encode($ids, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $userid);
+    } else {
+        unset_user_preference($name, $userid);
+    }
+    return $ids;
+}

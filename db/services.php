@@ -335,4 +335,18 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
     ],
+    'mod_seminarplaner_get_favorites' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'get_favorites',
+        'description' => 'List the seminar units the current user marked as favourites (D89).',
+        'type' => 'read',
+        'ajax' => true,
+    ],
+    'mod_seminarplaner_set_favorite' => [
+        'classname' => 'mod_seminarplaner\\external\\api',
+        'methodname' => 'set_favorite',
+        'description' => 'Mark or unmark a seminar unit as favourite of the current user (D89).',
+        'type' => 'write',
+        'ajax' => true,
+    ],
 ];

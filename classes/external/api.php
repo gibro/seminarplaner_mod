@@ -4690,6 +4690,107 @@ class api extends external_api {
     }
 
     /**
+     * Definiert die Eingabeparameter für das Abfragen der eigenen Favoriten.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
+    public static function get_favorites_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+        ]);
+    }
+
+    /**
+     * Die Seminareinheiten, die die aufrufende Person in dieser Aktivität als
+     * Favoriten markiert hat (D89). Favoriten sind persönlich.
+     *
+     * @param int $cmid Kurs-Modul-Id der Aktivität.
+     * @return array Array mit dem Schlüssel ids.
+     */
+    public static function get_favorites(int $cmid): array {
+        global $CFG, $USER;
+        require_once($CFG->dirroot . '/mod/seminarplaner/locallib.php');
+
+        $params = self::validate_parameters(self::get_favorites_parameters(), ['cmid' => $cmid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        self::require_any_module_capability($resolved['context'], [
+            'mod/seminarplaner:managemethods',
+            'mod/seminarplaner:managegrids',
+        ]);
+
+        return ['ids' => seminarplaner_get_favorites((int)$resolved['cm']->id, (int)$USER->id)];
+    }
+
+    /**
+     * Beschreibt die Rückgabestruktur der Favoriten-Liste.
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
+    public static function get_favorites_returns(): external_single_structure {
+        return new external_single_structure([
+            'ids' => new external_multiple_structure(new external_value(PARAM_RAW, 'Method card id')),
+        ]);
+    }
+
+    /**
+     * Definiert die Eingabeparameter für das Markieren eines Favoriten.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
+    public static function set_favorite_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'methodid' => new external_value(PARAM_RAW, 'Method card id'),
+            'favorite' => new external_value(PARAM_BOOL, 'True to mark, false to unmark'),
+        ]);
+    }
+
+    /**
+     * Markiert eine Seminareinheit als Favorit der aufrufenden Person oder
+     * nimmt die Markierung zurück (D89).
+     *
+     * Ob es die Karte gibt, wird bewusst nicht geprüft: Eine gelöschte Karte
+     * taucht im Favoriten-Reiter ohnehin nicht mehr auf, und die Prüfung
+     * kostete bei jedem Klick das Laden aller Karten.
+     *
+     * @param int $cmid Kurs-Modul-Id der Aktivität.
+     * @param string $methodid Id der Seminareinheit.
+     * @param bool $favorite True markiert, false nimmt zurück.
+     * @return array Array mit dem Schlüssel ids (Favoriten nach der Änderung).
+     */
+    public static function set_favorite(int $cmid, string $methodid, bool $favorite): array {
+        global $CFG, $USER;
+        require_once($CFG->dirroot . '/mod/seminarplaner/locallib.php');
+
+        $params = self::validate_parameters(self::set_favorite_parameters(), [
+            'cmid' => $cmid,
+            'methodid' => $methodid,
+            'favorite' => $favorite,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        self::require_any_module_capability($resolved['context'], [
+            'mod/seminarplaner:managemethods',
+            'mod/seminarplaner:managegrids',
+        ]);
+        $id = trim((string)$params['methodid']);
+        if ($id === '' || \core_text::strlen($id) > 255) {
+            throw new invalid_parameter_exception('Ungültige Seminareinheit.');
+        }
+        self::enforce_write_rate_limit('set_favorite', 120, 60);
+
+        return ['ids' => seminarplaner_set_favorite((int)$resolved['cm']->id, (int)$USER->id, $id, (bool)$params['favorite'])];
+    }
+
+    /**
+     * Beschreibt die Rückgabestruktur des Markierens.
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
+    public static function set_favorite_returns(): external_single_structure {
+        return self::get_favorites_returns();
+    }
+
+    /**
      * Definiert die Eingabeparameter für das Lebenszeichen eines offenen Plans.
      *
      * @return external_function_parameters Parameterdefinition der Webservice-Funktion.

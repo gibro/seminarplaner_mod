@@ -1,6 +1,6 @@
 define(['core/ajax', 'core/notification', 'mod_seminarplaner/lernzieleditor', 'mod_seminarplaner/tagsuggest',
-    'mod_seminarplaner/multiextend'],
-function(Ajax, Notification, LernzielEditor, TagSuggest, MultiExtend) {
+    'mod_seminarplaner/multiextend', 'mod_seminarplaner/favorites'],
+function(Ajax, Notification, LernzielEditor, TagSuggest, MultiExtend, Favorites) {
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
     const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -920,8 +920,9 @@ function(Ajax, Notification, LernzielEditor, TagSuggest, MultiExtend) {
 
     // Welcher Bibliothek-Tab die geteilte Liste (#ml-browse) gerade zeigt:
     // 'local' = eigene Seminareinheiten, 'concepts' = die aus importierten
-    // Seminarkonzepten. Beide sind lokale Kopien und teilen sich Filterleiste,
-    // Liste und Editor - getrennt wird nur, welche Einheiten drin sind.
+    // Seminarkonzepten, 'favorites' = die mit Herz markierten aus beiden (D89).
+    // Alle sind lokale Kopien und teilen sich Filterleiste, Liste und Editor -
+    // getrennt wird nur, welche Einheiten drin sind.
     let libraryScope = 'local';
 
     // Eine Einheit stammt aus einem Konzept, wenn sie dessen Herkunft trägt.
@@ -943,7 +944,20 @@ function(Ajax, Notification, LernzielEditor, TagSuggest, MultiExtend) {
         return card ? String(card._kgkonzept.setname) : `Seminarkonzept #${setid}`;
     };
 
-    const scopedMethods = () => methods.filter((m) => (libraryScope === 'concepts' ? isKonzeptCard(m) : !isKonzeptCard(m)));
+    const scopedMethods = () => methods.filter((m) => {
+        if (libraryScope === 'favorites') {
+            return Favorites.has(m.id);
+        }
+        return libraryScope === 'concepts' ? isKonzeptCard(m) : !isKonzeptCard(m);
+    });
+
+    // Leerhinweis im Favoriten-Reiter: ohne Herz gibt es dort nichts zu sehen.
+    const updateFavoritesEmpty = () => {
+        const hint = bySel('#ml-favorites-empty');
+        if (hint) {
+            hint.classList.toggle('kg-hidden', libraryScope !== 'favorites' || scopedMethods().length > 0);
+        }
+    };
 
     // Herkunft = aus welchem Seminarkonzept. Nur im Konzept-Tab, und erst ab
     // dem zweiten Konzept - bei einem einzigen gäbe es nichts zu unterscheiden.
@@ -1063,6 +1077,7 @@ function(Ajax, Notification, LernzielEditor, TagSuggest, MultiExtend) {
         });
         host.classList.toggle('kg-library-list--selecting', selectionMode);
         host.innerHTML = '';
+        updateFavoritesEmpty();
 
         scopedMethods().forEach((m, index) => {
             if (!m.id) {
@@ -1108,6 +1123,7 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                 </span>
                 <div class="sp-card-title ml-card-title"><strong>${escapeHtml(m.titel || '(ohne Titel)')}</strong></div>
                 <div class="ml-card-head-actions">
+                  ${Favorites.button(m.id, 'ml-card-fav')}
                   <details class="ml-card-menu sq-menu">
                     <summary class="sq-menu__btn" aria-label="Aktionen" title="Weitere Aktionen">⋮</summary>
                     <div class="sq-menu__panel" role="menu">
@@ -1151,6 +1167,21 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                     }
                     card.classList.toggle('kg-library-card--selected', selectinput.checked);
                     updateBulkToolbar();
+                });
+            }
+            const favbtn = card.querySelector('.sp-fav');
+            if (favbtn) {
+                favbtn.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    Favorites.toggle(runtimeCmid, m.id).then(() => {
+                        // Im Favoriten-Reiter verschwindet eine entherzte
+                        // Einheit sofort - sonst stünde sie dort bis zum
+                        // nächsten Reiterwechsel ohne Herz herum.
+                        if (libraryScope === 'favorites') {
+                            renderList();
+                            applyFilters();
+                        }
+                    });
                 });
             }
             const editbtn = card.querySelector('[data-act="edit"]');
@@ -2991,7 +3022,8 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
             btn.classList.toggle('ml-subtab--active', active);
             btn.setAttribute('aria-selected', active ? 'true' : 'false');
         });
-        [['local', '#ml-tab-local'], ['collections', '#ml-tab-collections'], ['concepts', '#ml-tab-concepts']]
+        [['local', '#ml-tab-local'], ['favorites', '#ml-tab-favorites'], ['collections', '#ml-tab-collections'],
+            ['concepts', '#ml-tab-concepts']]
             .forEach(([key, sel]) => {
                 const panel = bySel(sel);
                 if (panel) {
@@ -3004,18 +3036,19 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
         // das Panel dort bringt seine eigene Oberfläche mit und der Block ist
         // mit seinem Panel ohnehin ausgeblendet.
         const browse = bySel('#ml-browse');
-        if (browse && (name === 'local' || name === 'concepts')) {
-            const panel = bySel(name === 'concepts' ? '#ml-tab-concepts' : '#ml-tab-local');
+        if (browse && (name === 'local' || name === 'concepts' || name === 'favorites')) {
+            const panel = bySel(`#ml-tab-${name}`);
             if (panel && browse.parentElement !== panel) {
                 panel.appendChild(browse);
             }
             libraryScope = name;
-            // Eine hier angelegte Einheit gehörte zu keinem Konzept - der
-            // Anlegen-Button bleibt deshalb dem lokalen Tab vorbehalten. Die
-            // Suche daneben gilt für alle Bereiche und bleibt stehen.
+            // Eine hier angelegte Einheit gehörte zu keinem Konzept und hätte
+            // kein Herz - der Anlegen-Button bleibt deshalb dem lokalen Tab
+            // vorbehalten. Die Suche daneben gilt für alle Bereiche und bleibt
+            // stehen.
             const createbtn = bySel('#ml-create-open');
             if (createbtn) {
-                createbtn.classList.toggle('kg-hidden', name === 'concepts');
+                createbtn.classList.toggle('kg-hidden', name !== 'local');
             }
             // Der Herkunftsfilter zählt nur im Konzept-Tab; beim Verlassen
             // zurücksetzen, sonst filtert er unsichtbar weiter.
@@ -3154,7 +3187,7 @@ Deine lokalen Änderungen bleiben erhalten.">↻ Aktualisierte Version verfügba
                 });
             }
 
-            Promise.all([loadMethods(cmid), loadMethodsetSyncStatus(cmid)]).then(() => {
+            Promise.all([loadMethods(cmid), loadMethodsetSyncStatus(cmid), Favorites.load(cmid)]).then(() => {
                 renderList();
                 applyRequestedEditFromUrl();
             }).catch((e) => {
