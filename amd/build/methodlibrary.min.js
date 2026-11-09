@@ -1,6 +1,6 @@
 define(['core/ajax', 'core/notification', 'mod_seminarplaner/lernzieleditor', 'mod_seminarplaner/tagsuggest',
-    'mod_seminarplaner/multiextend', 'mod_seminarplaner/favorites'],
-function(Ajax, Notification, LernzielEditor, TagSuggest, MultiExtend, Favorites) {
+    'mod_seminarplaner/multiextend', 'mod_seminarplaner/favorites', 'mod_seminarplaner/alternativelinks'],
+function(Ajax, Notification, LernzielEditor, TagSuggest, MultiExtend, Favorites, AlternativeLinks) {
     const bySel = (sel) => document.querySelector(sel);
     const asCall = (methodname, args) => Ajax.call([{methodname, args}])[0];
     const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -692,33 +692,7 @@ function(Ajax, Notification, LernzielEditor, TagSuggest, MultiExtend, Favorites)
     };
 
     const reconcileAlternativesForMethod = (methodid, selectedalternatives) => {
-        const currentid = String(methodid || '').trim();
-        if (!currentid) {
-            return;
-        }
-        const selected = new Set(
-            (Array.isArray(selectedalternatives) ? selectedalternatives : [])
-                .map((id) => String(id || '').trim())
-                .filter((id) => id && id !== currentid)
-        );
-
-        methods = methods.map((method) => {
-            const id = String(method.id || '').trim();
-            if (!id) {
-                return method;
-            }
-            if (id === currentid) {
-                return Object.assign({}, method, {alternativen: Array.from(selected)});
-            }
-            const existing = Array.isArray(method.alternativen)
-                ? method.alternativen.map((altid) => String(altid || '').trim()).filter(Boolean)
-                : [];
-            const withoutcurrent = existing.filter((altid) => altid !== currentid);
-            if (selected.has(id)) {
-                withoutcurrent.push(currentid);
-            }
-            return Object.assign({}, method, {alternativen: Array.from(new Set(withoutcurrent))});
-        });
+        AlternativeLinks.setLinks(methods, methodid, selectedalternatives);
     };
 
     const buildMethod = async () => {

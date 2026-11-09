@@ -16,9 +16,9 @@
  */
 define(['core/ajax', 'core_user/repository', 'core/fragment', 'core/templates', 'mod_seminarplaner/lernzieleditor',
     'mod_seminarplaner/livemodel', 'mod_seminarplaner/planmemory', 'mod_seminarplaner/tagsuggest',
-    'mod_seminarplaner/multiextend', 'mod_seminarplaner/favorites'],
+    'mod_seminarplaner/multiextend', 'mod_seminarplaner/favorites', 'mod_seminarplaner/alternativelinks'],
 function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, PlanMemory, TagSuggest, MultiExtend,
-    Favorites) {
+    Favorites, AlternativeLinks) {
     const DEFAULT_BOUNDARY_MIN = 750; // 12:30 fallback, same rule as the PHP converter.
     const ANCHORS = ['vormittag', 'nachmittag'];
     const DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
@@ -2059,11 +2059,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         // D21 (Nachtrag): Alternativen sind bisher eine Momentaufnahme beim
         // Einfuegen - wer die Verknuepfung erst danach in der Bibliothek setzt,
         // sah sie im Plan nie. Dieser Abgleich laeuft bei jedem render() und
-        // holt zweierlei nach:
+        // holt dreierlei nach:
         //
-        //   1. Kandidaten nachziehen: was die Bibliothek als Alternative der
+        //   1. Geloeste Kandidaten entfernen: Bleibt nur, was ueber
+        //      Verknuepfungen mit der aktiven Karte zusammenhaengt. Nicht nur
+        //      direkt Verknuepfte, sonst schrumpfte die Gruppe beim Umschalten,
+        //      wenn eine Karte nur am „Hauptkandidaten" haengt.
+        //   2. Kandidaten nachziehen: was die Bibliothek als Alternative der
         //      aktiven Karte kennt, wird Kandidat der Auswahl.
-        //   2. Benachbarte Platzierungen zusammenfuehren, die laut Bibliothek
+        //   3. Benachbarte Platzierungen zusammenfuehren, die laut Bibliothek
         //      Alternativen voneinander sind. Sie standen sonst als zwei
         //      getrennte Programmpunkte im Tag und zaehlten beide in die
         //      Zeitbilanz, obwohl im Seminar nur eine davon laeuft.
@@ -2084,11 +2088,23 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 }
                 return card.alternativen.map(String).filter((r) => this.methodCards[r]);
             };
+            const graph = AlternativeLinks.linkGraph(this.methodCardList);
 
             Object.keys(seq.einheitenauswahlen).forEach((eaid) => {
                 const auswahl = seq.einheitenauswahlen[eaid];
                 if (!auswahl || !Array.isArray(auswahl.kandidaten)) {
                     return;
+                }
+                const aktiv = String(auswahl.aktiv || '');
+                if (this.methodCards[aktiv]) {
+                    // Karten, die die Bibliothek nicht (mehr) kennt, bleiben
+                    // stehen: Ueber sie sagt der Graph nichts aus.
+                    const reachable = AlternativeLinks.reachableFrom(graph, aktiv);
+                    const kept = auswahl.kandidaten.filter((ref) => !this.methodCards[String(ref)] || reachable.has(String(ref)));
+                    if (kept.length !== auswahl.kandidaten.length) {
+                        auswahl.kandidaten = kept;
+                        changed = true;
+                    }
                 }
                 const known = auswahl.kandidaten.map(String);
                 altsOf(auswahl.aktiv).forEach((ref) => {
@@ -4664,9 +4680,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 }
             });
             // Alternative Seminareinheiten (dynamische IDs, eigene Behandlung):
-            // sich selbst nie als Alternative speichern.
-            card.alternativen = readMultiDropdownValues('#sq-e-alternativen')
-                .filter((id) => String(id) !== String(card.id));
+            // sich selbst nie als Alternative speichern. Die Gegenseiten muessen
+            // mit, sonst stellt der Server eine geloeste Verknuepfung wieder her.
+            AlternativeLinks.setLinks(this.methodCardList, card.id, readMultiDropdownValues('#sq-e-alternativen'));
             // Datei-Anhänge: Der Entwurfsbereich (Fragment) wird beim Speichern
             // serverseitig in den Dateibestand der Einheit übernommen.
             const draftid = this.unitMaterialDraftItemId();
@@ -5658,14 +5674,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
 
         // Eigenständiges Duplikat der aktiven Karte in der Bibliothek anlegen
         // (wie „Als neue Einheit duplizieren" dort: lokale Einheit, ohne
-        // Alternativen und ohne Verknüpfung zur globalen Sammlung; die Anhänge
-        // kopiert der Server über _copyfrom). Rückgabe: Promise mit der neuen
-        // Karte (nach dem Neuladen der Bibliothek, damit die Anhänge stimmen).
-        createDuplicateCard(card) {
+        // Verknüpfung zur globalen Sammlung und, wenn nichts anderes übergeben
+        // wird, ohne Alternativen; die Anhänge kopiert der Server über
+        // _copyfrom). Rückgabe: Promise mit der neuen Karte (nach dem Neuladen
+        // der Bibliothek, damit die Anhänge stimmen).
+        createDuplicateCard(card, alternativen = []) {
             const copy = JSON.parse(JSON.stringify(card));
             copy.id = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
             copy.titel = numberedTitleFor(cardTitle(card), this.methodCardList);
-            copy.alternativen = [];
+            copy.alternativen = alternativen;
             copy._copyfrom = String(card.id);
             copy.timemodified = Date.now();
             delete copy._kgsync;
@@ -5785,7 +5802,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const oldtitle = cardTitle(card);
             btn.disabled = true;
             btn.textContent = 'Wird angelegt …';
-            this.createDuplicateCard(card).then((copy) => {
+            // Das Duplikat übernimmt die Alternativen dieser Stelle auch in der
+            // Bibliothek, sonst räumt der Abgleich sie als gelöst wieder ab.
+            const others = auswahl.kandidaten.map(String).filter((ref) => ref !== String(card.id));
+            this.createDuplicateCard(card, others).then((copy) => {
                 const newid = String(copy.id);
                 // Nur diese Stelle (samt ihren geteilten Teilen) zeigt jetzt auf
                 // das Duplikat; ihre Alternativen bleiben, das Original darin
@@ -7008,7 +7028,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 this.reconciling = false;
                 if (merged) {
                     this.setDirty(true);
-                    this.toast('Alternativen aus der Bibliothek übernommen.');
+                    this.toast('Alternativen mit der Bibliothek abgeglichen.');
                 }
             }
             this.renderHead();
