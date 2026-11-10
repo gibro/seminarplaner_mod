@@ -1100,6 +1100,7 @@ class api extends external_api {
             'setname' => (string)$set->displayname,
             'plancreated' => false,
             'planname' => '',
+            'plancount' => 0,
         ];
     }
 
@@ -1115,7 +1116,8 @@ class api extends external_api {
             'totalcount' => new external_value(PARAM_INT, 'Total methods after import'),
             'setname' => new external_value(PARAM_TEXT, 'Methodset display name'),
             'plancreated' => new external_value(PARAM_BOOL, 'Whether a new plan was created (D32 Seminarkonzept)'),
-            'planname' => new external_value(PARAM_TEXT, 'Name of the created plan'),
+            'planname' => new external_value(PARAM_TEXT, 'Name(s) of the created plan(s)'),
+            'plancount' => new external_value(PARAM_INT, 'Number of created plans'),
         ]);
     }
 
@@ -1150,11 +1152,8 @@ class api extends external_api {
             return null;
         }
         $version = $repo->get_version($contentversionid);
-        $payload = $version ? json_decode((string)$version->snapshotjson, true) : null;
-        if (
-            !is_array($payload) || (string)($payload['typ'] ?? '') !== 'seminarkonzept'
-                || !is_array($payload['plan'] ?? null)
-        ) {
+        $snapshot = \local_seminarplaner\local\service\konzept_snapshot::decode($version ? (string)$version->snapshotjson : '');
+        if (!$snapshot['plans']) {
             // Kein Plan im Snapshot. Das trifft jedes Set, das vor D32
             // veroeffentlicht wurde (damals blieb der Snapshot leer, die
             // Einheiten lagen nur in local_kgen_method) und spaeter das Label
@@ -1163,9 +1162,7 @@ class api extends external_api {
             // Sammlungs-Weg.
             return null;
         }
-        $snapshotmethods = is_array($payload['methods'] ?? null) ? $payload['methods'] : [];
-        $plan = $payload['plan'];
-        $state = is_array($plan['state'] ?? null) ? $plan['state'] : [];
+        $snapshotmethods = $snapshot['methods'];
         $actorid = (int)$GLOBALS['USER']->id;
 
         // Attachments live at the global set's method rows; match them back
@@ -1188,6 +1185,7 @@ class api extends external_api {
         // Fresh ids for every unit; the map drives the reference rewrite.
         $idmap = [];
         $imported = [];
+        $snapshottitles = [];
         $counter = 0;
         foreach ($snapshotmethods as $method) {
             if (!is_array($method)) {
@@ -1209,30 +1207,29 @@ class api extends external_api {
             $copy['_kgkonzept'] = self::konzept_origin($set);
             $copy['materialien'] = $attachmentsbytitle[self::normalize_method_title($title)] ?? [];
             $imported[] = $copy;
+            $snapshottitles[self::normalize_method_title($title)] = true;
         }
 
-        // Rewrite the sequence's card references onto the fresh ids.
-        $statekey = \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY;
-        if (
-            isset($state[$statekey]) && is_array($state[$statekey])
-                && isset($state[$statekey]['einheitenauswahlen']) && is_array($state[$statekey]['einheitenauswahlen'])
-        ) {
-            foreach ($state[$statekey]['einheitenauswahlen'] as $eaid => $auswahl) {
-                if (!is_array($auswahl)) {
-                    continue;
-                }
-                $kandidaten = [];
-                foreach ((array)($auswahl['kandidaten'] ?? []) as $ref) {
-                    $ref = (string)$ref;
-                    $kandidaten[] = $idmap[$ref] ?? $ref;
-                }
-                $auswahl['kandidaten'] = $kandidaten;
-                if (isset($auswahl['aktiv']) && $auswahl['aktiv'] !== null && $auswahl['aktiv'] !== '') {
-                    $aktiv = (string)$auswahl['aktiv'];
-                    $auswahl['aktiv'] = $idmap[$aktiv] ?? $aktiv;
-                }
-                $state[$statekey]['einheitenauswahlen'][$eaid] = $auswahl;
+        // Ein hochgeladener Plan kann zu einem Eintrag dazukommen, dessen Einheiten nur als
+        // Zeilen vorliegen. Auch die gehoeren zum Konzept und duerfen nicht wegfallen.
+        foreach ($rows as $row) {
+            if (isset($snapshottitles[self::normalize_method_title((string)($row->title ?? ''))])) {
+                continue;
             }
+            $mapped = self::map_global_method_record(
+                $row,
+                (int)$set->id,
+                $contentversionid,
+                $attachmentsbymethod[(int)$row->id] ?? []
+            );
+            if (trim((string)$mapped['titel']) === '') {
+                continue;
+            }
+            $counter++;
+            $mapped['id'] = self::new_konzept_card_id($counter);
+            $mapped['_kgkonzept'] = self::konzept_origin($set);
+            unset($mapped['_kgsync']);
+            $imported[] = $mapped;
         }
 
         // Units become part of the activity library.
@@ -1244,26 +1241,36 @@ class api extends external_api {
         $merged = array_merge($existing, $imported);
         $service->save_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id, $merged);
 
-        // New plan, never overwriting: unique name within the activity.
+        // New plans, never overwriting: unique names within the activity.
         $gridservice = new grid_service();
         $existingnames = [];
         foreach ($gridservice->list_grids((int)$resolved['cm']->id) as $grid) {
             $existingnames[trim((string)$grid->name)] = true;
         }
-        $planname = trim((string)($plan['name'] ?? '')) !== '' ? trim((string)$plan['name']) : (string)$set->displayname;
-        $uniquename = $planname;
-        $suffix = 2;
-        while (isset($existingnames[$uniquename])) {
-            $uniquename = $planname . ' (' . $suffix . ')';
-            $suffix++;
+        $createdplans = [];
+        foreach ($snapshot['plans'] as $plan) {
+            $planname = trim((string)$plan['name']) !== '' ? trim((string)$plan['name']) : (string)$set->displayname;
+            $uniquename = $planname;
+            $suffix = 2;
+            while (isset($existingnames[$uniquename])) {
+                $uniquename = $planname . ' (' . $suffix . ')';
+                $suffix++;
+            }
+            $existingnames[$uniquename] = true;
+            $newgridid = $gridservice->create_grid(
+                (int)$resolved['cm']->id,
+                $uniquename,
+                $actorid,
+                trim((string)$plan['description']) !== '' ? (string)$plan['description'] : null
+            );
+            $gridservice->save_user_state(
+                $newgridid,
+                $actorid,
+                \local_seminarplaner\local\service\konzept_snapshot::rewrite_card_refs($plan['state'], $idmap)
+            );
+            $createdplans[(int)$newgridid] = $uniquename;
         }
-        $newgridid = $gridservice->create_grid(
-            (int)$resolved['cm']->id,
-            $uniquename,
-            $actorid,
-            trim((string)($plan['description'] ?? '')) !== '' ? (string)$plan['description'] : null
-        );
-        $gridservice->save_user_state($newgridid, $actorid, $state);
+        $createdgridids = array_keys($createdplans);
 
         // D55: importierte Seminarkonzepte im Bibliothek-Tab "Globale
         // Seminarkonzepte" auffindbar machen. Es gibt sonst keinen Marker -
@@ -1272,8 +1279,9 @@ class api extends external_api {
         self::record_imported_konzept((int)$resolved['cm']->id, [
             'setid' => (int)$set->id,
             'setname' => (string)$set->displayname,
-            'planname' => $uniquename,
-            'gridid' => (int)$newgridid,
+            'planname' => $createdplans[$createdgridids[0]],
+            'gridid' => $createdgridids[0],
+            'gridids' => $createdgridids,
             'unitcount' => count($imported),
             'timeimported' => time(),
         ]);
@@ -1284,7 +1292,8 @@ class api extends external_api {
             'totalcount' => count($merged),
             'setname' => (string)$set->displayname,
             'plancreated' => true,
-            'planname' => $uniquename,
+            'planname' => implode(', ', $createdplans),
+            'plancount' => count($createdplans),
         ];
     }
 
@@ -1398,6 +1407,7 @@ class api extends external_api {
             'setname' => (string)$set->displayname,
             'plancreated' => false,
             'planname' => '',
+            'plancount' => 0,
         ];
     }
 
@@ -1751,13 +1761,23 @@ class api extends external_api {
             // anderes als ein Plan, den es gab und den jemand geloescht hat -
             // sonst meldet die Bibliothek einen Verlust, den es nie gab.
             $hadplan = $gridid > 0;
+            // Ein Konzept kann mehrere Plaene mitbringen: verlinkt wird der erste, den es
+            // noch gibt, und als Titel steht dann der Konzeptname.
+            $gridids = array_map('intval', (array)($entry['gridids'] ?? [$gridid]));
+            foreach ($gridids as $candidate) {
+                if (isset($existinggrids[$candidate])) {
+                    $gridid = $candidate;
+                    break;
+                }
+            }
             $planexists = $hadplan && isset($existinggrids[$gridid]);
             $out[] = [
                 'setid' => (int)($entry['setid'] ?? 0),
                 'setname' => (string)($entry['setname'] ?? ''),
                 // Current plan name if it still exists (user may have renamed it),
                 // otherwise the name recorded at import time.
-                'planname' => $planexists ? $existinggrids[$gridid] : (string)($entry['planname'] ?? ''),
+                'planname' => count($gridids) > 1 ? ''
+                    : ($planexists ? $existinggrids[$gridid] : (string)($entry['planname'] ?? '')),
                 'gridid' => $gridid,
                 'hadplan' => $hadplan,
                 'planexists' => $planexists,

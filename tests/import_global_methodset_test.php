@@ -198,6 +198,60 @@ final class import_global_methodset_test extends advanced_testcase {
     /**
      * A Seminarkonzept with a plan creates that plan and rewrites references.
      */
+    public function test_import_seminarkonzept_creates_every_plan_with_its_bausteine(): void {
+        global $USER;
+
+        $this->resetAfterTest(true);
+        $this->setAdminUser();
+        $this->create_activity();
+
+        $statekey = \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY;
+        $plan = static function (string $name, array $bausteine, string $ref) use ($statekey): array {
+            return ['name' => $name, 'description' => '', 'state' => [$statekey => [
+                'version' => \mod_seminarplaner\local\sequence\sequence_state::FORMAT_VERSION,
+                'tage' => [],
+                'platzierungen' => [],
+                'bausteine' => $bausteine,
+                'einheitenauswahlen' => ['ea-1' => ['kandidaten' => [$ref], 'aktiv' => $ref]],
+            ]]];
+        };
+        [$setid, $versionid] = $this->create_published_set('seminarkonzept', [
+            'typ' => 'seminarkonzept',
+            'methods' => [['id' => 'alt-1', 'titel' => 'Blitzlicht']],
+            'plans' => [
+                $plan('Plan A', ['b-1' => ['titel' => 'Baustein A', 'varianten' => ['v-1' => ['titel' => 'V']]]], 'alt-1'),
+                $plan('Plan B', [], 'alt-1'),
+            ],
+        ]);
+        $this->create_global_method($setid, $versionid, 'Blitzlicht');
+        // Nur als Zeile vorhanden: darf neben den Plaenen nicht verloren gehen.
+        $this->create_global_method($setid, $versionid, 'Nur in der Sammlung');
+
+        $result = api::import_global_methodset($this->cmid, $setid);
+
+        $this->assertSame(2, $result['plancount']);
+        $this->assertSame(2, $result['importedcount']);
+        $this->assertSame('Plan A, Plan B', $result['planname']);
+
+        $library = array_column($this->get_library(), 'id', 'titel');
+        $this->assertArrayHasKey('Nur in der Sammlung', $library);
+
+        $service = new grid_service();
+        $grids = array_column($service->list_grids($this->cmid), null, 'name');
+        $this->assertCount(2, $grids);
+        foreach (['Plan A', 'Plan B'] as $name) {
+            $state = $service->get_user_state((int)$grids[$name]->id, (int)$USER->id)['state'];
+            $this->assertSame($library['Blitzlicht'], $state[$statekey]['einheitenauswahlen']['ea-1']['aktiv']);
+        }
+        $state = $service->get_user_state((int)$grids['Plan A']->id, (int)$USER->id)['state'];
+        $this->assertSame('Baustein A', $state[$statekey]['bausteine']['b-1']['titel']);
+
+        // Mehrere Plaene: die Bibliothek zeigt den Konzeptnamen statt eines einzelnen Plans.
+        $konzepte = api::list_imported_konzepte($this->cmid)['konzepte'];
+        $this->assertSame('', $konzepte[0]['planname']);
+        $this->assertTrue($konzepte[0]['planexists']);
+    }
+
     public function test_import_seminarkonzept_with_plan_creates_plan_and_rewrites_references(): void {
         global $USER;
 

@@ -3159,8 +3159,11 @@ function(Ajax, Notification, Handout, PlanMemory) {
                         refreshGlobalSyncUi();
                         // D32: beim Seminarkonzept entsteht zusätzlich ein
                         // neuer Plan (nie überschreibend).
+                        const plantext = Number(res.plancount) > 1
+                            ? `mit ${res.plancount} neuen Plänen (${res.planname})`
+                            : `als neuer Plan „${res.planname}"`;
                         setGlobalStatus(res.plancreated
-                            ? `Import erfolgreich: Seminarkonzept "${res.setname}" als neuer Plan „${res.planname}" angelegt, `
+                            ? `Import erfolgreich: Seminarkonzept "${res.setname}" ${plantext} angelegt, `
                                 + `${res.importedcount} Seminareinheiten übernommen (insgesamt ${res.totalcount}).`
                             : `Import erfolgreich: ${res.importedcount} Seminareinheiten aus "${res.setname}" in die Bibliothek `
                                 + `übernommen (insgesamt ${res.totalcount}). Dieses Konzept enthält keinen Seminarplan, `
