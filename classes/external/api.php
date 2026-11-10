@@ -3055,7 +3055,7 @@ class api extends external_api {
         string $description = '',
         string $changelog = ''
     ): array {
-        global $DB;
+        global $CFG, $DB;
 
         $params = self::validate_parameters(self::submit_seminarkonzept_for_review_parameters(), [
             'cmid' => $cmid,
@@ -3138,6 +3138,7 @@ class api extends external_api {
         $reviewerrepo = new \local_seminarplaner\local\repository\reviewer_repository();
         $workflow = new \local_seminarplaner\local\service\workflow_service();
 
+        $baseversionid = 0;
         if ((int)$params['methodsetid'] > 0) {
             // Resubmit an existing Seminarkonzept as a new version.
             $set = $repo->get_methodset((int)$params['methodsetid']);
@@ -3154,6 +3155,7 @@ class api extends external_api {
                 $repo->update_methodset_status((int)$set->id, 'draft', $actorid);
             }
             $setid = (int)$set->id;
+            $baseversionid = (int)($set->currentversion ?? 0);
             $versionnum = (int)$DB->get_field_sql(
                 'SELECT COALESCE(MAX(versionnum), 0) + 1 FROM {local_kgen_methodset_ver} WHERE methodsetid = :methodsetid',
                 ['methodsetid' => $setid]
@@ -3178,16 +3180,28 @@ class api extends external_api {
 
         // Snapshot payload (D32): object instead of the plain method array a
         // Methoden-Sammlung uses - plan state 1:1 plus the referenced units.
-        $snapshotpayload = [
-            'typ' => 'seminarkonzept',
-            'methods' => $planmethods,
-            'plan' => [
-                'name' => (string)$grid->name,
-                'description' => (string)($grid->description ?? ''),
-                'state' => $state,
-            ],
+        $planentry = [
+            'name' => (string)$grid->name,
+            'description' => (string)($grid->description ?? ''),
+            'state' => $state,
         ];
-        $snapshotjson = json_encode($snapshotpayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $droppedtitles = [];
+        $baseversion = $baseversionid > 0 ? $repo->get_version($baseversionid) : null;
+        if ($baseversion) {
+            // Resubmitting one plan must not cost the concept its other plans.
+            $resubmission = \local_seminarplaner\local\service\konzept_snapshot::merge_resubmitted_plan(
+                \local_seminarplaner\local\service\konzept_snapshot::decode((string)$baseversion->snapshotjson),
+                $planmethods,
+                $planentry
+            );
+            $snapshotjson = \local_seminarplaner\local\service\konzept_snapshot::encode($resubmission['snapshot']);
+            $droppedtitles = array_flip($resubmission['droppedtitles']);
+        } else {
+            $snapshotjson = json_encode(
+                ['typ' => 'seminarkonzept', 'methods' => $planmethods, 'plan' => $planentry],
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            );
+        }
         if ($snapshotjson === false) {
             throw new invalid_parameter_exception('Seminarkonzept konnte nicht serialisiert werden');
         }
@@ -3247,6 +3261,25 @@ class api extends external_api {
                 $actorid,
                 true
             );
+        }
+
+        // The units of the other plans stay browsable and keep their files.
+        if ($baseversion) {
+            require_once($CFG->dirroot . '/local/seminarplaner/locallib.php');
+            $normalize = [\local_seminarplaner\local\service\konzept_snapshot::class, 'normalize_key'];
+            $submittedtitles = [];
+            foreach ($planmethods as $method) {
+                $submittedtitles[$normalize((string)$method['titel'])] = true;
+            }
+            $baserows = $DB->get_records('local_kgen_method', ['methodsetversionid' => $baseversionid], 'id ASC');
+            foreach ($baserows as $row) {
+                $titlekey = $normalize((string)$row->title);
+                if (isset($submittedtitles[$titlekey]) || isset($droppedtitles[$titlekey])) {
+                    continue;
+                }
+                local_seminarplaner_copy_method_to_version($row, (int)$versionid, $actorid);
+                $savedcount++;
+            }
         }
 
         $comment = trim((string)$params['changelog']) !== ''

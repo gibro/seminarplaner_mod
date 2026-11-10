@@ -198,6 +198,66 @@ final class import_global_methodset_test extends advanced_testcase {
     /**
      * A Seminarkonzept with a plan creates that plan and rewrites references.
      */
+    public function test_resubmitting_a_plan_keeps_the_other_plans_and_their_units(): void {
+        global $DB, $USER;
+
+        $this->resetAfterTest(true);
+        $this->setAdminUser();
+        $this->create_activity();
+
+        $statekey = \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY;
+        $sequenz = static function (array $bausteine, array $refs): array {
+            return [
+                'version' => \mod_seminarplaner\local\sequence\sequence_state::FORMAT_VERSION,
+                'tage' => [],
+                'platzierungen' => [],
+                'bausteine' => $bausteine,
+                'einheitenauswahlen' => ['ea-1' => ['kandidaten' => $refs, 'aktiv' => $refs[0]]],
+            ];
+        };
+        [$setid, $versionid] = $this->create_published_set('seminarkonzept', [
+            'typ' => 'seminarkonzept',
+            'methods' => [
+                ['id' => 'k1', 'titel' => 'Gemeinsam'],
+                ['id' => 'k2', 'titel' => 'Nur alter Plan A'],
+                ['id' => 'k3', 'titel' => 'Nur Plan B'],
+            ],
+            'plans' => [
+                ['name' => 'Plan A', 'description' => '', 'state' => [$statekey => $sequenz([], ['k1', 'k2'])]],
+                ['name' => 'Plan B', 'description' => '', 'state' => [$statekey => $sequenz(['b9' => ['titel' => 'Bleibt']], ['k1', 'k3'])]],
+            ],
+        ]);
+        foreach (['Gemeinsam', 'Nur alter Plan A', 'Nur Plan B'] as $title) {
+            $this->create_global_method($setid, $versionid, $title);
+        }
+        (new \local_seminarplaner\local\repository\reviewer_repository())->replace_reviewers($setid, [(int)$USER->id], (int)$USER->id);
+
+        $cards = new method_card_service();
+        $cards->save_methods($this->cmid, (int)$USER->id, $this->contextid, [['titel' => 'Gemeinsam', 'ablauf' => 'Neu']]);
+        $cardid = (string)$cards->get_methods($this->cmid, (int)$USER->id, $this->contextid)[0]['id'];
+        $service = new grid_service();
+        $gridid = $service->create_grid($this->cmid, 'Plan A', (int)$USER->id);
+        $service->save_user_state($gridid, (int)$USER->id, [$statekey => $sequenz(['neu' => ['titel' => 'Dazu']], [$cardid])]);
+
+        $result = api::submit_seminarkonzept_for_review($this->cmid, $gridid, $setid);
+
+        $snapshot = \local_seminarplaner\local\service\konzept_snapshot::decode(
+            (string)$DB->get_field('local_kgen_methodset_ver', 'snapshotjson', ['id' => $result['versionid']])
+        );
+        $plans = array_column($snapshot['plans'], null, 'name');
+        $this->assertSame(['Plan A', 'Plan B'], array_keys($plans));
+        $this->assertSame(['neu'], array_keys($plans['Plan A']['state'][$statekey]['bausteine']));
+        $this->assertSame('k1', $plans['Plan A']['state'][$statekey]['einheitenauswahlen']['ea-1']['aktiv']);
+        $this->assertSame('Bleibt', $plans['Plan B']['state'][$statekey]['bausteine']['b9']['titel']);
+        $this->assertSame(['Gemeinsam', 'Nur Plan B'], array_column($snapshot['methods'], 'titel'));
+
+        $rows = $DB->get_fieldset_select('local_kgen_method', 'title', 'methodsetversionid = ?', [$result['versionid']]);
+        sort($rows);
+        $this->assertSame(['Gemeinsam', 'Nur Plan B'], $rows);
+        $this->assertSame(2, $result['savedcount']);
+        $this->assertSame(3, $DB->count_records('local_kgen_method', ['methodsetversionid' => $versionid]));
+    }
+
     public function test_import_seminarkonzept_creates_every_plan_with_its_bausteine(): void {
         global $USER;
 
