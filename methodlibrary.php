@@ -99,6 +99,11 @@ echo html_writer::tag('button', 'Lokale Seminareinheiten', [
     'type' => 'button', 'class' => 'ml-subtab ml-subtab--active', 'data-ml-tab' => 'local',
     'role' => 'tab', 'aria-selected' => 'true',
 ]);
+// D89: persönliche Favoriten - dieselben lokalen Einheiten, nur die mit Herz.
+echo html_writer::tag('button', 'Favoriten', [
+    'type' => 'button', 'class' => 'ml-subtab', 'data-ml-tab' => 'favorites',
+    'role' => 'tab', 'aria-selected' => 'false',
+]);
 echo html_writer::tag('button', 'Methodensammlungen', [
     'type' => 'button', 'class' => 'ml-subtab', 'data-ml-tab' => 'collections',
     'role' => 'tab', 'aria-selected' => 'false',
@@ -385,6 +390,15 @@ echo html_writer::tag('div', '', ['id' => 'ml-status', 'class' => 'kg-status', '
 echo html_writer::end_div(); // Ende #ml-browse (wandert zwischen den Tabs).
 
 echo html_writer::end_div(); // Ende Tab 1 (#ml-tab-local).
+
+// Tab Favoriten (D89): die Einheiten, die die angemeldete Person mit einem
+// Herz markiert hat - lokale wie aus Konzepten. Liste, Filter und Editor
+// bringt wie beim Konzept-Tab der geteilte Block (#ml-browse) mit.
+echo html_writer::start_div('ml-tabpanel kg-hidden', ['id' => 'ml-tab-favorites', 'role' => 'tabpanel']);
+echo html_writer::tag('p', 'Noch keine Favoriten. Klicke auf das Herz an einer Seminareinheit, '
+    . 'dann findest du sie hier und beim Einplanen in der Sequenz schneller wieder. Deine Favoriten '
+    . 'siehst nur du.', ['id' => 'ml-favorites-empty', 'class' => 'ml-favorites-empty kg-hidden']);
+echo html_writer::end_div(); // Ende Tab Favoriten (#ml-tab-favorites).
 
 // Tab 2: Methodensammlungen (globale Bibliothek, immer durchsuchbar).
 // D29/D33: globale Bibliothek - immer durchsuchbar, kein Vor-Import einer

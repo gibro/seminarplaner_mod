@@ -16,8 +16,9 @@
  */
 define(['core/ajax', 'core_user/repository', 'core/fragment', 'core/templates', 'mod_seminarplaner/lernzieleditor',
     'mod_seminarplaner/livemodel', 'mod_seminarplaner/planmemory', 'mod_seminarplaner/tagsuggest',
-    'mod_seminarplaner/multiextend'],
-function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, PlanMemory, TagSuggest, MultiExtend) {
+    'mod_seminarplaner/multiextend', 'mod_seminarplaner/favorites', 'mod_seminarplaner/alternativelinks'],
+function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, PlanMemory, TagSuggest, MultiExtend,
+    Favorites, AlternativeLinks) {
     const DEFAULT_BOUNDARY_MIN = 750; // 12:30 fallback, same rule as the PHP converter.
     const ANCHORS = ['vormittag', 'nachmittag'];
     const DAYS_ALL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
@@ -962,6 +963,8 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             this.loadGrids(this.requestedGrid || PlanMemory.read(this.cmid) || undefined);
             this.loadEnrichment();
             this.loadReferenten();
+            // D89: persönliche Favoriten für den Dialog „Einheit einplanen".
+            Favorites.load(this.cmid);
         }
 
         // ---- Referent*innen (D84) -------------------------------------------
@@ -2056,11 +2059,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         // D21 (Nachtrag): Alternativen sind bisher eine Momentaufnahme beim
         // Einfuegen - wer die Verknuepfung erst danach in der Bibliothek setzt,
         // sah sie im Plan nie. Dieser Abgleich laeuft bei jedem render() und
-        // holt zweierlei nach:
+        // holt dreierlei nach:
         //
-        //   1. Kandidaten nachziehen: was die Bibliothek als Alternative der
+        //   1. Geloeste Kandidaten entfernen: Bleibt nur, was ueber
+        //      Verknuepfungen mit der aktiven Karte zusammenhaengt. Nicht nur
+        //      direkt Verknuepfte, sonst schrumpfte die Gruppe beim Umschalten,
+        //      wenn eine Karte nur am „Hauptkandidaten" haengt.
+        //   2. Kandidaten nachziehen: was die Bibliothek als Alternative der
         //      aktiven Karte kennt, wird Kandidat der Auswahl.
-        //   2. Benachbarte Platzierungen zusammenfuehren, die laut Bibliothek
+        //   3. Benachbarte Platzierungen zusammenfuehren, die laut Bibliothek
         //      Alternativen voneinander sind. Sie standen sonst als zwei
         //      getrennte Programmpunkte im Tag und zaehlten beide in die
         //      Zeitbilanz, obwohl im Seminar nur eine davon laeuft.
@@ -2081,11 +2088,23 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 }
                 return card.alternativen.map(String).filter((r) => this.methodCards[r]);
             };
+            const graph = AlternativeLinks.linkGraph(this.methodCardList);
 
             Object.keys(seq.einheitenauswahlen).forEach((eaid) => {
                 const auswahl = seq.einheitenauswahlen[eaid];
                 if (!auswahl || !Array.isArray(auswahl.kandidaten)) {
                     return;
+                }
+                const aktiv = String(auswahl.aktiv || '');
+                if (this.methodCards[aktiv]) {
+                    // Karten, die die Bibliothek nicht (mehr) kennt, bleiben
+                    // stehen: Ueber sie sagt der Graph nichts aus.
+                    const reachable = AlternativeLinks.reachableFrom(graph, aktiv);
+                    const kept = auswahl.kandidaten.filter((ref) => !this.methodCards[String(ref)] || reachable.has(String(ref)));
+                    if (kept.length !== auswahl.kandidaten.length) {
+                        auswahl.kandidaten = kept;
+                        changed = true;
+                    }
                 }
                 const known = auswahl.kandidaten.map(String);
                 altsOf(auswahl.aktiv).forEach((ref) => {
@@ -2318,7 +2337,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             // desselben Bausteins bilden eine Klammer.
             const groups = [];
             placements.forEach((p) => {
-                const bid = p.data.typ === 'einheit' ? (p.data.bausteinid || null) : null;
+                const bid = p.data.bausteinid || null;
                 const previous = groups.length ? groups[groups.length - 1] : null;
                 if (previous && bid && previous.bausteinid === bid) {
                     previous.items.push(p);
@@ -2924,7 +2943,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const dstIdx = delta > 0 ? open[0] : open[open.length - 1];
             const srcSeq = anchors[found.anchorIdx].seq;
             const oldNeighbor = srcSeq[found.pos + pids.length] || '';
-            const single = this.dragIsSingleUnit() ? this.placement(pids[0]) : null;
+            const single = this.dragIsSinglePlacement() ? this.placement(pids[0]) : null;
             srcSeq.splice(found.pos, pids.length);
             const dstSeq = anchors[dstIdx].seq;
             if (delta > 0) {
@@ -3232,12 +3251,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             return body ? {ankername, beforePid: '', el: body} : null;
         }
 
-        // Drop über einem Baustein. Nur eine einzelne Seminareinheit kann
+        // Drop über einem Baustein. Nur eine einzelne Einheit oder Pause kann
         // hinein: über einer enthaltenen Einheit landet sie davor, sonst im
         // Kasten am Ende des Bausteins. Ausgenommen ist die obere Hälfte des
-        // Kopfs - dort sortiert sie wie bisher VOR den Baustein ein. Bausteine
-        // und Pausen kommen nie hinein (Bausteine verschachteln nicht, Pausen
-        // gehören keinem), für sie bleibt jeder Drop „vor den Baustein".
+        // Kopfs - dort sortiert sie wie bisher VOR den Baustein ein. Für ganze
+        // Bausteine bleibt jeder Drop „vor den Baustein", sie verschachteln nicht.
         bausteinDropTarget(event, ankername, group) {
             if (group.classList.contains('sq-dragging')) {
                 return null;
@@ -3245,7 +3263,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const grouppid = group.getAttribute('data-sq-drag');
             const before = {ankername, beforePid: grouppid, el: group};
             const bid = group.getAttribute('data-sq-group') || '';
-            if (!this.dragIsSingleUnit() || !bid) {
+            if (!this.dragIsSinglePlacement() || !bid) {
                 return before;
             }
             const box = event.target.closest('.sq-baustein');
@@ -3269,14 +3287,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             return {ankername, beforePid: '', el: box, joinBid: bid, groupPid: grouppid};
         }
 
-        // Wird gerade genau eine Seminareinheit gezogen (kein Baustein, keine
-        // Pause)? Nur sie kann ihre Baustein-Zugehörigkeit per Drop wechseln.
-        dragIsSingleUnit() {
-            if (!this.drag || this.drag.bid) {
-                return false;
-            }
-            const placement = this.placement(this.drag.pid);
-            return !!placement && placement.typ === 'einheit';
+        // Wird gerade genau eine Einheit oder Pause gezogen (kein ganzer
+        // Baustein)? Nur sie kann ihre Baustein-Zugehörigkeit per Drop wechseln.
+        dragIsSinglePlacement() {
+            return !!this.drag && !this.drag.bid && !!this.placement(this.drag.pid);
         }
 
         markDropTarget(target) {
@@ -3320,8 +3334,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const pids = [];
             for (let i = found.pos; i < seq.length; i++) {
                 const placement = this.placement(seq[i]);
-                if (!placement || placement.typ !== 'einheit'
-                        || String(placement.bausteinid || '') !== String(this.drag.bid)) {
+                if (!placement || String(placement.bausteinid || '') !== String(this.drag.bid)) {
                     break;
                 }
                 pids.push(seq[i]);
@@ -3354,10 +3367,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 beforePid = this.pidAfterRun(dstSeq, target.groupPid, target.joinBid, pids);
             }
 
-            // Eine einzeln gezogene Einheit gehört danach dem Baustein, in den
-            // sie fiel - oder keinem. Ganze Bausteine und Pausen behalten ihre
+            // Eine einzeln gezogene Einheit oder Pause gehört danach dem Baustein,
+            // in den sie fiel - oder keinem. Ganze Bausteine behalten ihre
             // Zugehörigkeit.
-            const single = this.dragIsSingleUnit() ? this.placement(pids[0]) : null;
+            const single = this.dragIsSinglePlacement() ? this.placement(pids[0]) : null;
             const oldBid = single ? (single.bausteinid || null) : null;
             const newBid = single ? (target.joinBid || null) : oldBid;
             const membershipChanges = String(oldBid || '') !== String(newBid || '');
@@ -3418,7 +3431,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             while (i < seq.length) {
                 const placement = this.placement(seq[i]);
                 const inRun = skip.indexOf(seq[i]) >= 0
-                    || (placement && placement.typ === 'einheit' && String(placement.bausteinid || '') === String(bid));
+                    || (placement && String(placement.bausteinid || '') === String(bid));
                 if (!inRun) {
                     break;
                 }
@@ -3454,7 +3467,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         keepBausteinVisible(bid, seq, beforePid) {
             const here = seq.some((pid) => {
                 const placement = this.placement(pid);
-                return placement && placement.typ === 'einheit' && String(placement.bausteinid || '') === String(bid);
+                return placement && String(placement.bausteinid || '') === String(bid);
             });
             if (!this.baustein(bid) || here) {
                 return;
@@ -4054,9 +4067,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             if (auswahlid && !this.auswahlInUse(auswahlid)) {
                 delete this.sequenz.einheitenauswahlen[auswahlid];
             }
-            // War es die letzte Einheit ihres Bausteins, bleibt der Baustein als
+            // War es der letzte Inhalt seines Bausteins, bleibt der Baustein als
             // leerer Kasten an derselben Stelle stehen (wie beim Lösen/Ziehen).
-            if (placement.typ === 'einheit' && placement.bausteinid) {
+            if (placement.bausteinid) {
                 this.keepBausteinVisible(placement.bausteinid, seq, seq[found.pos] || '');
             }
             // If this was one half of a split unit, drop the split marker from
@@ -4113,7 +4126,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         findRunAt(seq, pos, bid) {
             const inrun = (i) => {
                 const p = this.placement(seq[i]);
-                return p && p.typ === 'einheit' && String(p.bausteinid || '') === String(bid);
+                return p && String(p.bausteinid || '') === String(bid);
             };
             let start = pos;
             while (start > 0 && inrun(start - 1)) {
@@ -4226,7 +4239,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                     continue;
                 }
                 const neighbor = this.placement(seq[neighborPos]);
-                if (neighbor && neighbor.typ === 'einheit' && neighbor.bausteinid) {
+                if (neighbor && neighbor.bausteinid) {
                     return neighbor.bausteinid;
                 }
             }
@@ -4280,6 +4293,18 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 root.addEventListener('click', (event) => {
                     if (event.target === root) {
                         this.closeModal();
+                        return;
+                    }
+                    // D89: Herz im Dialog „Einheit einplanen". Im Favoriten-
+                    // Reiter verschwindet eine entherzte Einheit sofort.
+                    const fav = event.target.closest('.sp-fav[data-fav-id]');
+                    if (fav) {
+                        Favorites.toggle(this.cmid, fav.getAttribute('data-fav-id')).then(() => {
+                            if (this.pickerTab === 'favoriten') {
+                                const s = bySel('#sq-picker-search');
+                                this.renderPickerList(s ? s.value : '');
+                            }
+                        });
                         return;
                     }
                     const action = event.target.closest('[data-sq-action]');
@@ -4649,9 +4674,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 }
             });
             // Alternative Seminareinheiten (dynamische IDs, eigene Behandlung):
-            // sich selbst nie als Alternative speichern.
-            card.alternativen = readMultiDropdownValues('#sq-e-alternativen')
-                .filter((id) => String(id) !== String(card.id));
+            // sich selbst nie als Alternative speichern. Die Gegenseiten muessen
+            // mit, sonst stellt der Server eine geloeste Verknuepfung wieder her.
+            AlternativeLinks.setLinks(this.methodCardList, card.id, readMultiDropdownValues('#sq-e-alternativen'));
             // Datei-Anhänge: Der Entwurfsbereich (Fragment) wird beim Speichern
             // serverseitig in den Dateibestand der Einheit übernommen.
             const draftid = this.unitMaterialDraftItemId();
@@ -5410,6 +5435,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                   <div class="sq-modal__body">
                     <div class="sq-picker__tabs" role="tablist">
                       ${tab('lokal', 'Lokale Bibliothek')}
+                      ${tab('favoriten', 'Favoriten')}
                       ${tab('global', 'Methodensammlung')}
                       ${hasKonzept ? tab('konzept', 'Globale Seminarkonzepte') : ''}
                     </div>
@@ -5456,6 +5482,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 source = this.globalMethods || [];
             } else if (tab === 'konzept') {
                 source = this.methodCardList.filter(isKonzeptCard);
+            } else if (tab === 'favoriten') {
+                // D89: alle eigenen Karten mit Herz, lokale wie aus Konzepten.
+                source = this.methodCardList.filter((c) => Favorites.has(c.id));
             } else {
                 // Lokale Bibliothek ohne die Konzept-Import-Karten (eigener Tab).
                 source = this.methodCardList.filter((c) => !isKonzeptCard(c));
@@ -5469,11 +5498,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 return !needle || cardTitle(card).toLowerCase().includes(needle);
             }).slice(0, 60);
             if (!cards.length) {
-                const empty = unusedOnly
+                let empty = unusedOnly
                     ? 'Keine noch nicht verwendete Einheit gefunden.'
                     : (tab === 'global'
                         ? 'Keine globale Methode gefunden (oder Methodensammlung nicht verfügbar).'
                         : 'Keine passende Einheit gefunden.') + ' Unten kannst du eine neue schreiben.';
+                if (tab === 'favoriten' && !source.length) {
+                    empty = 'Noch keine Favoriten. Ein Klick auf das Herz an einer Einheit – hier oder in der'
+                        + ' Bibliothek – legt sie hier ab.';
+                }
                 list.innerHTML = `<div class="sq-empty">${empty}</div>`;
                 return;
             }
@@ -5495,6 +5528,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                         </div>
                       </div>
                       <div class="sq-picker__actions">
+                        ${card._isglobal ? '' : Favorites.button(card.id, 'sq-picker__fav')}
                         <button type="button" class="sq-picker__details" data-sq-action="picker-details"
                           data-cardid="${escapeHtml(String(card.id))}"${globalid
                               ? ` data-global-methodid="${globalid}"`
@@ -5634,14 +5668,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
 
         // Eigenständiges Duplikat der aktiven Karte in der Bibliothek anlegen
         // (wie „Als neue Einheit duplizieren" dort: lokale Einheit, ohne
-        // Alternativen und ohne Verknüpfung zur globalen Sammlung; die Anhänge
-        // kopiert der Server über _copyfrom). Rückgabe: Promise mit der neuen
-        // Karte (nach dem Neuladen der Bibliothek, damit die Anhänge stimmen).
-        createDuplicateCard(card) {
+        // Verknüpfung zur globalen Sammlung und, wenn nichts anderes übergeben
+        // wird, ohne Alternativen; die Anhänge kopiert der Server über
+        // _copyfrom). Rückgabe: Promise mit der neuen Karte (nach dem Neuladen
+        // der Bibliothek, damit die Anhänge stimmen).
+        createDuplicateCard(card, alternativen = []) {
             const copy = JSON.parse(JSON.stringify(card));
             copy.id = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
             copy.titel = numberedTitleFor(cardTitle(card), this.methodCardList);
-            copy.alternativen = [];
+            copy.alternativen = alternativen;
             copy._copyfrom = String(card.id);
             copy.timemodified = Date.now();
             delete copy._kgsync;
@@ -5761,7 +5796,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const oldtitle = cardTitle(card);
             btn.disabled = true;
             btn.textContent = 'Wird angelegt …';
-            this.createDuplicateCard(card).then((copy) => {
+            // Das Duplikat übernimmt die Alternativen dieser Stelle auch in der
+            // Bibliothek, sonst räumt der Abgleich sie als gelöst wieder ab.
+            const others = auswahl.kandidaten.map(String).filter((ref) => ref !== String(card.id));
+            this.createDuplicateCard(card, others).then((copy) => {
                 const newid = String(copy.id);
                 // Nur diese Stelle (samt ihren geteilten Teilen) zeigt jetzt auf
                 // das Duplikat; ihre Alternativen bleiben, das Original darin
@@ -6984,7 +7022,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 this.reconciling = false;
                 if (merged) {
                     this.setDirty(true);
-                    this.toast('Alternativen aus der Bibliothek übernommen.');
+                    this.toast('Alternativen mit der Bibliothek abgeglichen.');
                 }
             }
             this.renderHead();
@@ -7185,7 +7223,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         renderSequence(placements, anchorStart, seenBausteine) {
             const groups = [];
             placements.forEach((p) => {
-                const bid = p.data.typ === 'einheit' ? (p.data.bausteinid || null) : null;
+                const bid = p.data.bausteinid || null;
                 const previous = groups.length ? groups[groups.length - 1] : null;
                 if (previous && bid && previous.bausteinid === bid) {
                     previous.items.push(p);
@@ -7408,15 +7446,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const placeholder = isunit && !!p.data.bausteinid && this.isUnfilled(p.data);
             if (placeholder) {
                 items.push(item('remove', 'remove', inBaustein ? 'Reservierung entfernen' : 'Baustein entfernen'));
-            } else if (isunit && inBaustein) {
+            } else if (inBaustein) {
                 items.push(item('leave-baustein', 'unlink', 'Aus dem Baustein lösen'));
-            } else if (isunit) {
+            } else {
                 const bid = this.adjacentBausteinId(pid);
                 if (bid) {
                     const titel = (this.baustein(bid) || {}).titel || 'Baustein';
                     items.push(item('join-baustein', 'link', `In „${escapeHtml(titel)}" aufnehmen`));
                 }
-                if (!p.data.bausteinid) {
+                if (isunit && !p.data.bausteinid) {
                     items.push(item('heading-open', 'heading', 'Überschrift geben'));
                 }
             }
@@ -7929,7 +7967,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                         <span class="sq-pause__spacer"></span>
                         <button type="button" class="kg-btn sq-membership" data-sq-action="edit"
                           data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
-                        ${this.renderRowMenu(p, false)}
+                        ${this.renderRowMenu(p, inBaustein)}
                       </div>
                     </div>`;
             }

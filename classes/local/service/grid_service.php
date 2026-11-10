@@ -887,8 +887,12 @@ class grid_service {
                     $duration = max(0, (int)($p['dauer'] ?? 0)) + sequence_state::included_pause($p);
                     if (($p['typ'] ?? '') === 'pause') {
                         $clock += $duration;
-                        $currentbaustein = null;
-                        $currentbausteinindex = null;
+                        if ($currentbaustein !== null && (string)($p['bausteinid'] ?? '') === $currentbaustein) {
+                            $items[$currentbausteinindex]['endMin'] += $duration;
+                        } else {
+                            $currentbaustein = null;
+                            $currentbausteinindex = null;
+                        }
                         continue;
                     }
                     $bid = (string)($p['bausteinid'] ?? '');

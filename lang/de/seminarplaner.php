@@ -132,6 +132,7 @@ $string['advancedtools'] = 'Erweiterte Tools';
 $string['statejson'] = 'State JSON';
 
 $string['privacy:metadata:core_files'] = 'Anhänge der Seminareinheit werden in Moodle-Dateibereichen gespeichert.';
+$string['privacy:metadata:preference:favorites'] = 'Deine persönlichen Favoriten unter den Seminareinheiten, gespeichert je Aktivität.';
 $string['privacy:metadata:kgen_grid_user_state'] = 'Speichert nutzerspezifische Seminarplan-Stände.';
 $string['privacy:metadata:kgen_grid_user_state:gridid'] = 'Referenz auf den Seminarplan.';
 $string['privacy:metadata:kgen_grid_user_state:userid'] = 'Nutzer-ID.';

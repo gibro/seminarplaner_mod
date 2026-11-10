@@ -177,7 +177,7 @@ define([], function() {
                 // Aufeinanderfolgende Platzierungen desselben Bausteins buendeln.
                 const groups = [];
                 items.forEach((entry) => {
-                    const bid = entry.data.typ === 'einheit' ? (entry.data.bausteinid || null) : null;
+                    const bid = entry.data.bausteinid || null;
                     const previous = groups.length ? groups[groups.length - 1] : null;
                     if (previous && bid && previous.bausteinid === bid) {
                         previous.items.push(entry);
@@ -193,19 +193,24 @@ define([], function() {
                     // Gruppe legt sie selbst, sie bleibt deshalb ein Vermerk.
                     const includedPause = (data) => (data.typ === 'einheit')
                         ? Math.max(0, Number(data.inklpause) || 0) : 0;
-                    const grouppause = group.items.reduce((sum, entry) => sum + includedPause(entry.data), 0);
+                    const isPause = (entry) => entry.data.typ === 'pause';
+                    const minutesOf = (entry) => Math.max(0, Number(entry.data.dauer) || 0);
+                    // Eine Pause im Baustein zaehlt wie eine eingeschlossene als Vermerk.
+                    const grouppause = group.items.reduce((sum, entry) => {
+                        return sum + (isPause(entry) ? minutesOf(entry) : includedPause(entry.data));
+                    }, 0);
                     const groupminutes = group.items.reduce((sum, entry) => {
-                        return sum + Math.max(0, Number(entry.data.dauer) || 0);
-                    }, 0) + grouppause;
+                        return sum + minutesOf(entry) + includedPause(entry.data);
+                    }, 0);
                     // Pausen sind keine Programmpunkte — sie ruecken die Uhr weiter,
                     // erscheinen aber nicht als Block.
-                    if (group.items[0].data.typ === 'pause') {
+                    if (group.items.every(isPause)) {
                         clock += groupminutes;
                         return;
                     }
 
                     const baustein = group.bausteinid ? (bausteine[group.bausteinid] || null) : null;
-                    const themen = group.items.map((entry) => {
+                    const themen = group.items.filter((entry) => !isPause(entry)).map((entry) => {
                         const placement = entry.data;
                         const auswahl = placement.einheitenauswahl
                             ? (auswahlen[placement.einheitenauswahl] || null)

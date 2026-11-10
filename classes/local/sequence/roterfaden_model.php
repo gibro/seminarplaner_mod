@@ -269,9 +269,7 @@ class roterfaden_model {
                 // Aufeinanderfolgende Platzierungen desselben Bausteins buendeln.
                 $groups = [];
                 foreach ($items as $entry) {
-                    $bid = (($entry['data']['typ'] ?? '') === 'einheit')
-                        ? ((string)($entry['data']['bausteinid'] ?? '') ?: null)
-                        : null;
+                    $bid = (string)($entry['data']['bausteinid'] ?? '') ?: null;
                     $lastindex = $groups ? array_key_last($groups) : null;
                     if ($lastindex !== null && $bid !== null && $groups[$lastindex]['bausteinid'] === $bid) {
                         $groups[$lastindex]['items'][] = $entry;
@@ -287,21 +285,29 @@ class roterfaden_model {
                     // Gruppe legt sie selbst, sie bleibt deshalb ein Vermerk.
                     $groupminutes = 0;
                     $grouppause = 0;
+                    $units = [];
                     foreach ($group['items'] as $entry) {
                         $pause = sequence_state::included_pause($entry['data']);
-                        $groupminutes += max(0, (int)($entry['data']['dauer'] ?? 0)) + $pause;
-                        $grouppause += $pause;
+                        $minutes = max(0, (int)($entry['data']['dauer'] ?? 0));
+                        $groupminutes += $minutes + $pause;
+                        // Eine Pause im Baustein zaehlt wie eine eingeschlossene als Vermerk.
+                        if (($entry['data']['typ'] ?? '') === 'pause') {
+                            $grouppause += $minutes;
+                        } else {
+                            $grouppause += $pause;
+                            $units[] = $entry;
+                        }
                     }
                     // Pausen sind keine Programmpunkte — sie ruecken die Uhr weiter,
                     // erscheinen aber nicht als Block.
-                    if (($group['items'][0]['data']['typ'] ?? '') === 'pause') {
+                    if (!$units) {
                         $clock += $groupminutes;
                         continue;
                     }
 
                     $baustein = $group['bausteinid'] ? ($bausteine[$group['bausteinid']] ?? null) : null;
                     $themen = [];
-                    foreach ($group['items'] as $entry) {
+                    foreach ($units as $entry) {
                         $placement = $entry['data'];
                         $auswahl = !empty($placement['einheitenauswahl'])
                             ? ($auswahlen[(string)$placement['einheitenauswahl']] ?? null)

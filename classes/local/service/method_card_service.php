@@ -377,6 +377,10 @@ class method_card_service {
             $seenmethoduids[$methoduid] = true;
             $method['id'] = $methoduid;
             $method = $this->normalize_method_phases($method);
+            // Ältere Exporte tragen noch die frühere Bezeichnung.
+            if (($method['gruppengroesse'] ?? '') === 'Plenum (10-20)') {
+                $method['gruppengroesse'] = 'Plenum (13-20)';
+            }
             $activeuids[] = $methoduid;
             $itemid = $this->resolve_effective_itemid($cmid, $userid, $methoduid, true, $contextid);
             if ($itemid === null) {

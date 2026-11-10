@@ -170,6 +170,26 @@ final class mobile_test extends advanced_testcase {
         $this->assertTrue($second['continuation']);
     }
 
+    public function test_pause_inside_a_baustein_keeps_the_block_together(): void {
+        $state = $this->build_state();
+        $state['sequenz']['bausteine']['bzz'] = ['titel' => 'Mit Pause', 'unterthemen' => ''];
+        $state['sequenz']['platzierungen']['z1'] = ['typ' => 'einheit', 'bausteinid' => 'bzz', 'titel' => 'Teil 1', 'dauer' => 30];
+        $state['sequenz']['platzierungen']['z2'] = ['typ' => 'pause', 'bausteinid' => 'bzz', 'titel' => 'Pause', 'dauer' => 15];
+        $state['sequenz']['platzierungen']['z3'] = ['typ' => 'einheit', 'bausteinid' => 'bzz', 'titel' => 'Teil 2', 'dauer' => 45];
+        $state['sequenz']['tage'][0]['anker']['nachmittag']['sequenz'] = ['z1', 'z2', 'z3'];
+
+        $days = roterfaden_model::build_days($state);
+
+        $anchors = array_column($days[0]['anchors'], null, 'key');
+        $this->assertCount(1, $anchors['nachmittag']['blocks']);
+        $block = $anchors['nachmittag']['blocks'][0];
+        $this->assertSame('Mit Pause', $block['title']);
+        $this->assertFalse($block['continuation']);
+        $this->assertSame(90, $block['minutes']);
+        $this->assertSame(15, $block['pause']);
+        $this->assertSame(['Teil 1', 'Teil 2'], array_column($block['themen'], 'title'));
+    }
+
     public function test_build_days_honours_a_per_day_lunch_break(): void {
         // D87: Am Dienstag liegt die Mittagspause anders (12:00-14:00).
         $state = $this->build_state();

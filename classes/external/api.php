@@ -1100,6 +1100,7 @@ class api extends external_api {
             'setname' => (string)$set->displayname,
             'plancreated' => false,
             'planname' => '',
+            'plancount' => 0,
         ];
     }
 
@@ -1115,7 +1116,8 @@ class api extends external_api {
             'totalcount' => new external_value(PARAM_INT, 'Total methods after import'),
             'setname' => new external_value(PARAM_TEXT, 'Methodset display name'),
             'plancreated' => new external_value(PARAM_BOOL, 'Whether a new plan was created (D32 Seminarkonzept)'),
-            'planname' => new external_value(PARAM_TEXT, 'Name of the created plan'),
+            'planname' => new external_value(PARAM_TEXT, 'Name(s) of the created plan(s)'),
+            'plancount' => new external_value(PARAM_INT, 'Number of created plans'),
         ]);
     }
 
@@ -1150,11 +1152,8 @@ class api extends external_api {
             return null;
         }
         $version = $repo->get_version($contentversionid);
-        $payload = $version ? json_decode((string)$version->snapshotjson, true) : null;
-        if (
-            !is_array($payload) || (string)($payload['typ'] ?? '') !== 'seminarkonzept'
-                || !is_array($payload['plan'] ?? null)
-        ) {
+        $snapshot = \local_seminarplaner\local\service\konzept_snapshot::decode($version ? (string)$version->snapshotjson : '');
+        if (!$snapshot['plans']) {
             // Kein Plan im Snapshot. Das trifft jedes Set, das vor D32
             // veroeffentlicht wurde (damals blieb der Snapshot leer, die
             // Einheiten lagen nur in local_kgen_method) und spaeter das Label
@@ -1163,9 +1162,7 @@ class api extends external_api {
             // Sammlungs-Weg.
             return null;
         }
-        $snapshotmethods = is_array($payload['methods'] ?? null) ? $payload['methods'] : [];
-        $plan = $payload['plan'];
-        $state = is_array($plan['state'] ?? null) ? $plan['state'] : [];
+        $snapshotmethods = $snapshot['methods'];
         $actorid = (int)$GLOBALS['USER']->id;
 
         // Attachments live at the global set's method rows; match them back
@@ -1188,6 +1185,7 @@ class api extends external_api {
         // Fresh ids for every unit; the map drives the reference rewrite.
         $idmap = [];
         $imported = [];
+        $snapshottitles = [];
         $counter = 0;
         foreach ($snapshotmethods as $method) {
             if (!is_array($method)) {
@@ -1209,30 +1207,29 @@ class api extends external_api {
             $copy['_kgkonzept'] = self::konzept_origin($set);
             $copy['materialien'] = $attachmentsbytitle[self::normalize_method_title($title)] ?? [];
             $imported[] = $copy;
+            $snapshottitles[self::normalize_method_title($title)] = true;
         }
 
-        // Rewrite the sequence's card references onto the fresh ids.
-        $statekey = \mod_seminarplaner\local\sequence\sequence_state::STATE_KEY;
-        if (
-            isset($state[$statekey]) && is_array($state[$statekey])
-                && isset($state[$statekey]['einheitenauswahlen']) && is_array($state[$statekey]['einheitenauswahlen'])
-        ) {
-            foreach ($state[$statekey]['einheitenauswahlen'] as $eaid => $auswahl) {
-                if (!is_array($auswahl)) {
-                    continue;
-                }
-                $kandidaten = [];
-                foreach ((array)($auswahl['kandidaten'] ?? []) as $ref) {
-                    $ref = (string)$ref;
-                    $kandidaten[] = $idmap[$ref] ?? $ref;
-                }
-                $auswahl['kandidaten'] = $kandidaten;
-                if (isset($auswahl['aktiv']) && $auswahl['aktiv'] !== null && $auswahl['aktiv'] !== '') {
-                    $aktiv = (string)$auswahl['aktiv'];
-                    $auswahl['aktiv'] = $idmap[$aktiv] ?? $aktiv;
-                }
-                $state[$statekey]['einheitenauswahlen'][$eaid] = $auswahl;
+        // Ein hochgeladener Plan kann zu einem Eintrag dazukommen, dessen Einheiten nur als
+        // Zeilen vorliegen. Auch die gehoeren zum Konzept und duerfen nicht wegfallen.
+        foreach ($rows as $row) {
+            if (isset($snapshottitles[self::normalize_method_title((string)($row->title ?? ''))])) {
+                continue;
             }
+            $mapped = self::map_global_method_record(
+                $row,
+                (int)$set->id,
+                $contentversionid,
+                $attachmentsbymethod[(int)$row->id] ?? []
+            );
+            if (trim((string)$mapped['titel']) === '') {
+                continue;
+            }
+            $counter++;
+            $mapped['id'] = self::new_konzept_card_id($counter);
+            $mapped['_kgkonzept'] = self::konzept_origin($set);
+            unset($mapped['_kgsync']);
+            $imported[] = $mapped;
         }
 
         // Units become part of the activity library.
@@ -1244,26 +1241,36 @@ class api extends external_api {
         $merged = array_merge($existing, $imported);
         $service->save_methods((int)$resolved['cm']->id, $actorid, (int)$resolved['context']->id, $merged);
 
-        // New plan, never overwriting: unique name within the activity.
+        // New plans, never overwriting: unique names within the activity.
         $gridservice = new grid_service();
         $existingnames = [];
         foreach ($gridservice->list_grids((int)$resolved['cm']->id) as $grid) {
             $existingnames[trim((string)$grid->name)] = true;
         }
-        $planname = trim((string)($plan['name'] ?? '')) !== '' ? trim((string)$plan['name']) : (string)$set->displayname;
-        $uniquename = $planname;
-        $suffix = 2;
-        while (isset($existingnames[$uniquename])) {
-            $uniquename = $planname . ' (' . $suffix . ')';
-            $suffix++;
+        $createdplans = [];
+        foreach ($snapshot['plans'] as $plan) {
+            $planname = trim((string)$plan['name']) !== '' ? trim((string)$plan['name']) : (string)$set->displayname;
+            $uniquename = $planname;
+            $suffix = 2;
+            while (isset($existingnames[$uniquename])) {
+                $uniquename = $planname . ' (' . $suffix . ')';
+                $suffix++;
+            }
+            $existingnames[$uniquename] = true;
+            $newgridid = $gridservice->create_grid(
+                (int)$resolved['cm']->id,
+                $uniquename,
+                $actorid,
+                trim((string)$plan['description']) !== '' ? (string)$plan['description'] : null
+            );
+            $gridservice->save_user_state(
+                $newgridid,
+                $actorid,
+                \local_seminarplaner\local\service\konzept_snapshot::rewrite_card_refs($plan['state'], $idmap)
+            );
+            $createdplans[(int)$newgridid] = $uniquename;
         }
-        $newgridid = $gridservice->create_grid(
-            (int)$resolved['cm']->id,
-            $uniquename,
-            $actorid,
-            trim((string)($plan['description'] ?? '')) !== '' ? (string)$plan['description'] : null
-        );
-        $gridservice->save_user_state($newgridid, $actorid, $state);
+        $createdgridids = array_keys($createdplans);
 
         // D55: importierte Seminarkonzepte im Bibliothek-Tab "Globale
         // Seminarkonzepte" auffindbar machen. Es gibt sonst keinen Marker -
@@ -1272,8 +1279,9 @@ class api extends external_api {
         self::record_imported_konzept((int)$resolved['cm']->id, [
             'setid' => (int)$set->id,
             'setname' => (string)$set->displayname,
-            'planname' => $uniquename,
-            'gridid' => (int)$newgridid,
+            'planname' => $createdplans[$createdgridids[0]],
+            'gridid' => $createdgridids[0],
+            'gridids' => $createdgridids,
             'unitcount' => count($imported),
             'timeimported' => time(),
         ]);
@@ -1284,7 +1292,8 @@ class api extends external_api {
             'totalcount' => count($merged),
             'setname' => (string)$set->displayname,
             'plancreated' => true,
-            'planname' => $uniquename,
+            'planname' => implode(', ', $createdplans),
+            'plancount' => count($createdplans),
         ];
     }
 
@@ -1398,6 +1407,7 @@ class api extends external_api {
             'setname' => (string)$set->displayname,
             'plancreated' => false,
             'planname' => '',
+            'plancount' => 0,
         ];
     }
 
@@ -1751,13 +1761,23 @@ class api extends external_api {
             // anderes als ein Plan, den es gab und den jemand geloescht hat -
             // sonst meldet die Bibliothek einen Verlust, den es nie gab.
             $hadplan = $gridid > 0;
+            // Ein Konzept kann mehrere Plaene mitbringen: verlinkt wird der erste, den es
+            // noch gibt, und als Titel steht dann der Konzeptname.
+            $gridids = array_map('intval', (array)($entry['gridids'] ?? [$gridid]));
+            foreach ($gridids as $candidate) {
+                if (isset($existinggrids[$candidate])) {
+                    $gridid = $candidate;
+                    break;
+                }
+            }
             $planexists = $hadplan && isset($existinggrids[$gridid]);
             $out[] = [
                 'setid' => (int)($entry['setid'] ?? 0),
                 'setname' => (string)($entry['setname'] ?? ''),
                 // Current plan name if it still exists (user may have renamed it),
                 // otherwise the name recorded at import time.
-                'planname' => $planexists ? $existinggrids[$gridid] : (string)($entry['planname'] ?? ''),
+                'planname' => count($gridids) > 1 ? ''
+                    : ($planexists ? $existinggrids[$gridid] : (string)($entry['planname'] ?? '')),
                 'gridid' => $gridid,
                 'hadplan' => $hadplan,
                 'planexists' => $planexists,
@@ -3035,7 +3055,7 @@ class api extends external_api {
         string $description = '',
         string $changelog = ''
     ): array {
-        global $DB;
+        global $CFG, $DB;
 
         $params = self::validate_parameters(self::submit_seminarkonzept_for_review_parameters(), [
             'cmid' => $cmid,
@@ -3118,6 +3138,7 @@ class api extends external_api {
         $reviewerrepo = new \local_seminarplaner\local\repository\reviewer_repository();
         $workflow = new \local_seminarplaner\local\service\workflow_service();
 
+        $baseversionid = 0;
         if ((int)$params['methodsetid'] > 0) {
             // Resubmit an existing Seminarkonzept as a new version.
             $set = $repo->get_methodset((int)$params['methodsetid']);
@@ -3134,6 +3155,7 @@ class api extends external_api {
                 $repo->update_methodset_status((int)$set->id, 'draft', $actorid);
             }
             $setid = (int)$set->id;
+            $baseversionid = (int)($set->currentversion ?? 0);
             $versionnum = (int)$DB->get_field_sql(
                 'SELECT COALESCE(MAX(versionnum), 0) + 1 FROM {local_kgen_methodset_ver} WHERE methodsetid = :methodsetid',
                 ['methodsetid' => $setid]
@@ -3158,16 +3180,28 @@ class api extends external_api {
 
         // Snapshot payload (D32): object instead of the plain method array a
         // Methoden-Sammlung uses - plan state 1:1 plus the referenced units.
-        $snapshotpayload = [
-            'typ' => 'seminarkonzept',
-            'methods' => $planmethods,
-            'plan' => [
-                'name' => (string)$grid->name,
-                'description' => (string)($grid->description ?? ''),
-                'state' => $state,
-            ],
+        $planentry = [
+            'name' => (string)$grid->name,
+            'description' => (string)($grid->description ?? ''),
+            'state' => $state,
         ];
-        $snapshotjson = json_encode($snapshotpayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $droppedtitles = [];
+        $baseversion = $baseversionid > 0 ? $repo->get_version($baseversionid) : null;
+        if ($baseversion) {
+            // Resubmitting one plan must not cost the concept its other plans.
+            $resubmission = \local_seminarplaner\local\service\konzept_snapshot::merge_resubmitted_plan(
+                \local_seminarplaner\local\service\konzept_snapshot::decode((string)$baseversion->snapshotjson),
+                $planmethods,
+                $planentry
+            );
+            $snapshotjson = \local_seminarplaner\local\service\konzept_snapshot::encode($resubmission['snapshot']);
+            $droppedtitles = array_flip($resubmission['droppedtitles']);
+        } else {
+            $snapshotjson = json_encode(
+                ['typ' => 'seminarkonzept', 'methods' => $planmethods, 'plan' => $planentry],
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            );
+        }
         if ($snapshotjson === false) {
             throw new invalid_parameter_exception('Seminarkonzept konnte nicht serialisiert werden');
         }
@@ -3227,6 +3261,25 @@ class api extends external_api {
                 $actorid,
                 true
             );
+        }
+
+        // The units of the other plans stay browsable and keep their files.
+        if ($baseversion) {
+            require_once($CFG->dirroot . '/local/seminarplaner/locallib.php');
+            $normalize = [\local_seminarplaner\local\service\konzept_snapshot::class, 'normalize_key'];
+            $submittedtitles = [];
+            foreach ($planmethods as $method) {
+                $submittedtitles[$normalize((string)$method['titel'])] = true;
+            }
+            $baserows = $DB->get_records('local_kgen_method', ['methodsetversionid' => $baseversionid], 'id ASC');
+            foreach ($baserows as $row) {
+                $titlekey = $normalize((string)$row->title);
+                if (isset($submittedtitles[$titlekey]) || isset($droppedtitles[$titlekey])) {
+                    continue;
+                }
+                local_seminarplaner_copy_method_to_version($row, (int)$versionid, $actorid);
+                $savedcount++;
+            }
         }
 
         $comment = trim((string)$params['changelog']) !== ''
@@ -4687,6 +4740,107 @@ class api extends external_api {
                 'avatarurl' => new external_value(PARAM_URL, 'Profile picture url'),
             ])),
         ]);
+    }
+
+    /**
+     * Definiert die Eingabeparameter für das Abfragen der eigenen Favoriten.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
+    public static function get_favorites_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+        ]);
+    }
+
+    /**
+     * Die Seminareinheiten, die die aufrufende Person in dieser Aktivität als
+     * Favoriten markiert hat (D89). Favoriten sind persönlich.
+     *
+     * @param int $cmid Kurs-Modul-Id der Aktivität.
+     * @return array Array mit dem Schlüssel ids.
+     */
+    public static function get_favorites(int $cmid): array {
+        global $CFG, $USER;
+        require_once($CFG->dirroot . '/mod/seminarplaner/locallib.php');
+
+        $params = self::validate_parameters(self::get_favorites_parameters(), ['cmid' => $cmid]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        self::require_any_module_capability($resolved['context'], [
+            'mod/seminarplaner:managemethods',
+            'mod/seminarplaner:managegrids',
+        ]);
+
+        return ['ids' => seminarplaner_get_favorites((int)$resolved['cm']->id, (int)$USER->id)];
+    }
+
+    /**
+     * Beschreibt die Rückgabestruktur der Favoriten-Liste.
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
+    public static function get_favorites_returns(): external_single_structure {
+        return new external_single_structure([
+            'ids' => new external_multiple_structure(new external_value(PARAM_RAW, 'Method card id')),
+        ]);
+    }
+
+    /**
+     * Definiert die Eingabeparameter für das Markieren eines Favoriten.
+     *
+     * @return external_function_parameters Parameterdefinition der Webservice-Funktion.
+     */
+    public static function set_favorite_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'methodid' => new external_value(PARAM_RAW, 'Method card id'),
+            'favorite' => new external_value(PARAM_BOOL, 'True to mark, false to unmark'),
+        ]);
+    }
+
+    /**
+     * Markiert eine Seminareinheit als Favorit der aufrufenden Person oder
+     * nimmt die Markierung zurück (D89).
+     *
+     * Ob es die Karte gibt, wird bewusst nicht geprüft: Eine gelöschte Karte
+     * taucht im Favoriten-Reiter ohnehin nicht mehr auf, und die Prüfung
+     * kostete bei jedem Klick das Laden aller Karten.
+     *
+     * @param int $cmid Kurs-Modul-Id der Aktivität.
+     * @param string $methodid Id der Seminareinheit.
+     * @param bool $favorite True markiert, false nimmt zurück.
+     * @return array Array mit dem Schlüssel ids (Favoriten nach der Änderung).
+     */
+    public static function set_favorite(int $cmid, string $methodid, bool $favorite): array {
+        global $CFG, $USER;
+        require_once($CFG->dirroot . '/mod/seminarplaner/locallib.php');
+
+        $params = self::validate_parameters(self::set_favorite_parameters(), [
+            'cmid' => $cmid,
+            'methodid' => $methodid,
+            'favorite' => $favorite,
+        ]);
+        $resolved = self::resolve_cm_context((int)$params['cmid']);
+        self::require_any_module_capability($resolved['context'], [
+            'mod/seminarplaner:managemethods',
+            'mod/seminarplaner:managegrids',
+        ]);
+        $id = trim((string)$params['methodid']);
+        if ($id === '' || \core_text::strlen($id) > 255) {
+            throw new invalid_parameter_exception('Ungültige Seminareinheit.');
+        }
+        self::enforce_write_rate_limit('set_favorite', 120, 60);
+
+        return ['ids' => seminarplaner_set_favorite((int)$resolved['cm']->id, (int)$USER->id, $id, (bool)$params['favorite'])];
+    }
+
+    /**
+     * Beschreibt die Rückgabestruktur des Markierens.
+     *
+     * @return external_single_structure Rückgabedefinition der Webservice-Funktion.
+     */
+    public static function set_favorite_returns(): external_single_structure {
+        return self::get_favorites_returns();
     }
 
     /**

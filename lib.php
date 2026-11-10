@@ -147,6 +147,8 @@ function seminarplaner_delete_instance($id) {
         $DB->delete_records('kgen_activity_setlink', ['cmid' => $cmid]);
         $DB->delete_records('kgen_activity_methodovr', ['cmid' => $cmid]);
         $DB->delete_records('kgen_import_export_log', ['cmid' => $cmid]);
+        // D89: persönliche Favoriten gehören zur Aktivität und gehen mit ihr.
+        $DB->delete_records('user_preferences', ['name' => 'mod_seminarplaner_favorites_' . $cmid]);
     }
 
     $DB->delete_records('seminarplaner', ['id' => $id]);

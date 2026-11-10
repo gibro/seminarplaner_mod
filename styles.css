@@ -697,6 +697,12 @@ select.kg-input:-moz-focusring {
   outline-offset: 1px;
 }
 
+/* Gesperrter Chip (Bausteine ohne gewählte Seminarpläne). */
+.kg-scope-chip:has(input:disabled) {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
 /* Dropdowns in den Karten brauchen Abstand nach unten (sonst klebt z. B. das
    Sammlungs-Dropdown direkt am „Seminarkonzept importieren"-Button). */
 .kg-ie-card select.kg-input {
@@ -6637,7 +6643,7 @@ body.sq-touch-dragging {
 }
 
 /* ==========================================================================
-   D48: Hinweis auf die Seminarschmiede im Import/Export-Tab
+   D48: Hinweis auf die Konzeptschmiede im Import/Export-Tab
    ========================================================================== */
 .kg-ie-hint {
     border: 1px solid var(--ig-lightgray);
@@ -9500,4 +9506,45 @@ details.sq-menu[open] > summary.sq-menu__btn {
 .sq-picker__details:hover,
 .sq-picker__details:focus-visible {
     color: var(--ig-red);
+}
+
+/* D89: Favoriten-Herz (Bibliothekskarten und Dialog „Einheit einplanen"). */
+.sp-fav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    background: none;
+    color: var(--ig-gray);
+    cursor: pointer;
+}
+.sp-fav__icon {
+    fill: none;
+    transition: transform .12s ease;
+}
+.sp-fav:hover,
+.sp-fav:focus-visible {
+    color: var(--ig-red);
+}
+.sp-fav:hover .sp-fav__icon {
+    transform: scale(1.12);
+}
+.sp-fav--on {
+    color: var(--ig-red);
+}
+.sp-fav--on .sp-fav__icon {
+    fill: currentColor;
+}
+/* Platz im Kartenkopf für Herz und ⋮-Menü nebeneinander. */
+.ml-card-title {
+    padding-right: 78px;
+}
+.ml-favorites-empty {
+    margin: 0 0 12px;
+    padding: 12px 14px;
+    background: var(--ig-surface-soft);
+    color: var(--ig-gray);
 }

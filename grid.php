@@ -206,7 +206,8 @@ echo html_writer::tag(
           <label class="kg-tag-option"><input type="checkbox" id="sp-filter-group-all" checked><span>Alle</span></label>
           <div id="sp-filter-group-options">
             <label class="kg-tag-option"><input type="checkbox" value="Gruppenarbeit (2-5)"><span>Gruppenarbeit (2-5)</span></label>
-            <label class="kg-tag-option"><input type="checkbox" value="Plenum (10-20)"><span>Plenum (10-20)</span></label>
+            <label class="kg-tag-option"><input type="checkbox" value="Plenum (6-12)"><span>Plenum (6-12)</span></label>
+            <label class="kg-tag-option"><input type="checkbox" value="Plenum (13-20)"><span>Plenum (13-20)</span></label>
             <label class="kg-tag-option"><input type="checkbox" value="beliebig"><span>beliebig</span></label>
           </div>
         </div>

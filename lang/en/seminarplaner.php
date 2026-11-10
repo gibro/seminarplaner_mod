@@ -132,6 +132,7 @@ $string['advancedtools'] = 'Advanced tools';
 $string['statejson'] = 'State JSON';
 
 $string['privacy:metadata:core_files'] = 'Method attachments are stored in Moodle file areas.';
+$string['privacy:metadata:preference:favorites'] = 'Your personal favourite seminar units, stored per activity.';
 $string['privacy:metadata:kgen_grid_user_state'] = 'Stores user-specific saved seminar plan state.';
 $string['privacy:metadata:kgen_grid_user_state:gridid'] = 'Grid reference.';
 $string['privacy:metadata:kgen_grid_user_state:userid'] = 'User id.';

@@ -87,11 +87,26 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const methodsel = bySel(`#kg-ie-${prefix}-methods`);
         const unitsel = bySel(`#kg-ie-${prefix}-units`);
         const gridsel = bySel(`#kg-ie-${prefix}-grids`);
+        const grids = !!gridsel && !!gridsel.checked;
         return {
             methods: !methodsel || !!methodsel.checked,
-            units: !!unitsel && !!unitsel.checked,
-            grids: !!gridsel && !!gridsel.checked
+            // Bausteine sind nur innerhalb eines Seminarplans repräsentiert und
+            // reisen deshalb nie ohne einen.
+            units: grids && !!unitsel && !!unitsel.checked,
+            grids
         };
+    };
+
+    // Der Bausteine-Chip ist nur bei gewählten Seminarplänen bedienbar; mit dem
+    // Seminarplan-Chip wird er eingeschaltet, ohne ihn gesperrt und geleert.
+    const syncExportUnitsChip = () => {
+        const unitsel = bySel('#kg-ie-export-units');
+        const gridsel = bySel('#kg-ie-export-grids');
+        if (!unitsel || !gridsel) {
+            return;
+        }
+        unitsel.disabled = !gridsel.checked;
+        unitsel.checked = gridsel.checked;
     };
 
     const selectedComponentCount = (selection) => {
@@ -642,11 +657,11 @@ function(Ajax, Notification, Handout, PlanMemory) {
     const exportJsonFull = async (cmid) => {
         const selection = getComponentSelection('export');
         if (selectedComponentCount(selection) === 0) {
-            throw new Error('Bitte mindestens eine Komponente auswählen (Seminareinheiten, Bausteine oder Seminarpläne).');
+            throw new Error('Bitte mindestens eine Komponente auswählen (Seminareinheiten oder Seminarpläne).');
         }
-        // Die Planzustände werden auch für die Bausteine gebraucht, nicht nur
-        // für den Seminarplan-Teil des Exports.
-        const seminarplaene = (selection.grids || selection.units)
+        // Bausteine gibt es nur mit Seminarplänen (getComponentSelection); die
+        // Plan-Zustände tragen sie bereits in `sequenz.bausteine`.
+        const seminarplaene = selection.grids
             ? await collectSeminarplaeneForExport(cmid)
             : [];
         const bausteine = collectBausteineForExport(seminarplaene);
@@ -2826,6 +2841,11 @@ function(Ajax, Notification, Handout, PlanMemory) {
         const globalSetApplyBtn = bySel('#kg-global-set-apply');
         bindPdfColumnsDropdown(cmid);
         bindPdfInfo(cmid);
+        const exportGridsChip = bySel('#kg-ie-export-grids');
+        if (exportGridsChip) {
+            exportGridsChip.addEventListener('change', syncExportUnitsChip);
+            syncExportUnitsChip();
+        }
         document.querySelectorAll('input[name^="kg-pdf-orientation"]').forEach((toggle) => {
             toggle.addEventListener('change', () => savePdfColumns(cmid));
         });
@@ -2855,29 +2875,37 @@ function(Ajax, Notification, Handout, PlanMemory) {
                 try {
                     currentImportPayload = await parseFile(fileinput.files[0]);
                     previewRows = buildMethodPreviewRows(currentImportPayload.methods);
-                    previewUnits = (Array.isArray(currentImportPayload.bausteine)
-                        ? currentImportPayload.bausteine
-                        : []).map((unit) => ({
-                            unit,
-                            selected: true
-                        }));
                     previewGrids = (Array.isArray(currentImportPayload.seminarplaene)
                         ? currentImportPayload.seminarplaene
                         : []).map((plan) => ({
                             plan,
                             selected: true
                         }));
+                    // Bausteine sind nur innerhalb eines Seminarplans repräsentiert:
+                    // Ohne Seminarplan in der Datei werden sie gar nicht angeboten.
+                    const fileunits = Array.isArray(currentImportPayload.bausteine) ? currentImportPayload.bausteine : [];
+                    previewUnits = previewGrids.length
+                        ? fileunits.map((unit) => ({
+                            unit,
+                            selected: true
+                        }))
+                        : [];
                     renderPreview();
                     step(2);
                     const found = currentImportPayload.components || {};
                     const foundSummary = [
                         found.methods ? `${previewRows.length} Seminareinheiten` : 'keine Seminareinheiten',
-                        found.units ? `${previewUnits.length} Bausteine` : 'keine Bausteine',
+                        previewUnits.length ? `${previewUnits.length} Bausteine` : 'keine Bausteine',
                         found.grids ? `${previewGrids.length} Seminarpläne` : 'keine Seminarpläne'
                     ].join(', ');
-                    const msg = previewRows.length
+                    const ignoredunits = (!previewGrids.length && fileunits.length)
+                        ? ` ${fileunits.length} Bausteine werden nicht übernommen, weil die Datei keinen `
+                            + 'Seminarplan enthält.'
+                        : '';
+                    const msg = (previewRows.length
                         ? `Datei analysiert: ${foundSummary}.`
-                        : `Datei analysiert: ${foundSummary}. Es wurden keine Seminareinheiten zur Vorschau gefunden.`;
+                        : `Datei analysiert: ${foundSummary}. Es wurden keine Seminareinheiten zur Vorschau gefunden.`)
+                        + ignoredunits;
                     setStatus(msg, false);
                 } catch (e) {
                     currentImportPayload = null;
@@ -2930,11 +2958,20 @@ function(Ajax, Notification, Handout, PlanMemory) {
                 const postLoads = [];
                 try {
                     const selectedRows = previewRows.filter((r) => r.selected);
-                    const selectedUnits = previewUnits.filter((row) => row.selected).map((row) => row.unit);
                     const seminarplaene = previewGrids.filter((row) => row.selected).map((row) => row.plan);
+                    // Bausteine nur zusammen mit mindestens einem Seminarplan.
+                    const selectedUnits = seminarplaene.length
+                        ? previewUnits.filter((row) => row.selected).map((row) => row.unit)
+                        : [];
+                    if (!seminarplaene.length && previewUnits.some((row) => row.selected)) {
+                        successParts.push('Bausteine: nicht übernommen (kein Seminarplan ausgewählt)');
+                    }
 
                     if (!selectedRows.length && !selectedUnits.length && !seminarplaene.length) {
-                        setImportStatus('Keine Einträge ausgewählt.', true);
+                        setImportStatus(previewUnits.some((row) => row.selected)
+                            ? 'Bausteine werden nur zusammen mit einem Seminarplan importiert – bitte auch '
+                                + 'den Seminarplan auswählen.'
+                            : 'Keine Einträge ausgewählt.', true);
                         return;
                     }
 
@@ -3122,8 +3159,11 @@ function(Ajax, Notification, Handout, PlanMemory) {
                         refreshGlobalSyncUi();
                         // D32: beim Seminarkonzept entsteht zusätzlich ein
                         // neuer Plan (nie überschreibend).
+                        const plantext = Number(res.plancount) > 1
+                            ? `mit ${res.plancount} neuen Plänen (${res.planname})`
+                            : `als neuer Plan „${res.planname}"`;
                         setGlobalStatus(res.plancreated
-                            ? `Import erfolgreich: Seminarkonzept "${res.setname}" als neuer Plan „${res.planname}" angelegt, `
+                            ? `Import erfolgreich: Seminarkonzept "${res.setname}" ${plantext} angelegt, `
                                 + `${res.importedcount} Seminareinheiten übernommen (insgesamt ${res.totalcount}).`
                             : `Import erfolgreich: ${res.importedcount} Seminareinheiten aus "${res.setname}" in die Bibliothek `
                                 + `übernommen (insgesamt ${res.totalcount}). Dieses Konzept enthält keinen Seminarplan, `
