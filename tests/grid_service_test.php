@@ -168,6 +168,52 @@ final class grid_service_test extends advanced_testcase {
         $this->assertSame(645, $items[1]['endMin']);
     }
 
+    /**
+     * Eine Pause im Baustein gehört zu dessen Zeitspanne und teilt ihn nicht.
+     */
+    public function test_publish_keeps_baustein_together_across_its_pause(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $gridid = $service->create_grid(1006, 'Sequenzplan', 7);
+        $state = [
+            'config' => [
+                'days' => ['Montag'],
+                'ankerzeiten' => [
+                    'vormittag' => ['start' => '08:30', 'end' => '12:30'],
+                    'nachmittag' => ['start' => '13:15', 'end' => '17:30'],
+                ],
+            ],
+            'plan' => ['days' => ['Montag' => []]],
+            'sequenz' => [
+                'version' => 1,
+                'tage' => [[
+                    'tag' => 1,
+                    'bezeichnung' => 'Montag',
+                    'anker' => [
+                        'vormittag' => ['sequenz' => ['p1', 'p2', 'p3']],
+                        'nachmittag' => ['sequenz' => []],
+                    ],
+                ]],
+                'platzierungen' => [
+                    'p1' => ['typ' => 'einheit', 'bausteinid' => 'b1', 'titel' => 'Teil 1', 'dauer' => 45],
+                    'p2' => ['typ' => 'pause', 'bausteinid' => 'b1', 'titel' => 'Pause', 'dauer' => 15],
+                    'p3' => ['typ' => 'einheit', 'bausteinid' => 'b1', 'titel' => 'Teil 2', 'dauer' => 60],
+                ],
+                'bausteine' => ['b1' => ['titel' => 'Grundlagen', 'unterthemen' => '']],
+                'einheitenauswahlen' => [],
+            ],
+        ];
+        $service->save_user_state($gridid, 7, $state);
+        $service->publish_roterfaden(1006, $gridid, $state, 7);
+
+        $items = $service->get_roterfaden_state(1006)['state']['plan']['days']['Montag'];
+
+        $this->assertCount(1, $items);
+        $this->assertSame(510, $items[0]['startMin']);
+        $this->assertSame(630, $items[0]['endMin']);
+    }
+
     public function test_set_roterfaden_visibility_unpublishes(): void {
         $this->resetAfterTest(true);
 

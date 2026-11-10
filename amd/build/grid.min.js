@@ -2478,7 +2478,7 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
                         // D88: eine eingeschlossene Pause verlaengert die Einheit.
                         const inklpause = p.typ === 'einheit' ? Math.max(0, Number(p.inklpause) || 0) : 0;
                         const duration = Math.max(0, Number(p.dauer) || 0) + inklpause;
-                        const baustein = p.bausteinid ? bausteine[p.bausteinid] : null;
+                        const baustein = (p.typ !== 'pause' && p.bausteinid) ? bausteine[p.bausteinid] : null;
                         let title = String(p.titel || '').trim();
                         let reserved = false;
                         if (!title && baustein && baustein.titel) {

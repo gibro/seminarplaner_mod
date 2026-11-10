@@ -246,9 +246,9 @@ define(['mod_seminarplaner/roterfadenmodel'], function(Model) {
                         || String((baustein && baustein.titel) || '').trim()
                         || (ispause ? 'Pause' : 'Seminareinheit');
                     const phase = ispause ? '' : Model.phaseKey(card ? card.seminarphase : '');
-                    const continuation = !!(placement.fortsetzung
+                    const continuation = !ispause && !!(placement.fortsetzung
                         || (placement.bausteinid && seenBausteine[placement.bausteinid]));
-                    if (placement.bausteinid) {
+                    if (!ispause && placement.bausteinid) {
                         seenBausteine[placement.bausteinid] = true;
                     }
 

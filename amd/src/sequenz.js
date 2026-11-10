@@ -2337,7 +2337,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             // desselben Bausteins bilden eine Klammer.
             const groups = [];
             placements.forEach((p) => {
-                const bid = p.data.typ === 'einheit' ? (p.data.bausteinid || null) : null;
+                const bid = p.data.bausteinid || null;
                 const previous = groups.length ? groups[groups.length - 1] : null;
                 if (previous && bid && previous.bausteinid === bid) {
                     previous.items.push(p);
@@ -2943,7 +2943,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const dstIdx = delta > 0 ? open[0] : open[open.length - 1];
             const srcSeq = anchors[found.anchorIdx].seq;
             const oldNeighbor = srcSeq[found.pos + pids.length] || '';
-            const single = this.dragIsSingleUnit() ? this.placement(pids[0]) : null;
+            const single = this.dragIsSinglePlacement() ? this.placement(pids[0]) : null;
             srcSeq.splice(found.pos, pids.length);
             const dstSeq = anchors[dstIdx].seq;
             if (delta > 0) {
@@ -3251,12 +3251,11 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             return body ? {ankername, beforePid: '', el: body} : null;
         }
 
-        // Drop über einem Baustein. Nur eine einzelne Seminareinheit kann
+        // Drop über einem Baustein. Nur eine einzelne Einheit oder Pause kann
         // hinein: über einer enthaltenen Einheit landet sie davor, sonst im
         // Kasten am Ende des Bausteins. Ausgenommen ist die obere Hälfte des
-        // Kopfs - dort sortiert sie wie bisher VOR den Baustein ein. Bausteine
-        // und Pausen kommen nie hinein (Bausteine verschachteln nicht, Pausen
-        // gehören keinem), für sie bleibt jeder Drop „vor den Baustein".
+        // Kopfs - dort sortiert sie wie bisher VOR den Baustein ein. Für ganze
+        // Bausteine bleibt jeder Drop „vor den Baustein", sie verschachteln nicht.
         bausteinDropTarget(event, ankername, group) {
             if (group.classList.contains('sq-dragging')) {
                 return null;
@@ -3264,7 +3263,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const grouppid = group.getAttribute('data-sq-drag');
             const before = {ankername, beforePid: grouppid, el: group};
             const bid = group.getAttribute('data-sq-group') || '';
-            if (!this.dragIsSingleUnit() || !bid) {
+            if (!this.dragIsSinglePlacement() || !bid) {
                 return before;
             }
             const box = event.target.closest('.sq-baustein');
@@ -3288,14 +3287,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             return {ankername, beforePid: '', el: box, joinBid: bid, groupPid: grouppid};
         }
 
-        // Wird gerade genau eine Seminareinheit gezogen (kein Baustein, keine
-        // Pause)? Nur sie kann ihre Baustein-Zugehörigkeit per Drop wechseln.
-        dragIsSingleUnit() {
-            if (!this.drag || this.drag.bid) {
-                return false;
-            }
-            const placement = this.placement(this.drag.pid);
-            return !!placement && placement.typ === 'einheit';
+        // Wird gerade genau eine Einheit oder Pause gezogen (kein ganzer
+        // Baustein)? Nur sie kann ihre Baustein-Zugehörigkeit per Drop wechseln.
+        dragIsSinglePlacement() {
+            return !!this.drag && !this.drag.bid && !!this.placement(this.drag.pid);
         }
 
         markDropTarget(target) {
@@ -3339,8 +3334,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const pids = [];
             for (let i = found.pos; i < seq.length; i++) {
                 const placement = this.placement(seq[i]);
-                if (!placement || placement.typ !== 'einheit'
-                        || String(placement.bausteinid || '') !== String(this.drag.bid)) {
+                if (!placement || String(placement.bausteinid || '') !== String(this.drag.bid)) {
                     break;
                 }
                 pids.push(seq[i]);
@@ -3373,10 +3367,10 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 beforePid = this.pidAfterRun(dstSeq, target.groupPid, target.joinBid, pids);
             }
 
-            // Eine einzeln gezogene Einheit gehört danach dem Baustein, in den
-            // sie fiel - oder keinem. Ganze Bausteine und Pausen behalten ihre
+            // Eine einzeln gezogene Einheit oder Pause gehört danach dem Baustein,
+            // in den sie fiel - oder keinem. Ganze Bausteine behalten ihre
             // Zugehörigkeit.
-            const single = this.dragIsSingleUnit() ? this.placement(pids[0]) : null;
+            const single = this.dragIsSinglePlacement() ? this.placement(pids[0]) : null;
             const oldBid = single ? (single.bausteinid || null) : null;
             const newBid = single ? (target.joinBid || null) : oldBid;
             const membershipChanges = String(oldBid || '') !== String(newBid || '');
@@ -3437,7 +3431,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             while (i < seq.length) {
                 const placement = this.placement(seq[i]);
                 const inRun = skip.indexOf(seq[i]) >= 0
-                    || (placement && placement.typ === 'einheit' && String(placement.bausteinid || '') === String(bid));
+                    || (placement && String(placement.bausteinid || '') === String(bid));
                 if (!inRun) {
                     break;
                 }
@@ -3473,7 +3467,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         keepBausteinVisible(bid, seq, beforePid) {
             const here = seq.some((pid) => {
                 const placement = this.placement(pid);
-                return placement && placement.typ === 'einheit' && String(placement.bausteinid || '') === String(bid);
+                return placement && String(placement.bausteinid || '') === String(bid);
             });
             if (!this.baustein(bid) || here) {
                 return;
@@ -4073,9 +4067,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             if (auswahlid && !this.auswahlInUse(auswahlid)) {
                 delete this.sequenz.einheitenauswahlen[auswahlid];
             }
-            // War es die letzte Einheit ihres Bausteins, bleibt der Baustein als
+            // War es der letzte Inhalt seines Bausteins, bleibt der Baustein als
             // leerer Kasten an derselben Stelle stehen (wie beim Lösen/Ziehen).
-            if (placement.typ === 'einheit' && placement.bausteinid) {
+            if (placement.bausteinid) {
                 this.keepBausteinVisible(placement.bausteinid, seq, seq[found.pos] || '');
             }
             // If this was one half of a split unit, drop the split marker from
@@ -4132,7 +4126,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         findRunAt(seq, pos, bid) {
             const inrun = (i) => {
                 const p = this.placement(seq[i]);
-                return p && p.typ === 'einheit' && String(p.bausteinid || '') === String(bid);
+                return p && String(p.bausteinid || '') === String(bid);
             };
             let start = pos;
             while (start > 0 && inrun(start - 1)) {
@@ -4245,7 +4239,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                     continue;
                 }
                 const neighbor = this.placement(seq[neighborPos]);
-                if (neighbor && neighbor.typ === 'einheit' && neighbor.bausteinid) {
+                if (neighbor && neighbor.bausteinid) {
                     return neighbor.bausteinid;
                 }
             }
@@ -7229,7 +7223,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
         renderSequence(placements, anchorStart, seenBausteine) {
             const groups = [];
             placements.forEach((p) => {
-                const bid = p.data.typ === 'einheit' ? (p.data.bausteinid || null) : null;
+                const bid = p.data.bausteinid || null;
                 const previous = groups.length ? groups[groups.length - 1] : null;
                 if (previous && bid && previous.bausteinid === bid) {
                     previous.items.push(p);
@@ -7452,15 +7446,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const placeholder = isunit && !!p.data.bausteinid && this.isUnfilled(p.data);
             if (placeholder) {
                 items.push(item('remove', 'remove', inBaustein ? 'Reservierung entfernen' : 'Baustein entfernen'));
-            } else if (isunit && inBaustein) {
+            } else if (inBaustein) {
                 items.push(item('leave-baustein', 'unlink', 'Aus dem Baustein lösen'));
-            } else if (isunit) {
+            } else {
                 const bid = this.adjacentBausteinId(pid);
                 if (bid) {
                     const titel = (this.baustein(bid) || {}).titel || 'Baustein';
                     items.push(item('join-baustein', 'link', `In „${escapeHtml(titel)}" aufnehmen`));
                 }
-                if (!p.data.bausteinid) {
+                if (isunit && !p.data.bausteinid) {
                     items.push(item('heading-open', 'heading', 'Überschrift geben'));
                 }
             }
@@ -7973,7 +7967,7 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                         <span class="sq-pause__spacer"></span>
                         <button type="button" class="kg-btn sq-membership" data-sq-action="edit"
                           data-pid="${escapeHtml(p.pid)}">Bearbeiten</button>
-                        ${this.renderRowMenu(p, false)}
+                        ${this.renderRowMenu(p, inBaustein)}
                       </div>
                     </div>`;
             }
