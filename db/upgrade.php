@@ -398,5 +398,19 @@ function xmldb_seminarplaner_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026101906, 'seminarplaner');
     }
 
+    if ($oldversion < 2026111002) {
+        // Aus "Plenum (10-20)" wird "Plenum (13-20)", auch in den Bibliotheken der Aktivitäten.
+        $rows = $DB->get_records_select(
+            'config_plugins',
+            'plugin = :plugin AND ' . $DB->sql_like('name', ':namelike') . ' AND ' . $DB->sql_like('value', ':old'),
+            ['plugin' => 'mod_seminarplaner', 'namelike' => 'methods_cmid_%', 'old' => '%Plenum (10-20)%']
+        );
+        foreach ($rows as $row) {
+            set_config($row->name, str_replace('Plenum (10-20)', 'Plenum (13-20)', (string)$row->value), 'mod_seminarplaner');
+        }
+
+        upgrade_mod_savepoint(true, 2026111002, 'seminarplaner');
+    }
+
     return true;
 }

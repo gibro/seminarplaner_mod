@@ -463,7 +463,8 @@ function seminarplaner_phase_options(): array {
 function seminarplaner_groupsize_options(): array {
     return [
         'Gruppenarbeit (2-5)' => 'Gruppenarbeit (2-5)',
-        'Plenum (10-20)' => 'Plenum (10-20)',
+        'Plenum (6-12)' => 'Plenum (6-12)',
+        'Plenum (13-20)' => 'Plenum (13-20)',
         'beliebig' => 'beliebig',
     ];
 }

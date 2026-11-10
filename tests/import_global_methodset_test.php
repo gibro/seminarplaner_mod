@@ -198,6 +198,29 @@ final class import_global_methodset_test extends advanced_testcase {
     /**
      * A Seminarkonzept with a plan creates that plan and rewrites references.
      */
+    public function test_saving_a_card_with_the_old_group_size_renames_it(): void {
+        global $CFG, $USER;
+        require_once($CFG->dirroot . '/mod/seminarplaner/locallib.php');
+
+        $this->resetAfterTest(true);
+        $this->setAdminUser();
+        $this->create_activity();
+
+        $cards = new method_card_service();
+        $cards->save_methods($this->cmid, (int)$USER->id, $this->contextid, [
+            ['titel' => 'Alt', 'gruppengroesse' => 'Plenum (10-20)'],
+            ['titel' => 'Neu', 'gruppengroesse' => 'Plenum (6-12)'],
+        ]);
+
+        $saved = array_column($cards->get_methods($this->cmid, (int)$USER->id, $this->contextid), 'gruppengroesse', 'titel');
+        $this->assertSame('Plenum (13-20)', $saved['Alt']);
+        $this->assertSame('Plenum (6-12)', $saved['Neu']);
+        $this->assertSame(
+            ['Gruppenarbeit (2-5)', 'Plenum (6-12)', 'Plenum (13-20)', 'beliebig'],
+            array_keys(seminarplaner_groupsize_options())
+        );
+    }
+
     public function test_resubmitting_a_plan_keeps_the_other_plans_and_their_units(): void {
         global $DB, $USER;
 
