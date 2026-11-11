@@ -378,8 +378,10 @@ class method_card_service {
             $method['id'] = $methoduid;
             $method = $this->normalize_method_phases($method);
             // Ältere Exporte tragen noch die frühere Bezeichnung.
-            if (($method['gruppengroesse'] ?? '') === 'Plenum (10-20)') {
-                $method['gruppengroesse'] = 'Plenum (13-20)';
+            if (is_string($method['gruppengroesse'] ?? null)) {
+                $method['gruppengroesse'] = \local_seminarplaner\local\service\konzept_snapshot::rename_group_size(
+                    $method['gruppengroesse']
+                );
             }
             $activeuids[] = $methoduid;
             $itemid = $this->resolve_effective_itemid($cmid, $userid, $methoduid, true, $contextid);

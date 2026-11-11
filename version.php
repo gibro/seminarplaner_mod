@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_seminarplaner';
-$plugin->version = 2026111100;
+$plugin->version = 2026111101;
 $plugin->requires = 2024042200; // Moodle 4.5 minimum.
 $plugin->maturity = MATURITY_STABLE;
 $plugin->release = '1.1.0';
@@ -33,5 +33,5 @@ $plugin->release = '1.1.0';
 // Die Methodensets und Konzepte liegen in Tabellen des Local-Plugins;
 // ohne dieses Plugin ist die Aktivitaet nicht lauffaehig.
 $plugin->dependencies = [
-    'local_seminarplaner' => 2026111002,
+    'local_seminarplaner' => 2026111100,
 ];
