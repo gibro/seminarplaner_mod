@@ -7441,8 +7441,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const items = [];
 
             // Platzhalter eines Bausteins (leerer Baustein bzw. offene
-            // Reservierung) sind keine Einheit: Aufnehmen, Lösen oder eine
-            // Überschrift geben ergäbe eine leere Seminareinheit im Plan.
+            // Reservierung) sind keine Einheit: Aufnehmen oder Lösen ergäbe
+            // eine leere Seminareinheit im Plan. „Überschrift geben" steht
+            // seit v2026111100 bewusst nicht mehr im Menü.
             const placeholder = isunit && !!p.data.bausteinid && this.isUnfilled(p.data);
             if (placeholder) {
                 items.push(item('remove', 'remove', inBaustein ? 'Reservierung entfernen' : 'Baustein entfernen'));
@@ -7453,9 +7454,6 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 if (bid) {
                     const titel = (this.baustein(bid) || {}).titel || 'Baustein';
                     items.push(item('join-baustein', 'link', `In „${escapeHtml(titel)}" aufnehmen`));
-                }
-                if (isunit && !p.data.bausteinid) {
-                    items.push(item('heading-open', 'heading', 'Überschrift geben'));
                 }
             }
 
