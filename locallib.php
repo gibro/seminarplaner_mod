@@ -462,10 +462,10 @@ function seminarplaner_phase_options(): array {
  */
 function seminarplaner_groupsize_options(): array {
     return [
-        'Gruppenarbeit (2-5)' => 'Gruppenarbeit (2-5)',
-        'Plenum (6-12)' => 'Plenum (6-12)',
-        'Plenum (13-20)' => 'Plenum (13-20)',
-        'beliebig' => 'beliebig',
+        'Partnerarbeit' => 'Partnerarbeit',
+        'Gruppenarbeit' => 'Gruppenarbeit',
+        'Plenum' => 'Plenum',
+        'beliebige Gruppengröße' => 'beliebige Gruppengröße',
     ];
 }
 
@@ -889,7 +889,7 @@ function seminarplaner_render_unit_form_fields(string $prefix, array $options = 
         'Gruppenräume' => 'Gruppenräume',
         'akustisch ruhig' => 'akustisch ruhig',
     ], 'Raumanforderungen wählen', 'Raumanforderungen');
-    $out .= $select('Gruppengröße', 'gruppengroesse', ['' => '(keine Angabe)'] + seminarplaner_groupsize_options());
+    $out .= $select('Gruppengröße', 'gruppengroesse', ['' => 'keine Angabe'] + seminarplaner_groupsize_options());
     if ($withvorbereitung) {
         // Nur der Bibliotheks-Editor kennt dieses Feld; es speist die Karten-Badges,
         // die Stapelbearbeitung und den Import/Export. Ohne Eingabefeld würde die

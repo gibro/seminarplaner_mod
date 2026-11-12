@@ -4713,6 +4713,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 this.setDirty(true);
                 this.render();
                 this.toast('Gespeichert – Dauer geändert? Dann sind die Zeiten schon angepasst.');
+                if (draftid > 0) {
+                    this.refreshCardsAfterUpload();
+                }
             }).catch(() => {
                 // Auch im Modal melden - die Statuszeile liegt hinter dem Overlay.
                 this.setUnitFormError('Die Einheit konnte nicht gespeichert werden.');
@@ -5105,9 +5108,13 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             }).then(() => {
                 // Entwurfsbereich ist übernommen - Nummer nicht an der Karte
                 // lassen (siehe saveUnitModal).
+                const hadupload = Number(card.materialiendraftitemid) > 0;
                 delete card.materialiendraftitemid;
                 this.closeUnitModal();
                 this.applySuggestTarget(String(card.id), this.createTarget || {});
+                if (hadupload) {
+                    this.refreshCardsAfterUpload();
+                }
             }).catch(() => {
                 // Auch im Modal melden - die Statuszeile liegt hinter dem Overlay.
                 this.setUnitFormError('Die neue Einheit konnte nicht angelegt werden.');
@@ -5710,6 +5717,15 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                     }
                 });
             });
+        }
+
+        // Nach einem Upload kennt nur der Server die neue Dateiliste der Einheit
+        // (save_method_cards liefert sie nicht zurueck). Ohne Neuladen zeigt die
+        // Ansicht die alte Liste und schickt sie bei jedem weiteren Speichern mit.
+        // Der Server loescht deswegen zwar nichts mehr, die Anzeige soll aber
+        // stimmen. Faellt das Laden aus, bleibt es bei der alten Anzeige.
+        refreshCardsAfterUpload() {
+            this.reloadMethodCards().then(() => this.render()).catch(() => null);
         }
 
         // ⋮ „Als neue Einheit duplizieren": Duplikat in der Bibliothek, direkt
@@ -7441,8 +7457,9 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
             const items = [];
 
             // Platzhalter eines Bausteins (leerer Baustein bzw. offene
-            // Reservierung) sind keine Einheit: Aufnehmen, Lösen oder eine
-            // Überschrift geben ergäbe eine leere Seminareinheit im Plan.
+            // Reservierung) sind keine Einheit: Aufnehmen oder Lösen ergäbe
+            // eine leere Seminareinheit im Plan. „Überschrift geben" steht
+            // seit v2026111100 bewusst nicht mehr im Menü.
             const placeholder = isunit && !!p.data.bausteinid && this.isUnfilled(p.data);
             if (placeholder) {
                 items.push(item('remove', 'remove', inBaustein ? 'Reservierung entfernen' : 'Baustein entfernen'));
@@ -7453,9 +7470,6 @@ function(Ajax, UserRepository, Fragment, Templates, LernzielEditor, LiveModel, P
                 if (bid) {
                     const titel = (this.baustein(bid) || {}).titel || 'Baustein';
                     items.push(item('join-baustein', 'link', `In „${escapeHtml(titel)}" aufnehmen`));
-                }
-                if (isunit && !p.data.bausteinid) {
-                    items.push(item('heading-open', 'heading', 'Überschrift geben'));
                 }
             }
 

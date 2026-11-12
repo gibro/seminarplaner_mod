@@ -35,8 +35,10 @@ class import_export_validator {
         'Zeitbedarf' => ['5', '10', '20', '30', '45', '60', '90', '120', '150', '180', 'mehr als 180 Minuten'],
         // Muss zu seminarplaner_groupsize_options() passen (const kann keine
         // Funktion aufrufen). Bei Änderung der Cluster hier mitpflegen.
-        // 'Plenum (10-20)' steht in älteren Exporten und wird beim Speichern umbenannt.
-        'Gruppengröße' => ['Gruppenarbeit (2-5)', 'Plenum (6-12)', 'Plenum (13-20)', 'Plenum (10-20)', 'beliebig'],
+        // Die Werte mit Zahlen und 'beliebig' stehen in älteren Exporten und
+        // werden beim Speichern umbenannt (konzept_snapshot::GROUP_SIZE_RENAMES).
+        'Gruppengröße' => ['Partnerarbeit', 'Gruppenarbeit', 'Plenum', 'beliebige Gruppengröße',
+            'Gruppenarbeit (2-5)', 'Plenum (6-12)', 'Plenum (13-20)', 'Plenum (10-20)', 'beliebig'],
         'Komplexitätsgrad' => ['sehr niedrig', 'niedrig', 'mittel', 'hoch'],
     ];
 

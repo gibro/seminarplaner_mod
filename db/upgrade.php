@@ -412,5 +412,23 @@ function xmldb_seminarplaner_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026111002, 'seminarplaner');
     }
 
+    if ($oldversion < 2026111101) {
+        // Gruppengrößen ohne Zahlen (Partnerarbeit kommt neu dazu), auch in den
+        // Bibliotheken der Aktivitäten.
+        $rows = $DB->get_records_select(
+            'config_plugins',
+            'plugin = :plugin AND ' . $DB->sql_like('name', ':namelike') . ' AND ' . $DB->sql_like('value', ':key'),
+            ['plugin' => 'mod_seminarplaner', 'namelike' => 'methods_cmid_%', 'key' => '%gruppengroesse%']
+        );
+        foreach ($rows as $row) {
+            $json = \local_seminarplaner\local\service\konzept_snapshot::rename_group_sizes_in_json((string)$row->value);
+            if ($json !== (string)$row->value) {
+                set_config($row->name, $json, 'mod_seminarplaner');
+            }
+        }
+
+        upgrade_mod_savepoint(true, 2026111101, 'seminarplaner');
+    }
+
     return true;
 }

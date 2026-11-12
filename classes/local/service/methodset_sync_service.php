@@ -242,7 +242,9 @@ class methodset_sync_service {
         foreach ($userids as $userid) {
             $currentmethods = $service->get_methods((int)$link->cmid, $userid, (int)$context->id);
             $merged = $this->merge_methods_for_sync($currentmethods, $methodsetid, $oldmethods, $newmethods, $newversionid);
-            $service->save_methods((int)$link->cmid, $userid, (int)$context->id, $merged);
+            // The list is built from the server state just read, so it may prune: an
+            // attachment the set dropped has to disappear here too.
+            $service->save_methods((int)$link->cmid, $userid, (int)$context->id, $merged, true);
         }
 
         $link->methodsetversionid = $newversionid;

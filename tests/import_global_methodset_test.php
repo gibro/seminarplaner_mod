@@ -209,14 +209,16 @@ final class import_global_methodset_test extends advanced_testcase {
         $cards = new method_card_service();
         $cards->save_methods($this->cmid, (int)$USER->id, $this->contextid, [
             ['titel' => 'Alt', 'gruppengroesse' => 'Plenum (10-20)'],
-            ['titel' => 'Neu', 'gruppengroesse' => 'Plenum (6-12)'],
+            ['titel' => 'Beliebig', 'gruppengroesse' => 'beliebig'],
+            ['titel' => 'Neu', 'gruppengroesse' => 'Partnerarbeit'],
         ]);
 
         $saved = array_column($cards->get_methods($this->cmid, (int)$USER->id, $this->contextid), 'gruppengroesse', 'titel');
-        $this->assertSame('Plenum (13-20)', $saved['Alt']);
-        $this->assertSame('Plenum (6-12)', $saved['Neu']);
+        $this->assertSame('Plenum', $saved['Alt']);
+        $this->assertSame('beliebige Gruppengröße', $saved['Beliebig']);
+        $this->assertSame('Partnerarbeit', $saved['Neu']);
         $this->assertSame(
-            ['Gruppenarbeit (2-5)', 'Plenum (6-12)', 'Plenum (13-20)', 'beliebig'],
+            ['Partnerarbeit', 'Gruppenarbeit', 'Plenum', 'beliebige Gruppengröße'],
             array_keys(seminarplaner_groupsize_options())
         );
     }
