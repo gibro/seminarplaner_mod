@@ -335,7 +335,7 @@ final class sync_attachments_test extends advanced_testcase {
         $this->assertSame(['Handout.pdf'], $this->activity_attachments('Hallo'));
     }
 
-    public function test_save_with_an_explicitly_empty_list_still_removes_the_attachments(): void {
+    public function test_save_with_an_empty_list_keeps_the_attachments(): void {
         $v1 = $this->publish_version(1);
         $unitid = $this->add_set_unit($v1, 'Hallo');
         $this->attach_to_set_unit($unitid, 'Handout.pdf');
@@ -346,6 +346,59 @@ final class sync_attachments_test extends advanced_testcase {
         $methods[0]['materialien'] = [];
         $this->save_activity_methods($methods);
 
-        $this->assertSame([], $this->activity_attachments('Hallo'));
+        // A list from the browser may be stale; removing goes through the file manager.
+        $this->assertSame(['Handout.pdf'], $this->activity_attachments('Hallo'));
+    }
+
+    public function test_upload_survives_a_later_save_with_the_stale_browser_list(): void {
+        global $USER;
+
+        // The browser loads the units: one unit, no attachments yet.
+        $clientlist = [
+            ['id' => 'einheita', 'titel' => 'Einheit A', 'zeitbedarf' => '30', 'materialien' => []],
+            ['id' => 'einheitb', 'titel' => 'Einheit B', 'zeitbedarf' => '30', 'materialien' => []],
+        ];
+        $this->save_activity_methods($clientlist);
+
+        // Upload into the draft area and save the unit dialog, as sequenz.js does.
+        $draftitemid = file_get_unused_draft_itemid();
+        get_file_storage()->create_file_from_string((object)[
+            'contextid' => (int)context_user::instance((int)$USER->id)->id,
+            'component' => 'user',
+            'filearea' => 'draft',
+            'itemid' => $draftitemid,
+            'filepath' => '/',
+            'filename' => 'Arbeitsblatt.pdf',
+        ], 'inhalt');
+        $clientlist[0]['materialiendraftitemid'] = $draftitemid;
+        $this->save_activity_methods($clientlist);
+        $this->assertSame(['Arbeitsblatt.pdf'], $this->activity_attachments('Einheit A'));
+
+        // The browser drops the draft id but keeps its old, empty list - and later
+        // someone edits ANOTHER unit. This used to delete the upload.
+        unset($clientlist[0]['materialiendraftitemid']);
+        $clientlist[1]['titel'] = 'Einheit B, umbenannt';
+        $this->save_activity_methods($clientlist);
+
+        $this->assertSame(['Arbeitsblatt.pdf'], $this->activity_attachments('Einheit A'));
+    }
+
+    public function test_file_manager_draft_still_removes_attachments(): void {
+        global $USER;
+
+        $this->save_activity_methods([[
+            'id' => 'einheita', 'titel' => 'Einheit A', 'zeitbedarf' => '30',
+            'materialien' => [['name' => 'Alt.pdf', 'contentbase64' => base64_encode('alt')]],
+        ]]);
+        $this->assertSame(['Alt.pdf'], $this->activity_attachments('Einheit A'));
+
+        // The file manager hands over an empty draft: the user removed the file.
+        $draftitemid = file_get_unused_draft_itemid();
+        $this->save_activity_methods([[
+            'id' => 'einheita', 'titel' => 'Einheit A', 'zeitbedarf' => '30',
+            'materialien' => [], 'materialiendraftitemid' => $draftitemid,
+        ]]);
+
+        $this->assertSame([], $this->activity_attachments('Einheit A'));
     }
 }

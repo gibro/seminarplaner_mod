@@ -352,9 +352,14 @@ class method_card_service {
      * @param int $userid User id.
      * @param int $contextid Module context id.
      * @param array $methods Seminar unit array.
+     * @param bool $prunefiles Delete stored attachments a unit's list does not name.
+     *     Only for callers that build the list from the server's current state (the
+     *     set sync). A browser sends the list it loaded earlier - after an upload in
+     *     another dialog, tab or by another person that list is stale, and pruning
+     *     would delete the new files with the next unrelated save.
      * @return void
      */
-    public function save_methods(int $cmid, int $userid, int $contextid, array $methods): void {
+    public function save_methods(int $cmid, int $userid, int $contextid, array $methods, bool $prunefiles = false): void {
         global $DB;
 
         if ($cmid <= 0 || $userid <= 0) {
@@ -399,9 +404,9 @@ class method_card_service {
                 unset($method['materialien'], $method['h5p'], $method['materialiendraftitemid'], $method['h5pdraftitemid']);
             }
 
-            // Sync_file_area() deletes every file the payload does not list. A payload
-            // without the key means "not touched" and must not wipe the attachments -
-            // only an explicitly empty list removes them.
+            // A payload without the key means "not touched". A name list only adds
+            // files; removing them needs the draft area (file manager), deleting the
+            // unit, or $prunefiles from the set sync.
             $materialentries = (array)($method['materialien'] ?? []);
             $touchmaterial = array_key_exists('materialien', $method);
             $materialdraftitemid = 0;
@@ -425,10 +430,10 @@ class method_card_service {
             }
 
             $method['materialien'] = $touchmaterial
-                ? $this->sync_file_area($contextid, $itemid, self::FILEAREA_MATERIALIEN, $materialentries, $userid)
+                ? $this->sync_file_area($contextid, $itemid, self::FILEAREA_MATERIALIEN, $materialentries, $userid, $prunefiles)
                 : $this->list_file_descriptors($contextid, self::FILEAREA_MATERIALIEN, $itemid);
             $method['h5p'] = $touchh5p
-                ? $this->sync_file_area($contextid, $itemid, self::FILEAREA_H5P, $h5pentries, $userid)
+                ? $this->sync_file_area($contextid, $itemid, self::FILEAREA_H5P, $h5pentries, $userid, $prunefiles)
                 : $this->list_file_descriptors($contextid, self::FILEAREA_H5P, $itemid);
             unset($method['materialiendraftitemid'], $method['h5pdraftitemid']);
             $normalized[] = $method;
@@ -920,9 +925,17 @@ class method_card_service {
      * @param string $filearea
      * @param array $entries
      * @param int $userid
+     * @param bool $prune Delete stored files the entries do not name (see save_methods()).
      * @return array
      */
-    private function sync_file_area(int $contextid, int $itemid, string $filearea, array $entries, int $userid): array {
+    private function sync_file_area(
+        int $contextid,
+        int $itemid,
+        string $filearea,
+        array $entries,
+        int $userid,
+        bool $prune = false
+    ): array {
         $fs = get_file_storage();
         $existing = $fs->get_area_files($contextid, 'mod_seminarplaner', $filearea, $itemid, 'filename', false);
         $byname = [];
@@ -991,7 +1004,7 @@ class method_card_service {
         }
 
         foreach ($byname as $name => $file) {
-            if (!isset($keep[$name])) {
+            if ($prune && !isset($keep[$name])) {
                 $file->delete();
             }
         }
