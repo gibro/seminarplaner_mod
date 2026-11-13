@@ -9186,7 +9186,10 @@ details.sq-menu[open] > summary.sq-menu__btn {
     .sq-unit__details { padding-left: 16px; }
 }
 /* Ueberschriften aus dem Ablauf-Feld (Tiny) wuerden sonst in Theme-Groesse
-   erscheinen und den Aufklappbereich dominieren. */
+   erscheinen und den Aufklappbereich dominieren. Ausserdem griff die
+   Oberflaechenregel „.kg-shell h3/h4/h5" (Versalien, Schriftstaerke 900)
+   auf selbst gesetzte Zwischenueberschriften im Text durch - schlecht
+   lesbar. Im Fliesstext sind sie einfach fett in der Textschrift. */
 .sq-unit__details h1,
 .sq-unit__details h2,
 .sq-unit__details h3,
@@ -9198,10 +9201,20 @@ details.sq-menu[open] > summary.sq-menu__btn {
 .sq-modal--detail .sq-details__list h3,
 .sq-modal--detail .sq-details__list h4,
 .sq-modal--detail .sq-details__list h5,
-.sq-modal--detail .sq-details__list h6 {
+.sq-modal--detail .sq-details__list h6,
+.sp-method-detail__text h1,
+.sp-method-detail__text h2,
+.sp-method-detail__text h3,
+.sp-method-detail__text h4,
+.sp-method-detail__text h5,
+.sp-method-detail__text h6 {
     margin: 0.9em 0 0.3em;
+    font-family: var(--font-body);
     font-size: 15px;
+    font-weight: 700;
     line-height: 1.3;
+    text-transform: none;
+    letter-spacing: normal;
 }
 
 /* ---- Einheit einplanen vs. neu schreiben (Variante B, 30. September 2026) ----
