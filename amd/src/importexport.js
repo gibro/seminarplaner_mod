@@ -1109,7 +1109,26 @@ function(Ajax, Notification, Handout, PlanMemory) {
                 nachmittag: (isLast && az.letzterTagNurVormittag) ? vmStart : nmStart
             };
             const items = [];
+            // Mittagspause wie im Überblick (grid.js, D11): Sie ist keine
+            // Platzierung, sondern die Lücke zwischen den Ankern. Läuft der
+            // Vormittag in die Pause hinein, beginnt sie erst danach.
+            const vmEndCfg = (lunch && pdfParseClock(lunch.start) !== null)
+                ? pdfParseClock(lunch.start) : pdfParseClock((az.vormittag || {}).end);
+            let vmContentEnd = anchorStarts.vormittag;
             ['vormittag', 'nachmittag'].forEach((ankername) => {
+                if (ankername === 'nachmittag') {
+                    const pauseStart = Math.max(Number.isFinite(vmEndCfg) ? vmEndCfg : vmContentEnd, vmContentEnd);
+                    const pauseEnd = anchorStarts.nachmittag;
+                    if (Number.isFinite(pauseStart) && Number.isFinite(pauseEnd) && pauseEnd > pauseStart) {
+                        items.push({
+                            kind: 'break',
+                            title: 'Mittagspause',
+                            startMin: pauseStart,
+                            endMin: pauseEnd,
+                            details: {}
+                        });
+                    }
+                }
                 let clock = Number.isFinite(anchorStarts[ankername]) ? anchorStarts[ankername] : 0;
                 const pids = (((tag.anker || {})[ankername] || {}).sequenz) || [];
                 pids.forEach((pid) => {
@@ -1161,6 +1180,9 @@ function(Ajax, Notification, Handout, PlanMemory) {
                     }
                     clock += duration;
                 });
+                if (ankername === 'vormittag') {
+                    vmContentEnd = clock;
+                }
             });
             days[dayname] = items;
         });
@@ -2271,18 +2293,18 @@ function(Ajax, Notification, Handout, PlanMemory) {
             doc.text(line2, 14, 26);
         }
 
-        const items = [];
-        days.forEach((day) => {
-            ((plan[day] || []).filter((entry) => entry && entry.kind !== 'break'))
-                .slice()
-                .sort((a, b) => (a.startMin || 0) - (b.startMin || 0))
-                .forEach((entry) => {
-                    items.push(entry);
-                });
-        });
-
         const headers = selectedcols.map((key) => PDF_COLUMN_LABELS[key] || key);
-        const rows = items.map((item) => selectedcols.map((key) => getPdfColumnValue(item, key) || '—'));
+        // Pausen laufen als graue Zeile über die ganze Breite; die Uhrzeit
+        // bleibt in ihrer Spalte, wenn die vorne steht.
+        const breakRow = (item) => {
+            const time = `${formatTimeForPdf(item.startMin)} – ${formatTimeForPdf(item.endMin)}`;
+            const title = escapeTextForPdf(item.title || 'Pause') || 'Pause';
+            const styles = {fillColor: [232, 234, 238], fontStyle: 'bold', textColor: [70, 76, 88]};
+            if (selectedcols[0] === 'uhrzeit' && selectedcols.length > 1) {
+                return [{content: time, styles}, {content: title, colSpan: selectedcols.length - 1, styles}];
+            }
+            return [{content: `${time}  ${title}`, colSpan: selectedcols.length, styles}];
+        };
 
         const widthMap = {
             uhrzeit: 25,
@@ -2312,16 +2334,49 @@ function(Ajax, Notification, Handout, PlanMemory) {
             };
         });
 
-        doc.autoTable({
-            head: [headers],
-            body: rows,
-            startY: line2 ? 32 : 30,
-            styles: {fontSize: 8, cellPadding: 2},
-            headStyles: {fillColor: [43, 104, 197], textColor: 255, fontStyle: 'bold'},
-            alternateRowStyles: {fillColor: [245, 247, 250]},
-            margin: {top: 30},
-            columnStyles,
-            didDrawPage: () => stampPdfLogo(doc)
+        // Jeder Wochentag beginnt auf einer eigenen Seite mit dem Tagesnamen
+        // als Überschrift; läuft ein Tag über mehrere Seiten, steht oben
+        // „<Tag> (Fortsetzung)". Tage ohne Einträge entfallen.
+        const planned = days
+            .map((day) => ({
+                day,
+                entries: (plan[day] || []).filter(Boolean).slice()
+                    .sort((a, b) => (a.startMin || 0) - (b.startMin || 0))
+            }))
+            .filter((entry) => entry.entries.some((item) => item.kind !== 'break'));
+        planned.forEach(({day, entries}, index) => {
+            let y = 22;
+            if (index > 0) {
+                doc.addPage();
+            } else {
+                y = line2 ? 36 : 32;
+            }
+            doc.setFontSize(14);
+            doc.setFont(undefined, 'bold');
+            doc.text(day, 14, y);
+            doc.setFont(undefined, 'normal');
+            const rows = entries.map((item) => (item.kind === 'break'
+                ? breakRow(item)
+                : selectedcols.map((key) => getPdfColumnValue(item, key) || '—')));
+            doc.autoTable({
+                head: [headers],
+                body: rows,
+                startY: y + 4,
+                styles: {fontSize: 8, cellPadding: 2},
+                headStyles: {fillColor: [43, 104, 197], textColor: 255, fontStyle: 'bold'},
+                alternateRowStyles: {fillColor: [245, 247, 250]},
+                margin: {top: 30},
+                columnStyles,
+                didDrawPage: (data) => {
+                    stampPdfLogo(doc);
+                    if (data.pageNumber > 1) {
+                        doc.setFontSize(12);
+                        doc.setFont(undefined, 'bold');
+                        doc.text(`${day} (Fortsetzung)`, 14, 22);
+                        doc.setFont(undefined, 'normal');
+                    }
+                }
+            });
         });
 
         const filename = meta.title ? `ZIM-${meta.title}.pdf` : 'ZIM-Papier.pdf';
