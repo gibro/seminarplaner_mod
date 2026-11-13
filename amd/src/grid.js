@@ -814,7 +814,7 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
             const end = parseTimeToMinutes(this.state.config.timeRange.end);
             const level = ZOOM_LEVELS[this.zoomIndex];
             const slotMinutes = Number(level.slotMinutes || 15);
-            const slotPx = Number(level.slotPx || 1);
+            const slotPx = this.currentSlotPx();
             const target = document.querySelector(`[data-overlay="${day}"]`)
                 || document.querySelector(`.sp-grid[data-day="${day}"]`);
             if (!target || typeof clientY !== 'number') {
@@ -973,7 +973,7 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
             if (this.resizeState.flowid) {
                 const level = ZOOM_LEVELS[this.zoomIndex];
                 const dy = Number(this.getPointerClientY(event) || 0) - this.resizeState.originY;
-                const stepPx = Number(level.slotPx || 1);
+                const stepPx = this.currentSlotPx();
                 const stepMin = Number(level.slotMinutes || 15);
                 const movedSteps = Math.round(dy / stepPx);
                 const movedMin = movedSteps * stepMin;
@@ -1025,7 +1025,7 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
             const current = list[idx];
             const level = ZOOM_LEVELS[this.zoomIndex];
             const dy = Number(this.getPointerClientY(event) || 0) - this.resizeState.originY;
-            const stepPx = Number(level.slotPx || 1);
+            const stepPx = this.currentSlotPx();
             const stepMin = Number(level.slotMinutes || 15);
             const movedSteps = Math.round(dy / stepPx);
             const movedMin = movedSteps * stepMin;
@@ -2365,7 +2365,7 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
 
             document.querySelectorAll('.sp-daycol').forEach((dayCol) => {
                 dayCol.style.setProperty('--rows', slotsPerDay);
-                dayCol.style.setProperty('--slot-height', `${level.slotPx}px`);
+                dayCol.style.setProperty('--slot-height', `${this.currentSlotPx()}px`);
 
                 const grid = dayCol.querySelector('.sp-grid');
                 if (grid) {
@@ -2387,7 +2387,7 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
                 const overlay = dayCol.querySelector('.sp-overlay');
                 if (overlay) {
                     overlay.style.setProperty('--rows', slotsPerDay);
-                    overlay.style.setProperty('--slot-height', `${level.slotPx}px`);
+                    overlay.style.setProperty('--slot-height', `${this.currentSlotPx()}px`);
                 }
             });
         }
@@ -2585,15 +2585,112 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
             });
         }
 
+        // Aktuelle Höhe eines Rasterslots in Pixeln: die der Zoomstufe, außer
+        // fitSlotPxToPlan() musste das Raster für diesen Plan strecken.
+        currentSlotPx() {
+            const level = ZOOM_LEVELS[this.zoomIndex];
+            return Number(this.fittedSlotPx || level.slotPx || 1);
+        }
+
+        // Berechnet Lage und Höhe der Einträge eines Tages (nach startMin
+        // sortiert) für eine gegebene Slothöhe. Gemeinsame Grundlage für das
+        // Zeichnen (renderOverlays) und das Strecken des Rasters
+        // (fitSlotPxToPlan), damit beide exakt dieselbe Rechnung sehen.
+        layoutDayItems(items, start, slotPx) {
+            const level = ZOOM_LEVELS[this.zoomIndex];
+            const slotMinutes = level.slotMinutes;
+            const minItemPx = Number(level.minItemPx || slotPx);
+            const packShortItems = !!level.packShortItems;
+            const packGapPx = level.id === 'coarse' ? 4 : 2;
+            let packedBottomPx = 0;
+            return items.map((it) => {
+                const durationMin = Math.max(5, Number(it.endMin || 0) - Number(it.startMin || 0));
+                const naturalTopPx = Math.max(0, ((Number(it.startMin || 0) - start) / slotMinutes) * slotPx);
+                const naturalHeightPx = Math.max(1, (durationMin / slotMinutes) * slotPx);
+                const isShort = durationMin < slotMinutes;
+                const minHeightPx = isShort ? minItemPx : Math.min(minItemPx, naturalHeightPx);
+                let heightPx = Math.max(naturalHeightPx, minHeightPx);
+                let topPx = naturalTopPx;
+                if (packShortItems) {
+                    // Ein aufgeblähter kurzer Eintrag darf den nächsten nach
+                    // unten schieben, der holt den Versatz aber sofort wieder
+                    // auf, indem er schrumpft (bis auf seine Mindesthöhe) —
+                    // sonst summiert sich die Verschiebung über den Tag und
+                    // feste Zeiten wie die Mittagspause rutschen sichtbar weg.
+                    // Der Abstand zwischen Einträgen geht von der eigenen
+                    // Höhe ab, statt den Nachfolger zu verschieben.
+                    topPx = Math.max(topPx, packedBottomPx);
+                    heightPx = Math.max(naturalTopPx + naturalHeightPx - topPx, minHeightPx + packGapPx);
+                    packedBottomPx = topPx + heightPx;
+                    heightPx = Math.max(1, heightPx - packGapPx);
+                }
+                return {durationMin, isShort, naturalTopPx, naturalHeightPx, topPx, heightPx};
+            });
+        }
+
+        // Maßstabstreue: Folgen viele kurze Einheiten aufeinander, reicht das
+        // Aufholen in layoutDayItems() nicht mehr — jede bläht sich auf die
+        // Mindesthöhe auf, der Versatz summiert sich, und ein Block, der um
+        // 12:30 endet, steht im Raster bis 13:30. Dann wird das Raster für
+        // ALLE Tage gleichmäßig gestreckt (gleicher Maßstab in der Woche),
+        // bis feste Zeitanker (Mittagspause, Tagesende, Lücken) wieder auf
+        // die Minute stimmen und kein Eintrag mitten im Block weiter als zwei
+        // Kurzeinträge verrutscht. Tage ohne Häufung lösen das nie aus.
+        fitSlotPxToPlan() {
+            this.fittedSlotPx = 0;
+            const level = ZOOM_LEVELS[this.zoomIndex];
+            if (!level.packShortItems) {
+                return;
+            }
+            const baseSlotPx = Number(level.slotPx || 1);
+            const minItemPx = Number(level.minItemPx || baseSlotPx);
+            const packGapPx = level.id === 'coarse' ? 4 : 2;
+            // Zwei aufgeblähte Kurzeinträge Versatz innerhalb eines Blocks
+            // sind erlaubt; strenger zu sein streckte das Raster beim realen
+            // Plan von 96 auf 144 px je Slot, nur für wenige Minuten
+            // Genauigkeit mitten im Block. Die Zeitanker unten sitzen exakt.
+            const tolerancePx = (minItemPx + packGapPx) * 2;
+            const maxSlotPx = baseSlotPx * 6;
+            const start = parseTimeToMinutes(this.state.config.timeRange.start);
+            const planDays = this.overviewPlanDays();
+            const dayItems = this.getVisibleDays()
+                .map((day) => (planDays[day] || []).slice().sort((a, b) => a.startMin - b.startMin))
+                .filter((items) => items.length > 1);
+            // Zusätzlich muss der letzte Eintrag vor einem festen Zeitanker
+            // pünktlich enden: vor einer Lücke im Plan, vor einer längeren
+            // Pause (ab einem Rasterslot, z. B. Mittagspause) und am
+            // Tagesende. Endet der Vormittag um 12:30, darf er im Raster nicht
+            // darüber hinausragen. Kurze Pausen zählen bewusst nicht als
+            // Anker — sonst würden zwei 5-Minuten-Einträge vor einer
+            // 5-Minuten-Pause das Raster auf ein Vielfaches strecken.
+            const slotMinutes = level.slotMinutes;
+            const isAnchor = (item) => !item || (item.kind === 'break'
+                && Number(item.endMin || 0) - Number(item.startMin || 0) >= slotMinutes);
+            const fits = (slotPx) => dayItems.every((items) => this.layoutDayItems(items, start, slotPx)
+                .every((entry, index) => {
+                    if (entry.topPx - entry.naturalTopPx > tolerancePx + 0.5) {
+                        return false;
+                    }
+                    const next = items[index + 1];
+                    const endsrun = isAnchor(next) || Number(next.startMin || 0) > Number(items[index].endMin || 0);
+                    return !endsrun || entry.topPx + entry.heightPx <= entry.naturalTopPx + entry.naturalHeightPx + 0.5;
+                }));
+            let slotPx = baseSlotPx;
+            while (slotPx < maxSlotPx && !fits(slotPx)) {
+                slotPx += 2;
+            }
+            if (slotPx > baseSlotPx) {
+                this.fittedSlotPx = slotPx;
+            }
+        }
+
         renderOverlays() {
             const start = parseTimeToMinutes(this.state.config.timeRange.start);
             const end = parseTimeToMinutes(this.state.config.timeRange.end);
             const level = ZOOM_LEVELS[this.zoomIndex];
             const slotMinutes = level.slotMinutes;
-            const slotPx = Number(level.slotPx || 1);
-            const minItemPx = Number(level.minItemPx || slotPx);
+            const slotPx = this.currentSlotPx();
             const packShortItems = !!level.packShortItems;
-            const packGapPx = level.id === 'coarse' ? 4 : 2;
             const slotsPerDay = Math.max(1, Math.round((end - start) / slotMinutes));
             const overlayMinHeight = slotsPerDay * slotPx;
 
@@ -2619,28 +2716,9 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
                 }
 
                 const items = (planDays[day] || []).slice().sort((a, b) => a.startMin - b.startMin);
-                let packedBottomPx = 0;
-                items.forEach((it) => {
-                    const durationMin = Math.max(5, Number(it.endMin || 0) - Number(it.startMin || 0));
-                    const naturalTopPx = Math.max(0, ((Number(it.startMin || 0) - start) / slotMinutes) * slotPx);
-                    const naturalHeightPx = Math.max(1, (durationMin / slotMinutes) * slotPx);
-                    const isShort = durationMin < slotMinutes;
-                    const minHeightPx = isShort ? minItemPx : Math.min(minItemPx, naturalHeightPx);
-                    let heightPx = Math.max(naturalHeightPx, minHeightPx);
-                    let topPx = naturalTopPx;
-                    if (packShortItems) {
-                        // Ein aufgeblähter kurzer Eintrag darf den nächsten nach
-                        // unten schieben, der holt den Versatz aber sofort wieder
-                        // auf, indem er schrumpft (bis auf seine Mindesthöhe) —
-                        // sonst summiert sich die Verschiebung über den Tag und
-                        // feste Zeiten wie die Mittagspause rutschen sichtbar weg.
-                        // Der Abstand zwischen Einträgen geht von der eigenen
-                        // Höhe ab, statt den Nachfolger zu verschieben.
-                        topPx = Math.max(topPx, packedBottomPx);
-                        heightPx = Math.max(naturalTopPx + naturalHeightPx - topPx, minHeightPx + packGapPx);
-                        packedBottomPx = topPx + heightPx;
-                        heightPx = Math.max(1, heightPx - packGapPx);
-                    }
+                const layout = this.layoutDayItems(items, start, slotPx);
+                items.forEach((it, index) => {
+                    const {durationMin, isShort, naturalTopPx, topPx, heightPx} = layout[index];
 
                     const div = document.createElement('div');
                     let className = `sp-item sp-item--zoom-${level.id}`;
@@ -3108,7 +3186,8 @@ define(['core/ajax', 'core/notification', 'mod_seminarplaner/overviewpdf'], func
             this.ensureViewState();
             this.wrapper.classList.remove('sp-zoom-fine', 'sp-zoom-medium', 'sp-zoom-coarse');
             this.wrapper.classList.add(`sp-zoom-${ZOOM_LEVELS[this.zoomIndex].id}`);
-            this.wrapper.style.setProperty('--slot-height', `${ZOOM_LEVELS[this.zoomIndex].slotPx}px`);
+            this.fitSlotPxToPlan();
+            this.wrapper.style.setProperty('--slot-height', `${this.currentSlotPx()}px`);
             this.buildTimeColumn();
             this.setupDayGrids();
             this.renderOverlays();
