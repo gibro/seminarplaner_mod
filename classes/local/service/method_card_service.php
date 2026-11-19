@@ -35,8 +35,8 @@ class method_card_service {
     private const FILEAREA_MATERIALIEN = 'method_materialien';
     /** @var string */
     private const FILEAREA_H5P = 'method_h5p';
-    /** @var int Max attachment size in bytes per file upload (0 = Moodle/context default). */
-    private const MAX_ATTACHMENT_BYTES = 0;
+    /** @var int Max size in bytes for a newly supplied attachment. */
+    public const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
     /** @var int Max attachments per method/filearea. */
     private const MAX_ATTACHMENTS_PER_AREA = 25;
     /** @var int Shared owner id used for file map rows. */
@@ -977,7 +977,7 @@ class method_card_service {
             if ($base64 === '') {
                 continue;
             }
-            if (self::MAX_ATTACHMENT_BYTES > 0 && strlen($base64) > (self::MAX_ATTACHMENT_BYTES * 2)) {
+            if (strlen($base64) > 4 * intdiv(self::MAX_ATTACHMENT_BYTES + 2, 3)) {
                 throw new coding_exception('Attachment payload too large');
             }
 
@@ -985,7 +985,7 @@ class method_card_service {
             if ($content === false) {
                 continue;
             }
-            if (self::MAX_ATTACHMENT_BYTES > 0 && strlen($content) > self::MAX_ATTACHMENT_BYTES) {
+            if (strlen($content) > self::MAX_ATTACHMENT_BYTES) {
                 throw new coding_exception('Attachment exceeds max size');
             }
             if (isset($byname[$name])) {
@@ -1038,14 +1038,29 @@ class method_card_service {
             throw new coding_exception('Too many attachments in one method');
         }
 
+        // Validate before removing anything. Existing large files may be retained unchanged.
+        foreach ($draftfiles as $draftfile) {
+            if ((int)$draftfile->get_filesize() <= self::MAX_ATTACHMENT_BYTES) {
+                continue;
+            }
+            $existing = $fs->get_file(
+                $contextid,
+                'mod_seminarplaner',
+                $filearea,
+                $itemid,
+                $draftfile->get_filepath(),
+                $this->sanitize_filename($draftfile->get_filename())
+            );
+            if (!$existing || $existing->get_contenthash() !== $draftfile->get_contenthash()
+                    || $existing->get_referencefileid() !== $draftfile->get_referencefileid()) {
+                throw new coding_exception('Attachment exceeds max size');
+            }
+        }
         $fs->delete_area_files($contextid, 'mod_seminarplaner', $filearea, $itemid);
 
         foreach ($draftfiles as $draftfile) {
             if (!$draftfile || $draftfile->is_directory()) {
                 continue;
-            }
-            if (self::MAX_ATTACHMENT_BYTES > 0 && (int)$draftfile->get_filesize() > self::MAX_ATTACHMENT_BYTES) {
-                throw new coding_exception('Attachment exceeds max size');
             }
             $filename = $this->sanitize_filename((string)$draftfile->get_filename());
             if ($filename === '') {
