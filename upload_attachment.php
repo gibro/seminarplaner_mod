@@ -24,8 +24,6 @@
 
 require_once(__DIR__ . '/bootstrap.php');
 
-/** @var int Maximale Groesse eines hochgeladenen Anhangs in Bytes (10 MB). */
-const MOD_SEMINARPLANER_UPLOAD_MAX_BYTES = 10485760;
 /** @var string[] Dateiendungen, die als Anhang nicht hochgeladen werden duerfen. */
 const MOD_SEMINARPLANER_UPLOAD_BLOCKED_EXTENSIONS = [
     'php', 'php3', 'php4', 'php5', 'phtml', 'phar', 'cgi', 'pl', 'py', 'rb',
@@ -56,7 +54,7 @@ try {
     }
 
     $filesize = (int)($_FILES['attachment']['size'] ?? 0);
-    if ($filesize <= 0 || $filesize > MOD_SEMINARPLANER_UPLOAD_MAX_BYTES) {
+    if ($filesize <= 0 || $filesize > \mod_seminarplaner\local\service\method_card_service::MAX_ATTACHMENT_BYTES) {
         throw new moodle_exception('invalidparameter');
     }
 
