@@ -136,17 +136,7 @@ function seminarplaner_delete_instance($id) {
 
     $cmid = seminarplaner_get_cmid_from_instance($id);
     if (!empty($cmid)) {
-        $gridids = $DB->get_fieldset_select('kgen_grid', 'id', 'cmid = ?', [$cmid]);
-        if (!empty($gridids)) {
-            [$insql, $inparams] = $DB->get_in_or_equal($gridids, SQL_PARAMS_QM);
-            $DB->delete_records_select('kgen_grid_user_state', "gridid $insql", $inparams);
-            $DB->delete_records_select('kgen_grid_lock', "gridid $insql", $inparams);
-        }
-
-        $DB->delete_records('kgen_grid', ['cmid' => $cmid]);
-        $DB->delete_records('kgen_activity_setlink', ['cmid' => $cmid]);
-        $DB->delete_records('kgen_activity_methodovr', ['cmid' => $cmid]);
-        $DB->delete_records('kgen_import_export_log', ['cmid' => $cmid]);
+        \mod_seminarplaner\local\service\activity_data_service::delete_records($cmid);
         // D89: persönliche Favoriten gehören zur Aktivität und gehen mit ihr.
         $DB->delete_records('user_preferences', ['name' => 'mod_seminarplaner_favorites_' . $cmid]);
     }

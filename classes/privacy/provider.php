@@ -167,7 +167,8 @@ final class provider implements
         $gridids = $DB->get_fieldset_select('kgen_grid_user_state', 'DISTINCT gridid', 'userid = ?', [$userid]);
         $gridids = array_merge(
             $gridids,
-            $DB->get_fieldset_select('kgen_grid_presence', 'DISTINCT gridid', 'userid = ?', [$userid])
+            $DB->get_fieldset_select('kgen_grid_presence', 'DISTINCT gridid', 'userid = ?', [$userid]),
+            $DB->get_fieldset_select('kgen_grid_lock', 'DISTINCT gridid', 'userid = ?', [$userid])
         );
         $gridids = array_values(array_unique(array_map('intval', $gridids)));
         if (!empty($gridids)) {
@@ -528,31 +529,10 @@ final class provider implements
      * @return void
      */
     public static function delete_data_for_all_users_in_context(context $context): void {
-        global $DB;
-
         if (!$context instanceof context_module) {
             return;
         }
-        $cmid = (int)$context->instanceid;
-        $gridids = $DB->get_fieldset_select('kgen_grid', 'id', 'cmid = ?', [$cmid]);
-        $gridids = array_map('intval', $gridids);
-
-        if (!empty($gridids)) {
-            [$insql, $params] = $DB->get_in_or_equal($gridids, SQL_PARAMS_QM);
-            $DB->delete_records_select('kgen_grid_user_state', "gridid {$insql}", $params);
-            $DB->delete_records_select('kgen_grid_lock', "gridid {$insql}", $params);
-            $DB->delete_records_select('kgen_grid_presence', "gridid {$insql}", $params);
-        }
-
-        $DB->delete_records('kgen_method_filemap', ['cmid' => $cmid]);
-        $DB->delete_records('kgen_import_export_log', ['cmid' => $cmid]);
-        $DB->delete_records('kgen_activity_setlink', ['cmid' => $cmid]);
-        $DB->delete_records('kgen_activity_methodovr', ['cmid' => $cmid]);
-        $DB->delete_records('kgen_planning_state', ['cmid' => $cmid]);
-        $DB->delete_records('kgen_roterfaden_state', ['cmid' => $cmid]);
-
-        // Shared grid records are user-attributed and can be removed in full context deletion.
-        $DB->delete_records('kgen_grid', ['cmid' => $cmid]);
+        \mod_seminarplaner\local\service\activity_data_service::delete_records((int)$context->instanceid);
     }
 
     /**
