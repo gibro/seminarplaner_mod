@@ -23,6 +23,7 @@
  */
 
 use mod_seminarplaner\local\service\grid_service;
+use mod_seminarplaner\local\service\planning_state_service;
 
 /**
  * DB-backed tests for grid service.
@@ -224,7 +225,28 @@ final class grid_service_test extends advanced_testcase {
         $this->assertTrue($service->get_roterfaden_state(1005)['ispublished']);
 
         $this->assertTrue($service->set_roterfaden_visibility(1005, false, 9));
-        $this->assertFalse($service->get_roterfaden_state(1005)['ispublished']);
+        $this->assertSame(
+            ['ispublished' => false, 'gridid' => 0, 'state' => []],
+            $service->get_roterfaden_state(1005)
+        );
+    }
+
+    public function test_roterfaden_remains_a_snapshot_after_planning_changes(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $cmid = 1010;
+        $gridid = $service->create_grid($cmid, 'Published', 9);
+        $snapshot = ['plan' => ['days' => []]];
+        $service->publish_roterfaden($cmid, $gridid, $snapshot, 9);
+
+        $planning = new planning_state_service();
+        $planning->save_state($cmid, ['units' => [['id' => 'unit-1', 'title' => 'Draft']]], 9);
+
+        $this->assertSame(
+            ['ispublished' => true, 'gridid' => $gridid, 'state' => $snapshot],
+            $service->get_roterfaden_state($cmid)
+        );
     }
 
     /**
@@ -278,7 +300,10 @@ final class grid_service_test extends advanced_testcase {
         // Archivieren am Service vorbei - so wie es geloeschte Plaene vor dem Fix waren.
         $DB->set_field('kgen_grid', 'isarchived', 1, ['id' => $gridid]);
 
-        $this->assertFalse($service->get_roterfaden_state(1009)['ispublished']);
+        $this->assertSame(
+            ['ispublished' => false, 'gridid' => 0, 'state' => []],
+            $service->get_roterfaden_state(1009)
+        );
     }
 
     /**

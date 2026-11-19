@@ -1009,43 +1009,26 @@ class grid_service {
             throw new coding_exception('Invalid cmid for get_roterfaden_state');
         }
         $record = $this->repository->get_roterfaden_state($cmid);
-        if (!$record) {
+        if (!$record || (int)$record->ispublished !== 1) {
             return ['ispublished' => false, 'gridid' => 0, 'state' => []];
+        }
+
+        // Alte Schnappschüsse können noch auf einen archivierten oder entfernten Plan zeigen.
+        if ((int)$record->gridid > 0) {
+            $grid = $this->repository->get_grid((int)$record->gridid);
+            if (!$grid || (int)$grid->cmid !== $cmid || (int)$grid->isarchived === 1) {
+                return ['ispublished' => false, 'gridid' => 0, 'state' => []];
+            }
         }
 
         $decoded = json_decode((string)$record->statejson, true);
         if (!is_array($decoded)) {
             $decoded = [];
         }
-        $hasunits = isset($decoded['units']) && is_array($decoded['units']) && count($decoded['units']) > 0;
-        $hasplanningunits = isset($decoded['planningState']) && is_array($decoded['planningState'])
-            && isset($decoded['planningState']['units']) && is_array($decoded['planningState']['units'])
-            && count($decoded['planningState']['units']) > 0;
-        if (!$hasunits && !$hasplanningunits) {
-            $planningservice = new planning_state_service();
-            $planningstate = $planningservice->get_state($cmid);
-            $state = isset($planningstate['state']) && is_array($planningstate['state']) ? $planningstate['state'] : [];
-            if (isset($state['units']) && is_array($state['units'])) {
-                $decoded['planningState'] = $state;
-                $decoded['units'] = $state['units'];
-                if (isset($state['slotorder']) && is_array($state['slotorder'])) {
-                    $decoded['slotorder'] = $state['slotorder'];
-                }
-            }
-        }
 
-        // Altfaelle vor dem Fix in delete_grid(): Schnappschuss eines inzwischen
-        // geloeschten (archivierten) Plans gilt als nicht veroeffentlicht.
-        $ispublished = (int)$record->ispublished === 1;
-        if ($ispublished && (int)$record->gridid > 0) {
-            $grid = $this->repository->get_grid((int)$record->gridid);
-            if (!$grid || (int)$grid->isarchived === 1) {
-                $ispublished = false;
-            }
-        }
-
+        // Der aktuelle Planungsstand kann Änderungen enthalten, die noch nicht freigegeben wurden.
         return [
-            'ispublished' => $ispublished,
+            'ispublished' => true,
             'gridid' => (int)$record->gridid,
             'state' => $decoded,
         ];
