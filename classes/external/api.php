@@ -3864,6 +3864,7 @@ class api extends external_api {
         $params = self::validate_parameters(self::get_user_state_parameters(), ['cmid' => $cmid, 'gridid' => $gridid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
         require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::require_activity_grid((int)$resolved['cm']->id, (int)$params['gridid']);
 
         $service = new grid_service();
         $result = $service->get_user_state((int)$params['gridid'], (int)$GLOBALS['USER']->id);
@@ -3910,6 +3911,7 @@ class api extends external_api {
         $params = self::validate_parameters(self::get_sequenz_intro_parameters(), ['cmid' => $cmid, 'gridid' => $gridid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
         require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::require_activity_grid((int)$resolved['cm']->id, (int)$params['gridid']);
 
         $service = new grid_service();
         return ['seen' => $service->get_intro_seen((int)$params['gridid'], (int)$GLOBALS['USER']->id)];
@@ -3950,6 +3952,7 @@ class api extends external_api {
         $params = self::validate_parameters(self::mark_sequenz_intro_seen_parameters(), ['cmid' => $cmid, 'gridid' => $gridid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
         require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::require_activity_grid((int)$resolved['cm']->id, (int)$params['gridid']);
         self::enforce_write_rate_limit('mark_sequenz_intro_seen', 30, 60);
 
         $service = new grid_service();
@@ -4015,6 +4018,7 @@ class api extends external_api {
 
         $resolved = self::resolve_cm_context((int)$params['cmid']);
         require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::require_activity_grid((int)$resolved['cm']->id, (int)$params['gridid']);
         self::enforce_write_rate_limit('save_user_state', 240, 60);
         if (strlen((string)$params['statejson']) > self::MAX_STATE_JSON_BYTES) {
             throw new invalid_parameter_exception('statejson exceeds allowed size');
@@ -4341,6 +4345,7 @@ class api extends external_api {
 
         $resolved = self::resolve_cm_context((int)$params['cmid']);
         require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::require_activity_grid((int)$resolved['cm']->id, (int)$params['gridid']);
         self::enforce_write_rate_limit('acquire_lock', 120, 60);
 
         $service = new soft_lock_service();
@@ -4402,6 +4407,7 @@ class api extends external_api {
 
         $resolved = self::resolve_cm_context((int)$params['cmid']);
         require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::require_activity_grid((int)$resolved['cm']->id, (int)$params['gridid']);
         self::enforce_write_rate_limit('refresh_lock', 240, 60);
 
         $service = new soft_lock_service();
@@ -4456,6 +4462,7 @@ class api extends external_api {
 
         $resolved = self::resolve_cm_context((int)$params['cmid']);
         require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::require_activity_grid((int)$resolved['cm']->id, (int)$params['gridid']);
         self::enforce_write_rate_limit('release_lock', 120, 60);
 
         $service = new soft_lock_service();
@@ -4498,6 +4505,7 @@ class api extends external_api {
         $params = self::validate_parameters(self::lock_status_parameters(), ['cmid' => $cmid, 'gridid' => $gridid]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
         require_capability('mod/seminarplaner:managegrids', $resolved['context']);
+        self::require_activity_grid((int)$resolved['cm']->id, (int)$params['gridid']);
 
         $service = new soft_lock_service();
         $status = $service->status((int)$params['gridid']);
@@ -4619,7 +4627,7 @@ class api extends external_api {
         ]);
         $resolved = self::resolve_cm_context((int)$params['cmid']);
         require_capability('mod/seminarplaner:managegrids', $resolved['context']);
-        self::require_pdf_info_grid((int)$resolved['cm']->id, (int)$params['gridid']);
+        self::require_activity_grid((int)$resolved['cm']->id, (int)$params['gridid']);
         return ['infohtml' => seminarplaner_get_pdf_info((int)$resolved['cm']->id, (int)$params['gridid'])];
     }
 
@@ -4662,7 +4670,7 @@ class api extends external_api {
         $resolved = self::resolve_cm_context((int)$params['cmid']);
         require_capability('mod/seminarplaner:managegrids', $resolved['context']);
         self::enforce_write_rate_limit('set_pdf_info', 120, 60);
-        self::require_pdf_info_grid((int)$resolved['cm']->id, (int)$params['gridid']);
+        self::require_activity_grid((int)$resolved['cm']->id, (int)$params['gridid']);
         seminarplaner_set_pdf_info((int)$resolved['cm']->id, (int)$params['gridid'], (string)$params['infohtml']);
         return ['success' => true];
     }
@@ -4679,12 +4687,14 @@ class api extends external_api {
     }
 
     /**
-     * Der Seminarplan muss zu dieser Aktivität gehören.
+     * Prüft den Plan zusätzlich zur Capability im Aktivitätskontext.
+     *
+     * Eine Capability für das Kursmodul berechtigt nur zu Plänen dieses Moduls.
      *
      * @param int $cmid Course module id.
      * @param int $gridid Seminar plan id.
      */
-    private static function require_pdf_info_grid(int $cmid, int $gridid): void {
+    private static function require_activity_grid(int $cmid, int $gridid): void {
         global $DB;
         if (!$DB->record_exists('kgen_grid', ['id' => $gridid, 'cmid' => $cmid])) {
             throw new invalid_parameter_exception('Seminar plan does not belong to this activity');
