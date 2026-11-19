@@ -310,7 +310,7 @@ class grid_service {
         if ($hash !== '') {
             return $hash;
         }
-        $legacy = $this->repository->get_latest_state_for_grid($gridid);
+        $legacy = $this->repository->get_latest_state_for_grid($gridid, 'id, versionhash');
         return $legacy ? (string)$legacy->versionhash : '';
     }
 
