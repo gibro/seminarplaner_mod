@@ -5,10 +5,10 @@ Die Codebelege sind auf den ursprünglichen Prüfcommit festgelegt. Diese Tabell
 | Paket | Stand und nächste Abnahme |
 | --- | --- |
 | CQ-001 | `e73931d` vereinheitlicht die Zuordnungsprüfung in den betroffenen Plan-APIs. Die Moodle-Rollen- und Kontextmatrix bleibt offen. |
-| CQ-002 | `ced9f43` trennt den gespeicherten öffentlichen Schnappschuss vom späteren Entwurf. Referenten werden auch bei vorhandenen Alt-Schnappschüssen aus der Antwort entfernt. Eine vollständige Feldliste setzt abgestimmte fachliche Vorgaben und Altformat-Fixtures voraus. |
+| CQ-002 | `ced9f43` trennt Schnappschuss und Entwurf. `3d4d46b` entfernt Referenten aus gespeicherten Sequenz-Platzierungen. `d3045d2` deckt auch fehlende Restore-Zuordnungen und unlesbare Inhalte ab. Eine vollständige Feldliste setzt fachliche Vorgaben und Altformat-Fixtures voraus. |
 | CQ-003 | `36ec54a` nutzt dieselbe Bereinigung für die Plugin-Tabellen in beiden kontextweiten Löschpfaden. Benutzerbezogene Anonymisierung und die Löschung von Kopien bleiben getrennte Verträge. |
 | CQ-004 | `e41651d` prüft Größenlimits vor dem Draft-Ersatz. Für einen fehlertoleranten Austausch bleibt der in SEC-003 beschriebene Test auf dem konkreten Moodle-Dateispeicher erforderlich. |
-| CQ-005 | `5f0b607` macht das Laden von Altständen schreibfrei. Versionshash und Konvertierung bleiben lesbar. Die vorhandene Übernahme beim Speichern läuft weiter unter der Plansperre. Alte Weiterleitungen bleiben bis zur Nutzungsprüfung erhalten. |
+| CQ-005 | `5f0b607` macht das Laden von Altständen schreibfrei. `3664431` liest für wiederholte Versionsabfragen nur ID und Hash des jüngsten Altstands. Beim Öffnen und beim ersten Speichern unter der Plansperre wird der vollständige Zustand geladen. Die Nutzung alter Weiterleitungen bleibt zu prüfen. |
 | CQ-006 | Zeitregeln erst nach einem Vergleich mit gemeinsamen Referenzdaten zusammenführen. Die Testmatrix soll ältere Tagespläne, abweichende Pausen und Varianten in Web, App und PDF abdecken. |
 | CQ-007 | `b6af912` korrigiert die Versionsangaben in der README. Die Installationsgrenze im Code bleibt erhalten. Der tatsächlich unterstützte Mindeststand muss mit dem Begleitplugin getestet werden. |
 

@@ -1,6 +1,6 @@
 # Seminarplaner Auditplan
 
-Prüfstand vom 19. November 2026 ist das Moodle-Aktivitätsmodul **Seminarplaner 1.1.0** auf dem Branch `codex/security-privacy-audit` am Commit `d93a60b`. Die Lernplattform zeigt Moodle **5.2.5 (Build 20261112)**, PHP **8.3.36** und Seminarplaner **1.1.0 (Build 2026111302)**. Die Plugin-Build-Nummer stimmt mit dem Repository überein. Ein Inhaltsabgleich des Deployments steht aus. Screenshot der Moodle-Serverumgebung im lokalen Audit-Ordner · [Modulversion](https://github.com/gibro/seminarplaner_mod/blob/d93a60bd289aac160e7372636e19a628503397a9/version.php)
+Prüfstand vom 19. November 2026 ist das Moodle-Aktivitätsmodul **Seminarplaner 1.1.0** am Commit `d93a60b`. Die Plugin-Übersicht nennt Build `2026111302`, passend zum Repository. Die bereitgestellten Serverinformationen nennen PHP **8.3.36**. Der Screenshot der Umgebungsprüfung zeigt **Moodle 5.2.5 (Build 20261112)** als ausgewählte Prüfversion. Für die Abnahme sind der tatsächlich installierte Moodle-Core-Build und der Quellstand des Deployments noch zu bestätigen. [Modulversion am Prüfcommit](https://github.com/gibro/seminarplaner_mod/blob/d93a60bd289aac160e7372636e19a628503397a9/version.php)
 
 Die Ergebnisse für diesen Prüfstand stehen im [Security- und Datenschutzbericht](SECURITY-DATA-PRIVACY-AUDIT-Seminarplaner-20261119.md) und im [Codequalitätsbericht](CODE-QUALITY-AUDIT-Seminarplaner-20261119.md). Die folgenden Prüfschritte halten den vorgesehenen Umfang fest. Den tatsächlich belegten Umfang und offene Laufzeitprüfungen dokumentieren die Berichte.
 
