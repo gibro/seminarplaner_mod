@@ -1006,21 +1006,21 @@ class grid_service {
             throw new coding_exception('Invalid cmid for get_roterfaden_state');
         }
         $record = $this->repository->get_roterfaden_state($cmid);
-        if (!$record || (int)$record->ispublished !== 1) {
-            return ['ispublished' => false, 'gridid' => 0, 'state' => []];
+        $unpublished = ['ispublished' => false, 'gridid' => 0, 'state' => []];
+        // A restore without a matching plan stores gridid 0, even if the old snapshot was published.
+        if (!$record || (int)$record->ispublished !== 1 || (int)$record->gridid <= 0) {
+            return $unpublished;
         }
 
         // Alte Schnappschüsse können noch auf einen archivierten oder entfernten Plan zeigen.
-        if ((int)$record->gridid > 0) {
-            $grid = $this->repository->get_grid((int)$record->gridid);
-            if (!$grid || (int)$grid->cmid !== $cmid || (int)$grid->isarchived === 1) {
-                return ['ispublished' => false, 'gridid' => 0, 'state' => []];
-            }
+        $grid = $this->repository->get_grid((int)$record->gridid);
+        if (!$grid || (int)$grid->cmid !== $cmid || (int)$grid->isarchived === 1) {
+            return $unpublished;
         }
 
         $decoded = json_decode((string)$record->statejson, true);
         if (!is_array($decoded)) {
-            $decoded = [];
+            return $unpublished;
         }
 
         // Auch gespeicherte Schnappschüsse aus älteren Builds müssen die Teilnehmenden-Sicht einhalten.

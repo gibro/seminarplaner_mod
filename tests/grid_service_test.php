@@ -268,6 +268,27 @@ final class grid_service_test extends advanced_testcase {
         );
     }
 
+    public function test_restored_snapshot_requires_a_mapped_plan_and_decodable_content(): void {
+        $this->resetAfterTest(true);
+        $repository = new grid_repository();
+        $service = new grid_service($repository);
+        $cmid = 1013;
+        $unpublished = ['ispublished' => false, 'gridid' => 0, 'state' => []];
+
+        $repository->upsert_roterfaden_state($cmid, 0, '{"units":[]}', 9);
+        $this->assertSame($unpublished, $service->get_roterfaden_state($cmid));
+
+        $gridid = $service->create_grid($cmid, 'Restored plan', 9);
+        $repository->upsert_roterfaden_state($cmid, $gridid, '', 9);
+        $this->assertSame($unpublished, $service->get_roterfaden_state($cmid));
+
+        $repository->upsert_roterfaden_state($cmid, $gridid, '{"units":[]}', 9);
+        $this->assertSame(
+            ['ispublished' => true, 'gridid' => $gridid, 'state' => ['units' => []]],
+            $service->get_roterfaden_state($cmid)
+        );
+    }
+
     public function test_legacy_snapshot_uses_participant_view(): void {
         $this->resetAfterTest(true);
 
