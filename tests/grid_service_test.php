@@ -268,6 +268,21 @@ final class grid_service_test extends advanced_testcase {
         );
     }
 
+    public function test_legacy_snapshot_uses_participant_view(): void {
+        $this->resetAfterTest(true);
+
+        $repository = new grid_repository();
+        $service = new grid_service($repository);
+        $cmid = 1012;
+        $gridid = $service->create_grid($cmid, 'Legacy snapshot', 9);
+        $snapshot = ['sequenz' => ['platzierungen' => ['p1' => ['titel' => 'Einheit', 'referenten' => [9]]]]];
+        $repository->upsert_roterfaden_state($cmid, $gridid, json_encode($snapshot, JSON_THROW_ON_ERROR), 9);
+
+        $result = $service->get_roterfaden_state($cmid);
+        $this->assertTrue($result['ispublished']);
+        $this->assertSame(['titel' => 'Einheit'], $result['state']['sequenz']['platzierungen']['p1']);
+    }
+
     /**
      * Wer einen veroeffentlichten Plan loescht, zieht damit seinen Roten Faden zurueck.
      */

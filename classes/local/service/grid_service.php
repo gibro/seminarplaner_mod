@@ -1023,6 +1023,11 @@ class grid_service {
             $decoded = [];
         }
 
+        // Auch gespeicherte Schnappschüsse aus älteren Builds müssen die Teilnehmenden-Sicht einhalten.
+        if (is_array($decoded[sequence_state::STATE_KEY] ?? null)) {
+            $decoded[sequence_state::STATE_KEY] = sequence_state::strip_referenten($decoded[sequence_state::STATE_KEY]);
+        }
+
         // Der aktuelle Planungsstand kann Änderungen enthalten, die noch nicht freigegeben wurden.
         return [
             'ispublished' => true,
