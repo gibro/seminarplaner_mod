@@ -402,6 +402,30 @@ final class sync_attachments_test extends advanced_testcase {
         $this->assertSame([], $this->activity_attachments('Einheit A'));
     }
 
+    public function test_late_oversized_embedded_file_preserves_earlier_method(): void {
+        global $DB;
+
+        $original = ['id' => 'unit-a', 'titel' => 'Einheit A', 'materialien' => [
+            ['name' => 'Alt.pdf', 'contentbase64' => base64_encode('ursprünglich')],
+        ]];
+        $this->save_activity_methods([$original]);
+        $updated = $original;
+        $updated['materialien'] = [['name' => 'Neu.pdf', 'contentbase64' => base64_encode('neu')]];
+        $oversized = base64_encode(str_repeat('x', method_card_service::MAX_ATTACHMENT_BYTES + 1));
+
+        $this->expectException(\coding_exception::class);
+        $this->expectExceptionMessage('Attachment exceeds max size');
+        try {
+            $this->save_activity_methods([$updated, [
+                'id' => 'unit-b', 'titel' => 'Einheit B',
+                'h5p' => [['name' => 'Modul.h5p', 'contentbase64' => $oversized]],
+            ]]);
+        } finally {
+            $this->assertSame(['Alt.pdf'], $this->activity_attachments('Einheit A'));
+            $this->assertFalse($DB->record_exists('kgen_method_filemap', ['cmid' => $this->cmid, 'methoduid' => 'unit-b']));
+        }
+    }
+
     public function test_oversized_draft_leaves_existing_attachment_in_place(): void {
         global $USER;
 

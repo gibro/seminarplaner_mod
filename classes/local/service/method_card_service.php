@@ -366,8 +366,8 @@ class method_card_service {
             throw new coding_exception('Invalid input for save_methods');
         }
 
-        $normalized = [];
-        $activeuids = [];
+        // Validate embedded attachments for the whole save before any file or mapping changes.
+        $prepared = [];
         $seenmethoduids = [];
         foreach (array_values($methods) as $method) {
             if (!is_array($method)) {
@@ -388,51 +388,37 @@ class method_card_service {
                     $method['gruppengroesse']
                 );
             }
-            $activeuids[] = $methoduid;
-            $itemid = $this->resolve_effective_itemid($cmid, $userid, $methoduid, true, $contextid);
-            if ($itemid === null) {
-                throw new coding_exception('Unable to resolve file itemid');
-            }
-
             // Kopie einer Einheit: Die Anhänge bekommt sie als eigene Dateien, damit
             // Ändern oder Löschen in der Kopie das Original nicht mitreißt. Die
             // Dateiliste im Payload stammt vom Original und bleibt deshalb unberücksichtigt.
             $copyfrom = substr(clean_param((string)($method['_copyfrom'] ?? ''), PARAM_ALPHANUMEXT), 0, 255);
             unset($method['_copyfrom']);
             if ($copyfrom !== '' && $copyfrom !== $methoduid) {
-                $this->copy_method_files($cmid, $userid, $contextid, $copyfrom, $itemid);
                 unset($method['materialien'], $method['h5p'], $method['materialiendraftitemid'], $method['h5pdraftitemid']);
             }
 
-            // A payload without the key means "not touched". A name list only adds
-            // files; removing them needs the draft area (file manager), deleting the
-            // unit, or $prunefiles from the set sync.
-            $materialentries = (array)($method['materialien'] ?? []);
-            $touchmaterial = array_key_exists('materialien', $method);
-            $materialdraftitemid = 0;
-            if (isset($method['materialiendraftitemid'])) {
-                $materialdraftitemid = (int)$method['materialiendraftitemid'];
+            $materialentries = $this->attachment_entries($method, 'materialien');
+            $h5pentries = $this->attachment_entries($method, 'h5p');
+            $prepared[] = [$method, $copyfrom, $materialentries, $h5pentries];
+        }
+
+        $normalized = [];
+        $activeuids = [];
+        foreach ($prepared as [$method, $copyfrom, $materialentries, $h5pentries]) {
+            $methoduid = $method['id'];
+            $activeuids[] = $methoduid;
+            $itemid = $this->resolve_effective_itemid($cmid, $userid, $methoduid, true, $contextid);
+            if ($itemid === null) {
+                throw new coding_exception('Unable to resolve file itemid');
             }
-            if ($materialdraftitemid > 0) {
-                $materialentries = [['draftitemid' => $materialdraftitemid]];
-                $touchmaterial = true;
+            if ($copyfrom !== '' && $copyfrom !== $methoduid) {
+                $this->copy_method_files($cmid, $userid, $contextid, $copyfrom, $itemid);
             }
 
-            $h5pentries = (array)($method['h5p'] ?? []);
-            $touchh5p = array_key_exists('h5p', $method);
-            $h5pdraftitemid = 0;
-            if (isset($method['h5pdraftitemid'])) {
-                $h5pdraftitemid = (int)$method['h5pdraftitemid'];
-            }
-            if ($h5pdraftitemid > 0) {
-                $h5pentries = [['draftitemid' => $h5pdraftitemid]];
-                $touchh5p = true;
-            }
-
-            $method['materialien'] = $touchmaterial
+            $method['materialien'] = $materialentries !== null
                 ? $this->sync_file_area($contextid, $itemid, self::FILEAREA_MATERIALIEN, $materialentries, $userid, $prunefiles)
                 : $this->list_file_descriptors($contextid, self::FILEAREA_MATERIALIEN, $itemid);
-            $method['h5p'] = $touchh5p
+            $method['h5p'] = $h5pentries !== null
                 ? $this->sync_file_area($contextid, $itemid, self::FILEAREA_H5P, $h5pentries, $userid, $prunefiles)
                 : $this->list_file_descriptors($contextid, self::FILEAREA_H5P, $itemid);
             unset($method['materialiendraftitemid'], $method['h5pdraftitemid']);
@@ -918,7 +904,53 @@ class method_card_service {
     }
 
     /**
-     * Store file area content based on incoming attachment descriptors.
+     * Resolve the effective input and check its limits before saving any method.
+     *
+     * @param array $method Incoming method.
+     * @param string $key Attachment list key (materialien or h5p).
+     * @return array|null Entries to apply, or null to leave the area untouched.
+     */
+    private function attachment_entries(array $method, string $key): ?array {
+        $draftid = (int)($method[$key . 'draftitemid'] ?? 0);
+        if ($draftid > 0) {
+            return [['draftitemid' => $draftid]];
+        }
+        if (!array_key_exists($key, $method)) {
+            return null;
+        }
+        $entries = (array)$method[$key];
+        if (count($entries) > self::MAX_ATTACHMENTS_PER_AREA) {
+            throw new coding_exception('Too many attachments in one method');
+        }
+        $encodedlimit = 4 * intdiv(self::MAX_ATTACHMENT_BYTES + 2, 3);
+        foreach ($entries as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            if (isset($entry['draftitemid'])) {
+                if ((int)$entry['draftitemid'] > 0) {
+                    break; // sync_file_area returns after applying this draft.
+                }
+                continue;
+            }
+            $base64 = (string)($entry['contentbase64'] ?? '');
+            if ($base64 === '' || $this->sanitize_filename((string)($entry['name'] ?? '')) === '') {
+                continue;
+            }
+            $length = strlen($base64);
+            if ($length > $encodedlimit) {
+                throw new coding_exception('Attachment payload too large');
+            }
+            // At the final Base64 quartet, padding determines the actual byte count.
+            if ($length >= $encodedlimit - 2 && strlen((string)base64_decode($base64, true)) > self::MAX_ATTACHMENT_BYTES) {
+                throw new coding_exception('Attachment exceeds max size');
+            }
+        }
+        return $entries;
+    }
+
+    /**
+     * Store file area content based on prevalidated attachment descriptors.
      *
      * @param int $contextid
      * @param int $itemid
@@ -941,10 +973,6 @@ class method_card_service {
         $byname = [];
         foreach ($existing as $file) {
             $byname[$file->get_filename()] = $file;
-        }
-
-        if (count($entries) > self::MAX_ATTACHMENTS_PER_AREA) {
-            throw new coding_exception('Too many attachments in one method');
         }
 
         $keep = [];
@@ -977,16 +1005,9 @@ class method_card_service {
             if ($base64 === '') {
                 continue;
             }
-            if (strlen($base64) > 4 * intdiv(self::MAX_ATTACHMENT_BYTES + 2, 3)) {
-                throw new coding_exception('Attachment payload too large');
-            }
-
             $content = base64_decode($base64, true);
             if ($content === false) {
                 continue;
-            }
-            if (strlen($content) > self::MAX_ATTACHMENT_BYTES) {
-                throw new coding_exception('Attachment exceeds max size');
             }
             if (isset($byname[$name])) {
                 $byname[$name]->delete();
