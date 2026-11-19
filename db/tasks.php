@@ -24,4 +24,14 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$tasks = [];
+$tasks = [
+    [
+        'classname' => '\mod_seminarplaner\task\purge_presence',
+        'blocking' => 0,
+        'minute' => '*',
+        'hour' => '*',
+        'day' => '*',
+        'month' => '*',
+        'dayofweek' => '*',
+    ],
+];

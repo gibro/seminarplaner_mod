@@ -99,6 +99,19 @@ final class presence_test extends advanced_testcase {
         $this->assertSame(3, (int)reset($rows)->tag);
     }
 
+    public function test_scheduled_cleanup_does_not_need_a_new_ping(): void {
+        global $DB;
+
+        $now = time();
+        $service = new presence_service();
+        $service->ping($this->gridid, (int)$this->anna->id, 1, '', $now - presence_service::PURGE_SECONDS - 1);
+        $this->assertTrue($DB->record_exists('kgen_grid_presence', ['userid' => $this->anna->id]));
+
+        (new \mod_seminarplaner\task\purge_presence())->execute();
+
+        $this->assertFalse($DB->record_exists('kgen_grid_presence', ['userid' => $this->anna->id]));
+    }
+
     public function test_ping_reports_the_current_version_and_named_editors(): void {
         $hash = (new grid_service())->save_user_state($this->gridid, (int)$this->anna->id, ['config' => ['days' => ['Montag']]]);
 
