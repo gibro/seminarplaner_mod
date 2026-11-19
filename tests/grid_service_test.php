@@ -22,6 +22,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use mod_seminarplaner\local\repository\grid_repository;
 use mod_seminarplaner\local\service\grid_service;
 use mod_seminarplaner\local\service\planning_state_service;
 
@@ -92,6 +93,24 @@ final class grid_service_test extends advanced_testcase {
         $state = $service->get_user_state($gridid, 4);
         $this->assertCount(1, $state['state']['plan']['days']['Montag']);
         $this->assertCount(1, $state['state']['plan']['days']['Dienstag']);
+    }
+
+    public function test_reading_legacy_state_leaves_promotion_to_save(): void {
+        $this->resetAfterTest(true);
+
+        $repository = new grid_repository();
+        $service = new grid_service($repository);
+        $gridid = $service->create_grid(1011, 'Legacy plan', 4);
+        $repository->upsert_user_state($gridid, 4, '{"x":1}', 'legacy-hash');
+
+        $loaded = $service->get_user_state($gridid, 4);
+        $this->assertSame(1, $loaded['state']['x']);
+        $this->assertSame('legacy-hash', $loaded['versionhash']);
+        $this->assertSame('legacy-hash', $service->get_version_hash($gridid));
+        $this->assertFalse($repository->get_user_state($gridid, 0));
+
+        $hash = $service->save_user_state($gridid, 4, $loaded['state'], $loaded['versionhash']);
+        $this->assertSame($hash, $repository->get_user_state($gridid, 0)->versionhash);
     }
 
     public function test_delete_grid_removes_it_from_active_list(): void {

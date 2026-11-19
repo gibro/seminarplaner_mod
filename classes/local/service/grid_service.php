@@ -306,7 +306,12 @@ class grid_service {
      * @return string Empty if the plan has no stored state yet.
      */
     public function get_version_hash(int $gridid): string {
-        return $this->repository->get_state_versionhash($gridid, self::SHARED_STATE_USERID);
+        $hash = $this->repository->get_state_versionhash($gridid, self::SHARED_STATE_USERID);
+        if ($hash !== '') {
+            return $hash;
+        }
+        $legacy = $this->repository->get_latest_state_for_grid($gridid);
+        return $legacy ? (string)$legacy->versionhash : '';
     }
 
     /**
@@ -703,16 +708,8 @@ class grid_service {
 
         $record = $this->repository->get_user_state($gridid, self::SHARED_STATE_USERID);
         if (!$record) {
-            $legacy = $this->repository->get_latest_state_for_grid($gridid);
-            if ($legacy) {
-                $this->repository->upsert_user_state(
-                    $gridid,
-                    self::SHARED_STATE_USERID,
-                    (string)$legacy->statejson,
-                    (string)$legacy->versionhash
-                );
-                $record = $this->repository->get_user_state($gridid, self::SHARED_STATE_USERID);
-            }
+            // Keep reads side-effect free. The first save promotes this record under the plan lock.
+            $record = $this->repository->get_latest_state_for_grid($gridid);
         }
         if (!$record) {
             return ['state' => [], 'versionhash' => null];
