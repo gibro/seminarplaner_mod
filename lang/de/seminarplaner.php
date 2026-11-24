@@ -182,3 +182,4 @@ $string['privacy:metadata:kgen_activity_methodovr'] = 'Lokale Überschreibungen 
 $string['privacy:metadata:kgen_activity_methodovr:cmid'] = 'Kursmodul-ID.';
 $string['privacy:metadata:kgen_activity_methodovr:createdby'] = 'Nutzer-ID der erstellenden Person.';
 $string['privacy:metadata:kgen_activity_methodovr:modifiedby'] = 'Nutzer-ID der zuletzt ändernden Person.';
+$string['taskpurgepresence'] = 'Abgelaufene Präsenzdaten des Seminarplaners löschen';

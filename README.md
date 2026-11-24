@@ -6,9 +6,9 @@ Das Plugin arbeitet im Paar mit [`local_seminarplaner`](https://github.com/gibro
 
 | | |
 | --- | --- |
-| Version | `1.1.0` (`2026101907`), Reife `STABLE` |
-| Moodle | ab 4.5 (`$plugin->requires = 2024042200`) |
-| Abhängigkeit | `local_seminarplaner` ab `2026072000` |
+| Version | `1.1.0`, Build und Reifegrad in [version.php](version.php) |
+| Moodle | Technische Installationsgrenze: Moodle 4.4 (`2024042200`). Der unterstützte Mindeststand muss gemeinsam mit dem Begleitplugin getestet werden. |
+| Abhängigkeit | `local_seminarplaner` ab Build `2026111100` |
 | Datenbanken | MySQL/MariaDB und PostgreSQL |
 | Lizenz | GNU GPL v3 oder später (siehe `LICENSE`) |
 

@@ -182,3 +182,4 @@ $string['privacy:metadata:kgen_activity_methodovr'] = 'Local method overrides wi
 $string['privacy:metadata:kgen_activity_methodovr:cmid'] = 'Course module id.';
 $string['privacy:metadata:kgen_activity_methodovr:createdby'] = 'Creating user id.';
 $string['privacy:metadata:kgen_activity_methodovr:modifiedby'] = 'Last modifying user id.';
+$string['taskpurgepresence'] = 'Delete expired seminar planner presence data';

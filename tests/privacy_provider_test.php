@@ -74,6 +74,44 @@ final class privacy_provider_test extends advanced_testcase {
         $this->assertContains((int)$this->user->id, $userlist->get_userids());
     }
 
+    public function test_get_contexts_for_userid_includes_lock_only_user(): void {
+        $user = $this->getDataGenerator()->create_user();
+        $locks = new \mod_seminarplaner\local\service\soft_lock_service();
+        $locks->acquire($this->gridid, (int)$user->id, 300);
+
+        $contextids = provider::get_contexts_for_userid((int)$user->id)->get_contextids();
+        $this->assertContains((int)$this->context->id, array_map('intval', $contextids));
+    }
+
+    public function test_activity_deletion_clears_module_data_and_presence(): void {
+        global $DB;
+
+        $userid = (int)$this->user->id;
+        $instanceid = $DB->get_field('course_modules', 'instance', ['id' => $this->cmid], MUST_EXIST);
+        $planning = new \mod_seminarplaner\local\service\planning_state_service();
+        $planning->save_state($this->cmid, ['units' => []], $userid);
+        $grids = new grid_service();
+        $grids->publish_roterfaden($this->cmid, $this->gridid, ['plan' => ['days' => []]], $userid);
+        $presence = new \mod_seminarplaner\local\service\presence_service();
+        $presence->ping($this->gridid, $userid, 1, '');
+        $DB->insert_record('kgen_method_filemap', (object)[
+            'cmid' => $this->cmid,
+            'methoduid' => 'test-method',
+        ]);
+
+        $course = $this->getDataGenerator()->create_course();
+        $other = $this->getDataGenerator()->create_module('seminarplaner', ['course' => $course->id]);
+        $othercm = get_coursemodule_from_instance('seminarplaner', $other->id, 0, false, MUST_EXIST);
+        $planning->save_state((int)$othercm->id, ['units' => []], $userid);
+
+        $this->assertTrue(seminarplaner_delete_instance($instanceid));
+        foreach (['kgen_planning_state', 'kgen_roterfaden_state', 'kgen_method_filemap'] as $table) {
+            $this->assertFalse($DB->record_exists($table, ['cmid' => $this->cmid]));
+        }
+        $this->assertFalse($DB->record_exists('kgen_grid_presence', ['gridid' => $this->gridid]));
+        $this->assertTrue($DB->record_exists('kgen_planning_state', ['cmid' => $othercm->id]));
+    }
+
     public function test_export_user_data_writes_authored_grid(): void {
         writer::reset();
 

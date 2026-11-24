@@ -306,7 +306,12 @@ class grid_service {
      * @return string Empty if the plan has no stored state yet.
      */
     public function get_version_hash(int $gridid): string {
-        return $this->repository->get_state_versionhash($gridid, self::SHARED_STATE_USERID);
+        $hash = $this->repository->get_state_versionhash($gridid, self::SHARED_STATE_USERID);
+        if ($hash !== '') {
+            return $hash;
+        }
+        $legacy = $this->repository->get_latest_state_for_grid($gridid, 'id, versionhash');
+        return $legacy ? (string)$legacy->versionhash : '';
     }
 
     /**
@@ -703,16 +708,8 @@ class grid_service {
 
         $record = $this->repository->get_user_state($gridid, self::SHARED_STATE_USERID);
         if (!$record) {
-            $legacy = $this->repository->get_latest_state_for_grid($gridid);
-            if ($legacy) {
-                $this->repository->upsert_user_state(
-                    $gridid,
-                    self::SHARED_STATE_USERID,
-                    (string)$legacy->statejson,
-                    (string)$legacy->versionhash
-                );
-                $record = $this->repository->get_user_state($gridid, self::SHARED_STATE_USERID);
-            }
+            // Keep reads side-effect free. The first save promotes this record under the plan lock.
+            $record = $this->repository->get_latest_state_for_grid($gridid);
         }
         if (!$record) {
             return ['state' => [], 'versionhash' => null];
@@ -1009,43 +1006,31 @@ class grid_service {
             throw new coding_exception('Invalid cmid for get_roterfaden_state');
         }
         $record = $this->repository->get_roterfaden_state($cmid);
-        if (!$record) {
-            return ['ispublished' => false, 'gridid' => 0, 'state' => []];
+        $unpublished = ['ispublished' => false, 'gridid' => 0, 'state' => []];
+        // A restore without a matching plan stores gridid 0, even if the old snapshot was published.
+        if (!$record || (int)$record->ispublished !== 1 || (int)$record->gridid <= 0) {
+            return $unpublished;
+        }
+
+        // Alte Schnappschüsse können noch auf einen archivierten oder entfernten Plan zeigen.
+        $grid = $this->repository->get_grid((int)$record->gridid);
+        if (!$grid || (int)$grid->cmid !== $cmid || (int)$grid->isarchived === 1) {
+            return $unpublished;
         }
 
         $decoded = json_decode((string)$record->statejson, true);
         if (!is_array($decoded)) {
-            $decoded = [];
-        }
-        $hasunits = isset($decoded['units']) && is_array($decoded['units']) && count($decoded['units']) > 0;
-        $hasplanningunits = isset($decoded['planningState']) && is_array($decoded['planningState'])
-            && isset($decoded['planningState']['units']) && is_array($decoded['planningState']['units'])
-            && count($decoded['planningState']['units']) > 0;
-        if (!$hasunits && !$hasplanningunits) {
-            $planningservice = new planning_state_service();
-            $planningstate = $planningservice->get_state($cmid);
-            $state = isset($planningstate['state']) && is_array($planningstate['state']) ? $planningstate['state'] : [];
-            if (isset($state['units']) && is_array($state['units'])) {
-                $decoded['planningState'] = $state;
-                $decoded['units'] = $state['units'];
-                if (isset($state['slotorder']) && is_array($state['slotorder'])) {
-                    $decoded['slotorder'] = $state['slotorder'];
-                }
-            }
+            return $unpublished;
         }
 
-        // Altfaelle vor dem Fix in delete_grid(): Schnappschuss eines inzwischen
-        // geloeschten (archivierten) Plans gilt als nicht veroeffentlicht.
-        $ispublished = (int)$record->ispublished === 1;
-        if ($ispublished && (int)$record->gridid > 0) {
-            $grid = $this->repository->get_grid((int)$record->gridid);
-            if (!$grid || (int)$grid->isarchived === 1) {
-                $ispublished = false;
-            }
+        // Auch gespeicherte Schnappschüsse aus älteren Builds müssen die Teilnehmenden-Sicht einhalten.
+        if (is_array($decoded[sequence_state::STATE_KEY] ?? null)) {
+            $decoded[sequence_state::STATE_KEY] = sequence_state::strip_referenten($decoded[sequence_state::STATE_KEY]);
         }
 
+        // Der aktuelle Planungsstand kann Änderungen enthalten, die noch nicht freigegeben wurden.
         return [
-            'ispublished' => $ispublished,
+            'ispublished' => true,
             'gridid' => (int)$record->gridid,
             'state' => $decoded,
         ];
