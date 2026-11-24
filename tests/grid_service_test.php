@@ -22,7 +22,9 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use mod_seminarplaner\local\repository\grid_repository;
 use mod_seminarplaner\local\service\grid_service;
+use mod_seminarplaner\local\service\planning_state_service;
 
 /**
  * DB-backed tests for grid service.
@@ -91,6 +93,24 @@ final class grid_service_test extends advanced_testcase {
         $state = $service->get_user_state($gridid, 4);
         $this->assertCount(1, $state['state']['plan']['days']['Montag']);
         $this->assertCount(1, $state['state']['plan']['days']['Dienstag']);
+    }
+
+    public function test_reading_legacy_state_leaves_promotion_to_save(): void {
+        $this->resetAfterTest(true);
+
+        $repository = new grid_repository();
+        $service = new grid_service($repository);
+        $gridid = $service->create_grid(1011, 'Legacy plan', 4);
+        $repository->upsert_user_state($gridid, 4, '{"x":1}', 'legacy-hash');
+
+        $loaded = $service->get_user_state($gridid, 4);
+        $this->assertSame(1, $loaded['state']['x']);
+        $this->assertSame('legacy-hash', $loaded['versionhash']);
+        $this->assertSame('legacy-hash', $service->get_version_hash($gridid));
+        $this->assertFalse($repository->get_user_state($gridid, 0));
+
+        $hash = $service->save_user_state($gridid, 4, $loaded['state'], $loaded['versionhash']);
+        $this->assertSame($hash, $repository->get_user_state($gridid, 0)->versionhash);
     }
 
     public function test_delete_grid_removes_it_from_active_list(): void {
@@ -224,7 +244,64 @@ final class grid_service_test extends advanced_testcase {
         $this->assertTrue($service->get_roterfaden_state(1005)['ispublished']);
 
         $this->assertTrue($service->set_roterfaden_visibility(1005, false, 9));
-        $this->assertFalse($service->get_roterfaden_state(1005)['ispublished']);
+        $this->assertSame(
+            ['ispublished' => false, 'gridid' => 0, 'state' => []],
+            $service->get_roterfaden_state(1005)
+        );
+    }
+
+    public function test_roterfaden_remains_a_snapshot_after_planning_changes(): void {
+        $this->resetAfterTest(true);
+
+        $service = new grid_service();
+        $cmid = 1010;
+        $gridid = $service->create_grid($cmid, 'Published', 9);
+        $snapshot = ['plan' => ['days' => []]];
+        $service->publish_roterfaden($cmid, $gridid, $snapshot, 9);
+
+        $planning = new planning_state_service();
+        $planning->save_state($cmid, ['units' => [['id' => 'unit-1', 'title' => 'Draft']]], 9);
+
+        $this->assertSame(
+            ['ispublished' => true, 'gridid' => $gridid, 'state' => $snapshot],
+            $service->get_roterfaden_state($cmid)
+        );
+    }
+
+    public function test_restored_snapshot_requires_a_mapped_plan_and_decodable_content(): void {
+        $this->resetAfterTest(true);
+        $repository = new grid_repository();
+        $service = new grid_service($repository);
+        $cmid = 1013;
+        $unpublished = ['ispublished' => false, 'gridid' => 0, 'state' => []];
+
+        $repository->upsert_roterfaden_state($cmid, 0, '{"units":[]}', 9);
+        $this->assertSame($unpublished, $service->get_roterfaden_state($cmid));
+
+        $gridid = $service->create_grid($cmid, 'Restored plan', 9);
+        $repository->upsert_roterfaden_state($cmid, $gridid, '', 9);
+        $this->assertSame($unpublished, $service->get_roterfaden_state($cmid));
+
+        $repository->upsert_roterfaden_state($cmid, $gridid, '{"units":[]}', 9);
+        $this->assertSame(
+            ['ispublished' => true, 'gridid' => $gridid, 'state' => ['units' => []]],
+            $service->get_roterfaden_state($cmid)
+        );
+    }
+
+    public function test_legacy_snapshot_uses_participant_view(): void {
+        $this->resetAfterTest(true);
+
+        $repository = new grid_repository();
+        $service = new grid_service($repository);
+        $cmid = 1012;
+        $gridid = $service->create_grid($cmid, 'Legacy snapshot', 9);
+        $snapshot = ['sequenz' => ['platzierungen' => ['p1' => ['titel' => 'Einheit', 'referenten' => [9]]]]];
+        $repository->upsert_roterfaden_state($cmid, $gridid, json_encode($snapshot, JSON_THROW_ON_ERROR), 9);
+
+        $result = $service->get_roterfaden_state($cmid);
+        $this->assertTrue($result['ispublished']);
+        $this->assertSame(['titel' => 'Einheit'], $result['state']['sequenz']['platzierungen']['p1']);
     }
 
     /**
@@ -278,7 +355,10 @@ final class grid_service_test extends advanced_testcase {
         // Archivieren am Service vorbei - so wie es geloeschte Plaene vor dem Fix waren.
         $DB->set_field('kgen_grid', 'isarchived', 1, ['id' => $gridid]);
 
-        $this->assertFalse($service->get_roterfaden_state(1009)['ispublished']);
+        $this->assertSame(
+            ['ispublished' => false, 'gridid' => 0, 'state' => []],
+            $service->get_roterfaden_state(1009)
+        );
     }
 
     /**

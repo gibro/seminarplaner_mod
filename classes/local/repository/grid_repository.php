@@ -184,11 +184,12 @@ class grid_repository {
      * Get the newest existing state for a grid (legacy per-user fallback).
      *
      * @param int $gridid Grid id.
+     * @param string $fields Selected columns, starting with the unique id.
      * @return \stdClass|false
      */
-    public function get_latest_state_for_grid(int $gridid) {
+    public function get_latest_state_for_grid(int $gridid, string $fields = '*') {
         global $DB;
-        $records = $DB->get_records('kgen_grid_user_state', ['gridid' => $gridid], 'timemodified DESC, id DESC', '*', 0, 1);
+        $records = $DB->get_records('kgen_grid_user_state', ['gridid' => $gridid], 'timemodified DESC, id DESC', $fields, 0, 1);
         if (!$records) {
             return false;
         }

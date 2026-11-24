@@ -30,8 +30,8 @@ namespace mod_seminarplaner\local\service;
  * Jeder offene Sequenz-Tab meldet sich alle paar Sekunden (ping). Eine
  * Zeile je Person und Plan; was laenger als {@see self::ACTIVE_SECONDS} nicht
  * gemeldet wurde, gilt als weg, und was laenger als
- * {@see self::PURGE_SECONDS} liegt, wird beim naechsten Ping geloescht. Die
- * Tabelle haelt also nur Momentaufnahmen, keine Historie.
+ * {@see self::PURGE_SECONDS} liegt, wird beim nächsten Ping oder beim
+ * nächsten planmäßigen Bereinigungslauf gelöscht.
  */
 class presence_service {
     /** @var int Seconds after which a person no longer counts as present. */
@@ -78,9 +78,20 @@ class presence_service {
             }
         }
 
-        $DB->delete_records_select('kgen_grid_presence', 'timemodified < ?', [$now - self::PURGE_SECONDS]);
+        self::purge_expired($now);
 
         return $this->others($gridid, $userid, $now);
+    }
+
+    /**
+     * Delete expired presence snapshots independently of live editing.
+     *
+     * @param int $now Current Unix timestamp.
+     */
+    public static function purge_expired(int $now): void {
+        global $DB;
+
+        $DB->delete_records_select('kgen_grid_presence', 'timemodified < ?', [$now - self::PURGE_SECONDS]);
     }
 
     /**
